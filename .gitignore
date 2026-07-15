@@ -1,3 +1,60 @@
+<<<<<<< HEAD
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+*.tmp
+
+# IDE
+.vscode/
+.idea/
+
+# Dependencies
+node_modules/
+
+# Build / Cache
+build/
+dist/
+*.egg-info/
+
+# Machine Learning Models
+models/
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.pt
+*.onnx
+
+# Trading Bot Data
+data/
+cache/
+backtest_results/
+reports/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS files
+.DS_Store
+Thumbs.db
+=======
 ```gitignore
 # Python cache
 __pycache__/
@@ -60,3 +117,4 @@ build/
 *.tmp
 *~
 ```
+>>>>>>> 6f0cc4f949ff1040bdbfa1fff0b1c749b75de2fc
