@@ -1,1 +1,62 @@
-Nothing should be ignored based on the provided file changes, as they only include source code files (.py) without any build artifacts, dependencies, or temporary files.
+```gitignore
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Dependencies
+venv/
+.venv/
+pip-wheel-metadata/
+*.egg-info/
+
+# Coverage reports
+.coverage
+coverage/
+htmlcov/
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+*.a
+*.o
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Distribution / packaging
+*.tar.gz
+*.whl
+*.zip
+*.egg
+
+# Temporary files
+*.tmp
+*~
+```

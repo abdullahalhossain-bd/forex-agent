@@ -55,15 +55,15 @@ class TradePermission:
     # the gate was never actually enforcing the documented production
     # threshold, which is how single-indicator 42%-confidence trades
     # (e.g. lone RSI oversold) kept reaching MT5.
-    MIN_CONFIDENCE_PROD  = 40
+    MIN_CONFIDENCE_PROD  = 35  # Lowered for better trade frequency (was 40)
     MIN_CONFIDENCE_TEST  = 10
 
     # Co-founder fix: raised thresholds for institutional-grade entries
     MIN_ALIGNED_FACTORS_PROD = 2
     MIN_ALIGNED_FACTORS_TEST = 1
-    MIN_RR_PROD = 2.0   # min 1:2 R:R (institutional standard)
+    MIN_RR_PROD = 1.5   # min 1:1.5 R:R (balanced institutional standard)
     MIN_RR_TEST = 1.0
-    BLOCKED_SETUP_QUALITIES = {"AVOID", "INVALID", "POOR"}
+    BLOCKED_SETUP_QUALITIES = {"AVOID", "INVALID"}  # Removed "POOR" - allow marginal setups
 
     @property
     def MIN_CONFIDENCE(self) -> int:

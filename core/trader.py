@@ -1427,6 +1427,22 @@ class AITrader:
         dec_out["raw_signal"] = _raw_signal
         dec_out["execution_action"] = _final_action
         if _final_action in ("NO TRADE", "WAIT", None, ""):
+            # DETAILED REJECTION LOGGING
+            _perm_checks = perm_out.get("checks", [])
+            for _chk in _perm_checks:
+                if not _chk.get("passed", True):
+                    log.warning(
+                        f"[REJECTION] {_chk.get('check', 'Unknown')} | "
+                        f"detail={_chk.get('detail', 'N/A')}"
+                    )
+            log.warning(
+                f"[SIGNAL REJECTED] Analysis={_raw_signal} → Execution={_final_action} | "
+                f"Fusion Score={dec_out.get('confidence', 0)}% | "
+                f"Risk Approved={risk_out.get('approved', False)} | "
+                f"R:R={risk_out.get('rr_ratio', 0)} | "
+                f"Session={session_ctx.get('current_session', 'N/A') if session_ctx else 'N/A'} | "
+                f"Blocked by={perm_out.get('blocked_reason', 'multiple checks')}"
+            )
             # Execution is gated — but analysis verdict is PRESERVED in
             # dec_out["decision"]. Only execution_action reflects the block.
             dec_out.setdefault("gated_by_permission", True)
