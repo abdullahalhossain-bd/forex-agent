@@ -173,14 +173,18 @@ class MT5DataLoader:
         self._connected = False
         self._last_error: Optional[str] = None
         
-        # Logging setup
+        # Logging setup - FIX BUG #1: Prevent duplicate handlers on singleton logger
         self.logger = logging.getLogger("mt5_data_loader")
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        ))
-        self.logger.addHandler(handler)
+        
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s | %(levelname)-8s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            ))
+            self.logger.addHandler(handler)
+            self.logger.propagate = False  # Prevent bubbling to root
+        
         self.logger.setLevel(logging.INFO)
     
     def _initialize_mt5(self) -> bool:
@@ -291,6 +295,9 @@ class MT5DataLoader:
         """
         Fetch raw rates from MT5 with retry logic.
         
+        FIX BUG #2: Use chunked fetching to avoid MT5 terminal's
+        "Max bars in chart" limit that causes (-2, 'Invalid params') error.
+        
         Args:
             symbol: Trading symbol
             timeframe: Timeframe string
@@ -305,6 +312,10 @@ class MT5DataLoader:
         
         mt5_tf = TIMEFRAME_MAP[timeframe]
         
+        # FIX BUG #2: Chunk size to avoid terminal "Max bars in history" limit
+        # This is more robust than relying on terminal settings
+        CHUNK_SIZE = 5000  # Safe default for most terminal configurations
+        
         for attempt in range(1, self.MAX_RETRIES + 1):
             try:
                 if not self._ensure_connected():
@@ -316,22 +327,64 @@ class MT5DataLoader:
                     self.logger.error(f"Failed to select symbol {symbol}: {err}")
                     return None
                 
-                # Fetch rates
-                rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, bars)
+                # If requested bars <= CHUNK_SIZE, fetch directly
+                if bars <= CHUNK_SIZE:
+                    rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, bars)
+                    
+                    if rates is None:
+                        err = mt5.last_error()
+                        self.logger.warning(f"copy_rates_from_pos returned None: {err}")
+                        if attempt < self.MAX_RETRIES:
+                            time.sleep(self.RETRY_DELAY)
+                            continue
+                        return None
+                    
+                    if len(rates) == 0:
+                        self.logger.warning(f"No data returned for {symbol} {timeframe}")
+                        return None
+                    
+                    return rates
                 
-                if rates is None:
-                    err = mt5.last_error()
-                    self.logger.warning(f"copy_rates_from_pos returned None: {err}")
+                # FIX BUG #2: Fetch in chunks to avoid terminal limits
+                self.logger.debug(f"Fetching {bars} bars in chunks of {CHUNK_SIZE}")
+                all_chunks = []
+                pos = 0
+                remaining = bars
+                
+                while remaining > 0:
+                    n = min(CHUNK_SIZE, remaining)
+                    part = mt5.copy_rates_from_pos(symbol, mt5_tf, pos, n)
+                    
+                    if part is None or len(part) == 0:
+                        err = mt5.last_error()
+                        self.logger.warning(f"Chunk fetch failed at pos={pos}: {err}")
+                        break
+                    
+                    all_chunks.append(part)
+                    fetched = len(part)
+                    pos += fetched
+                    remaining -= n
+                    
+                    # If we got fewer bars than requested, no more history available
+                    if fetched < n:
+                        self.logger.debug(f"Reached end of history at pos={pos}")
+                        break
+                
+                if not all_chunks:
                     if attempt < self.MAX_RETRIES:
                         time.sleep(self.RETRY_DELAY)
                         continue
                     return None
                 
-                if len(rates) == 0:
-                    self.logger.warning(f"No data returned for {symbol} {timeframe}")
-                    return None
+                # Merge all chunks
+                merged = np.concatenate(all_chunks)
                 
-                return rates
+                # Remove any duplicate timestamps (can happen with overlapping chunks)
+                _, unique_idx = np.unique(merged['time'], return_index=True)
+                merged = merged[np.sort(unique_idx)]
+                
+                self.logger.debug(f"Merged {len(all_chunks)} chunks into {len(merged)} bars")
+                return merged
                 
             except Exception as e:
                 self.logger.error(f"Fetch attempt {attempt}/{self.MAX_RETRIES} failed: {e}")
