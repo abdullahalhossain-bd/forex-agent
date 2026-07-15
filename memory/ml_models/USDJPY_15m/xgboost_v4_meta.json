@@ -1,0 +1,14 @@
+{
+  "pair": "USDJPY",
+  "timeframe": "15m",
+  "model_type": "xgboost",
+  "version": "v4",
+  "saved_at": "2026-07-15T18:21:14+00:00",
+  "metrics": {
+    "accuracy": 0.5004004004004003,
+    "training_bars": 49950
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\xgboost_v4.pkl",
+  "is_keras": false,
+  "feature_names": []
+}

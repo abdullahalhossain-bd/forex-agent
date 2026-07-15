@@ -4324,5 +4324,19 @@
     "bond_yield": null,
     "sp500_change": 0.0,
     "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-15T17:33:53.200826+00:00",
+    "pair": "EURUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
   }
 ]

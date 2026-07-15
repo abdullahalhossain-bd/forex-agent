@@ -1,0 +1,11 @@
+{
+  "hash": "43fdcd15a8ff51902eebb31b6380a9a54be2254350b2fbb5fc0eaf5cc729a92f",
+  "saved_at": "2026-07-15T18:21:22.043068+00:00",
+  "metadata": {
+    "pair": "XAUUSD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v4",
+    "feature_names": []
+  }
+}

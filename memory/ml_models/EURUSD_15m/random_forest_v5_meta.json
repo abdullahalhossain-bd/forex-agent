@@ -1,0 +1,14 @@
+{
+  "pair": "EURUSD",
+  "timeframe": "15m",
+  "model_type": "random_forest",
+  "version": "v5",
+  "saved_at": "2026-07-15T18:20:58+00:00",
+  "metrics": {
+    "accuracy": 0.5026026026026026,
+    "training_bars": 49950
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\random_forest_v5.pkl",
+  "is_keras": false,
+  "feature_names": []
+}

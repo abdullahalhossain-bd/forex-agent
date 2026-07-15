@@ -1,0 +1,11 @@
+{
+  "hash": "1227c64258d464fba838e88e1965806c1377a3873a858398bdcaf742e53cbd9c",
+  "saved_at": "2026-07-15T18:21:37.195228+00:00",
+  "metadata": {
+    "pair": "USDCAD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v4",
+    "feature_names": []
+  }
+}

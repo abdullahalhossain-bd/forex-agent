@@ -1,0 +1,11 @@
+{
+  "hash": "b82321cda50f3fbab2290395b0841e31437978fdb34d7c479a88c2b36851ff5d",
+  "saved_at": "2026-07-15T18:21:29.660593+00:00",
+  "metadata": {
+    "pair": "AUDUSD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v4",
+    "feature_names": []
+  }
+}

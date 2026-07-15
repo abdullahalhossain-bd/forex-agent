@@ -1,0 +1,14 @@
+{
+  "pair": "AUDUSD",
+  "timeframe": "15m",
+  "model_type": "random_forest",
+  "version": "v4",
+  "saved_at": "2026-07-15T18:21:29+00:00",
+  "metrics": {
+    "accuracy": 0.5201201201201201,
+    "training_bars": 49950
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\random_forest_v4.pkl",
+  "is_keras": false,
+  "feature_names": []
+}

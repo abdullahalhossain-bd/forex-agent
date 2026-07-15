@@ -1,0 +1,513 @@
+2026-07-15 22:35:59,169 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
+2026-07-15 22:35:59,169 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
+2026-07-15 22:35:59,171 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-07-15 22:35:59,171 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-07-15 22:35:59,173 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-07-15 22:35:59,174 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-07-15 22:35:59,174 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-07-15 22:35:59,177 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
+2026-07-15 22:35:59,180 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
+2026-07-15 22:35:59,182 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-07-15 22:35:59,182 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
+2026-07-15 22:35:59,182 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
+2026-07-15 22:35:59,183 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
+2026-07-15 22:36:24,710 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:24,770 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:25,047 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:25,101 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:25,367 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:25,425 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:25,695 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:25,749 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-07-15 22:36:26,012 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:26,318 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:26,598 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:26,909 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:27,180 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:27,479 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:27,539 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:28,193 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:28,467 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:28,748 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:29,012 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:29,292 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:29,353 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:29,673 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:29,732 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:30,009 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:30,067 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:30,353 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:30,688 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:30,972 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-15 22:36:31,321 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-15 22:36:31,771 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:36:31,830 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-07-15 22:36:32,114 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+2026-07-15 22:36:45,650 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-07-15 22:36:45,674 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-07-15 22:36:45,683 - core.runtime - INFO - Day 68 FeatureStore wired (701 feature rows, 58 labels)
+2026-07-15 22:36:45,701 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
+2026-07-15 22:36:45,715 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-07-15 22:36:45,727 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-07-15 22:36:46,021 - core.runtime - INFO - Day 71 RL Agent wired (source=heuristic, model_loaded=False)
+2026-07-15 22:36:46,050 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-07-15 22:36:52,175 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
+2026-07-15 22:36:52,289 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-07-15 22:36:52,333 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-07-15 22:36:52,334 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-07-15 22:36:53,358 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-07-15 22:36:53,385 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-07-15 22:36:54,924 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-07-15 22:36:55,403 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-07-15 22:36:55,480 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-07-15 22:36:55,859 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-07-15 22:36:55,872 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USOUSD', 'UKOUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'US30USD', 'NAS100USD', 'SPX500USD', 'GER40USD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'CADHKD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB', 'USDSAR', 'USDAED'] | Risk Balance: $99159.93 (config) | Auto-restart: ON
+2026-07-15 22:36:55,876 - root - INFO - [System] Prometheus metrics exporter started on :9090
+2026-07-15 22:36:57,692 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-15 22:36:57,693 - root - INFO - [System] Signal handlers installed (SIGINT, SIGTERM)
+2026-07-15 22:37:01,450 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 22:37:01,672 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
+2026-07-15 22:37:01,894 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 22:37:01,896 - telegram.ext.Application - INFO - Application started
+2026-07-15 22:37:03,924 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:37:06,205 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:37:07,440 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:37:09,696 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:37:11,317 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:37:14,945 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:15,417 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:15,835 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:16,226 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:16,650 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:17,103 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:17,525 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:17,908 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:18,367 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:19,005 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:19,371 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:19,693 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:37:33,500 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:38:05,715 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:38:37,915 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:39:10,120 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:39:42,847 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:40:11,661 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:40:11,672 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:15:00+00:00 | current=2026-07-15T16:40:11.672016+00:00 | close=2026-07-15T16:30:00+00:00 | seconds_left=-612s | naive_input=False | is_closed=True
+2026-07-15 22:40:15,590 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:48:23,299 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
+2026-07-15 22:48:23,300 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
+2026-07-15 22:48:23,301 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-07-15 22:48:23,301 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
+2026-07-15 22:48:23,301 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
+2026-07-15 22:48:23,301 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
+2026-07-15 22:48:42,825 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:42,881 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:43,622 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:43,674 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:43,948 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:44,257 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:44,512 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:44,563 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-07-15 22:48:44,819 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:44,877 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:45,161 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:45,215 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:45,748 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:46,009 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:46,062 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:46,566 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:46,849 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:47,113 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:47,646 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:47,928 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:47,989 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:48,248 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:48,302 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:48,637 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:48,695 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:48,957 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:49,011 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:49,289 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-15 22:48:49,559 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-15 22:48:49,914 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 22:48:49,968 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-07-15 22:48:50,483 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+2026-07-15 22:48:54,927 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-07-15 22:48:54,943 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-07-15 22:48:54,952 - core.runtime - INFO - Day 68 FeatureStore wired (701 feature rows, 58 labels)
+2026-07-15 22:48:54,978 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
+2026-07-15 22:48:54,988 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-07-15 22:48:55,006 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-07-15 22:48:55,302 - core.runtime - INFO - Day 71 RL Agent wired (source=heuristic, model_loaded=False)
+2026-07-15 22:48:55,336 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-07-15 22:49:00,576 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
+2026-07-15 22:49:00,694 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-07-15 22:49:00,742 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-07-15 22:49:00,742 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-07-15 22:49:01,757 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-07-15 22:49:01,781 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-07-15 22:49:02,966 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-07-15 22:49:03,377 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-07-15 22:49:03,459 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-07-15 22:49:04,012 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-07-15 22:49:04,042 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USOUSD', 'UKOUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'US30USD', 'NAS100USD', 'SPX500USD', 'GER40USD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'CADHKD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB', 'USDSAR', 'USDAED'] | Risk Balance: $99159.93 (config) | Auto-restart: ON
+2026-07-15 22:49:04,048 - root - INFO - [System] Prometheus metrics exporter started on :9090
+2026-07-15 22:49:04,541 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 22:49:04,754 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
+2026-07-15 22:49:04,885 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-15 22:49:04,886 - root - INFO - [System] Signal handlers installed (SIGINT, SIGTERM)
+2026-07-15 22:49:04,968 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 22:49:04,970 - telegram.ext.Application - INFO - Application started
+2026-07-15 22:49:09,654 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:49:11,768 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:49:13,657 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:49:15,491 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:49:17,482 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:49:20,690 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:49:20,704 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:49:20.703866+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-261s | naive_input=False | is_closed=True
+2026-07-15 22:49:35,580 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:50:07,806 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:50:21,951 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:50:27,284 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:50:35,509 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:50:35,539 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:50:35.539365+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-336s | naive_input=False | is_closed=True
+2026-07-15 22:50:40,039 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:51:12,408 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:51:14,015 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:51:17,564 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:51:17,601 - llm_key_manager - WARNING - [LLM Keys] groq key #2 rate-limited, disabled for 3900s
+2026-07-15 22:51:20,750 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:51:26,505 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:51:26,518 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:51:26.518941+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-387s | naive_input=False | is_closed=True
+2026-07-15 22:51:44,619 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:51:46,747 - yfinance - ERROR - $AUDUSD=X: possibly delisted; no price data found  (period=2d)
+2026-07-15 22:51:46,758 - yfinance - ERROR - 
+1 Failed download:
+2026-07-15 22:51:46,758 - yfinance - ERROR - ['AUDUSD=X']: possibly delisted; no price data found  (period=2d)
+2026-07-15 22:52:10,311 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:52:14,250 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:14,256 - llm_key_manager - WARNING - [LLM Keys] groq key #3 rate-limited, disabled for 4130s
+2026-07-15 22:52:15,900 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:15,905 - llm_key_manager - WARNING - [LLM Keys] groq key #1 rate-limited, disabled for 482s
+2026-07-15 22:52:16,838 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:52:17,550 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:17,558 - llm_key_manager - WARNING - [LLM Keys] groq key #5 rate-limited, disabled for 391s
+2026-07-15 22:52:19,280 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:52:21,554 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:21,577 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:52:24,018 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:52:28,928 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:28,935 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 22:52:31,339 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:52:32,173 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:52:32,180 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:52:32,180 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 49s
+2026-07-15 22:52:43,690 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:52:43,723 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:52:43.722675+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-464s | naive_input=False | is_closed=True
+2026-07-15 22:52:49,057 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:53:12,908 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:53:14,384 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:53:14,388 - llm_key_manager - WARNING - [LLM Keys] groq key #6 rate-limited, disabled for 4087s
+2026-07-15 22:53:17,806 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:53:21,373 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:53:24,259 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:53:24,280 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:53:24.280009+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-504s | naive_input=False | is_closed=True
+2026-07-15 22:53:48,574 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:53:48,584 - llm_key_manager - WARNING - [LLM Keys] groq key #7 rate-limited, disabled for 21600s
+2026-07-15 22:53:52,748 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:53:53,604 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:53:56,837 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:53:56,843 - llm_key_manager - WARNING - [LLM Keys] groq key #4 rate-limited, disabled for 4300s
+2026-07-15 22:53:56,843 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 292s
+2026-07-15 22:53:59,186 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:53:59,741 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:53:59,750 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:54:01,909 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:54:02,577 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:54:02,585 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 62s
+2026-07-15 22:54:04,776 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:54:05,169 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:54:05,485 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:54:05,486 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 54s
+2026-07-15 22:54:24,346 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:54:24,359 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:54:24.359166+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-564s | naive_input=False | is_closed=True
+2026-07-15 22:54:25,860 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:54:55,922 - llm_key_manager - WARNING - [LLM Keys] sambanova key #1 rate-limited, disabled for 300s
+2026-07-15 22:54:58,793 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:55:11,907 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 217s
+2026-07-15 22:55:15,832 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:55:16,242 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:55:16,260 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:55:18,582 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:55:19,113 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:55:19,124 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:55:21,463 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:55:22,436 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:55:22,445 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 22:55:22,445 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 54s
+2026-07-15 22:55:30,797 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:55:30,812 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:55:30.812826+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-631s | naive_input=False | is_closed=True
+2026-07-15 22:55:31,066 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:56:03,391 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:56:17,796 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:56:17,808 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:56:17.807981+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-678s | naive_input=False | is_closed=True
+2026-07-15 22:56:35,607 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:56:43,854 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 125s
+2026-07-15 22:56:45,308 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:56:45,832 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:56:45,877 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:56:49,517 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:56:52,014 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:56:52,020 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 22:56:57,613 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:56:59,016 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:56:59,030 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:56:59,030 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 47s
+2026-07-15 22:57:07,827 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:57:18,547 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:57:18,559 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:57:18.559603+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-739s | naive_input=False | is_closed=True
+2026-07-15 22:57:40,057 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:57:47,800 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:57:47,813 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:57:47.813657+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-768s | naive_input=False | is_closed=True
+2026-07-15 22:58:11,580 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 37s
+2026-07-15 22:58:12,483 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:58:12,867 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:58:13,550 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:58:13,563 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:58:16,897 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:58:17,242 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:58:17,247 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:58:22,779 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:58:24,390 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:58:24,396 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 22:58:24,396 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 49s
+2026-07-15 22:58:40,617 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:58:40,636 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:58:40.636102+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-821s | naive_input=False | is_closed=True
+2026-07-15 22:58:44,828 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:59:04,160 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 22:59:05,677 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:59:05,693 - llm_key_manager - WARNING - [LLM Keys] groq key #5 rate-limited, disabled for 1536s
+2026-07-15 22:59:17,567 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:59:17,957 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 22:59:17,975 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:30:00+00:00 | current=2026-07-15T16:59:17.975495+00:00 | close=2026-07-15T16:45:00+00:00 | seconds_left=-858s | naive_input=False | is_closed=True
+2026-07-15 22:59:44,926 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 33s
+2026-07-15 22:59:46,107 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:59:46,450 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:59:46,464 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 22:59:49,790 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:59:49,970 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 22:59:50,121 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:59:50,128 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 22:59:55,396 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 22:59:56,048 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 22:59:56,055 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 22:59:56,055 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 50s
+2026-07-15 23:00:05,135 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:00:05,155 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:00:05.155689+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-5s | naive_input=False | is_closed=True
+2026-07-15 23:00:22,179 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:00:32,627 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:00:33,903 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:00:33,909 - llm_key_manager - WARNING - [LLM Keys] groq key #1 rate-limited, disabled for 1411s
+2026-07-15 23:00:42,675 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:00:42,691 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:00:42.691288+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-43s | naive_input=False | is_closed=True
+2026-07-15 23:00:54,393 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:01:08,950 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1376s
+2026-07-15 23:01:10,227 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:01:10,549 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:01:10,558 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:01:13,844 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:01:14,491 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:01:14,497 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:01:19,806 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:01:24,564 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:01:24,575 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:01:24,575 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 46s
+2026-07-15 23:01:25,253 - llm_key_manager - WARNING - [LLM Keys] cerebras key #1 rate-limited, disabled for 300s
+2026-07-15 23:01:26,608 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:01:29,223 - llm_key_manager - WARNING - [LLM Keys] sambanova key #1 rate-limited, disabled for 300s
+2026-07-15 23:01:58,827 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:01:59,319 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-15 23:02:00,381 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:02:00,400 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:02:00.400271+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-120s | naive_input=False | is_closed=True
+2026-07-15 23:02:21,747 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1303s
+2026-07-15 23:02:22,979 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:02:23,491 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:02:23,505 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:02:26,772 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:02:27,597 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:02:27,602 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:02:31,110 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:02:32,873 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:02:33,366 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:02:33,375 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:02:33,376 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 50s
+2026-07-15 23:02:44,262 - llm_key_manager - WARNING - [LLM Keys] openrouter key #1 rate-limited, disabled for 300s
+2026-07-15 23:02:51,012 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:02:51,042 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:02:51.042251+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-171s | naive_input=False | is_closed=True
+2026-07-15 23:03:03,393 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:03:18,176 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:03:18,195 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:03:18.195228+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-198s | naive_input=False | is_closed=True
+2026-07-15 23:03:35,678 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:03:45,691 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1219s
+2026-07-15 23:03:47,101 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:03:47,553 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:03:47,584 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:03:51,334 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:03:51,910 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:03:51,925 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:03:57,437 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:03:58,118 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:03:58,124 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:03:58,124 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 49s
+2026-07-15 23:04:05,425 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:04:05,436 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:04:05.436804+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-245s | naive_input=False | is_closed=True
+2026-07-15 23:04:13,166 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:04:45,987 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:04:47,004 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1158s
+2026-07-15 23:04:50,369 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:04:50,850 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:04:50,852 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:04:56,813 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:04:56,828 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:04:56.828585+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-297s | naive_input=False | is_closed=True
+2026-07-15 23:05:18,199 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:05:24,119 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:05:24,456 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:05:24,466 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:05:27,862 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:05:28,384 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:05:28,392 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:05:28,393 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 22s
+2026-07-15 23:05:38,999 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:05:39,018 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:05:39.018124+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-339s | naive_input=False | is_closed=True
+2026-07-15 23:05:52,605 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:06:12,421 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1072s
+2026-07-15 23:06:13,688 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:06:14,026 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:06:14,033 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:06:22,296 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:06:22,331 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:06:22.331113+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-382s | naive_input=False | is_closed=True
+2026-07-15 23:06:24,880 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:06:57,148 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:07:05,972 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:07:06,353 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:07:06,591 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:07:10,221 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:07:10,573 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:07:10,584 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:07:10,586 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 3s
+2026-07-15 23:07:16,016 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:07:16,524 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:07:16,529 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:07:17,518 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 1007s
+2026-07-15 23:07:25,093 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:07:25,121 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:07:25.121531+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-445s | naive_input=False | is_closed=True
+2026-07-15 23:07:29,478 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:07:52,040 - llm_key_manager - WARNING - [LLM Keys] sambanova key #1 rate-limited, disabled for 300s
+2026-07-15 23:08:01,837 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:08:16,543 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:08:16,961 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:08:17,011 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-07-15 23:08:20,657 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:08:21,185 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:08:21,198 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-07-15 23:08:24,262 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-15 23:08:24,800 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:08:24,807 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-07-15 23:08:24,808 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 52s
+2026-07-15 23:08:34,058 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:08:47,584 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:08:47,628 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T16:45:00+00:00 | current=2026-07-15T17:08:47.627056+00:00 | close=2026-07-15T17:00:00+00:00 | seconds_left=-528s | naive_input=False | is_closed=True
+2026-07-15 23:09:06,289 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:09:13,936 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 891s
+2026-07-15 23:31:30,787 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
+2026-07-15 23:31:30,788 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
+2026-07-15 23:31:30,788 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-07-15 23:31:30,789 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-07-15 23:31:30,789 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-07-15 23:31:30,789 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-07-15 23:31:30,790 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-07-15 23:31:30,791 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
+2026-07-15 23:31:30,792 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
+2026-07-15 23:31:30,792 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-07-15 23:31:30,793 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
+2026-07-15 23:31:30,794 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
+2026-07-15 23:31:30,797 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
+2026-07-15 23:32:47,746 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:47,798 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:48,081 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:48,115 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:48,400 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:48,443 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:48,721 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:48,769 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-07-15 23:32:49,094 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:49,152 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:49,442 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:49,492 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:49,796 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:50,088 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:50,149 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:50,749 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:51,036 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:51,325 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:51,609 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:51,905 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:51,949 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:52,244 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:52,292 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:52,581 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:52,626 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:52,909 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:52,948 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:53,261 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-15 23:32:53,548 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 200 OK"
+2026-07-15 23:32:53,932 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-15 23:32:53,967 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-07-15 23:32:54,252 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 200 OK"
+2026-07-15 23:33:01,114 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-07-15 23:33:01,153 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-07-15 23:33:01,180 - core.runtime - INFO - Day 68 FeatureStore wired (723 feature rows, 58 labels)
+2026-07-15 23:33:01,213 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
+2026-07-15 23:33:01,226 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-07-15 23:33:01,250 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-07-15 23:33:02,063 - core.runtime - INFO - Day 71 RL Agent wired (source=ppo, model_loaded=True)
+2026-07-15 23:33:02,146 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-07-15 23:33:09,854 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
+2026-07-15 23:33:10,047 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-07-15 23:33:10,132 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-07-15 23:33:10,132 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-07-15 23:33:11,163 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-07-15 23:33:11,188 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-07-15 23:33:12,811 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-07-15 23:33:13,396 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-07-15 23:33:13,508 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-07-15 23:33:14,114 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-07-15 23:33:14,142 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USOUSD', 'UKOUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'US30USD', 'NAS100USD', 'SPX500USD', 'GER40USD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'CADHKD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB', 'USDSAR', 'USDAED'] | Risk Balance: $99159.93 (config) | Auto-restart: ON
+2026-07-15 23:33:14,149 - root - INFO - [System] Prometheus metrics exporter started on :9090
+2026-07-15 23:33:14,531 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 23:33:14,727 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
+2026-07-15 23:33:14,924 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-15 23:33:14,927 - telegram.ext.Application - INFO - Application started
+2026-07-15 23:33:14,962 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-15 23:33:14,963 - root - INFO - [System] Signal handlers installed (SIGINT, SIGTERM)
+2026-07-15 23:33:20,661 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:33:22,979 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:33:24,538 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:33:26,627 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:33:28,703 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:33:29,539 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-15 23:33:33,962 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-15 23:33:33,978 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-15T17:15:00+00:00 | current=2026-07-15T17:33:33.978198+00:00 | close=2026-07-15T17:30:00+00:00 | seconds_left=-214s | naive_input=False | is_closed=True
+2026-07-15 23:33:45,510 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:34:17,706 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-15 23:34:22,929 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-15 23:34:26,546 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-15 23:34:26,807 - llm_key_manager - WARNING - [LLM Keys] groq key #3 rate-limited, disabled for 1995s
+2026-07-15 23:34:29,907 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"

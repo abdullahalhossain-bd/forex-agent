@@ -1,0 +1,11 @@
+{
+  "hash": "783f4460026f2fdb6145bcc11f313f97d629122fa79d768e9a2982eff6852a13",
+  "saved_at": "2026-07-15T18:21:22.101762+00:00",
+  "metadata": {
+    "pair": "XAUUSD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v4",
+    "feature_names": []
+  }
+}

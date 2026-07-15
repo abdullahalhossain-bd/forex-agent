@@ -1,0 +1,11 @@
+{
+  "hash": "09949cab07b202f35a333759b2350f27ff9df7cbe9b31e557e60f30da4325ba1",
+  "saved_at": "2026-07-15T18:21:14.066556+00:00",
+  "metadata": {
+    "pair": "USDJPY",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v4",
+    "feature_names": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "hash": "6814d0abb32240436353fabad02fa1220d54e272ff1fea58ef54b6d61034357e",
+  "saved_at": "2026-07-15T18:21:06.224611+00:00",
+  "metadata": {
+    "pair": "GBPUSD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v4",
+    "feature_names": []
+  }
+}

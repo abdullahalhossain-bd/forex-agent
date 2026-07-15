@@ -174,13 +174,20 @@ class MT5DataLoader:
         self._last_error: Optional[str] = None
         
         # Logging setup
+        # NOTE: logging.getLogger("mt5_data_loader") always returns the SAME
+        # logger object (loggers are singletons keyed by name). Previously we
+        # attached a brand-new StreamHandler on every MT5DataLoader() call, so
+        # creating 6 loaders (one per pair) meant the 6th pair's log lines were
+        # printed 6 times over. Only attach a handler once per process.
         self.logger = logging.getLogger("mt5_data_loader")
-        handler = logging.StreamHandler()
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s | %(levelname)-8s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        ))
-        self.logger.addHandler(handler)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s | %(levelname)-8s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S"
+            ))
+            self.logger.addHandler(handler)
+            self.logger.propagate = False
         self.logger.setLevel(logging.INFO)
     
     def _initialize_mt5(self) -> bool:
@@ -304,40 +311,74 @@ class MT5DataLoader:
             return None
         
         mt5_tf = TIMEFRAME_MAP[timeframe]
-        
-        for attempt in range(1, self.MAX_RETRIES + 1):
-            try:
-                if not self._ensure_connected():
-                    return None
-                
-                # Select symbol in Market Watch
-                if not mt5.symbol_select(symbol, True):
-                    err = mt5.last_error()
-                    self.logger.error(f"Failed to select symbol {symbol}: {err}")
-                    return None
-                
-                # Fetch rates
-                rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, bars)
-                
-                if rates is None:
-                    err = mt5.last_error()
-                    self.logger.warning(f"copy_rates_from_pos returned None: {err}")
+
+        # MT5 terminals cap how many bars copy_rates_from_pos will hand back in
+        # one call (Tools > Options > Charts > "Max. bars in chart"). Recent
+        # terminal builds return error (-2, 'Terminal: Invalid params') instead
+        # of silently truncating when the requested count exceeds that cap.
+        # Since the same error was showing up identically for every symbol and
+        # every retry, it's a request-size/terminal-setting problem, not a
+        # per-symbol one — so retrying the exact same count 3 times can never
+        # help. Instead, back off to progressively smaller counts.
+        candidate_counts = sorted({c for c in [
+            bars, 50_000, 20_000, 10_000, 5_000, 1_000
+        ] if 0 < c <= bars}, reverse=True)
+
+        for count in candidate_counts:
+            for attempt in range(1, self.MAX_RETRIES + 1):
+                try:
+                    if not self._ensure_connected():
+                        return None
+
+                    # Select symbol in Market Watch
+                    if not mt5.symbol_select(symbol, True):
+                        err = mt5.last_error()
+                        self.logger.error(f"Failed to select symbol {symbol}: {err}")
+                        return None
+
+                    # Fetch rates
+                    rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, count)
+
+                    if rates is None:
+                        err = mt5.last_error()
+                        self.logger.warning(
+                            f"copy_rates_from_pos({symbol}, {timeframe}, count={count}) "
+                            f"returned None: {err}"
+                        )
+                        if err and err[0] == -2:
+                            # Invalid params at this count almost certainly means the
+                            # terminal's "Max. bars in chart" setting is smaller than
+                            # `count`. Retrying the same count won't help — drop to
+                            # the next smaller candidate instead of burning retries.
+                            break
+                        if attempt < self.MAX_RETRIES:
+                            time.sleep(self.RETRY_DELAY)
+                            continue
+                        break
+
+                    if len(rates) == 0:
+                        self.logger.warning(f"No data returned for {symbol} {timeframe} at count={count}")
+                        break
+
+                    if count < bars:
+                        self.logger.warning(
+                            f"Terminal rejected a request for {bars} bars; succeeded at {count}. "
+                            "Increase 'Max. bars in chart' in MT5 (Tools > Options > Charts) "
+                            "if you need the full amount."
+                        )
+                    return rates
+
+                except Exception as e:
+                    self.logger.error(f"Fetch attempt {attempt}/{self.MAX_RETRIES} (count={count}) failed: {e}")
                     if attempt < self.MAX_RETRIES:
                         time.sleep(self.RETRY_DELAY)
-                        continue
-                    return None
-                
-                if len(rates) == 0:
-                    self.logger.warning(f"No data returned for {symbol} {timeframe}")
-                    return None
-                
-                return rates
-                
-            except Exception as e:
-                self.logger.error(f"Fetch attempt {attempt}/{self.MAX_RETRIES} failed: {e}")
-                if attempt < self.MAX_RETRIES:
-                    time.sleep(self.RETRY_DELAY)
-        
+
+        self.logger.error(
+            f"All fallback bar counts failed for {symbol} {timeframe}. "
+            "This usually means 'Max. bars in chart' in the MT5 terminal "
+            "(Tools > Options > Charts) is set too low, or the terminal has no "
+            f"history for {symbol} on this timeframe yet."
+        )
         return None
     
     def _process_rates(
@@ -414,8 +455,15 @@ class MT5DataLoader:
             }.get(timeframe, timedelta(hours=1))
             
             # If the last candle's time is very recent, it might be incomplete
-            # Remove it if it started less than tf_duration ago
-            if now_utc - last_candle_time.replace(tzinfo=None) < tf_duration:
+            # Remove it if it started less than tf_duration ago.
+            # NOTE: last_candle_time is already tz-aware UTC (set via
+            # tz_localize('UTC') above) and now_utc is also tz-aware UTC, so
+            # they can be subtracted directly. The previous code called
+            # .replace(tzinfo=None) on last_candle_time, turning it naive while
+            # now_utc stayed aware — pandas/py datetime refuses to subtract a
+            # naive value from an aware one ("Cannot subtract tz-naive and
+            # tz-aware datetime-like objects").
+            if now_utc - last_candle_time < tf_duration:
                 self.logger.info("Removing potentially incomplete last candle")
                 df = df.iloc[:-1]
         

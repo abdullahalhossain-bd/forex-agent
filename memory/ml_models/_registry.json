@@ -49,9 +49,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\xgboost_v4.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\xgboost_v4_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v5",
+          "saved_at": "2026-07-15T18:20:58+00:00",
+          "metrics": {
+            "accuracy": 0.4943943943943944,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\xgboost_v5.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\xgboost_v5_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v4"
+      "latest": "v5"
     },
     "EURUSD_15m_random_forest": {
       "pair": "EURUSD",
@@ -102,9 +114,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\random_forest_v4.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\random_forest_v4_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v5",
+          "saved_at": "2026-07-15T18:20:58+00:00",
+          "metrics": {
+            "accuracy": 0.5026026026026026,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\random_forest_v5.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\random_forest_v5_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v4"
+      "latest": "v5"
     },
     "GBPUSD_15m_xgboost": {
       "pair": "GBPUSD",
@@ -144,9 +168,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\xgboost_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\xgboost_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:06+00:00",
+          "metrics": {
+            "accuracy": 0.5088088088088089,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\xgboost_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\xgboost_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "GBPUSD_15m_random_forest": {
       "pair": "GBPUSD",
@@ -186,9 +222,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\random_forest_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\random_forest_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:06+00:00",
+          "metrics": {
+            "accuracy": 0.5205205205205206,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\random_forest_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\GBPUSD_15m\\random_forest_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "USDJPY_15m_xgboost": {
       "pair": "USDJPY",
@@ -228,9 +276,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\xgboost_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\xgboost_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:14+00:00",
+          "metrics": {
+            "accuracy": 0.5004004004004003,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\xgboost_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\xgboost_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "USDJPY_15m_random_forest": {
       "pair": "USDJPY",
@@ -270,9 +330,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\random_forest_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\random_forest_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:14+00:00",
+          "metrics": {
+            "accuracy": 0.5102102102102102,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\random_forest_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDJPY_15m\\random_forest_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "XAUUSD_15m_xgboost": {
       "pair": "XAUUSD",
@@ -312,9 +384,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\xgboost_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\xgboost_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:22+00:00",
+          "metrics": {
+            "accuracy": 0.5088088088088089,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\xgboost_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\xgboost_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "XAUUSD_15m_random_forest": {
       "pair": "XAUUSD",
@@ -354,9 +438,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\random_forest_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\random_forest_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:22+00:00",
+          "metrics": {
+            "accuracy": 0.4981981981981982,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\random_forest_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\random_forest_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "AUDUSD_15m_xgboost": {
       "pair": "AUDUSD",
@@ -396,9 +492,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\xgboost_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\xgboost_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:29+00:00",
+          "metrics": {
+            "accuracy": 0.5054054054054054,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\xgboost_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\xgboost_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "AUDUSD_15m_random_forest": {
       "pair": "AUDUSD",
@@ -438,9 +546,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\random_forest_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\random_forest_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:29+00:00",
+          "metrics": {
+            "accuracy": 0.5201201201201201,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\random_forest_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\random_forest_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "USDCAD_15m_xgboost": {
       "pair": "USDCAD",
@@ -480,9 +600,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\xgboost_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\xgboost_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:37+00:00",
+          "metrics": {
+            "accuracy": 0.5294294294294294,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\xgboost_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\xgboost_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     },
     "USDCAD_15m_random_forest": {
       "pair": "USDCAD",
@@ -522,9 +654,21 @@
           "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\random_forest_v3.pkl",
           "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\random_forest_v3_meta.json",
           "feature_names": []
+        },
+        {
+          "version": "v4",
+          "saved_at": "2026-07-15T18:21:37+00:00",
+          "metrics": {
+            "accuracy": 0.5385385385385385,
+            "training_bars": 49950
+          },
+          "is_keras": false,
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\random_forest_v4.pkl",
+          "meta_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCAD_15m\\random_forest_v4_meta.json",
+          "feature_names": []
         }
       ],
-      "latest": "v3"
+      "latest": "v4"
     }
   }
 }

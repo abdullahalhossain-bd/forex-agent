@@ -1,0 +1,11 @@
+{
+  "hash": "9a9e25b9f0aabc594b38de9f6ebaf7d1e305f9f2349de182eb9545c282a69167",
+  "saved_at": "2026-07-15T18:21:06.171111+00:00",
+  "metadata": {
+    "pair": "GBPUSD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v4",
+    "feature_names": []
+  }
+}

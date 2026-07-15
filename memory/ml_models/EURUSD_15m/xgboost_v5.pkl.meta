@@ -1,0 +1,11 @@
+{
+  "hash": "994301c36b59c65237aa2aa8c56b98a0eec784a9ec657d0b437131552ecb00e6",
+  "saved_at": "2026-07-15T18:20:58.537244+00:00",
+  "metadata": {
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v5",
+    "feature_names": []
+  }
+}
