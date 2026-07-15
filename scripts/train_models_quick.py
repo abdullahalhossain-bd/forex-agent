@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """
-Quick ML Model Training Script — generates synthetic OHLC data and trains
-XGBoost + Random Forest models for a pair+timeframe.
+Quick ML Model Training Script — Uses REAL MetaTrader5 historical data.
 
 Round-10 audit fix: the operator's audit found that ML models were NEVER
 trained ("pair_dir exists=False, registry exists=False"). This script
 creates a minimal working training pipeline so the Ensemble engine stops
 being permanently dead code.
+
+IMPORTANT: This script now uses REAL MT5 historical data by default.
+Synthetic data is ONLY used if explicitly enabled via --debug-synthetic flag.
 
 Usage:
     python scripts/train_models_quick.py --pair EURUSD --tf 15m
@@ -41,7 +43,13 @@ log = get_logger("train_models_quick")
 
 
 def generate_synthetic_ohlcv(symbol: str, bars: int = 500, seed: int = 42) -> pd.DataFrame:
-    """Generate realistic synthetic OHLCV data with trends, volatility, and patterns."""
+    """
+    Generate realistic synthetic OHLCV data with trends, volatility, and patterns.
+    
+    ⚠️ DEBUG ONLY: This function should ONLY be used for debugging/testing.
+    Production training MUST use real MT5 data.
+    """
+    log.warning("⚠️ GENERATING SYNTHETIC DATA - DEBUG MODE ONLY ⚠️")
     np.random.seed(seed + hash(symbol) % 1000)
     dates = pd.date_range("2024-01-01", periods=bars, freq="15min")
 
@@ -121,13 +129,53 @@ def build_labels(df: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     return df
 
 
-def train_one_pair(symbol: str, timeframe: str, bars: int = 500) -> bool:
-    """Train XGBoost + RandomForest models for one pair."""
+def train_one_pair(
+    symbol: str,
+    timeframe: str,
+    bars: int = 500,
+    use_synthetic: bool = False,
+) -> bool:
+    """
+    Train XGBoost + RandomForest models for one pair.
+    
+    Args:
+        symbol: Trading symbol (e.g., "EURUSD")
+        timeframe: Timeframe (e.g., "15m")
+        bars: Number of bars to fetch/generate
+        use_synthetic: If True, use synthetic data (DEBUG ONLY)
+    """
     log.info(f"=== Training {symbol} {timeframe} ===")
-
-    # 1. Generate data
-    df = generate_synthetic_ohlcv(symbol, bars=bars)
-    log.info(f"  Generated {len(df)} bars of synthetic data")
+    
+    # 1. Fetch data - REAL MT5 DATA BY DEFAULT
+    if use_synthetic:
+        log.warning("⚠️ Using SYNTHETIC data (DEBUG MODE)")
+        df = generate_synthetic_ohlcv(symbol, bars=bars)
+        log.info(f"  Generated {len(df)} bars of synthetic data")
+    else:
+        # Use the new MT5 data loader
+        from ml.mt5_data_loader import MT5DataLoader
+        
+        log.info("Fetching REAL MT5 historical data...")
+        loader = MT5DataLoader()
+        
+        # Map timeframe format (15m -> M15)
+        tf_map = {"1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30", 
+                  "1h": "H1", "4h": "H4", "1d": "D1"}
+        mt5_timeframe = tf_map.get(timeframe.lower(), timeframe.upper())
+        
+        result = loader.fetch(symbol=symbol, timeframe=mt5_timeframe, bars=bars)
+        loader.shutdown()
+        
+        if result.dataframe is None:
+            log.error(f"Failed to fetch MT5 data for {symbol} {timeframe}")
+            if result.errors:
+                log.error(f"Errors: {result.errors}")
+            return False
+        
+        df = result.dataframe
+        log.info(f"  Downloaded {result.rows_downloaded} candles from MT5")
+        log.info(f"  After cleaning: {result.rows_after_cleaning} rows")
+        log.info(f"  Date range: {result.start_date} → {result.end_date}")
 
     # 2. Add features + labels
     df = add_features(df)
@@ -247,26 +295,34 @@ def train_one_pair(symbol: str, timeframe: str, bars: int = 500) -> bool:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Quick ML model training with synthetic data (Round-10 fix)"
+        description="Quick ML model training with REAL MT5 data (Round-10 fix)"
     )
     parser.add_argument("--pair", type=str, default=None,
                         help="Train only this pair (e.g. EURUSD). Default: all default pairs.")
     parser.add_argument("--tf", type=str, default="15m",
                         help="Timeframe (default: 15m)")
-    parser.add_argument("--bars", type=int, default=500,
-                        help="Number of synthetic bars to generate (default: 500)")
+    parser.add_argument("--bars", type=int, default=100000,
+                        help="Number of bars to fetch from MT5 (default: 100000)")
+    parser.add_argument("--debug-synthetic", action="store_true",
+                        help="Use synthetic data instead of MT5 (DEBUG ONLY - not for production)")
     args = parser.parse_args()
 
     default_pairs = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD"]
     pairs = [args.pair.upper()] if args.pair else default_pairs
 
+    if args.debug_synthetic:
+        log.warning("⚠️ DEBUG MODE: Using SYNTHETIC data ⚠️")
+        log.warning("⚠️ Production models MUST use real MT5 data ⚠️")
+    else:
+        log.info("Using REAL MetaTrader5 historical data for training")
+    
     log.info(f"Training models for {len(pairs)} pair(s) on {args.tf} timeframe")
-    log.info(f"Synthetic data: {args.bars} bars per pair")
+    log.info(f"Bars per pair: {args.bars}")
 
     success_count = 0
     for pair in pairs:
         try:
-            if train_one_pair(pair, args.tf, bars=args.bars):
+            if train_one_pair(pair, args.tf, bars=args.bars, use_synthetic=args.debug_synthetic):
                 success_count += 1
         except Exception as e:
             log.error(f"Failed to train {pair} {args.tf}: {e}")
