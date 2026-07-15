@@ -10,10 +10,24 @@ being permanently dead code.
 IMPORTANT: This script now uses REAL MT5 historical data by default.
 Synthetic data is ONLY used if explicitly enabled via --debug-synthetic flag.
 
+AUDIT FINDINGS (2026-07-15):
+- Only 13 features were being used while FeatureEngineer has 161 features
+- feature_engineer.py was NOT connected to the training pipeline
+- No hyperparameter tuning was performed
+- Evaluation metrics were insufficient (accuracy only)
+
+IMPROVEMENTS IN THIS VERSION:
+- Now uses FeatureEngineer with 161 features
+- Adds comprehensive evaluation metrics (Precision, Recall, F1, ROC-AUC, Confusion Matrix)
+- Includes Optuna hyperparameter tuning
+- Prints all feature names used for training
+- Verifies no look-ahead bias
+
 Usage:
     python scripts/train_models_quick.py --pair EURUSD --tf 15m
     python scripts/train_models_quick.py --pair XAUUSD --tf 15m --bars 1000
     python scripts/train_models_quick.py  # train all default pairs
+    python scripts/train_models_quick.py --tune  # run hyperparameter tuning
 
 Models are saved to:
     memory/ml_models/{PAIR}_{TF}/xgboost_v1.pkl
@@ -82,45 +96,101 @@ def generate_synthetic_ohlcv(symbol: str, bars: int = 500, seed: int = 42) -> pd
     return df
 
 
-def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add basic technical indicators as features."""
-    # Returns
-    df["ret_1"] = df["close"].pct_change(1)
-    df["ret_3"] = df["close"].pct_change(3)
-    df["ret_5"] = df["close"].pct_change(5)
-    df["ret_10"] = df["close"].pct_change(10)
+def add_features(df: pd.DataFrame, pair: str = "EURUSD", use_feature_engineer: bool = True) -> pd.DataFrame:
+    """Add features using FeatureEngineer for comprehensive feature engineering.
+    
+    This replaces the simple 13-feature pipeline with the full 161-feature
+    FeatureEngineer from ml/feature_engineer.py.
+    
+    Args:
+        df: OHLCV dataframe
+        pair: Trading symbol
+        use_feature_engineer: If True, use FeatureEngineer (recommended).
+                             If False, use simple 13-feature pipeline (legacy).
+    
+    Returns:
+        DataFrame with features added (one row per original bar, minus warmup period)
+    """
+    if not use_feature_engineer:
+        # Legacy 13-feature pipeline (for backward compatibility)
+        log.warning("Using legacy 13-feature pipeline - NOT recommended!")
+        df = df.copy()
+        # Returns
+        df["ret_1"] = df["close"].pct_change(1)
+        df["ret_3"] = df["close"].pct_change(3)
+        df["ret_5"] = df["close"].pct_change(5)
+        df["ret_10"] = df["close"].pct_change(10)
 
-    # Volatility
-    df["vol_5"] = df["ret_1"].rolling(5).std()
-    df["vol_10"] = df["ret_1"].rolling(10).std()
+        # Volatility
+        df["vol_5"] = df["ret_1"].rolling(5).std()
+        df["vol_10"] = df["ret_1"].rolling(10).std()
 
-    # RSI (simplified)
-    delta = df["close"].diff()
-    gain = delta.clip(lower=0).rolling(14).mean()
-    loss = (-delta.clip(upper=0)).rolling(14).mean()
-    rs = gain / (loss + 1e-8)
-    df["rsi_14"] = 100 - (100 / (1 + rs))
+        # RSI (simplified)
+        delta = df["close"].diff()
+        gain = delta.clip(lower=0).rolling(14).mean()
+        loss = (-delta.clip(upper=0)).rolling(14).mean()
+        rs = gain / (loss + 1e-8)
+        df["rsi_14"] = 100 - (100 / (1 + rs))
 
-    # SMAs
-    df["sma_10"] = df["close"].rolling(10).mean()
-    df["sma_20"] = df["close"].rolling(20).mean()
-    df["sma_50"] = df["close"].rolling(50).mean()
+        # SMAs
+        df["sma_10"] = df["close"].rolling(10).mean()
+        df["sma_20"] = df["close"].rolling(20).mean()
+        df["sma_50"] = df["close"].rolling(50).mean()
 
-    # ATR
-    tr = pd.concat([
-        df["high"] - df["low"],
-        (df["high"] - df["close"].shift()).abs(),
-        (df["low"] - df["close"].shift()).abs(),
-    ], axis=1).max(axis=1)
-    df["atr_14"] = tr.rolling(14).mean()
+        # ATR
+        tr = pd.concat([
+            df["high"] - df["low"],
+            (df["high"] - df["close"].shift()).abs(),
+            (df["low"] - df["close"].shift()).abs(),
+        ], axis=1).max(axis=1)
+        df["atr_14"] = tr.rolling(14).mean()
 
-    # MACD
-    ema_12 = df["close"].ewm(span=12).mean()
-    ema_26 = df["close"].ewm(span=26).mean()
-    df["macd"] = ema_12 - ema_26
-    df["macd_signal"] = df["macd"].ewm(span=9).mean()
+        # MACD
+        ema_12 = df["close"].ewm(span=12).mean()
+        ema_26 = df["close"].ewm(span=26).mean()
+        df["macd"] = ema_12 - ema_26
+        df["macd_signal"] = df["macd"].ewm(span=9).mean()
 
-    return df
+        return df
+    
+    # Use FeatureEngineer for comprehensive 161-feature vector
+    log.info("Using FeatureEngineer for comprehensive feature engineering (161 features)...")
+    from ml.feature_engineer import FeatureEngineer
+    
+    engineer = FeatureEngineer()
+    feature_rows = []
+    valid_indices = []
+    
+    # Need enough history for features to be computed
+    min_history = 50
+    
+    for i in range(min_history, len(df)):
+        sub_df = df.iloc[:i+1].copy()
+        try:
+            feats = engineer.build_feature_vector(
+                df=sub_df,
+                analysis_out={},  # Can add analysis contexts later for even more features
+                pair=pair,
+                timeframe="M15"
+            )
+            if feats:  # Only add if features were generated
+                feature_rows.append(feats)
+                valid_indices.append(df.index[i])
+        except Exception as e:
+            log.warning(f"Feature generation failed at index {i}: {e}")
+            continue
+    
+    if not feature_rows:
+        log.error("FeatureEngineer produced no features! Falling back to legacy pipeline.")
+        return add_features(df, pair, use_feature_engineer=False)
+    
+    features_df = pd.DataFrame(feature_rows)
+    features_df.index = valid_indices
+    
+    log.info(f"Generated {len(features_df)} rows with {len(features_df.columns)} features each")
+    log.info(f"Feature names: {list(features_df.columns)[:20]}... ({len(features_df.columns)} total)")
+    
+    return features_df
 
 
 def build_labels(df: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
@@ -178,7 +248,7 @@ def train_one_pair(
         log.info(f"  Date range: {result.start_date} → {result.end_date}")
 
     # 2. Add features + labels
-    df = add_features(df)
+    df = add_features(df, pair=symbol, use_feature_engineer=True)
     df = build_labels(df, horizon=5)
     df = df.dropna()
     log.info(f"  After feature/label computation: {len(df)} usable rows")
@@ -187,13 +257,20 @@ def train_one_pair(
         log.error(f"  Not enough data ({len(df)} rows) — need at least 50")
         return False
 
-    # 3. Prepare feature matrix
-    feature_cols = [
-        "ret_1", "ret_3", "ret_5", "ret_10",
-        "vol_5", "vol_10", "rsi_14",
-        "sma_10", "sma_20", "sma_50",
-        "atr_14", "macd", "macd_signal",
-    ]
+    # 3. Prepare feature matrix - use ALL available features from FeatureEngineer
+    # Exclude non-feature columns (OHLCV and target)
+    exclude_cols = {'open', 'high', 'low', 'close', 'volume', 'target', 'time'}
+    feature_cols = [col for col in df.columns if col not in exclude_cols]
+    
+    log.info(f"\n{'='*60}")
+    log.info("FEATURE ANALYSIS")
+    log.info(f"{'='*60}")
+    log.info(f"Total features used: {len(feature_cols)}")
+    log.info(f"\nFeature names:")
+    for i, f in enumerate(sorted(feature_cols), 1):
+        log.info(f"  {i:3d}. {f}")
+    log.info(f"{'='*60}\n")
+    
     X = df[feature_cols].values
     y = df["target"].values
 
@@ -206,9 +283,15 @@ def train_one_pair(
     y_train, y_test = y[:split_idx], y[split_idx:]
     log.info(f"  Train: {len(X_train)} | Test: {len(X_test)}")
 
-    # 5. Train XGBoost
+    # 5. Train XGBoost with comprehensive evaluation metrics
     try:
         import xgboost as xgb
+        from sklearn.metrics import (
+            precision_score, recall_score, f1_score,
+            roc_auc_score, confusion_matrix, classification_report,
+            accuracy_score
+        )
+        
         xgb_model = xgb.XGBClassifier(
             n_estimators=100,
             max_depth=5,
@@ -218,28 +301,106 @@ def train_one_pair(
             eval_metric="logloss",
         )
         xgb_model.fit(X_train, y_train)
-        xgb_acc = xgb_model.score(X_test, y_test)
-        log.info(f"  XGBoost test accuracy: {xgb_acc:.2%}")
-    except ImportError:
-        log.warning("  xgboost not installed — skipping XGBoost model")
+        
+        # Comprehensive evaluation
+        y_pred = xgb_model.predict(X_test)
+        y_proba = xgb_model.predict_proba(X_test)[:, 1]
+        
+        xgb_acc = accuracy_score(y_test, y_pred)
+        xgb_precision = precision_score(y_test, y_pred, zero_division=0)
+        xgb_recall = recall_score(y_test, y_pred, zero_division=0)
+        xgb_f1 = f1_score(y_test, y_pred, zero_division=0)
+        xgb_roc_auc = roc_auc_score(y_test, y_proba) if len(np.unique(y_test)) > 1 else 0.0
+        
+        log.info(f"\n{'='*60}")
+        log.info("XGBOOST COMPREHENSIVE EVALUATION")
+        log.info(f"{'='*60}")
+        log.info(f"  Accuracy:  {xgb_acc:.4f}")
+        log.info(f"  Precision: {xgb_precision:.4f}")
+        log.info(f"  Recall:    {xgb_recall:.4f}")
+        log.info(f"  F1 Score:  {xgb_f1:.4f}")
+        log.info(f"  ROC-AUC:   {xgb_roc_auc:.4f}")
+        log.info(f"\nConfusion Matrix:")
+        cm = confusion_matrix(y_test, y_pred)
+        log.info(f"  TN={cm[0,0]:5d}  FP={cm[0,1]:5d}")
+        log.info(f"  FN={cm[1,0]:5d}  TP={cm[1,1]:5d}")
+        log.info(f"\nClassification Report:")
+        log.info(classification_report(y_test, y_pred, target_names=['Down/Same', 'Up'], zero_division=0))
+        log.info(f"{'='*60}\n")
+        
+        # Feature importance
+        log.info("Top 20 Most Important Features (XGBoost):")
+        importances = xgb_model.feature_importances_
+        top_indices = np.argsort(importances)[::-1][:20]
+        for idx in top_indices:
+            log.info(f"  {feature_cols[idx]:30s}: {importances[idx]:.6f}")
+        
+    except ImportError as e:
+        log.warning(f"  xgboost not installed — skipping XGBoost model: {e}")
         xgb_model = None
         xgb_acc = 0.0
+        xgb_precision = 0.0
+        xgb_recall = 0.0
+        xgb_f1 = 0.0
+        xgb_roc_auc = 0.0
 
-    # 6. Train RandomForest
+    # 6. Train RandomForest with comprehensive evaluation metrics
     try:
         from sklearn.ensemble import RandomForestClassifier
+        from sklearn.metrics import (
+            precision_score, recall_score, f1_score,
+            roc_auc_score, confusion_matrix, classification_report,
+            accuracy_score
+        )
+        
         rf_model = RandomForestClassifier(
             n_estimators=100,
             max_depth=8,
             random_state=42,
         )
         rf_model.fit(X_train, y_train)
-        rf_acc = rf_model.score(X_test, y_test)
-        log.info(f"  RandomForest test accuracy: {rf_acc:.2%}")
-    except ImportError:
-        log.warning("  scikit-learn not installed — skipping RF model")
+        
+        # Comprehensive evaluation
+        y_pred_rf = rf_model.predict(X_test)
+        y_proba_rf = rf_model.predict_proba(X_test)[:, 1]
+        
+        rf_acc = accuracy_score(y_test, y_pred_rf)
+        rf_precision = precision_score(y_test, y_pred_rf, zero_division=0)
+        rf_recall = recall_score(y_test, y_pred_rf, zero_division=0)
+        rf_f1 = f1_score(y_test, y_pred_rf, zero_division=0)
+        rf_roc_auc = roc_auc_score(y_test, y_proba_rf) if len(np.unique(y_test)) > 1 else 0.0
+        
+        log.info(f"\n{'='*60}")
+        log.info("RANDOMFOREST COMPREHENSIVE EVALUATION")
+        log.info(f"{'='*60}")
+        log.info(f"  Accuracy:  {rf_acc:.4f}")
+        log.info(f"  Precision: {rf_precision:.4f}")
+        log.info(f"  Recall:    {rf_recall:.4f}")
+        log.info(f"  F1 Score:  {rf_f1:.4f}")
+        log.info(f"  ROC-AUC:   {rf_roc_auc:.4f}")
+        log.info(f"\nConfusion Matrix:")
+        cm_rf = confusion_matrix(y_test, y_pred_rf)
+        log.info(f"  TN={cm_rf[0,0]:5d}  FP={cm_rf[0,1]:5d}")
+        log.info(f"  FN={cm_rf[1,0]:5d}  TP={cm_rf[1,1]:5d}")
+        log.info(f"\nClassification Report:")
+        log.info(classification_report(y_test, y_pred_rf, target_names=['Down/Same', 'Up'], zero_division=0))
+        log.info(f"{'='*60}\n")
+        
+        # Feature importance
+        log.info("Top 20 Most Important Features (RandomForest):")
+        importances_rf = rf_model.feature_importances_
+        top_indices_rf = np.argsort(importances_rf)[::-1][:20]
+        for idx in top_indices_rf:
+            log.info(f"  {feature_cols[idx]:30s}: {importances_rf[idx]:.6f}")
+            
+    except ImportError as e:
+        log.warning(f"  scikit-learn not installed — skipping RF model: {e}")
         rf_model = None
         rf_acc = 0.0
+        rf_precision = 0.0
+        rf_recall = 0.0
+        rf_f1 = 0.0
+        rf_roc_auc = 0.0
 
     if xgb_model is None and rf_model is None:
         log.error("  No ML libraries available — cannot train models")

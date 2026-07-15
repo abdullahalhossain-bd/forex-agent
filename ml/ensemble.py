@@ -256,13 +256,13 @@ class EnsembleEngine:
             # FULL. Capital protection comes first: rules-only mode is now
             # capped at HALF size regardless of confidence. If ML models
             # come back online, agreement-based sizing resumes normally.
-            position_size = "HALF" if votes[0].confidence >= 50 else "WAIT"
-            position_multiplier = 0.5 if votes[0].confidence >= 50 else 0.0
+            position_size = "HALF" if votes[0].confidence >= 40 else "WAIT"  # Lowered from 50
+            position_multiplier = 0.5 if votes[0].confidence >= 40 else 0.0  # Lowered from 50
             # ARCHITECTURAL FIX: preserve analysis verdict even when below
             # threshold. Don't zero confidence — let downstream gates decide.
             _rules_decision = votes[0].signal if votes[0].signal in ("BUY", "SELL") else "WAIT"
             _rules_conf = round(votes[0].confidence, 1)
-            if _rules_conf < 50 and _rules_decision in ("BUY", "SELL"):
+            if _rules_conf < 40 and _rules_decision in ("BUY", "SELL"):  # Lowered from 50
                 # Decision becomes WAIT (insufficient confidence for execution)
                 # BUT analysis_signal / analysis_confidence preserve the verdict.
                 log.info(
@@ -343,8 +343,8 @@ class EnsembleEngine:
         elif vote_result.position_multiplier == 0:
             decision_str = "WAIT" if decision_str in ("BUY", "SELL") else decision_str
 
-        # Check minimum confidence threshold — lowered from 55 to 50
-        min_conf = 50.0
+        # Check minimum confidence threshold — lowered from 55 to 45
+        min_conf = 45.0  # Lowered from 50 for better trade frequency
         if decision_str in ("BUY", "SELL") and fusion_result.final_confidence < min_conf:
             decision_str = "WAIT"
             log.info(

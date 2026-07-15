@@ -33302,3 +33302,4 @@ groq.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached
 2026-07-16 00:26:51 | DEBUG    | rl_environment            | [RL Env] OPEN LONG @ 1.10001 SL=1.09891 TP=1.10222 lot=0.82
 2026-07-16 00:26:51 | DEBUG    | rl_environment            | [RL Env] CLOSE LONG @ 1.10005 PnL=$3.08 (manual_close)
 2026-07-16 00:26:53 | INFO     | train_ppo_quick           | [PPO Quick] Model saved to D:\Projects\forex\ml\rl_policy\ppo_forex_latest.zip
+2026-07-15 18:42:36 | WARNING  | train_ppo_quick           | ⚠️ GENERATING SYNTHETIC DATA - DEBUG MODE ONLY ⚠️

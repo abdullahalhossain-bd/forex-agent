@@ -517,7 +517,7 @@ class DecisionAgent:
         if (master_sig in ("WAIT", "", "NO TRADE", None)
                 and llm_norm in ("WAIT", "NO TRADE", "HOLD", "", None)
                 and rule_signal in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL")
-                and rule_conf >= 30):
+                and rule_conf >= 25):  # Lowered threshold for Barrier-1 promotion
             _rule_norm = "BUY" if "BUY" in rule_signal else "SELL"
             votes += [_rule_norm] * 3  # promote rule to master weight
             log.info(

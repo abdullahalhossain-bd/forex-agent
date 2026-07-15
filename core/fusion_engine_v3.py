@@ -48,11 +48,11 @@ DEFAULT_NEWS_WEIGHT   = float(os.getenv("FUSION_NEWS_WEIGHT",   "0.20"))
 # ── Signal TTL (Master List Issue #5b) ─────────────────────────
 # A signal older than this is considered stale (the market has moved
 # during the LLM's 5-10s thinking time). Default 30s, override via env.
-DEFAULT_SIGNAL_TTL_SEC = float(os.getenv("FUSION_SIGNAL_TTL_SEC", "30"))
+DEFAULT_SIGNAL_TTL_SEC = float(os.getenv("FUSION_SIGNAL_TTL_SEC", "60"))  # Extended TTL
 
 # ── Minimum RRR (Master List Issue #5c) ────────────────────────
 # Reject trades where risk:reward < 1:1.5. Default 1.5, override via env.
-DEFAULT_MIN_RRR = float(os.getenv("FUSION_MIN_RRR", "1.5"))
+DEFAULT_MIN_RRR = float(os.getenv("FUSION_MIN_RRR", "1.3"))  # Lowered for adaptive threshold
 
 
 @dataclass

@@ -86,10 +86,15 @@ class RLAgent:
                 log.info(f"[RL Agent] PPO model loaded from {model_path}")
                 return True
             else:
-                log.info(f"[RL Agent] No model at {model_path} — using heuristic")
+                log.warning(f"[RL Agent] No model at {model_path} — using heuristic (CHECK: file exists={model_path.exists()})")
+                log.warning(f"[RL Agent] Searching in: {model_path.parent}")
+                if model_path.parent.exists():
+                    log.warning(f"[RL Agent] Files in directory: {list(model_path.parent.iterdir())}")
                 return False
         except Exception as e:
-            log.warning(f"[RL Agent] model load failed: {e}")
+            log.exception(f"[RL Agent] model load failed from {model_path}: {e}")
+                import traceback
+                log.error(f"[RL Agent] Full traceback: {traceback.format_exc()}")
             return False
 
     def predict(self, state: np.ndarray, ensemble_signal: str = "WAIT",
@@ -132,13 +137,13 @@ class RLAgent:
         """Heuristic action when no PPO model is available.
         Lowered veto threshold from 55% to 45% — original was too aggressive,
         blocking too many valid trades."""
-        if ensemble_signal == "BUY" and ensemble_confidence >= 50:
+        if ensemble_signal == "BUY" and ensemble_confidence >= 45:  # Lowered from 50
             return RLAction(
                 action=1, action_name="BUY", confidence=0.6,
                 reason="Heuristic: ensemble BUY with sufficient confidence",
                 model_loaded=False, source="heuristic",
             )
-        elif ensemble_signal == "SELL" and ensemble_confidence >= 50:
+        elif ensemble_signal == "SELL" and ensemble_confidence >= 45:  # Lowered from 50
             return RLAction(
                 action=2, action_name="SELL", confidence=0.6,
                 reason="Heuristic: ensemble SELL with sufficient confidence",
