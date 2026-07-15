@@ -1,0 +1,14 @@
+{
+  "pair": "AUDUSD",
+  "timeframe": "15m",
+  "model_type": "xgboost",
+  "version": "v3",
+  "saved_at": "2026-07-15T17:14:00+00:00",
+  "metrics": {
+    "accuracy": 0.5384615384615384,
+    "training_bars": 451
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\AUDUSD_15m\\xgboost_v3.pkl",
+  "is_keras": false,
+  "feature_names": []
+}

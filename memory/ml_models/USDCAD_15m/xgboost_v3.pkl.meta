@@ -1,0 +1,11 @@
+{
+  "hash": "730ecd414dd95ecb84c59779971fe591a74e602ca07f9a555c8c40d1867d65b2",
+  "saved_at": "2026-07-15T17:14:00.477909+00:00",
+  "metadata": {
+    "pair": "USDCAD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v3",
+    "feature_names": []
+  }
+}

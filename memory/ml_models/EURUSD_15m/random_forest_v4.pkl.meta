@@ -1,0 +1,11 @@
+{
+  "hash": "4a8e569937ae89a4141638f1c9ed5fcdf4746a76019322d24f0e0a79c44bcdf0",
+  "saved_at": "2026-07-15T17:13:58.503170+00:00",
+  "metadata": {
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v4",
+    "feature_names": []
+  }
+}

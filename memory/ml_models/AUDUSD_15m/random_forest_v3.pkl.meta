@@ -1,0 +1,11 @@
+{
+  "hash": "d16ee255f0b2581a116082c6b7b3f180e92c17939b2224e5cc590b9b239b1bce",
+  "saved_at": "2026-07-15T17:14:00.126522+00:00",
+  "metadata": {
+    "pair": "AUDUSD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v3",
+    "feature_names": []
+  }
+}

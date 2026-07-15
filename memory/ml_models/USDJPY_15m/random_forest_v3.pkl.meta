@@ -1,0 +1,11 @@
+{
+  "hash": "3b1be494846062bc18c4bba4599dd42ec50a1cae1db29697fff72b06be8655ef",
+  "saved_at": "2026-07-15T17:13:59.328715+00:00",
+  "metadata": {
+    "pair": "USDJPY",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v3",
+    "feature_names": []
+  }
+}
