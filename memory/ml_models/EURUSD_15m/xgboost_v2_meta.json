@@ -1,0 +1,13 @@
+{
+  "pair": "EURUSD",
+  "timeframe": "15m",
+  "model_type": "xgboost",
+  "version": "v2",
+  "saved_at": "2026-07-14T16:15:41+00:00",
+  "metrics": {
+    "accuracy": 0.7068062827225131,
+    "training_bars": 951
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\EURUSD_15m\\xgboost_v2.pkl",
+  "is_keras": false
+}

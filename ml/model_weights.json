@@ -1,0 +1,46 @@
+{
+  "_comment": "Day 70+ — Default ensemble model weights with relaxed thresholds for more trade activity.",
+  "xgboost": 0.35,
+  "random_forest": 0.20,
+  "lstm": 0.25,
+  "rules": 0.20,
+  "_regime_adjustments": {
+    "TRENDING": {
+      "xgboost": 0.05,
+      "lstm": 0.05,
+      "random_forest": -0.05,
+      "rules": -0.05
+    },
+    "RANGING": {
+      "random_forest": 0.05,
+      "rules": 0.05,
+      "xgboost": -0.05,
+      "lstm": -0.05
+    },
+    "BREAKOUT": {
+      "xgboost": 0.05,
+      "rules": 0.05,
+      "lstm": 0.0,
+      "random_forest": -0.10
+    },
+    "VOLATILE": {
+      "rules": 0.10,
+      "random_forest": 0.05,
+      "xgboost": -0.05,
+      "lstm": -0.10
+    }
+  },
+  "_agreement_rules": {
+    "4/4": "FULL",
+    "3/4": "HALF",
+    "2/4": "REDUCED",
+    "1/4": "NO_TRADE",
+    "0/4": "NO_TRADE"
+  },
+  "_thresholds": {
+    "min_confidence": 50,
+    "high_conviction": 70,
+    "conflict_penalty": 15,
+    "abstain_if_conflict_above": 0.8
+  }
+}

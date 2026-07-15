@@ -1,0 +1,13 @@
+{
+  "pair": "XAUUSD",
+  "timeframe": "15m",
+  "model_type": "random_forest",
+  "version": "v1",
+  "saved_at": "2026-07-14T16:15:43+00:00",
+  "metrics": {
+    "accuracy": 0.7539267015706806,
+    "training_bars": 951
+  },
+  "model_path": "D:\\Projects\\forex\\memory\\ml_models\\XAUUSD_15m\\random_forest_v1.pkl",
+  "is_keras": false
+}

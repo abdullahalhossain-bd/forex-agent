@@ -1,0 +1,13 @@
+{
+  "level_1_active": false,
+  "level_1_until": null,
+  "level_2_active": false,
+  "level_2_until": null,
+  "level_3_active": false,
+  "level_3_until": null,
+  "daily_loss_pct": 0.0,
+  "weekly_loss_pct": 0.0,
+  "current_drawdown_pct": -0.00011143614159472391,
+  "peak_balance": 99170.98,
+  "last_reset": "2026-07-14T17:41:02.734348+00:00"
+}

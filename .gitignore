@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────
+# Forex AI — .gitignore
+# ─────────────────────────────────────────────────────────────
+# Merged from the legacy .gitignore + .gitignore.txt into a
+# single, well-formed file (the old .gitignore was wrapped in
+# markdown backticks which made git ignore the directives).
+# ─────────────────────────────────────────────────────────────
+
+# ── Environment & secrets ────────────────────────────────────
+.env
+.env.*
+!.env.example
+.env.local
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+target/
+
+# ── Virtual environments ─────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── IDE / Editor ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# ── Database files ───────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+database/*.db
+
+# ── Logs ─────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Memory & runtime state ───────────────────────────────────
+memory/trade_vectors/
+memory/*.npy
+memory/pattern_stats.json
+memory/confidence_history.json
+memory/disabled_patterns.json
+memory/pending_approvals.json
+memory/approval_mode.json
+memory/news_history.json
+memory/daily_reviews/
+memory/human_override_cmd.json
+memory/trading_journal/
+
+# ── Backups & reports (runtime generated) ────────────────────
+backups/
+reports/
+
+# ── Charts & data output ─────────────────────────────────────
+data/chart.html
+data/*.csv
+data/backtest_cache/
+
+# ── OS files ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Testing & coverage ───────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# ── Node (if any dashboard tooling lands) ────────────────────
+node_modules/

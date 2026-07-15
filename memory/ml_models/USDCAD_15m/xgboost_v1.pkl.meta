@@ -1,0 +1,10 @@
+{
+  "hash": "0daec69fb8f6a24239e2cb0b50608b40b2936f133cb7c487838381d0151f6f78",
+  "saved_at": "2026-07-15T08:09:56.423282+00:00",
+  "regenerated": true,
+  "metadata": {
+    "note": "Metadata back-filled post-hoc; this file predates the safe_pickle .meta convention. Hash reflects file content at regeneration time, not at original training time.",
+    "pair_timeframe_dir": "USDCAD_15m",
+    "model_file": "xgboost_v1.pkl"
+  }
+}

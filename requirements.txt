@@ -1,0 +1,46 @@
+# ── Core ────────────────────────────────────────────────────
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+python-dotenv>=1.0
+psutil>=5.9
+
+# ── Data & Indicators ──────────────────────────────────────
+pandas-ta>=0.3.14b1
+ta>=0.10
+
+# ── Machine Learning ───────────────────────────────────────
+xgboost>=2.0
+scikit-learn>=1.3
+stable-baselines3>=2.1
+gymnasium>=0.29
+
+# ── Visualization ──────────────────────────────────────────
+matplotlib>=3.7
+streamlit>=1.30
+
+# ── Communication ──────────────────────────────────────────
+python-telegram-bot>=20.0
+groq>=0.4
+google-genai>=0.3.0
+openai>=1.0
+
+# ── Model Versioning (optional) ───────────────────────────
+mlflow>=2.10; python_version>="3.9"
+
+# ── Broker (Windows only) ─────────────────────────────────
+MetaTrader5>=5.0.45; platform_system=="Windows"
+
+# ── HTTP / Cloudflare bypass (Day 99+ — Issue #5) ────────
+# curl_cffi emulates Chrome's TLS fingerprint (JA3) exactly,
+# defeating Cloudflare bot detection that 403s Python's default
+# requests library. Used as an optional fallback in
+# utils/api_rate_limiter.py and core/llm_key_manager.py for
+# Cerebras / OpenRouter / Polygon / Twelve Data endpoints.
+# If not installed, code falls back to plain requests with a
+# browser User-Agent (which is enough for most providers).
+curl_cffi>=0.5.10
+
+# cloudscraper is used by news_filter.py for Forex Factory HTML
+# scraping when the FairEconomy JSON feed is unavailable.
+cloudscraper>=1.2.71

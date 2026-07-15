@@ -1,0 +1,10 @@
+{
+  "hash": "6bc05ab06bdad85533b7efeb0692d14492c854a93b7833cfa61fea916a0ddefa",
+  "saved_at": "2026-07-15T08:09:56.415234+00:00",
+  "regenerated": true,
+  "metadata": {
+    "note": "Metadata back-filled post-hoc; this file predates the safe_pickle .meta convention. Hash reflects file content at regeneration time, not at original training time.",
+    "pair_timeframe_dir": "GBPUSD_15m",
+    "model_file": "xgboost_v1.pkl"
+  }
+}

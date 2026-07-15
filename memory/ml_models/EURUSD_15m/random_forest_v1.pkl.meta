@@ -1,0 +1,10 @@
+{
+  "hash": "6f51e8211611bd179e1e05ea61714b6218772347d343fdf3c5862ed142cbf3ee",
+  "saved_at": "2026-07-15T08:09:56.400477+00:00",
+  "regenerated": true,
+  "metadata": {
+    "note": "Metadata back-filled post-hoc; this file predates the safe_pickle .meta convention. Hash reflects file content at regeneration time, not at original training time.",
+    "pair_timeframe_dir": "EURUSD_15m",
+    "model_file": "random_forest_v1.pkl"
+  }
+}
