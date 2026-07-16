@@ -934,5 +934,31 @@
     "recommendation": "Final decision: NO TRADE",
     "has_conflict": false,
     "result": null
+  },
+  {
+    "time": "2026-07-16T22:02:56",
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "price": 1.14464,
+    "trend": "bearish",
+    "rsi": 40.47609,
+    "bias": "NO TRADE",
+    "confidence": 48.6,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
+  },
+  {
+    "time": "2026-07-16T22:03:46",
+    "pair": "GBPUSD",
+    "timeframe": "15m",
+    "price": 1.34781,
+    "trend": "bearish",
+    "rsi": 28.77688,
+    "bias": "NO TRADE",
+    "confidence": 45.4,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
   }
 ]

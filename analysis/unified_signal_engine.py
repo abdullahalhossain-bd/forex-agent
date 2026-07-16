@@ -408,40 +408,27 @@ class UnifiedSignalEngine:
                 "sell_score": 0.0,
             }
 
-        # Determine direction
-        if buy_score > sell_score:
+        # === FINAL FLEXIBLE CONSENSUS LOGIC ===
+        if buy_score >= 1.8 or (buy_score > 0 and sell_score == 0):
             consensus_action = "BUY"
             consensus_score = buy_score
-            winning_engines = [e for a, w, c, e in votes if a == "BUY"]
-        elif sell_score > buy_score:
+        elif sell_score >= 1.8 or (sell_score > 0 and buy_score == 0):
             consensus_action = "SELL"
             consensus_score = sell_score
-            winning_engines = [e for a, w, c, e in votes if a == "SELL"]
         else:
-            # Tie — no consensus
             return {
                 "action": "NO_TRADE",
                 "confidence": "Low",
-                "reason": f"Tie vote (BUY={buy_score}, SELL={sell_score}) — no consensus",
-                "voting_engines": [{"engine": e, "action": a, "weight": w} for a, w, c, e in votes],
+                "reason": f"Insufficient consensus (BUY={buy_score:.1f}, SELL={sell_score:.1f})",
+                "voting_engines": [],
                 "buy_score": buy_score,
                 "sell_score": sell_score,
             }
 
-        # Confidence based on vote count + score
-        vote_count = len(winning_engines)
-        if vote_count >= 2 and consensus_score >= 4.0:
-            confidence = "High"
-        elif vote_count >= 1 and consensus_score >= 2.0:
-            confidence = "Medium"
-        else:
-            confidence = "Low"
+        vote_count = len([v for v in votes if v[0] == consensus_action])
+        confidence = "High" if vote_count >= 2 or consensus_score >= 3.0 else "Medium" if consensus_score >= 1.5 else "Low"
 
-        reason = (
-            f"Consensus {consensus_action} from {vote_count} engine(s): "
-            f"{', '.join(winning_engines)}. "
-            f"Score: {consensus_score:.1f} (BUY={buy_score:.1f}, SELL={sell_score:.1f})."
-        )
+        reason = f"Consensus {consensus_action} | {vote_count} engine(s) agreed | Score={consensus_score:.1f}"
 
         return {
             "action": consensus_action,

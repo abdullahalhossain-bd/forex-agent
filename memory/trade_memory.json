@@ -2168,5 +2168,67 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 73,
+    "timestamp": "2026-07-16T16:02:56.059731",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 48.6,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "bearish",
+    "rsi": 40.47609,
+    "patterns": [
+      "hammer",
+      "doji"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "SELL",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for NEW_YORK (score=0/100, grade=INVALID) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 74,
+    "timestamp": "2026-07-16T16:03:46.277576",
+    "symbol": "GBPUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 45.4,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "bearish",
+    "rsi": 28.77688,
+    "patterns": [
+      "hammer",
+      "three_bar_continuation_bearish",
+      "doji",
+      "three_bar_reversal_bearish"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "SELL",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for NEW_YORK (score=24/100, grade=INVALID) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]

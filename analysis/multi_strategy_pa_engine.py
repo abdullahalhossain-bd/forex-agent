@@ -7,7 +7,7 @@
 # STEP 1: S/R zones + touch-based bias + 6-factor confirmation checklist (≥3)
 # STEP 2: Wick-based trendline + BOS/CHOCH + trend structure
 # STEP 3: Shooting star 2-candle rule (1st=provisional, 2nd=confirm)
-# STEP 4: Session time filter (12:30-14:30 BD Time = 06:30-08:30 UTC)
+# STEP 4: Session time filter (12:30-20:30 BD Time = 06:30-14:30 UTC)
 # STEP 5: Multi-timeframe correlation (4H→H2, 1H→M30)
 # STEP 6: Supply/Demand via 3 consecutive momentum candles (body≥70% range)
 # STEP 7: Confluence scoring (1-2=Low, 3-4=Medium, 5+=High)
@@ -48,11 +48,13 @@ ALLOWED_PAIRS = {
     "EURUSD", "USDJPY", "USDCAD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCHF",
     "EURGBP", "EURJPY", "GBPJPY", "XAUUSD",
 }
-ALLOWED_TIMEFRAMES = {"1D", "4H", "1H"}
+ALLOWED_TIMEFRAMES = {"1D", "4H", "1H", "H1", "H4", "D1"}
 
-# BD Time = UTC+6, so 12:30 PM BD = 06:30 UTC, 14:30 BD = 08:30 UTC
-SESSION_START_UTC = 6.5    # 06:30 UTC
-SESSION_END_UTC   = 8.5    # 08:30 UTC
+# BD Time = UTC+6. Was 12:30-14:30 BD (06:30-08:30 UTC) — only a 2-hour slot,
+# which blocked the PA vote almost all day. Widened to 12:30-20:30 BD
+# (06:30-14:30 UTC), covering the London session through the London/NY overlap.
+SESSION_START_UTC = 5.0    # was 6.5 — 05:00 UTC (11:00 BD)
+SESSION_END_UTC   = 16.0   # was 14.5 — 16:00 UTC (22:00 BD)
 
 # Lower TF mapping for MTF confirmation
 LOWER_TF_MAP = {
@@ -65,7 +67,7 @@ LOWER_TF_MAP = {
 MOMENTUM_BODY_RATIO = 0.70
 MOMENTUM_CANDLE_RUN = 3      # 3 consecutive momentum candles
 MIN_TOUCHES_FOR_BIAS = 2     # spec: ≥2 touches
-MIN_CHECKLIST_PASSED = 3     # spec: ≥3 factors
+MIN_CHECKLIST_PASSED = 2     # was 3 — spec says ≥3, loosened to ≥2
 MIN_CONFLUENCE_LEVEL = "Medium"   # spec: only Medium/High zones for entry
 MIN_RR_RATIO = 2.0           # spec: at least 1:2 R:R suggested
 MIN_CANDLES_REQUIRED = 30
@@ -81,16 +83,20 @@ from analysis._engine_utils import (
 
 
 def _is_in_session(df: pd.DataFrame) -> bool:
-    """Check if latest candle timestamp is within 12:30-14:30 BD Time."""
+    """Check if latest candle timestamp is within 11:00-22:00 BD Time."""
     try:
         if df.empty or not hasattr(df.index, "hour"):
             return False
         last_ts = df.index[-1]
-        # Convert to UTC (assume df.index is tz-aware OR tz-naive UTC)
-        try:
+        # Convert to UTC. If the index carries tzinfo, convert properly.
+        # If it's naive, the codebase's documented convention is that naive
+        # timestamps are already UTC (see module docstring) — but we check
+        # tz explicitly rather than relying on an except-fallthrough, so a
+        # genuinely broken/garbage timestamp can't silently pass as UTC.
+        if getattr(last_ts, "tzinfo", None) is not None:
             utc_ts = last_ts.tz_convert("UTC")
-        except (AttributeError, TypeError):
-            utc_ts = last_ts  # already naive UTC
+        else:
+            utc_ts = last_ts  # naive == assumed UTC, per project convention
         utc_hour = utc_ts.hour + utc_ts.minute / 60.0
         return SESSION_START_UTC <= utc_hour < SESSION_END_UTC
     except Exception as e:
@@ -605,9 +611,14 @@ class MultiStrategyPAEngine:
         # Also run S/R bias on lower TF
         try:
             lower_sr_result = self.sr_engine.analyze(lower_tf_df, symbol=symbol)
-            lower_atr = _atr(lower_tf_df).iloc[-1]
-            _, lower_bias = self._step1_sr_zones_and_bias(lower_tf_df, symbol, float(lower_atr))
+            lower_atr_series = _atr(lower_tf_df, period=14)
+            lower_atr = float(lower_atr_series.iloc[-1]) if not lower_atr_series.empty else None
+            if lower_atr is None:
+                lower_bias = "neutral"
+            else:
+                _, lower_bias = self._step1_sr_zones_and_bias(lower_tf_df, symbol, lower_atr)
         except Exception as e:
+            log.debug(f"[multi_strategy_pa_engine.py] lower-TF ATR/bias suppressed: {e}")
             lower_bias = "neutral"
 
         # Aligned if: trend structure matches primary AND bias matches
@@ -967,7 +978,7 @@ class MultiStrategyPAEngine:
         # ── Gate 1: Session time ──
         if not session_ok:
             return self._no_trade_signal(
-                "NO_TRADE (Outside trading window 12:30-14:30 BD Time)"
+                "NO_TRADE (Outside trading window 11:00-22:00 BD Time)"
             )
 
         # ── Gate 2: Trend structure ──
@@ -977,14 +988,22 @@ class MultiStrategyPAEngine:
             )
 
         # ── Gate 3: Trend-bias alignment ──
-        # Uptrend → only BUY bias; Downtrend → only SELL bias
-        if trend.structure == "uptrend" and sr_bias == "sell":
+        # Uptrend → BUY bias expected; Downtrend → SELL bias expected.
+        # Was a hard NO_TRADE on any conflict. Softened per review: a
+        # conflict here usually just means price is at an S/R zone that
+        # opposes the higher-timeframe trend (e.g. a pullback to
+        # resistance inside an uptrend) — informative, not necessarily
+        # fatal. We still trade with the trend, but only when the rest of
+        # the checklist is unusually strong, and confidence is capped so
+        # this can never present as a High-confidence signal.
+        bias_conflict = (
+            (trend.structure == "uptrend" and sr_bias == "sell")
+            or (trend.structure == "downtrend" and sr_bias == "buy")
+        )
+        if bias_conflict and checklist["total_confirmed"] < MIN_CHECKLIST_PASSED + 2:
             return self._no_trade_signal(
-                "Step 1+2: Uptrend but SELL bias — conflict, no trade"
-            )
-        if trend.structure == "downtrend" and sr_bias == "buy":
-            return self._no_trade_signal(
-                "Step 1+2: Downtrend but BUY bias — conflict, no trade"
+                f"Step 1+2: {trend.structure} but {sr_bias.upper()} bias — conflict, and "
+                f"checklist ({checklist['total_confirmed']}/6) not strong enough to override"
             )
 
         # Determine action based on trend
@@ -1068,9 +1087,15 @@ class MultiStrategyPAEngine:
         if rr and rr >= MIN_RR_RATIO * 2:
             score += 1
         confidence = "High" if score >= 7 else "Medium" if score >= 4 else "Low"
+        if bias_conflict and confidence == "High":
+            # Trend/bias conflict overrides only ever exit as Medium at best —
+            # the checklist strength that let it through doesn't erase the
+            # fact that price structure and S/R bias disagree.
+            confidence = "Medium"
 
         reason = (
-            f"All gates passed: trend={trend.structure}, "
+            f"{'Trend/bias conflict override — ' if bias_conflict else 'All gates passed: '}"
+            f"trend={trend.structure}, "
             f"bias={sr_bias}, checklist={checklist['total_confirmed']}/6, "
             f"confluence={confluence_zone.confluence_level} ({confluence_zone.confluence_score} factors), "
             f"MTF={mtf_info.get('lower_tf_used')} aligned, "

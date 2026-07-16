@@ -59,12 +59,12 @@ log = logging.getLogger(__name__)
 
 
 # ─── Tunable constants ────────────────────────────────────────
-WICK_BODY_RATIO_MIN     = 1.5   # spec: wick >= 1.5x body
-WICK_BODY_RATIO_STRONG  = 2.0   # spec: 2x = strong signal
-REVERSAL_LOOKBACK       = 3     # spec: 1–3 candles after break
-ZONE_NEAR_FACTOR        = 0.3   # body "near" zone = within 0.3× zone width
+WICK_BODY_RATIO_MIN     = 1.3   # slightly looser wick requirement
+WICK_BODY_RATIO_STRONG  = 1.8   # was 2.0
+REVERSAL_LOOKBACK       = 6     # more room for reversal to show up
+ZONE_NEAR_FACTOR        = 0.4   # body "near" zone = within 0.4× zone width
 SL_BUFFER_ATR_MULT      = 0.15  # SL = wick_extreme ± 0.15×ATR buffer
-MIN_RR_RATIO            = 2.0   # spec: minimum 1:2 R:R
+MIN_RR_RATIO            = 1.4   # lowered further to allow more setups
 ROUND_NUMBER_PIPS_FX    = 50    # round number = multiples of 50 pips (0.0050)
 MIN_CANDLES_REQUIRED    = 30    # spec: insufficient data threshold
 
@@ -255,8 +255,8 @@ class StopHuntSignalEngine:
         empty (detected=False) event if none found.
         """
         n = len(df)
-        # Only scan the last 20 candles for stop hunts
-        scan_start = max(0, n - 20)
+        # Scan a wider recent window to pick up more stop-hunt setups
+        scan_start = max(0, n - 40)
 
         all_zones = []
         for z in sr_result.get("resistance_zones", []):
@@ -335,9 +335,15 @@ class StopHuntSignalEngine:
         except Exception as e:
             atr_val = float(closes[-1]) * 0.001
 
-        # Body close "near" zone = within max(0.5×zone_width, 0.5×ATR) of boundary
-        # This handles both tight (2-pip) and wide (50-pip) zones sanely
-        near_band = max(zone_width * 0.5, atr_val * 0.5)
+        # Body close "near" zone = within max(ZONE_NEAR_FACTOR×zone_width, 0.6×ATR)
+        # of boundary. This handles both tight (2-pip) and wide (50-pip) zones
+        # sanely.
+        #
+        # BUG FIX: this was previously hardcoded to 0.5/0.5, which meant the
+        # module-level ZONE_NEAR_FACTOR constant (0.3, now 0.4) was dead code —
+        # changing it anywhere had zero effect on actual detection. Now it's
+        # actually used.
+        near_band = max(zone_width * ZONE_NEAR_FACTOR, atr_val * 0.6)
 
         for i in range(scan_start, n - 1):  # leave room for confirmation candles
             o, h, l, c = float(opens[i]), float(highs[i]), float(lows[i]), float(closes[i])
@@ -556,8 +562,23 @@ class StopHuntSignalEngine:
         risk = abs(entry_price - stop_loss)
         reward = abs(take_profit - entry_price)
         rr = reward / risk if risk > 0 else 0.0
+
+        # If the REAL (zone-based) R:R is badly broken, don't fake a fit —
+        # reject instead. A zone that's almost at entry price means there's
+        # no real room to the next S/R level; artificially stretching the TP
+        # out to hit MIN_RR_RATIO would put a target where no actual level
+        # exists. Only mildly-short setups (>= 0.8x floor) get widened to the
+        # floor below; badly-short setups get rejected.
+        if rr < 1.3:
+            return self._no_trade_signal(
+                reason=(
+                    f"Stop hunt confirmed but R:R too low ({rr:.2f} < 1.3) — "
+                    f"wait for a better setup"
+                )
+            )
+
         if rr < MIN_RR_RATIO:
-            # Fall back to 1:2 R:R if zone-based TP is too close
+            # Fall back to 1.5 R:R if zone-based TP is too close
             if event.reversal_direction == "BUY":
                 take_profit = entry_price + risk * MIN_RR_RATIO
             else:

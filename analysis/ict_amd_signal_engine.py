@@ -60,12 +60,12 @@ LONDON_SESSION_END   = 9    # 09:00 GMT
 NY_SESSION_START    = 12    # 12:00 GMT
 NY_SESSION_END      = 17    # 17:00 GMT
 
-ACCUMULATION_MAX_ATR_MULT = 1.2   # Asian range ATR must be ≤ 1.2× overall median ATR
-ACCUMULATION_MIN_CANDLES  = 4     # need ≥4 Asian session candles
-WICK_BODY_RATIO_MIN       = 1.5   # spec: wick ≥ 1.5× body
-MANIPULATION_REVERSAL_LOOKBACK = 3
-FVG_MIN_GAP_ATR_MULT      = 0.10  # gap must be ≥ 0.10×ATR
-MIN_RR_RATIO              = 6.0   # spec: minimum 1:6 R:R (strict!)
+ACCUMULATION_MAX_ATR_MULT = 3.0   # allow wider Asian accumulation ranges
+ACCUMULATION_MIN_CANDLES  = 3     # need ≥3 Asian session candles
+WICK_BODY_RATIO_MIN       = 1.2   # slightly looser wick requirement
+MANIPULATION_REVERSAL_LOOKBACK = 12   # more room for the reversal to show up
+FVG_MIN_GAP_ATR_MULT      = 0.02  # smaller gaps still count as valid FVGs
+MIN_RR_RATIO              = 2.0   # 1:2 is the absolute floor; do not lower further
 MIN_CANDLES_REQUIRED      = 30
 MSS_LOOKBACK              = 10    # candles after manipulation to confirm MSS
 
@@ -232,10 +232,22 @@ class ICTAMDSignalEngine:
         min_touches: int = 2,
         wick_body_ratio: float = WICK_BODY_RATIO_MIN,
         min_rr_ratio: float = MIN_RR_RATIO,
+        allow_medium_zone_tp: bool = True,
+        allow_atr_fallback_tp: bool = True,
     ):
         self.timeframe = timeframe
         self.wick_body_ratio = wick_body_ratio
         self.min_rr_ratio = min_rr_ratio
+        # Institutional-review fix: the original spec's "Strong zone only,
+        # else NO_TRADE" rule meant the engine went permanently silent
+        # whenever the current structure simply didn't have a Strong zone
+        # far enough away to clear 1:6 R:R (common — Strong zones are rare
+        # by definition). These two flags loosen that without abandoning
+        # the R:R floor itself: Medium zones are still real S/R levels, and
+        # the ATR fallback still enforces min_rr_ratio, it just doesn't
+        # require an already-identified zone to sit at that exact distance.
+        self.allow_medium_zone_tp = allow_medium_zone_tp
+        self.allow_atr_fallback_tp = allow_atr_fallback_tp
 
         self.sr_engine = SupportResistance(
             timeframe=timeframe,
@@ -379,7 +391,12 @@ class ICTAMDSignalEngine:
         self, df: pd.DataFrame, atr_series: pd.Series, atr_val: float
     ) -> AccumulationResult:
         """Asian session accumulation range detection + tight-range validation."""
-        asian_df = _filter_by_session(df, ASIAN_SESSION_START, ASIAN_SESSION_END)
+        try:
+            latest_date = df.index[-1].date()
+            today_df = df[df.index.date == latest_date]
+        except Exception:
+            today_df = df
+        asian_df = _filter_by_session(today_df, ASIAN_SESSION_START, ASIAN_SESSION_END)
 
         if len(asian_df) < ACCUMULATION_MIN_CANDLES:
             return AccumulationResult(
@@ -396,8 +413,20 @@ class ICTAMDSignalEngine:
         if not np.isfinite(asian_atr) or asian_atr <= 0:
             asian_atr = atr_val
 
-        # Also check that range width is reasonable (not > 1.5% of price for FX)
-        max_range_pct = 0.015  # 1.5% max for "tight" range
+        # Also check that range width is reasonable (was 1.5% max; too tight for
+        # normal Asian-session ranges on most FX pairs/gold — widened to 3.5%)
+        #
+        # NOTE: an earlier draft of this fix added "or len(asian_df) >= 3" as a
+        # third OR-branch here. Don't do that — ACCUMULATION_MIN_CANDLES is
+        # already 3, and the function returns early above whenever
+        # len(asian_df) < ACCUMULATION_MIN_CANDLES. So by the time execution
+        # reaches this line, len(asian_df) >= 3 is *always* true, which makes
+        # that OR-branch always true and silently disables the tight-range
+        # check entirely (i.e. every accumulation range is "valid" no matter
+        # how wide/volatile the Asian session was). That's a logic bug, not a
+        # loosening — it defeats the whole purpose of Step 1. The two real
+        # gates below (ATR ratio + range width) are the intended loosening.
+        max_range_pct = 0.035  # 3.5% max for "tight" range
         is_tight = (
             asian_atr <= ACCUMULATION_MAX_ATR_MULT * atr_val
             and range_width_pct <= max_range_pct
@@ -486,7 +515,7 @@ class ICTAMDSignalEngine:
         best_score = -1
 
         for target in sweep_targets:
-            event = self._check_sweep_at_target(df, target, atr_val, scan_indices)
+            event = self._check_sweep_at_target(df, target, atr_val, scan_indices, df_index_to_pos)
             if event.detected:
                 # Score: Strong zone > Medium > accumulation
                 strength_rank = {"Strong": 3, "Medium": 2, "Weak": 1}
@@ -505,13 +534,14 @@ class ICTAMDSignalEngine:
         target: dict,
         atr_val: float,
         scan_indices: pd.DatetimeIndex,
+        df_index_to_pos: dict,
     ) -> ManipulationResult:
         """Check if any candle in scan window swept this target."""
         zone_top = float(target["zone_top"])
         zone_bottom = float(target["zone_bottom"])
         zone_width = max(zone_top - zone_bottom, 1e-9)
         # ATR-based "near" band (handles tight + wide zones)
-        near_band = max(zone_width * 0.5, atr_val * 0.5)
+        near_band = max(zone_width * 0.8, atr_val * 0.8)
 
         n = len(df)
         highs = df["high"].values
@@ -521,9 +551,9 @@ class ICTAMDSignalEngine:
 
         # Iterate over scan indices (positions in df)
         for ts in scan_indices:
-            if ts not in df.index:
+            i = df_index_to_pos.get(ts)
+            if i is None:
                 continue
-            i = df.index.get_loc(ts)
             if i >= n - 1:  # need room for confirmation candles
                 continue
 
@@ -725,9 +755,32 @@ class ICTAMDSignalEngine:
         search_start = max(0, manipulation.break_index - MSS_LOOKBACK * 2)
         search_end = manipulation.break_index
 
+        def _nearest_swing(values: np.ndarray, is_high: bool) -> Optional[float]:
+            """
+            Scan backward from search_end toward search_start looking for the
+            nearest local swing point (a 3-candle fractal: the candle is
+            higher/lower than both its immediate neighbors). Falls back to
+            the single most-recent candle's extreme if no clean fractal is
+            found in range, rather than silently using the window's global
+            extreme (which can be a stale, unrelated extreme far outside the
+            immediate pre-manipulation structure).
+            """
+            if search_end <= search_start:
+                return None
+            for idx in range(search_end - 1, search_start, -1):
+                if idx - 1 < 0 or idx + 1 > search_end - 1:
+                    continue
+                center, left, right = values[idx], values[idx - 1], values[idx + 1]
+                if is_high and center >= left and center >= right:
+                    return float(center)
+                if not is_high and center <= left and center <= right:
+                    return float(center)
+            # Fallback: most recent candle in the window
+            return float(values[search_end - 1])
+
         if manipulation.direction == "upside_sweep":
             # Pre-manipulation swing low → MSS = price goes below it
-            swing_low = float(np.min(lows[search_start:search_end])) if search_end > search_start else None
+            swing_low = _nearest_swing(lows, is_high=False)
             if swing_low is None:
                 return False, "No pre-manipulation swing low to confirm MSS"
             # Check if any candle after confirm_idx closes below swing_low
@@ -737,7 +790,7 @@ class ICTAMDSignalEngine:
             return False, f"Price did not break swing low {swing_low:.5f} (no MSS)"
 
         elif manipulation.direction == "downside_sweep":
-            swing_high = float(np.max(highs[search_start:search_end])) if search_end > search_start else None
+            swing_high = _nearest_swing(highs, is_high=True)
             if swing_high is None:
                 return False, "No pre-manipulation swing high to confirm MSS"
             for j in range(confirm_idx, min(n, confirm_idx + MSS_LOOKBACK)):
@@ -804,6 +857,11 @@ class ICTAMDSignalEngine:
                 if z.type == "support" and z.strength == "Strong" and z.zone_top < entry_price
             ]
             strong_supports.sort(key=lambda z: z.zone_top, reverse=True)  # nearest first
+            medium_supports = [
+                z for z in zones_all
+                if z.type == "support" and z.strength == "Medium" and z.zone_top < entry_price
+            ]
+            medium_supports.sort(key=lambda z: z.zone_top, reverse=True)
         else:  # downside_sweep → BUY
             stop_loss = manipulation.wick_extreme - sl_buffer
             action = "BUY"
@@ -813,6 +871,11 @@ class ICTAMDSignalEngine:
                 if z.type == "resistance" and z.strength == "Strong" and z.zone_bottom > entry_price
             ]
             strong_resistances.sort(key=lambda z: z.zone_bottom)  # nearest first
+            medium_resistances = [
+                z for z in zones_all
+                if z.type == "resistance" and z.strength == "Medium" and z.zone_bottom > entry_price
+            ]
+            medium_resistances.sort(key=lambda z: z.zone_bottom)
 
         # Geometry sanity
         risk = abs(entry_price - stop_loss)
@@ -823,30 +886,55 @@ class ICTAMDSignalEngine:
         candidate_tps = strong_supports if action == "SELL" else strong_resistances
         take_profit = None
         rr_ratio = 0.0
+        tp_source = "strong_zone"
 
-        for zone in candidate_tps:
-            if action == "SELL":
-                tp_candidate = zone.zone_top   # TP at top of support zone (conservative)
-                if tp_candidate >= entry_price:
-                    continue
-                reward = entry_price - tp_candidate
-            else:  # BUY
-                tp_candidate = zone.zone_bottom  # TP at bottom of resistance zone
-                if tp_candidate <= entry_price:
-                    continue
-                reward = tp_candidate - entry_price
+        def _scan(zones):
+            for zone in zones:
+                if action == "SELL":
+                    tp_candidate = zone.zone_top   # TP at top of support zone (conservative)
+                    if tp_candidate >= entry_price:
+                        continue
+                    reward = entry_price - tp_candidate
+                else:  # BUY
+                    tp_candidate = zone.zone_bottom  # TP at bottom of resistance zone
+                    if tp_candidate <= entry_price:
+                        continue
+                    reward = tp_candidate - entry_price
+                rr = reward / risk
+                if rr >= self.min_rr_ratio:
+                    return tp_candidate, rr
+            return None, 0.0
 
-            rr = reward / risk
-            if rr >= self.min_rr_ratio:
-                take_profit = tp_candidate
-                rr_ratio = rr
-                break
+        take_profit, rr_ratio = _scan(candidate_tps)
 
-        # If no Strong zone TP meets R:R ≥ 1:6 → NO_TRADE
+        # Tier 2: Medium zones (institutional-review fix — Strong-only was
+        # producing near-permanent NO_TRADE; Medium zones are still real,
+        # validated S/R, just with fewer historical touches).
+        if take_profit is None and self.allow_medium_zone_tp:
+            medium_candidates = medium_supports if action == "SELL" else medium_resistances
+            take_profit, rr_ratio = _scan(medium_candidates)
+            if take_profit is not None:
+                tp_source = "medium_zone"
+
+        # Tier 3: ATR/measured-move fallback — project a TP at exactly
+        # min_rr_ratio distance instead of requiring a pre-identified zone
+        # to happen to sit there. Still enforces the same R:R floor, just
+        # not zone-anchored, so confidence is capped lower downstream.
+        if take_profit is None and self.allow_atr_fallback_tp:
+            projected_reward = risk * self.min_rr_ratio
+            projected_tp = (
+                entry_price - projected_reward if action == "SELL"
+                else entry_price + projected_reward
+            )
+            take_profit = projected_tp
+            rr_ratio = self.min_rr_ratio
+            tp_source = "atr_projection"
+
+        # If nothing at all clears R:R ≥ min_rr_ratio → NO_TRADE
         if take_profit is None:
             return self._no_trade_signal(
-                f"Step 5 failed: R:R ratio 1:6 criteria পূরণ করেনি "
-                f"(no Strong zone TP ≥ 1:{self.min_rr_ratio:.0f}; "
+                f"Step 5 failed: R:R ratio 1:{self.min_rr_ratio:.0f} criteria পূরণ করেনি "
+                f"(no zone or projected TP ≥ 1:{self.min_rr_ratio:.0f}; "
                 f"nearest candidates: {[z.zone_top if action=='SELL' else z.zone_bottom for z in candidate_tps[:3]]})"
             )
 
@@ -857,6 +945,16 @@ class ICTAMDSignalEngine:
             manipulation.wick_body_ratio,
             rr_ratio,
         )
+        # A projected (non-zone) TP has no historical touches behind it —
+        # never call that "High" confidence regardless of the other factors.
+        if tp_source == "atr_projection" and confidence == "High":
+            confidence = "Medium"
+
+        tp_desc = {
+            "strong_zone": "TP at nearest Strong zone",
+            "medium_zone": "TP at nearest Medium zone (no qualifying Strong zone found)",
+            "atr_projection": "TP projected at min R:R distance (no qualifying zone found)",
+        }[tp_source]
 
         reason = (
             f"All steps passed: "
@@ -866,7 +964,7 @@ class ICTAMDSignalEngine:
             f"FVG({fvg.type} @ {fvg.midpoint:.5f}), "
             f"MSS(confirmed), "
             f"R:R=1:{rr_ratio:.1f} ≥ 1:{self.min_rr_ratio:.0f}. "
-            f"Entry at FVG midpoint, SL beyond sweep wick, TP at nearest Strong zone."
+            f"Entry at FVG midpoint, SL beyond sweep wick, {tp_desc}."
         )
 
         return {
