@@ -350,7 +350,10 @@ class FeatureEngineer:
         )
 
         # Time features
-        now = datetime.now(timezone.utc)
+        # Timezone policy: use pd.Timestamp.now(tz="UTC") everywhere instead
+        # of datetime.now(timezone.utc)/datetime.utcnow() so every "now" value
+        # in the pipeline is the same tz-aware UTC type as DataFrame indices.
+        now = pd.Timestamp.now(tz="UTC")
         f["hour_utc"] = float(now.hour)
         f["day_of_week"] = float(now.weekday())  # 0=Mon, 6=Sun
         f["is_weekend"] = 1.0 if now.weekday() >= 5 else 0.0

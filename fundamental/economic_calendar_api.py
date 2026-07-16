@@ -3,7 +3,7 @@ fundamental/economic_calendar_api.py — Day 94 Institutional Economic Calendar
 ==============================================================================
 Multi-source economic calendar with fallback chain:
 
-    FairEconomy JSON → Tradermade → Finnhub → Forex Factory scraper → fallback
+    FairEconomy JSON → Forex Factory scraper → hardcoded fallback
 
 Day 95 hotfix:
   - FairEconomy JSON added as Layer 0 (primary source).
@@ -14,17 +14,21 @@ Day 95 hotfix:
   - _normalize_ff_events() no longer double-filters by time window.
   - get_calendar() preserves correct source label when filtered list is empty.
 
+Later update: Tradermade and Finnhub layers removed by user request (no
+paid/registered API keys in use for this project). Both were optional
+paid-tier sources used only for forecast/actual numeric fields consumed by
+EconomicSurpriseEngine; get_forecast_actual_events() now always returns []
+and callers already treat that as "no surprise data available".
+
 Fetch chain:
     Layer 0: FairEconomy JSON   — primary, fast, reliable, no key needed
-    Layer 1: Tradermade API     — clean REST, forecast/previous/actual
-    Layer 2: Finnhub API        — free tier calendar
-    Layer 3: FF scraper         — existing Day 90/91 cloudscraper path
-    Layer 4: hardcoded fallback — last resort approximate schedule
+    Layer 1: FF scraper         — existing Day 90/91 cloudscraper path
+    Layer 2: hardcoded fallback — last resort approximate schedule
 
 Output shape (compatible with existing NewsFilter/AnalysisAgent):
     {
-      "source":            "faireconomy_json" | "tradermade" | "finnhub"
-                           | "ff_scraper" | "hardcoded_fallback" | "none",
+      "source":            "faireconomy_json" | "ff_scraper"
+                           | "hardcoded_fallback" | "none",
       "events":            [{"title","currency","time","impact","forecast",
                              "previous","actual"}],
       "high_impact_count": int,
@@ -52,14 +56,10 @@ log = get_logger("economic_calendar_api")
 
 # ── Impact level mapping ─────────────────────────────────────────
 IMPACT_MAP = {
-    # Tradermade / FairEconomy
+    # FairEconomy / FF scraper
     "high":   "HIGH",
     "medium": "MEDIUM",
     "low":    "LOW",
-    # Finnhub numeric
-    "3": "HIGH",
-    "2": "MEDIUM",
-    "1": "LOW",
 }
 
 # FairEconomy JSON URL
@@ -76,26 +76,12 @@ class EconomicCalendarAPI:
     BLOCK_WINDOW_MINUTES = 30  # block trades ±30min around high-impact events
 
     def __init__(self):
-        self._tradermade_key = os.getenv("TRADERMADE_API_KEY", "").strip()
-        self._finnhub_key    = os.getenv("FINNHUB_API_KEY", "").strip()
-        # Day 99+ FIX: surface missing optional keys once at construction
-        # so a degraded configuration is visible in logs immediately,
-        # rather than only being detectable by reading the fallback
-        # source label on every cycle. These are warnings, not errors —
-        # the FairEconomy primary source needs no key, so the calendar
-        # still works. But forecast/actual data (used by the economic
-        # surprise engine) is unavailable without at least one of these.
-        if not self._tradermade_key:
-            log.info(
-                "[EconCal] TRADERMADE_API_KEY not set — forecast/actual "
-                "data from Tradermade will be unavailable (economic "
-                "surprise engine will have reduced signal quality)"
-            )
-        if not self._finnhub_key:
-            log.info(
-                "[EconCal] FINNHUB_API_KEY not set — forecast/actual "
-                "data from Finnhub will be unavailable"
-            )
+        # TraderMade / Finnhub sources removed by user request (no paid API
+        # keys in use). The calendar now relies only on the free,
+        # no-key-needed sources: FairEconomy JSON (primary) and the Forex
+        # Factory scraper (fallback). See get_forecast_actual_events() for
+        # the forecast/actual-data implication of this.
+        pass
 
     # ─────────────────────────────────────────────────────────
     # PUBLIC API
@@ -127,17 +113,9 @@ class EconomicCalendarAPI:
         if events:
             source = "faireconomy_json"
 
-        # ── Layer 1: Tradermade ──
-        if not events and self._tradermade_key:
-            events = self._fetch_tradermade(currencies, hours_ahead)
-            if events:
-                source = "tradermade"
-
-        # ── Layer 2: Finnhub ──
-        if not events and self._finnhub_key:
-            events = self._fetch_finnhub(currencies, hours_ahead)
-            if events:
-                source = "finnhub"
+        # Tradermade / Finnhub layers removed by user request (no paid API
+        # keys in use) — the chain now goes straight from FairEconomy JSON
+        # to the Forex Factory scraper below.
 
         # ── Layer 3: Forex Factory scraper (news_filter module) ──
         if not events:
@@ -218,40 +196,21 @@ class EconomicCalendarAPI:
     ) -> List[Dict]:
         """Fetch events that carry BOTH forecast and actual values.
 
-        Day 98+ FIX: get_calendar()'s fallback chain stops at the first
-        source that returns ANY events. FairEconomy JSON (Layer 0) is
-        checked first, succeeds almost always, and never populates
-        forecast/actual — so Tradermade/Finnhub (the only two sources
-        here that do) were effectively unreachable in the default
-        configuration. This starved EconomicSurpriseEngine of real data:
-        it would silently fall back to NEUTRAL/confidence=0 every cycle.
+        NOTE: Tradermade and Finnhub — the two sources that used to provide
+        this — were removed by user request (no paid API keys in use).
+        FairEconomy JSON and the Forex Factory scraper (this module's other
+        sources) don't populate forecast/actual fields, so this method now
+        always returns an empty list. Kept as a stable no-op stub (instead
+        of deleting it outright) so EconomicSurpriseEngine and any other
+        caller don't need code changes — they already treat an empty list
+        as "no forecast/actual data available" and fall back to
+        NEUTRAL/confidence=0, exactly as before when both keys were unset.
 
-        This method exists specifically to bypass that short-circuit for
-        callers that need forecast+actual data. It tries ONLY the sources
-        capable of providing those fields, in order, and does not touch
-        or change get_calendar()'s existing behavior for any other caller.
-
-        Returns: list of raw event dicts (may be empty if no forecast/actual
-                 keys are configured, or both sources fail).
+        Returns: [] always (see note above).
         """
-        if currencies is None:
-            currencies = ["USD", "EUR", "GBP", "JPY"]
-
-        if self._tradermade_key:
-            events = self._fetch_tradermade(currencies, hours_ahead)
-            if events:
-                log.debug(f"[EconCal] forecast/actual via tradermade: {len(events)} events")
-                return events
-
-        if self._finnhub_key:
-            events = self._fetch_finnhub(currencies, hours_ahead)
-            if events:
-                log.debug(f"[EconCal] forecast/actual via finnhub: {len(events)} events")
-                return events
-
         log.debug(
-            "[EconCal] no forecast/actual source available "
-            "(TRADERMADE_API_KEY / FINNHUB_API_KEY not set, or both failed)"
+            "[EconCal] get_forecast_actual_events(): no source configured "
+            "(Tradermade/Finnhub removed) — returning empty list"
         )
         return []
 
@@ -321,83 +280,6 @@ class EconomicCalendarAPI:
     # ─────────────────────────────────────────────────────────
     # SOURCE 1: Tradermade
     # ─────────────────────────────────────────────────────────
-
-    def _fetch_tradermade(self, currencies: List[str], hours_ahead: int) -> Optional[List[Dict]]:
-        """Tradermade economic calendar API."""
-        try:
-            url   = "https://api.tradermade.com/v1/calendar"
-            start = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H:%M")
-            end   = (datetime.now(timezone.utc) + timedelta(hours=hours_ahead)).strftime("%Y-%m-%d-%H:%M")
-            params = {
-                "api_key": self._tradermade_key,
-                "start":   start,
-                "end":     end,
-                "currency": ",".join(currencies),
-                "format":  "json",
-            }
-            resp = requests.get(url, params=params, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            log.warning(f"[EconCal] Tradermade failed: {e}")
-            return None
-
-        events = []
-        for item in data if isinstance(data, list) else []:
-            try:
-                events.append({
-                    "title":    item.get("event", ""),
-                    "currency": item.get("currency", ""),
-                    "time":     datetime.fromisoformat(item["date"].replace("Z", "+00:00")),
-                    "impact":   IMPACT_MAP.get(str(item.get("impact", "")).lower(), "LOW"),
-                    "forecast": str(item.get("forecast", "") or ""),
-                    "previous": str(item.get("previous", "") or ""),
-                    "actual":   str(item.get("actual", "") or ""),
-                })
-            except Exception:
-                continue
-        return events or None
-
-    # ─────────────────────────────────────────────────────────
-    # SOURCE 2: Finnhub economic calendar
-    # ─────────────────────────────────────────────────────────
-
-    def _fetch_finnhub(self, currencies: List[str], hours_ahead: int) -> Optional[List[Dict]]:
-        """Finnhub /calendar/economic endpoint."""
-        try:
-            url    = "https://finnhub.io/api/v1/calendar/economic"
-            now    = int(time.time())
-            params = {
-                "from":  now,
-                "to":    now + hours_ahead * 3600,
-                "token": self._finnhub_key,
-            }
-            resp = requests.get(url, params=params, timeout=15)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            log.warning(f"[EconCal] Finnhub failed: {e}")
-            return None
-
-        events = []
-        for item in data.get("economicCalendar", []):
-            try:
-                country  = item.get("country", "")
-                currency = {"US": "USD", "EU": "EUR", "GB": "GBP", "JP": "JPY"}.get(country, "")
-                if currency not in currencies:
-                    continue
-                events.append({
-                    "title":    item.get("event", ""),
-                    "currency": currency,
-                    "time":     datetime.fromtimestamp(item["time"], tz=timezone.utc),
-                    "impact":   IMPACT_MAP.get(str(item.get("impact", "")), "LOW"),
-                    "forecast": str(item.get("estimate", "") or ""),
-                    "previous": str(item.get("prev", "") or ""),
-                    "actual":   str(item.get("actual", "") or ""),
-                })
-            except Exception:
-                continue
-        return events or None
 
     # ─────────────────────────────────────────────────────────
     # SOURCE 3: normalize existing FF scraper events

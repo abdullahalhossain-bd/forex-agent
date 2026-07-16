@@ -8449,5 +8449,65 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 283,
+    "timestamp": "2026-07-16T07:15:57.592480",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "CHOPPY",
+    "trend": "sideways",
+    "rsi": 53.41263,
+    "patterns": [
+      "hammer"
+    ],
+    "rule_signal": "STRONG_BUY",
+    "llm_signal": "BUY",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for LONDON (score=27/100, grade=INVALID)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 284,
+    "timestamp": "2026-07-16T07:16:34.422037",
+    "symbol": "GBPUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "RANGING",
+    "trend": "sideways",
+    "rsi": 52.06177,
+    "patterns": [
+      "doji",
+      "morning_star",
+      "three_bar_reversal_bullish"
+    ],
+    "rule_signal": "STRONG_BUY",
+    "llm_signal": "BUY",
+    "reasons": [
+      "Analysis pipeline returned NO TRADE \u2014 honoring upstream verdict"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]

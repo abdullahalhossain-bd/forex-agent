@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────
+# .dockerignore — Forex AI Trading System
+# ─────────────────────────────────────────────────────────────
+# Keeps Docker build contexts small and prevents runtime /
+# secret / VCS files from leaking into production images.
+# Pattern borrowed from OpenAlice's .dockerignore.
+# ─────────────────────────────────────────────────────────────
+
+# VCS
+.git
+.gitignore
+.github
+.gitattributes
+
+# Python caches & virtualenvs
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Runtime state (mounted as volumes in production)
+state/
+memory/
+logs/
+backups/
+reports/
+data/backtest_cache/
+data/chart.html
+data/*.csv
+
+# Secrets — NEVER bake into image
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Docs & meta (not needed inside the image)
+README.md
+CHANGELOG.md
+CONTRIBUTING.md
+CONTRIBUTORS.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+AGENTS.md
+BOOK_IMPLEMENTATION_MASTER.md
+docs/
+*.md
+!requirements.txt
+
+# Debug / one-off scripts (keep main.py, run_*.py)
+debug_*.py
+diagnose_*.py
+fix_*.py
+test_*.py
+*_test.py
+tests/
+
+# Backups & legacy
+backups/
+legacy/

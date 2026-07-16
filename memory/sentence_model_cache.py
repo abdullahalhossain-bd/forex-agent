@@ -49,13 +49,37 @@ def get_sentence_model():
         try:
             from sentence_transformers import SentenceTransformer
             log.info(f"[SentenceModelCache] Loading '{_MODEL_NAME}' (once, shared)...")
-            _shared_model = SentenceTransformer(_MODEL_NAME)
+            # Bug fix: this repo's .env sets HF_TOKEN, and huggingface_hub
+            # automatically attaches it to every request (including the
+            # metadata HEAD check) whenever it's present in the
+            # environment. `all-MiniLM-L6-v2` is a PUBLIC model that needs
+            # no authentication at all — but if HF_TOKEN is invalid,
+            # revoked, or expired, HuggingFace responds with
+            # "401 Unauthorized" to the *authenticated* request, and the
+            # whole load fails even though an anonymous request would have
+            # succeeded. Passing token=False forces an anonymous request
+            # for this specific (public) model, independent of whatever is
+            # in HF_TOKEN.
+            try:
+                _shared_model = SentenceTransformer(_MODEL_NAME, token=False)
+            except TypeError:
+                # Older sentence-transformers / huggingface_hub versions
+                # use the pre-`token=` kwarg name.
+                _shared_model = SentenceTransformer(_MODEL_NAME, use_auth_token=False)
             log.info(f"[SentenceModelCache] Model loaded — shared across all callers")
         except ImportError:
             log.warning("[SentenceModelCache] sentence-transformers not installed")
             _shared_model = None
         except Exception as e:
-            log.warning(f"[SentenceModelCache] load failed: {e}")
+            if "401" in str(e) or "Unauthorized" in str(e):
+                log.warning(
+                    f"[SentenceModelCache] load failed with 401 Unauthorized even "
+                    f"in anonymous mode: {e}. This usually means no internet "
+                    f"access to huggingface.co (not a token problem) — check "
+                    f"network/firewall settings. Continuing without vector memory."
+                )
+            else:
+                log.warning(f"[SentenceModelCache] load failed: {e}")
             _shared_model = None
     return _shared_model
 

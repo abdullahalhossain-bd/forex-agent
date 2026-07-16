@@ -422,19 +422,33 @@ class MT5DataLoader:
 
         # Convert time to datetime
         # MT5 returns timestamps in broker server time (not UTC)
-        # We need to handle this carefully
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        # We need to handle this carefully.
+        #
+        # TIMEZONE POLICY (single source of truth for this project):
+        #   Every timestamp in the pipeline is tz-AWARE UTC. We never mix
+        #   naive and aware timestamps, and we never silently drop tzinfo
+        #   with `.replace(tzinfo=None)` / `tz_localize(None)`. If a naive
+        #   timestamp needs to be compared or subtracted against an aware
+        #   one, it must first be localized/converted to UTC.
+        df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
 
         # Get broker timezone offset from environment
         # Common values: 2 (GMT+2 winter), 3 (GMT+3 summer), 0 (UTC)
         offset_hours = float(os.getenv("MT5_BROKER_TZ_OFFSET_HOURS", "0") or 0)
 
         if offset_hours != 0:
-            # Adjust to UTC
+            # Adjust to UTC (subtraction on two tz-aware series is safe)
             df['time'] = df['time'] - pd.Timedelta(hours=offset_hours)
 
-        # Set timezone to UTC
-        df['time'] = df['time'].dt.tz_localize('UTC')
+        # `pd.to_datetime(..., utc=True)` above already produces a tz-aware
+        # (UTC) column, so there is nothing left to localize. Trying to
+        # tz_localize('UTC') a column that is already tz-aware raises
+        # `TypeError: Already tz-aware, use tz_convert to convert`, so we
+        # assert the invariant instead of calling tz_localize again.
+        assert df['time'].dt.tz is not None, (
+            "df['time'] must be tz-aware UTC after pd.to_datetime(utc=True); "
+            "got tz-naive dtype instead."
+        )
 
         # Set time as index
         df.set_index('time', inplace=True)
@@ -453,7 +467,61 @@ class MT5DataLoader:
         # The most recent candle may not be closed yet
         if len(df) > 0:
             last_candle_time = df.index[-1]
-            now_utc = datetime.now(timezone.utc)
+
+            # ── TIMEZONE FIX ─────────────────────────────────────────────
+            # Original bug: `now_utc` was tz-aware while `last_candle_time`
+            # had `.replace(tzinfo=None)` applied right before the
+            # subtraction, forcing it tz-naive. Subtracting an aware
+            # timestamp from a naive one raises:
+            #   TypeError: Cannot subtract tz-naive and tz-aware
+            #   datetime-like objects
+            #
+            # Fix: normalize BOTH operands to tz-aware UTC before doing any
+            # arithmetic, and never strip tzinfo again. `last_candle_time`
+            # is handled defensively for both cases because it can come
+            # from different code paths (e.g. a cached/pickled DataFrame
+            # built before this fix, or a df.index that was tz_localized
+            # to a non-UTC zone upstream) — we don't want to assume it is
+            # already tz-aware UTC just because it usually is in this
+            # function.
+            if last_candle_time.tzinfo is None:
+                # Naive timestamp (no tzinfo at all) -> attach UTC.
+                # tz_localize() ASSIGNS a timezone to a naive timestamp
+                # without shifting the underlying wall-clock time, which is
+                # correct here because upstream code already treats these
+                # values as UTC — it just forgot to say so.
+                last_candle_time = last_candle_time.tz_localize("UTC")
+            else:
+                # Already tz-aware (UTC or otherwise) -> convert to UTC.
+                # tz_convert() re-expresses the SAME instant in a different
+                # zone (shifting wall-clock time as needed), which is the
+                # correct operation for an already-aware timestamp. Calling
+                # tz_localize() on an aware timestamp instead would raise
+                # `TypeError: Already tz-aware, use tz_convert to convert`.
+                last_candle_time = last_candle_time.tz_convert("UTC")
+
+            # Keep `now_utc` tz-aware UTC (pandas Timestamp, not
+            # datetime.now(timezone.utc), so both sides are the same type
+            # and compare/subtract cleanly under pandas 2.x).
+            now_utc = pd.Timestamp.now(tz="UTC")
+
+            # ── Debug logs before datetime arithmetic ──────────────────
+            self.logger.debug(
+                "Pre-subtraction timestamp check | "
+                f"index dtype={df.index.dtype}, tz={df.index.tz} | "
+                f"min={df.index.min()}, max={df.index.max()} | "
+                f"last_candle_time={last_candle_time} (tz={last_candle_time.tzinfo}) | "
+                f"now_utc={now_utc} (tz={now_utc.tz})"
+            )
+
+            # ── Assertions: never let a naive/aware pair reach subtraction ──
+            assert last_candle_time.tzinfo is not None, (
+                "last_candle_time is tz-naive after normalization — refusing "
+                "to subtract against a tz-aware timestamp."
+            )
+            assert now_utc.tzinfo is not None, (
+                "now_utc must be tz-aware (pd.Timestamp.now(tz='UTC'))."
+            )
 
             # Define timeframe durations
             tf_duration = {
@@ -467,8 +535,10 @@ class MT5DataLoader:
             }.get(timeframe, timedelta(hours=1))
 
             # If the last candle's time is very recent, it might be incomplete
-            # Remove it if it started less than tf_duration ago
-            if now_utc - last_candle_time.replace(tzinfo=None) < tf_duration:
+            # (incomplete-candle detection kept exactly as before — only the
+            # timezone handling changed). Both operands are now tz-aware UTC,
+            # so this subtraction/comparison is safe under pandas 2.x.
+            if now_utc - last_candle_time < tf_duration:
                 self.logger.info("Removing potentially incomplete last candle")
                 df = df.iloc[:-1]
 

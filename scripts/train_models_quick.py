@@ -248,8 +248,18 @@ def train_one_pair(
         log.info(f"  Date range: {result.start_date} → {result.end_date}")
 
     # 2. Add features + labels
-    df = add_features(df, pair=symbol, use_feature_engineer=True)
+    # NOTE: this ordering fix is unrelated to the timezone bug above — it's a
+    # separate, pre-existing issue: build_labels() needs the raw "close"
+    # column, but FeatureEngineer's output (features_df) only has a renamed
+    # "price_close" column, so calling build_labels() AFTER add_features()
+    # raised KeyError: 'close'. Fix: compute the label on the raw OHLCV df
+    # first (while "close" still exists), then run feature engineering, then
+    # align the label back onto the feature rows by index.
     df = build_labels(df, horizon=5)
+    labels = df["target"]
+
+    df = add_features(df, pair=symbol, use_feature_engineer=True)
+    df["target"] = labels.reindex(df.index)
     df = df.dropna()
     log.info(f"  After feature/label computation: {len(df)} usable rows")
 
@@ -434,6 +444,16 @@ def train_one_pair(
             model_type="xgboost",       # NO version suffix — predictor looks for "xgboost"
             metrics={"accuracy": float(xgb_acc), "training_bars": len(df)},
             is_keras=False,
+            # Bug fix: previously feature_names was never passed, so
+            # ModelStore.get_feature_names() returned [] and the predictor
+            # fell back to a bare n_features_in_ count check. Any future
+            # change to FeatureEngineer's feature count (e.g. 13 -> 161)
+            # then hard-fails every prediction with:
+            #   "legacy model schema missing (expects N, got M); retrain required"
+            # even for models trained *after* the change. Saving the exact
+            # training-time feature names lets the predictor reindex by
+            # name instead of relying on a fragile column count.
+            feature_names=feature_cols,
         )
         if version:
             log.info(f"  Saved: xgboost {version} (acc={xgb_acc:.2%})")
@@ -446,6 +466,7 @@ def train_one_pair(
             model_type="random_forest", # NO version suffix
             metrics={"accuracy": float(rf_acc), "training_bars": len(df)},
             is_keras=False,
+            feature_names=feature_cols,  # same schema fix as above
         )
         if version:
             log.info(f"  Saved: random_forest {version} (acc={rf_acc:.2%})")

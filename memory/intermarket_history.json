@@ -4380,5 +4380,33 @@
     "bond_yield": null,
     "sp500_change": 0.0,
     "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-16T07:15:23.046099+00:00",
+    "pair": "EURUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-16T07:16:14.595881+00:00",
+    "pair": "GBPUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
   }
 ]

@@ -371,12 +371,23 @@ class MyfxbookSentiment:
         # Try multiple selectors since the page structure changes
 
         # Approach 1: look for table rows with pair names
+        #
+        # Bug note: this previously required a literal "/" between the two
+        # currency codes (e.g. "EUR/USD") and matched only upper-case. If
+        # Myfxbook's current markup renders the pair as "EURUSD" (no slash)
+        # or wraps each character in its own span (so get_text() still joins
+        # them into "EURUSD", but case can vary depending on CSS
+        # text-transform), the old regex silently matched zero rows and the
+        # whole source fell through to synthetic sentiment. Made the slash
+        # optional and the match case-insensitive; add_pair() already
+        # upper-cases and validates the result, so this doesn't loosen the
+        # final data quality check.
         for row in soup.select("tr"):
             try:
                 text = row.get_text(separator=" ", strip=True)
-                # Look for patterns like "EUR/USD" followed by percentages
+                # Look for patterns like "EUR/USD" or "EURUSD" followed by percentages
                 match = re.search(
-                    r"([A-Z]{3}/[A-Z]{3}).*?(\d+(?:\.\d+)?)%.*?(\d+(?:\.\d+)?)%",
+                    r"([A-Za-z]{3}/?[A-Za-z]{3}).*?(\d+(?:\.\d+)?)%.*?(\d+(?:\.\d+)?)%",
                     text
                 )
                 if match:
@@ -419,7 +430,19 @@ class MyfxbookSentiment:
                 seen.add(r["pair"])
                 unique.append(r)
 
-        log.debug(f"[Myfxbook] parsed {len(unique)} pairs from outlook page")
+        if unique:
+            log.debug(f"[Myfxbook] parsed {len(unique)} pairs from outlook page")
+        else:
+            # Previously this was a silent debug-level no-op, so when
+            # Myfxbook changed their markup the source quietly degraded to
+            # synthetic sentiment with no actionable signal in the logs.
+            # Log a snippet of the raw HTML so a future markup change can be
+            # diagnosed without re-adding print statements.
+            snippet = re.sub(r"\s+", " ", html)[:500]
+            log.warning(
+                "[Myfxbook] parsed 0 pairs from outlook page — page structure "
+                f"may have changed. HTML snippet: {snippet!r}"
+            )
         return unique
 
     @staticmethod
