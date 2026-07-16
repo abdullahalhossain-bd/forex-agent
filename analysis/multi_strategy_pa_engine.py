@@ -13,7 +13,13 @@
 # STEP 7: Confluence scoring (1-2=Low, 3-4=Medium, 5+=High)
 # STEP 8: Final signal gate (all conditions must pass)
 #
-# Applicable to: EURUSD/USDJPY/USDCAD on 1D/4H/1H timeframes only.
+# Applicable to: majors/crosses/gold on 1D/4H/1H timeframes.
+# (Originally limited to EURUSD/USDJPY/USDCAD — expanded per Day-97+ audit:
+#  the 6-factor checklist, S/R, S/D and MTF logic below are symbol-agnostic;
+#  pip size and round-number handling are delegated to analysis/_engine_utils.py
+#  (_pip_value / _is_round_number), which already supports JPY-quoted pairs
+#  and XAUUSD elsewhere in the codebase. If a new pair misbehaves, check
+#  _engine_utils first rather than re-narrowing this set.)
 # ============================================================
 
 import json
@@ -30,7 +36,18 @@ log = logging.getLogger(__name__)
 
 
 # ─── Constants ────────────────────────────────────────────────
-ALLOWED_PAIRS = {"EURUSD", "USDJPY", "USDCAD"}
+# Day-97+ audit fix: was {"EURUSD","USDJPY","USDCAD"} only — every other
+# pair (GBPUSD, XAUUSD, AUDUSD, NZDUSD, EUR-crosses, ...) silently
+# abstained on every call ("Pair X not supported"), which meant the PA
+# vote in the 3-vote confluence engine was missing for most symbols and
+# quietly dragging overall confidence down. Widened to the symbols this
+# engine's logic (S/R, S/D, MTF, checklist — all symbol-agnostic) already
+# supports via analysis/_engine_utils.py. Add/remove symbols here as
+# needed; nothing else in this file needs to change to support a new one.
+ALLOWED_PAIRS = {
+    "EURUSD", "USDJPY", "USDCAD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCHF",
+    "EURGBP", "EURJPY", "GBPJPY", "XAUUSD",
+}
 ALLOWED_TIMEFRAMES = {"1D", "4H", "1H"}
 
 # BD Time = UTC+6, so 12:30 PM BD = 06:30 UTC, 14:30 BD = 08:30 UTC

@@ -135,9 +135,23 @@ class TradePermission:
         # (API failed), default to DENY — don't allow trading when we can't
         # verify news safety. Previously defaulted to True (fail-open) which
         # meant news API failure → trading allowed → could trade into CPI/NFP.
-        if not news_ctx:
+        # Round-?? fix: explicit env-var bypass, same pattern as
+        # BYPASS_FUSION_GATE below. Added because the Forex Factory
+        # calendar fetch has been failing (403/timeout — scraper blocked),
+        # so news_ctx is empty on effectively every cycle and this gate
+        # was blocking 100% of trades. Fail-safe-by-default is still the
+        # right behavior when we can't verify news safety; this just gives
+        # the operator a conscious, logged way to override it while the
+        # scraper is down, instead of it silently blocking everything.
+        # Defaults to false — bypass must be turned on deliberately.
+        import os as _os_news
+        _bypass_news = _os_news.getenv("BYPASS_NEWS_GATE", "false").lower() == "true"
+        if _bypass_news:
+            ok = True
+            detail = "News system unavailable (BYPASS_NEWS_GATE=true: allowed anyway — no CPI/NFP protection)"
+        elif not news_ctx:
             ok = False
-            detail = "News system unavailable — fail-safe block"
+            detail = "News system unavailable — fail-safe block (set BYPASS_NEWS_GATE=true to override)"
         else:
             ok = news_ctx.get("news_trade_allowed", False)
             detail = news_ctx.get("news_reason", "Unknown")

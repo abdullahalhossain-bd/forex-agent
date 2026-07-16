@@ -1,60 +1,110 @@
-2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
-2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
-2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
-2026-07-16 20:46:36,176 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
-2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
-2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
-2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
-2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
-2026-07-16 20:46:36,178 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
-2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
-2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
-2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
-2026-07-16 20:46:36,179 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
-2026-07-16 20:48:05,202 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:05,223 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-2026-07-16 20:48:05,289 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:05,641 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:05,697 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:06,057 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:06,115 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:06,413 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:06,472 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
-2026-07-16 20:48:07,084 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:07,148 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:07,463 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:07,519 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:07,881 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:08,180 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:08,231 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:10,059 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:10,342 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:10,640 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:10,975 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:11,270 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:11,323 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:11,656 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:11,709 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:12,004 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:12,051 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:12,351 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:12,678 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:13,022 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-07-16 20:48:13,328 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 401 Unauthorized"
-2026-07-16 20:48:13,834 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 20:48:13,885 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
-2026-07-16 20:48:14,222 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 401 Unauthorized"
-2026-07-16 20:48:45,058 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
-2026-07-16 20:48:45,179 - core.runtime - INFO - Day 67 ConfluenceEngine wired
-2026-07-16 20:48:45,241 - core.runtime - INFO - Day 68 FeatureStore wired (54 feature rows, 0 labels)
-2026-07-16 20:48:45,307 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
-2026-07-16 20:48:45,328 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
-2026-07-16 20:48:45,378 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
-2026-07-16 20:48:47,670 - core.runtime - INFO - Day 71 RL Agent wired (source=ppo, model_loaded=True)
-2026-07-16 20:48:47,729 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
-2026-07-16 20:49:01,644 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
-2026-07-16 20:49:01,948 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
-2026-07-16 20:49:02,083 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
-2026-07-16 20:49:02,084 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
-2026-07-16 20:49:02,138 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
-2026-07-16 20:49:02,160 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-07-16 21:24:46,074 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
+2026-07-16 21:24:46,074 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
+2026-07-16 21:24:46,074 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-07-16 21:24:46,075 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-07-16 21:24:46,075 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-07-16 21:24:46,075 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-07-16 21:24:46,075 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-07-16 21:24:46,076 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
+2026-07-16 21:24:46,076 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
+2026-07-16 21:24:46,078 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-07-16 21:24:46,079 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
+2026-07-16 21:24:46,081 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
+2026-07-16 21:24:46,084 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
+2026-07-16 21:25:03,149 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:03,151 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-16 21:25:03,197 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:03,506 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:03,547 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:03,834 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:03,876 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:04,149 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:04,196 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-07-16 21:25:04,495 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:04,541 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:04,815 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:04,861 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:05,157 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:05,446 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:05,492 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:06,016 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:06,307 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:06,610 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:06,894 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:07,175 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:07,219 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:07,508 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:07,545 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:07,834 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:07,884 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:08,163 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:08,202 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:08,571 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-16 21:25:08,855 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 401 Unauthorized"
+2026-07-16 21:25:09,208 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 21:25:09,253 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-07-16 21:25:09,533 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 401 Unauthorized"
+2026-07-16 21:25:13,877 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-07-16 21:25:13,902 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-07-16 21:25:13,914 - core.runtime - INFO - Day 68 FeatureStore wired (70 feature rows, 0 labels)
+2026-07-16 21:25:13,938 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
+2026-07-16 21:25:13,946 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-07-16 21:25:13,960 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-07-16 21:25:14,386 - core.runtime - INFO - Day 71 RL Agent wired (source=ppo, model_loaded=True)
+2026-07-16 21:25:14,412 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-07-16 21:25:20,873 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
+2026-07-16 21:25:21,008 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-07-16 21:25:21,078 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-07-16 21:25:21,078 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-07-16 21:25:21,097 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-07-16 21:25:21,107 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-07-16 21:25:22,548 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-07-16 21:25:23,015 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-07-16 21:25:23,083 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-07-16 21:25:23,641 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-07-16 21:25:23,676 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USOUSD', 'UKOUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'US30USD', 'NAS100USD', 'SPX500USD', 'GER40USD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'CADHKD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB', 'USDSAR', 'USDAED'] | Risk Balance: $99159.93 (config) | Auto-restart: ON
+2026-07-16 21:25:23,683 - root - INFO - [System] Prometheus metrics exporter started on :9090
+2026-07-16 21:25:24,517 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-07-16 21:25:24,518 - root - INFO - [System] Signal handlers installed (SIGINT, SIGTERM)
+2026-07-16 21:25:24,989 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-16 21:25:25,182 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
+2026-07-16 21:25:25,378 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-07-16 21:25:25,379 - telegram.ext.Application - INFO - Application started
+2026-07-16 21:25:36,379 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:25:38,268 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:25:39,721 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:25:41,708 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:25:43,834 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:25:46,034 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-16 21:25:46,052 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T15:00:00+00:00 | current=2026-07-16T15:25:46.051892+00:00 | close=2026-07-16T15:15:00+00:00 | seconds_left=-646s | naive_input=False | is_closed=True
+2026-07-16 21:25:56,008 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-16 21:26:18,964 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:26:21,336 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-16 21:26:21,367 - llm_key_manager - WARNING - [LLM Keys] groq key #3 rate-limited, disabled for 1097s
+2026-07-16 21:26:22,864 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-16 21:26:22,885 - llm_key_manager - WARNING - [LLM Keys] groq key #2 rate-limited, disabled for 2330s
+2026-07-16 21:26:24,542 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-16 21:26:24,545 - llm_key_manager - WARNING - [LLM Keys] groq key #7 rate-limited, disabled for 21600s
+2026-07-16 21:26:25,582 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-16 21:26:26,317 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
+2026-07-16 21:26:26,338 - llm_key_manager - ERROR - [LLM Keys] gemini key #2 unauthorized — permanently disabled
+2026-07-16 21:26:28,101 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-16 21:26:28,218 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-16 21:26:28,771 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
+2026-07-16 21:26:28,778 - llm_key_manager - ERROR - [LLM Keys] gemini key #3 unauthorized — permanently disabled
+2026-07-16 21:26:30,621 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-07-16 21:26:31,067 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
+2026-07-16 21:26:31,071 - llm_key_manager - ERROR - [LLM Keys] gemini key #1 unauthorized — permanently disabled
+2026-07-16 21:26:31,071 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
+2026-07-16 21:26:37,368 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 4 failed: Price did not break swing low 1.14616 (no MSS) | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 12:30-14:30 BD Time)
+2026-07-16 21:26:42,184 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-16 21:26:42,199 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T15:00:00+00:00 | current=2026-07-16T15:26:42.199014+00:00 | close=2026-07-16T15:15:00+00:00 | seconds_left=-702s | naive_input=False | is_closed=True
+2026-07-16 21:27:00,431 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-07-16 21:27:17,720 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:27:20,091 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-07-16 21:27:20,094 - llm_key_manager - WARNING - [LLM Keys] groq key #6 rate-limited, disabled for 2900s
+2026-07-16 21:27:23,697 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-07-16 21:27:25,221 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.51% or ATR=0.50×) | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 12:30-14:30 BD Time)
+2026-07-16 21:27:29,949 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-07-16 21:27:29,962 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T15:00:00+00:00 | current=2026-07-16T15:27:29.962224+00:00 | close=2026-07-16T15:15:00+00:00 | seconds_left=-750s | naive_input=False | is_closed=True
+2026-07-16 21:27:32,661 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
