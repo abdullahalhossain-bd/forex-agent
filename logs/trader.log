@@ -1978,3 +1978,12 @@ groq.RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached
 2026-07-16 21:27:29 | INFO     | ai_trader                 | [3/9] Analysis Agent...
 2026-07-16 21:27:29 | INFO     | analysis_agent            | [AnalysisAgent] Running Day 65 pipeline for USDJPY (15m)
 2026-07-16 21:27:29 | INFO     | session_analyzer          | [SessionAnalyzer] LONDON_NY_OVERLAP | USDJPY | Strategy: A_PLUS_ONLY | Score: 18 | Fusion: ⏳ pending | Trade: ✅
+2026-07-16 21:49:05 | INFO     | train_models_quick        | Using REAL MetaTrader5 historical data for training
+2026-07-16 21:49:05 | INFO     | train_models_quick        | Training models for 6 pair(s) on 15m timeframe
+2026-07-16 21:49:05 | INFO     | train_models_quick        | Bars per pair: 100000
+2026-07-16 21:49:05 | INFO     | train_models_quick        | === Training EURUSD 15m ===
+2026-07-16 21:49:05 | INFO     | train_models_quick        | Fetching REAL MT5 historical data...
+2026-07-16 21:49:06 | INFO     | train_models_quick        |   Downloaded 100000 candles from MT5
+2026-07-16 21:49:06 | INFO     | train_models_quick        |   After cleaning: 99999 rows
+2026-07-16 21:49:06 | INFO     | train_models_quick        |   Date range: 2022-07-07 04:30:00+00:00 → 2026-07-16 18:30:00+00:00
+2026-07-16 21:49:06 | INFO     | train_models_quick        | Using FeatureEngineer for comprehensive feature engineering (161 features)...
