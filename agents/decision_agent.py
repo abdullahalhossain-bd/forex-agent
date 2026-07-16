@@ -210,6 +210,18 @@ class DecisionAgent:
         llm_conf = _safe_conf(llm_conf)
         master_conf = _safe_conf(master_conf)
 
+        # BUGFIX (confidence-zeroing): every early-return "NO TRADE" gate
+        # below (news/risk/session/dead-zone/fusion/SignalFusion) used to
+        # hardcode confidence=0, throwing away whatever the rule engine,
+        # LLM, and MasterAnalyst actually said. That's inconsistent with
+        # the later consensus/ConfidenceEngine/FusionV3 gates in this same
+        # function, which all explicitly PRESERVE the analysis-layer
+        # confidence for audit instead of zeroing it. _preserved_conf is
+        # the strongest of the three raw voter confidences, used by those
+        # early gates so "Confidence: 0%" no longer contradicts an LLM
+        # that reported e.g. 70-90%.
+        _preserved_conf = max(rule_conf, llm_conf, master_conf)
+
         # P0 fix (audit C7): mirror the same fail-safe for MasterAnalyst.
         # NOTE: master_sig/master_conf are now defined ABOVE this block
         # (Bug #1 fix — previously this branch crashed with UnboundLocalError).
@@ -291,8 +303,8 @@ class DecisionAgent:
 
         # Gates (only reached in non-TEST_MODE or when final_signal is not BUY/SELL)
         if not news_ok:
-            return self._result("NO TRADE", 0, risk_out,
-                ["News window active — trading blocked"],
+            return self._result("NO TRADE", _preserved_conf, risk_out,
+                ["News window active — trading blocked (analysis confidence preserved)"],
                 pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label)
 
         # Day 81+ hotfix (Barrier 4): placeholder_risk is built in
@@ -323,8 +335,8 @@ class DecisionAgent:
                 and risk_out.get("rr_ratio", -1) == 0
             )
         if not risk_approved and not _is_placeholder:
-            return self._result("NO TRADE", 0, risk_out,
-                [f"Risk rejected: {risk_out.get('reject_reason')}"],
+            return self._result("NO TRADE", _preserved_conf, risk_out,
+                [f"Risk rejected: {risk_out.get('reject_reason')} (analysis confidence preserved)"],
                 pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label)
         if not risk_approved and _is_placeholder:
             log.info(
@@ -372,22 +384,25 @@ class DecisionAgent:
 
         if not _test_mode:
             if is_dead_zone:
-                return self._result("NO TRADE", 0, risk_out, [
-                    f"Session gate: DEAD_ZONE ({current_session}) — trading paused",
+                return self._result("NO TRADE", _preserved_conf, risk_out, [
+                    f"Session gate: DEAD_ZONE ({current_session}) — trading paused "
+                    f"(analysis confidence preserved)",
                 ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
                    analysis_out=analysis_out)
 
             if not sess_trade_allowed:
-                return self._result("NO TRADE", 0, risk_out, [
+                return self._result("NO TRADE", _preserved_conf, risk_out, [
                     f"Session gate: trade not allowed in {current_session} "
-                    f"(strategy={session_ctx.get('session_strategy', 'N/A')})",
+                    f"(strategy={session_ctx.get('session_strategy', 'N/A')}) "
+                    f"(analysis confidence preserved)",
                 ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
                    analysis_out=analysis_out)
 
             if not fusion_allowed:
-                return self._result("NO TRADE", 0, risk_out, [
+                return self._result("NO TRADE", _preserved_conf, risk_out, [
                     f"Fusion gate: SMC fusion rejected for {current_session} "
-                    f"(score={fusion_score}/100, grade={fusion_grade})",
+                    f"(score={fusion_score}/100, grade={fusion_grade}) "
+                    f"(analysis confidence preserved)",
                 ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
                    analysis_out=analysis_out)
 
@@ -397,8 +412,9 @@ class DecisionAgent:
             # rejection), honor that too — the upstream pipeline already
             # weighed more context than the vote block has access to.
             if final_signal == "NO TRADE":
-                return self._result("NO TRADE", 0, risk_out, [
-                    "Analysis pipeline returned NO TRADE — honoring upstream verdict",
+                return self._result("NO TRADE", _preserved_conf, risk_out, [
+                    "Analysis pipeline returned NO TRADE — honoring upstream verdict "
+                    "(analysis confidence preserved)",
                 ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
                    analysis_out=analysis_out)
         else:
@@ -406,7 +422,7 @@ class DecisionAgent:
             # narrow conflict-check behavior so TEST_MODE trades are
             # not silently blocked by the new hard gate.
             if final_signal == "NO TRADE" and has_conflict:
-                return self._result("NO TRADE", 0, risk_out, [
+                return self._result("NO TRADE", _preserved_conf, risk_out, [
                     f"Sentiment conflict: Technical {rule_signal} vs Sentiment {sentiment_bias}",
                     conflict_result.get("recommendation", ""),
                 ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
@@ -465,12 +481,14 @@ class DecisionAgent:
                 # hard block. The engine returns WAIT on 2/4 (or fewer)
                 # agreement and NO_TRADE on strong disagreement.
                 if _fs_signal not in ("BUY", "SELL"):
-                    return self._result("NO TRADE", 0, risk_out, [
-                        f"SignalFusion gate: {_fs_signal} "
-                        f"(consensus={_fs_agreement}, "
-                        f"conf={_fs_conf:.0f}%)",
-                    ], pattern=pattern, pair=pair, timeframe=timeframe,
-                       regime=regime_label, analysis_out=analysis_out)
+                    return self._result(
+                        "NO TRADE", max(_preserved_conf, _fs_conf), risk_out, [
+                            f"SignalFusion gate: {_fs_signal} "
+                            f"(consensus={_fs_agreement}, "
+                            f"conf={_fs_conf:.0f}%) "
+                            f"(analysis confidence preserved)",
+                        ], pattern=pattern, pair=pair, timeframe=timeframe,
+                        regime=regime_label, analysis_out=analysis_out)
             except Exception as e:
                 if not self._signal_fusion_warned:
                     log.warning(

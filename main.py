@@ -69,6 +69,18 @@ sys.stderr.reconfigure(encoding="utf-8")
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+# Ensure HF cache directory is set to the repository cache to avoid
+# runtime network HEAD/timeouts when fetching small files from the Hub.
+# If the user or system already set HF_HOME, respect that.
+if "HF_HOME" not in os.environ:
+    _hf_cache_path = PROJECT_ROOT / "data" / "hf_cache"
+    try:
+        _hf_cache_path.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
+    os.environ["HF_HOME"] = str(_hf_cache_path)
+    print(f"HF_HOME not set — using repo cache: {os.environ['HF_HOME']}")
+
 from config import (
     EXECUTION_MODE,
     INITIAL_BALANCE,
