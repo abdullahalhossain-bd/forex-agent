@@ -416,8 +416,8 @@ class SessionAnalyzer:
         fusion_score = min(100, fusion_score)
 
         if fusion_score >= 85:   grade = "A+"
-        elif fusion_score >= 55  # Lowered from 70: grade = "A"
-        elif fusion_score >= 55: grade = "B"
+        elif fusion_score >= 55: grade = "A"    # Lowered from 70
+        elif fusion_score >= 40: grade = "B"
         else:                    grade = "INVALID"
 
         return {

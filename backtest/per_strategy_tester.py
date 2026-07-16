@@ -137,15 +137,22 @@ class TradeSimulator:
         stop_loss: float,
         take_profit: float,
         pip_size: float = 0.0001,
-    ) -> Tuple[Optional[int], float, str]:
+    ) -> Tuple[Optional[int], float, str, float]:
         """
         Simulate a trade from entry_idx onward.
 
         Returns:
-            (exit_idx, exit_price, exit_reason)
+            (exit_idx, exit_price, exit_reason, actual_entry)
+
+        BUG #14 FIX: actual_entry (slippage-adjusted fill price) is now
+        returned so callers can compute P&L against the REAL fill price,
+        not the theoretical entry_price. Previously actual_entry was
+        computed here and immediately discarded — every backtest P&L
+        was computed off entry_price with zero slippage cost applied,
+        making results systematically better than live trading.
         """
         if entry_idx >= len(df) - 1:
-            return None, entry_price, "no_data"
+            return None, entry_price, "no_data", entry_price
 
         # Apply spread/slippage
         if direction == "long":
@@ -163,23 +170,23 @@ class TradeSimulator:
             if direction == "long":
                 # Check SL first (pessimistic)
                 if low <= stop_loss:
-                    return i, stop_loss, "SL"
+                    return i, stop_loss, "SL", actual_entry
                 # Then TP
                 if high >= take_profit:
-                    return i, take_profit, "TP"
+                    return i, take_profit, "TP", actual_entry
             else:  # short
                 # Check SL first (pessimistic)
                 if high >= stop_loss:
-                    return i, stop_loss, "SL"
+                    return i, stop_loss, "SL", actual_entry
                 # Then TP
                 if low <= take_profit:
-                    return i, take_profit, "TP"
+                    return i, take_profit, "TP", actual_entry
 
             # Timeout
             if i == entry_idx + self.max_hold_bars:
-                return i, close, "timeout"
+                return i, close, "timeout", actual_entry
 
-        return len(df) - 1, float(df.iloc[-1]["close"]), "end_of_data"
+        return len(df) - 1, float(df.iloc[-1]["close"]), "end_of_data", actual_entry
 
 
 # ════════════════════════════════════════════════════════════════
@@ -357,7 +364,7 @@ class PerStrategyTester:
                     tp_dist = abs(entry - stop) * self.rr_ratio
                     tp = entry + tp_dist if setup.direction == "bullish" else entry - tp_dist
 
-                    exit_idx, exit_price, reason = self.sim.simulate(
+                    exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                         df, i, "long" if setup.direction == "bullish" else "short",
                         entry, stop, tp, pip)
 
@@ -366,7 +373,7 @@ class PerStrategyTester:
                     trade = self._make_trade(
                         "pin_bar", pair, timeframe,
                         "long" if setup.direction == "bullish" else "short",
-                        df.index[i], entry, stop, tp,
+                        df.index[i], actual_entry, stop, tp,
                         df.index[exit_idx], exit_price, reason, pip,
                         confidence=setup.quality_grade, tactic=tactic)
                     result.trades.append(trade)
@@ -408,7 +415,7 @@ class PerStrategyTester:
                     stop = entry + 1.5 * atr
                     tp = entry - 1.5 * atr * self.rr_ratio
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, i, direction, entry, stop, tp, pip)
 
                 if exit_idx is None:
@@ -416,7 +423,7 @@ class PerStrategyTester:
 
                 trade = self._make_trade(
                     "candlestick_patterns", pair, timeframe, direction,
-                    df.index[i], entry, stop, tp,
+                    df.index[i], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence=pat.reliability, tactic=pat.pattern_name)
                 result.trades.append(trade)
@@ -481,7 +488,7 @@ class PerStrategyTester:
                 if base_end >= len(df) - 5:
                     continue
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, base_end, direction, entry, stop, tp, pip)
 
                 if exit_idx is None:
@@ -489,7 +496,7 @@ class PerStrategyTester:
 
                 trade = self._make_trade(
                     "sd_zones_scored", pair, timeframe, direction,
-                    df.index[base_end], entry, stop, tp,
+                    df.index[base_end], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence=scored.tier, tactic=scored.entry_method)
                 result.trades.append(trade)
@@ -553,14 +560,14 @@ class PerStrategyTester:
                     else:
                         continue
 
-                    exit_idx, exit_price, reason = self.sim.simulate(
+                    exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                         df, i, direction, entry, stop, tp, pip)
                     if exit_idx is None:
                         continue
 
                     trade = self._make_trade(
                         "sr_zones", pair, timeframe, direction,
-                        df.index[i], entry, stop, tp,
+                        df.index[i], actual_entry, stop, tp,
                         df.index[exit_idx], exit_price, reason, pip,
                         confidence="Medium", tactic=zone_type)
                     result.trades.append(trade)
@@ -605,14 +612,14 @@ class PerStrategyTester:
                     tp = entry + 1.5 * atr * self.rr_ratio if direction == "long" \
                         else entry - 1.5 * atr * self.rr_ratio
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, i, direction, entry, stop, tp, pip)
                 if exit_idx is None:
                     continue
 
                 trade = self._make_trade(
                     "stop_hunt", pair, timeframe, direction,
-                    df.index[i], entry, stop, tp,
+                    df.index[i], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence=signal.get("confidence", "Medium"),
                     tactic="stop_hunt_default")
@@ -657,14 +664,14 @@ class PerStrategyTester:
                     tp = entry + 1.5 * atr * self.rr_ratio if direction == "long" \
                         else entry - 1.5 * atr * self.rr_ratio
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, i, direction, entry, stop, tp, pip)
                 if exit_idx is None:
                     continue
 
                 trade = self._make_trade(
                     "ict_amd", pair, timeframe, direction,
-                    df.index[i], entry, stop, tp,
+                    df.index[i], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence=signal.get("confidence", "Medium"),
                     tactic="ict_amd_default")
@@ -709,14 +716,14 @@ class PerStrategyTester:
                     tp = entry + 1.5 * atr * self.rr_ratio if direction == "long" \
                         else entry - 1.5 * atr * self.rr_ratio
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, i, direction, entry, stop, tp, pip)
                 if exit_idx is None:
                     continue
 
                 trade = self._make_trade(
                     "multi_pa", pair, timeframe, direction,
-                    df.index[i], entry, stop, tp,
+                    df.index[i], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence=signal.get("confidence", "Medium"),
                     tactic="multi_pa_default")
@@ -786,14 +793,14 @@ class PerStrategyTester:
                 tp = entry + 1.5 * atr * self.rr_ratio if direction == "long" \
                     else entry - 1.5 * atr * self.rr_ratio
 
-                exit_idx, exit_price, reason = self.sim.simulate(
+                exit_idx, exit_price, reason, actual_entry = self.sim.simulate(
                     df, i, direction, entry, stop, tp, pip)
                 if exit_idx is None:
                     continue
 
                 trade = self._make_trade(
                     "cci_state", pair, timeframe, direction,
-                    df.index[i], entry, stop, tp,
+                    df.index[i], actual_entry, stop, tp,
                     df.index[exit_idx], exit_price, reason, pip,
                     confidence="High" if sig.confluence_score == 3 else "Medium",
                     tactic=f"cci_{int(cci_val)}")

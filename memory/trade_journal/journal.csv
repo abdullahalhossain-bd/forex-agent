@@ -279,3 +279,5 @@ timestamp,cycle,symbol,timeframe,session,decision,confidence,entry,sl,tp1,tp2,lo
 2026-07-15T17:06:21+00:00,20,NZDUSD,15m,New York,NO TRADE,0.0,0.58402,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
 2026-07-15T17:07:24+00:00,21,EURGBP,15m,New York,NO TRADE,0.0,0.84572,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
 2026-07-15T17:08:46+00:00,22,EURJPY,15m,New York,NO TRADE,0.0,185.595,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-16T06:22:15+00:00,1,EURUSD,15m,Tokyo/Sydney,NO TRADE,0.0,1.1467,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-16T06:23:05+00:00,2,GBPUSD,15m,Tokyo/Sydney,NO TRADE,0.0,1.35355,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,

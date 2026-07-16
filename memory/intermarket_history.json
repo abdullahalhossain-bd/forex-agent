@@ -4338,5 +4338,47 @@
     "bond_yield": null,
     "sp500_change": 0.0,
     "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-16T06:21:17.060356+00:00",
+    "pair": "EURUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-16T06:22:43.939349+00:00",
+    "pair": "GBPUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
+  },
+  {
+    "timestamp": "2026-07-16T06:23:18.337985+00:00",
+    "pair": "USDJPY",
+    "regime": "NEUTRAL",
+    "macro_score": 0,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": null,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 0.0,
+    "bond_yield": null,
+    "sp500_change": 0.0,
+    "vix_value": null
   }
 ]

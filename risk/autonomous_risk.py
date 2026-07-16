@@ -281,11 +281,18 @@ class AutonomousRiskManager:
                     symbol, signal, self._get_open_positions()
                 )
             elif hasattr(self.exposure_manager, "check"):
+                # Bug #10 fix: 'decision' doesn't exist yet at this point in
+                # the function — it's only built at Step 8 (~100 lines below,
+                # after lot sizing). Referencing it here raised
+                # UnboundLocalError whenever this fallback branch (no
+                # check_new_position(), only check()) was taken. The actual
+                # lot/risk_usd aren't known yet this early, so use the same
+                # safe defaults the old (broken) code intended as its fallback.
                 exposure_check = self.exposure_manager.check(
                     pair=symbol,
                     direction=signal,
-                    lot=decision.get("lot", 0.01) if isinstance(decision, dict) else 0.01,
-                    risk_usd=decision.get("risk_usd", 0) if isinstance(decision, dict) else 0,
+                    lot=0.01,
+                    risk_usd=0,
                     balance=self.balance,
                 )
                 exposure_check = {"allowed": getattr(exposure_check, "allowed", True),

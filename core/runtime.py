@@ -91,7 +91,7 @@ class Runtime:
         try:
             self.health.stop()
         except Exception as e:
-            log.warning(f"Suppressed exception at line 93: {e}")
+            log.warning("Suppressed exception while stopping health monitor: %s", e)
             pass
         self.bus.publish("system.shutdown", {"ts": time.time()}, source="runtime")
         self.lifecycle.shutdown()
@@ -819,7 +819,7 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
             from config import INITIAL_BALANCE
             mgr.initial_balance = float(INITIAL_BALANCE)
         except Exception as e:
-            log.warning(f"Suppressed exception at line 755: {e}")
+            log.warning("Suppressed exception while setting LiveRiskManager initial_balance: %s", e)
             pass
         registry.register_instance("live_risk_manager", mgr)
         services.append("live_risk_manager")
@@ -1042,7 +1042,10 @@ def boot_analytics(registry: ServiceRegistry) -> PhaseResult:
 
     try:
         from analytics.performance_report import PerformanceReport
-        registry.register("performance_report", lambda r: PerformanceReport())
+        registry.register(
+            "performance_report",
+            lambda r: PerformanceReport(tracker=r.try_resolve("strategy_tracker")),
+        )
         services.append("performance_report")
     except Exception as e:
         log.warning("PerformanceReport not available: %s", e)
@@ -1151,14 +1154,14 @@ def boot_dashboard(registry: ServiceRegistry) -> PhaseResult:
             if hasattr(dl, "_on_runtime_metric"):
                 dl._on_runtime_metric(evt.payload)
         except Exception as e:
-            log.warning(f"Suppressed exception at line 1040: {e}")
+            log.warning("Suppressed exception in _on_metric dashboard callback: %s", e)
             pass
 
     try:
         get_bus().subscribe("analytics.metric", _on_metric)
         get_bus().subscribe("health.report", _on_metric)
     except Exception as e:
-        log.warning(f"Suppressed exception at line 1047: {e}")
+        log.warning("Suppressed exception while subscribing analytics/health events: %s", e)
         pass
 
     get_bus().publish("system.startup", {"phase": "dashboard", "services": services}, source="runtime")
@@ -1254,7 +1257,7 @@ def boot_automation(registry: ServiceRegistry) -> PhaseResult:
                     message=str(evt.payload),
                 )
         except Exception as e:
-            log.warning(f"Suppressed exception at line 1153: {e}")
+            log.warning("Suppressed exception in _on_sys_error automation callback: %s", e)
             pass
 
     get_bus().subscribe("system.error", _on_sys_error)
@@ -1294,7 +1297,10 @@ def boot_orchestrator(registry: ServiceRegistry) -> PhaseResult:
 
     try:
         from orchestrator.daily_routine import DailyRoutineManager
-        registry.register("daily_routine", lambda r: DailyRoutineManager())
+        registry.register(
+            "daily_routine",
+            lambda r: DailyRoutineManager(orchestrator=r.try_resolve("trading_orchestrator")),
+        )
         services.append("daily_routine")
     except Exception as e:
         log.warning("DailyRoutineManager not available: %s", e)
@@ -1315,7 +1321,16 @@ def boot_orchestrator(registry: ServiceRegistry) -> PhaseResult:
 
     try:
         from orchestrator.human_override import HumanOverrideSystem
-        registry.register("human_override", lambda r: HumanOverrideSystem())
+
+        def _make_human_override(r):
+            hos = HumanOverrideSystem(
+                state_manager=r.try_resolve("system_state_manager"),
+                bus=r.try_resolve("message_bus"),
+            )
+            hos.start()  # FIX (bug 18): actually start the command-file poll thread
+            return hos
+
+        registry.register("human_override", _make_human_override)
         services.append("human_override")
     except Exception as e:
         log.warning("HumanOverrideSystem not available: %s", e)

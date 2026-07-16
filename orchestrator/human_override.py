@@ -47,11 +47,49 @@ class HumanOverrideSystem:
         self._override_history: list[dict] = []
         self._last_check_time = 0
         self._poll_interval = 5  # Check command file every 5 seconds
+        self._poll_thread: Optional[__import__("threading").Thread] = None
+        self._stop_polling = __import__("threading").Event()
 
     def start(self):
-        """Start monitoring for human override commands."""
+        """Start monitoring for human override commands.
+
+        FIX (bug 18): previously this only logged a message — nothing ever
+        actually called check_command_file(), because the live trading loop
+        never polled it. HumanOverrideSystem now polls itself in a daemon
+        thread, so STOP_ALL/CLOSE_ALL/PAUSE/RESUME work via the command file
+        regardless of whether the live loop remembers to poll.
+        """
+        import threading
+
         log.info("[HumanOverride] System active — monitoring for override commands")
         log.info("[HumanOverride] Commands: STOP_ALL, CLOSE_ALL, PAUSE, RESUME, STATUS")
+
+        if self._poll_thread is not None and self._poll_thread.is_alive():
+            log.warning("[HumanOverride] Poll thread already running — start() ignored")
+            return
+
+        self._stop_polling.clear()
+
+        def _poll_loop():
+            while not self._stop_polling.is_set():
+                try:
+                    self.check_command_file()
+                except Exception as e:
+                    log.error(f"[HumanOverride] poll loop error: {e}")
+                self._stop_polling.wait(self._poll_interval)
+
+        self._poll_thread = threading.Thread(
+            target=_poll_loop, name="human-override-poll", daemon=True
+        )
+        self._poll_thread.start()
+        log.info(f"[HumanOverride] Command-file poll thread started (every {self._poll_interval}s)")
+
+    def stop(self):
+        """Stop the background polling thread (does not affect trading state)."""
+        self._stop_polling.set()
+        if self._poll_thread is not None:
+            self._poll_thread.join(timeout=self._poll_interval + 1)
+            log.info("[HumanOverride] Command-file poll thread stopped")
 
     def check_command_file(self) -> Optional[str]:
         """

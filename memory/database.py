@@ -272,19 +272,6 @@ class Database:
         cursor.execute("SELECT * FROM trades WHERE result = 'OPEN' ORDER BY date DESC")
         return [dict(row) for row in cursor.fetchall()]
 
-    def update_trade_result(self, trade_id: int, result: str, pnl: float):
-        """Trade শেষ হলে result update করো।"""
-        # Day 102+ hotfix: lock around write
-        with self._lock:
-            cursor = self.conn.cursor()
-            cursor.execute("""
-            UPDATE trades
-            SET result = ?, pnl = ?
-            WHERE id = ?
-            """, (result, pnl, trade_id))
-            self.conn.commit()
-            print(f"✅ Trade #{trade_id} updated: {result} | PnL: {pnl}")
-
     # ── Analysis Log ───────────────────────────────────────────
 
     def save_analysis(self, analysis: dict) -> int:

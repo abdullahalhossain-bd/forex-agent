@@ -209,8 +209,16 @@ class EnsembleEngine:
 
         # Rule engine (from Day 67 Confluence)
         # Use rule_confidence if > 0, otherwise use master_confidence, otherwise default 50
+        # BUG #12 fix: master_signal was accepted as a parameter and
+        # documented as a "confirmation signal" but never actually read —
+        # master_confidence was borrowed as a fallback regardless of
+        # whether MasterAnalyst's signal agreed with the rule signal.
+        # That meant a MasterAnalyst SELL at high confidence could
+        # silently inflate confidence for an opposing rule-engine BUY.
+        # Now we only borrow master_confidence when master_signal
+        # actually confirms rule_signal (same direction).
         effective_rule_conf = rule_confidence
-        if effective_rule_conf <= 0 and master_confidence > 0:
+        if effective_rule_conf <= 0 and master_confidence > 0 and master_signal == rule_signal:
             effective_rule_conf = master_confidence
         if effective_rule_conf <= 0 and rule_signal in ("BUY", "SELL"):
             effective_rule_conf = 50.0  # minimum viable confidence

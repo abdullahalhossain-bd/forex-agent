@@ -12,6 +12,7 @@
 # ============================================================
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -401,7 +402,7 @@ class CapitalManager:
                 with open(CAPITAL_STATE_PATH) as f:
                     return json.load(f)
             except Exception as e:
-                log.warning(f"Suppressed exception at line 403: {e}")
+                log.warning("Suppressed exception while loading capital state: %s", e)
                 pass
         return {"allocations": {}, "pair_weights": dict(DEFAULT_PAIR_WEIGHTS)}
 

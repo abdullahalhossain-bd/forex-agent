@@ -160,7 +160,8 @@ class ForexAISystem:
         )
         self.symbols = self._resolve_symbols()
         self.timeframe = getattr(self.args, "timeframe", None) or DEFAULT_TIMEFRAME
-        self.balance = INITIAL_BALANCE
+        self.balance = getattr(self.args, "balance", None) or INITIAL_BALANCE
+        self.max_cycles = getattr(self.args, "max_cycles", None)
 
         # The trader is constructed by the runtime's RUNTIME phase and
         # registered in the ServiceRegistry under "trader" / "trading_engine".
@@ -409,7 +410,17 @@ class ForexAISystem:
             while not self._stop_requested:
                 run_started = time.time()
                 try:
-                    report = self.trading_engine.run()
+                    if self.max_cycles:
+                        try:
+                            report = self.trading_engine.run(max_cycles=self.max_cycles)
+                        except TypeError:
+                            logging.warning(
+                                "[System] --max-cycles was set but trading_engine.run() "
+                                "doesn't accept a max_cycles argument — ignoring override."
+                            )
+                            report = self.trading_engine.run()
+                    else:
+                        report = self.trading_engine.run()
                     self._write_final_report(report)
                     if self._stop_requested:
                         break
@@ -717,8 +728,12 @@ Examples:
     args = parser.parse_args()
 
     if args.disable_news_block:
-        os.environ["NEWS_BLOCK_ENABLED"] = "true"
+        os.environ["NEWS_BLOCK_ENABLED"] = "false"
         print("[main] News block disabled via CLI override")
+
+    if getattr(args, "paper", False):
+        print("[main] WARNING: --paper has no effect — paper trading mode was "
+              "removed from this system (EXECUTION_MODE is always mt5_demo).")
 
     setup_logging()
     logger = logging.getLogger("main")

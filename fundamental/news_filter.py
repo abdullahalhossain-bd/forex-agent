@@ -69,7 +69,7 @@ class NewsFilter:
         "MEDIUM":  20,
         "LOW":     15,
     }
-    WATCHED_CURRENCIES = {"USD", "EUR", "GBP", "JPY"}
+    WATCHED_CURRENCIES = {"USD", "EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF"}
     # Day 98+ FIX: now points at the single shared list in faireconomy_cache.py
     # instead of maintaining its own copy (was identical to
     # economic_calendar_api.py's copy by coincidence, not by design).

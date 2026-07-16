@@ -16,6 +16,20 @@ from broker.mt5_connection import MT5_AVAILABLE
 
 log = get_logger("order_manager")
 
+# Day 33+ FIX (Bug #6): MAX_LOT backstop mismatch. This used to be a
+# hardcoded class constant (10.0) completely disconnected from the
+# actual configured MAX_LOT used by the risk engine / position sizer
+# elsewhere in the system (see config.MAX_LOT, referenced in main.py).
+# If an operator tightened config.MAX_LOT (e.g. to 2.0 lots) to reduce
+# risk, this "hard backstop" would still silently allow up to 10.0 lots
+# through — the backstop was never actually backing up the real limit.
+# We now import the real value and only fall back to 10.0 if config
+# doesn't define one (e.g. isolated unit tests).
+try:
+    from config import MAX_LOT as CONFIG_MAX_LOT
+except Exception:
+    CONFIG_MAX_LOT = 10.0
+
 if MT5_AVAILABLE:
     import MetaTrader5 as mt5
 
@@ -142,7 +156,7 @@ def _resolve_filling_mode(broker_symbol: str):
             log_broker_last_error(symbol=broker_symbol, error=e,
                                   stage="resolve_filling_mode")
         except Exception as e:
-            log.warning(f"Suppressed exception at line 69: {e}")
+            log.warning("Suppressed exception while logging broker last_error (resolve_filling_mode): %s", e)
             pass
         return mt5.ORDER_FILLING_IOC
 
@@ -163,7 +177,7 @@ class OrderManager:
 
     MAX_RETRIES = 3
     RETRY_DELAY_SEC = 2
-    MAX_LOT = 10.0   # sanity ceiling — risk engine আগেই size করে, এটা শুধু hard backstop
+    MAX_LOT = CONFIG_MAX_LOT   # sanity ceiling — now sourced from config, not hardcoded
 
     def __init__(self, connection, account_manager):
         self.connection = connection
@@ -444,7 +458,7 @@ class OrderManager:
                         ticket=outcome.get("ticket"),
                     )
                 except Exception as e:
-                    log.warning(f"Suppressed exception at line 201: {e}")
+                    log.warning("Suppressed exception logging order confirmation event: %s", e)
                     pass
                 return outcome
 
@@ -1024,7 +1038,7 @@ class OrderManager:
                 log_broker_last_error(symbol=symbol, error=last_err,
                                       attempt=attempt, stage="order_send_none")
             except Exception as e:
-                log.warning(f"Suppressed exception at line 585: {e}")
+                log.warning("Suppressed exception while logging broker last_error (order_send_none): %s", e)
                 pass
             return {
                 "success": False,
@@ -1089,7 +1103,7 @@ class OrderManager:
                     attempt=attempt,
                 )
             except Exception as e:
-                log.warning(f"Suppressed exception at line 607: {e}")
+                log.warning("Suppressed exception while logging broker order_send: %s", e)
                 pass
             return {
                 "success": True,

@@ -481,10 +481,16 @@ class DecisionAgent:
                     self._signal_fusion = None
 
         # Weighted voting — normalize STRONG_BUY/STRONG_SELL to BUY/SELL
+        # BUG #7 FIX: use the *_for_vote variants so an excluded
+        # master/LLM vote (parse_failed / unavailable) is actually kept
+        # out of the tally. Previously this block read the raw
+        # master_sig/llm_signal, which meant the exclusion computed above
+        # (master_signal_for_vote / llm_conf_for_vote) was never wired in
+        # — an excluded master vote still counted for 3 votes.
         votes = []
-        if master_sig in ("BUY", "STRONG_BUY"):
+        if master_signal_for_vote in ("BUY", "STRONG_BUY"):
             votes += ["BUY"] * 3
-        elif master_sig in ("SELL", "STRONG_SELL"):
+        elif master_signal_for_vote in ("SELL", "STRONG_SELL"):
             votes += ["SELL"] * 3
         llm_norm = "NO TRADE" if llm_signal in ("WAIT", "HOLD") else llm_signal
         if llm_norm in ("BUY", "STRONG_BUY"):
@@ -514,7 +520,7 @@ class DecisionAgent:
         # → decision=WAIT.  But the rule engine already did full technical
         # analysis; its signal is valid.  Promote rule signal to master
         # weight (3 votes) when master has nothing useful to say.
-        if (master_sig in ("WAIT", "", "NO TRADE", None)
+        if (master_signal_for_vote in ("WAIT", "", "NO TRADE", None)
                 and llm_norm in ("WAIT", "NO TRADE", "HOLD", "", None)
                 and rule_signal in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL")
                 and rule_conf >= 25):  # Lowered threshold for Barrier-1 promotion
@@ -528,7 +534,7 @@ class DecisionAgent:
         buy_votes  = votes.count("BUY")
         sell_votes = votes.count("SELL")
 
-        base_conf = master_conf if master_conf > 0 else round((rule_conf + llm_conf) / 2)
+        base_conf = master_conf_for_vote if master_conf_for_vote > 0 else round((rule_conf + llm_conf_for_vote) / 2)
 
         # Sentiment boost/reduction
         sentiment_boost = 0
@@ -590,12 +596,12 @@ class DecisionAgent:
             if rule_signal in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL") and rule_conf > _max_voter_conf:
                 _max_voter_conf = rule_conf
                 _max_voter_label = f"rule:{rule_signal}"
-            if master_sig in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL") and master_conf > _max_voter_conf:
-                _max_voter_conf = master_conf
-                _max_voter_label = f"master:{master_sig}"
-            if llm_signal in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL") and llm_conf > _max_voter_conf:
-                _max_voter_conf = llm_conf
-                _max_voter_label = f"llm:{llm_signal}"
+            if master_signal_for_vote in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL") and master_conf_for_vote > _max_voter_conf:
+                _max_voter_conf = master_conf_for_vote
+                _max_voter_label = f"master:{master_signal_for_vote}"
+            if llm_norm in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL") and llm_conf_for_vote > _max_voter_conf:
+                _max_voter_conf = llm_conf_for_vote
+                _max_voter_label = f"llm:{llm_norm}"
 
             decision = "WAIT"
             # Preserve strongest voter confidence — DON'T zero it.

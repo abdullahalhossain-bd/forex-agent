@@ -783,6 +783,7 @@ def check_round_number_tp(
         "proximity_pips": proximity_pips,
         "round_between_entry_tp": round_between,
         "is_too_close": is_too_close,
+        "tp_just_below": tp_just_below,
     }
 
     if round_between and is_too_close:
@@ -798,14 +799,19 @@ def check_round_number_tp(
             details=details,
         )
 
-    if is_too_close:
+    # FIX (bug 21): tp_just_below was computed but never consulted here — this
+    # branch used to fire on raw proximity (is_too_close) alone, which also
+    # WARNs when TP already sits safely *past* the round number (no barrier
+    # left ahead of it). Gate on tp_just_below so it only fires when the round
+    # number is still an un-crossed barrier in front of TP.
+    if tp_just_below:
         return EntryQualityResult(
             flag_name="round_number_tp",
             passed=False,
             severity="WARNING",
             reason=(
-                f"TP {take_profit:.5f} is only {dist_pips:.1f} pips from round number "
-                f"{nearest:.5f}. Price may reverse at the round number. "
+                f"TP {take_profit:.5f} is only {dist_pips:.1f} pips short of round number "
+                f"{nearest:.5f}. Price may reverse at the round number before reaching TP. "
                 f"Consider adjusting TP."
             ),
             details=details,

@@ -93,8 +93,8 @@ class RLAgent:
                 return False
         except Exception as e:
             log.exception(f"[RL Agent] model load failed from {model_path}: {e}")
-                import traceback
-                log.error(f"[RL Agent] Full traceback: {traceback.format_exc()}")
+            import traceback
+            log.error(f"[RL Agent] Full traceback: {traceback.format_exc()}")
             return False
 
     def predict(self, state: np.ndarray, ensemble_signal: str = "WAIT",

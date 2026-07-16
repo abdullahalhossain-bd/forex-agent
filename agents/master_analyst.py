@@ -1374,6 +1374,13 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             "master_story":      result.get("market_story", ""),
             "master_risks":      result.get("risks", []),
             "master_critique":   result.get("self_critique", ""),
+            # Bug #8 fix: these flags are set by _fallback_result() when the
+            # LLM call fails (parse error / unavailable) and are required by
+            # decision_agent.py's vote-exclusion logic (master_ctx.get(...)).
+            # They were previously dropped here, so an excluded master vote
+            # never actually got excluded downstream.
+            "_llm_parse_failed": result.get("_llm_parse_failed", False),
+            "_llm_unavailable":  result.get("_llm_unavailable", False),
         }
 
     def print_summary(self, result: dict) -> None:

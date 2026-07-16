@@ -8390,5 +8390,64 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 281,
+    "timestamp": "2026-07-16T06:22:15.044130",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "CHOPPY",
+    "trend": "sideways",
+    "rsi": 51.80677,
+    "patterns": [
+      "bearish_pin_bar"
+    ],
+    "rule_signal": "SELL",
+    "llm_signal": "SELL",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for TOKYO (score=15/100, grade=INVALID)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 282,
+    "timestamp": "2026-07-16T06:23:05.543198",
+    "symbol": "GBPUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "RANGING",
+    "trend": "sideways",
+    "rsi": 53.64629,
+    "patterns": [
+      "evening_star",
+      "three_bar_reversal_bearish"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "News window active \u2014 trading blocked"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]

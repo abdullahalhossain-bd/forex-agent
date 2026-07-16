@@ -199,13 +199,37 @@ class ValidationEngine:
                 X_train, X_test = X.iloc[:split], X.iloc[split:]
                 y_train, y_test = y.iloc[:split], y.iloc[split:]
                 try:
-                    y_pred = model.predict(X_test)
+                    # FIX: previously predicted with the incoming `model` as-is,
+                    # which is typically already fit on the full X/y (including
+                    # X_test) — that made this "strict unseen data test" test on
+                    # data the model had already seen, silently inflating the
+                    # score. Clone + refit on X_train only so X_test is genuinely
+                    # held out; if the model type can't be cloned, fall back but
+                    # flag it instead of pretending it's a clean OOS test.
+                    eval_model = model
+                    leakage_risk = True
+                    try:
+                        from sklearn.base import clone
+                        eval_model = clone(model)
+                        eval_model.fit(X_train, y_train)
+                        leakage_risk = False
+                    except Exception as clone_err:
+                        log.warning(
+                            f"[Validation] could not clone/refit model for OOS test "
+                            f"({clone_err}); falling back to evaluating the "
+                            f"already-fitted model on the held-out slice — "
+                            f"result may be optimistic if X_test overlaps training data"
+                        )
+                        eval_model = model
+
+                    y_pred = eval_model.predict(X_test)
                     acc = float(np.mean(y_pred == np.array(y_test).astype(int)))
                     report.walk_forward = {
                         "score": acc * 100,
                         "passed": acc >= 0.55,
                         "avg_accuracy": acc,
                         "folds": [],
+                        "leakage_risk": leakage_risk,
                     }
                 except Exception:
                     report.walk_forward = {"score": 0, "passed": False}
