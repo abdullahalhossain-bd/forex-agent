@@ -65,7 +65,7 @@ except Exception as e:
             try:
                 from google import genai as google_genai
                 _gemini_client = google_genai.Client(api_key=gemini_key)
-                MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+                MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
                 LLM_AVAILABLE = True
             except Exception as e2:
                 log.warning(f"[DailyReview] Gemini init failed: {e2}")

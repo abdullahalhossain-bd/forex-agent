@@ -7,7 +7,8 @@
 # STEP 1: S/R zones + touch-based bias + 6-factor confirmation checklist (≥3)
 # STEP 2: Wick-based trendline + BOS/CHOCH + trend structure
 # STEP 3: Shooting star 2-candle rule (1st=provisional, 2nd=confirm)
-# STEP 4: Session time filter (12:30-20:30 BD Time = 06:30-14:30 UTC)
+# STEP 4: Session time filter (11:00 BD - 04:00 BD next day = 05:00-22:00 UTC,
+#          env-overridable via PA_SESSION_START_UTC / PA_SESSION_END_UTC)
 # STEP 5: Multi-timeframe correlation (4H→H2, 1H→M30)
 # STEP 6: Supply/Demand via 3 consecutive momentum candles (body≥70% range)
 # STEP 7: Confluence scoring (1-2=Low, 3-4=Medium, 5+=High)
@@ -24,6 +25,7 @@
 
 import json
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 
@@ -51,10 +53,25 @@ ALLOWED_PAIRS = {
 ALLOWED_TIMEFRAMES = {"1D", "4H", "1H", "H1", "H4", "D1"}
 
 # BD Time = UTC+6. Was 12:30-14:30 BD (06:30-08:30 UTC) — only a 2-hour slot,
-# which blocked the PA vote almost all day. Widened to 12:30-20:30 BD
-# (06:30-14:30 UTC), covering the London session through the London/NY overlap.
-SESSION_START_UTC = 5.0    # was 6.5 — 05:00 UTC (11:00 BD)
-SESSION_END_UTC   = 16.0   # was 14.5 — 16:00 UTC (22:00 BD)
+# which blocked the PA vote almost all day. Widened to 11:00-22:00 BD
+# (05:00-16:00 UTC), covering the London session through the London/NY overlap.
+#
+# Follow-up fix (window/dead-zone alignment audit): 16:00 UTC (22:00 BD) cut
+# the window off 6 hours before the NEW_YORK session actually closes (22:00
+# UTC / 04:00 BD next day), so the back half of every NY session — pure
+# trend-continuation hours, not low-liquidity ones — abstained on PA for a
+# clock-alignment reason that had nothing to do with setup quality. The
+# window now runs up to 22:00 UTC, which is exactly where session_rules.py's
+# DEAD_ZONES already takes over (22:00 GMT). This does NOT touch any quality
+# gate — SMC score minimums, confluence factor counts, and R:R floors in
+# risk/trade_permission.py and analysis/session_rules.py are unchanged, so a
+# genuinely weak NY setup is still rejected exactly as before. This only
+# stops a good setup from being discarded purely because of a stale clock
+# boundary. Both ends are env-overridable — same pattern as
+# DEAD_ZONES_ENABLED — for operators who want a different window, as a
+# conscious, auditable choice rather than a silent hardcoded change.
+SESSION_START_UTC = float(os.getenv("PA_SESSION_START_UTC", "5.0"))    # 05:00 UTC (11:00 BD)
+SESSION_END_UTC   = float(os.getenv("PA_SESSION_END_UTC", "22.0"))     # 22:00 UTC (04:00 BD) — aligned to DEAD_ZONES start
 
 # Lower TF mapping for MTF confirmation
 LOWER_TF_MAP = {

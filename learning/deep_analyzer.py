@@ -52,7 +52,7 @@ try:
     if not LLM_AVAILABLE:
         _gemini_client = _key_manager.get_gemini_client()
         if _gemini_client is not None:
-            MODEL = _os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+            MODEL = _os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
             LLM_AVAILABLE = True
             log.info(f"[DeepAnalyzer] Gemini client initialized (fallback) | model={MODEL}")
 except Exception as e:
@@ -73,7 +73,7 @@ except Exception as e:
             try:
                 from google import genai as _google_genai
                 _gemini_client = _google_genai.Client(api_key=_gemini_key)
-                MODEL = _os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+                MODEL = _os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
                 LLM_AVAILABLE = True
                 log.info(f"[DeepAnalyzer] Gemini client initialized (single-key) | model={MODEL}")
             except Exception as _e:

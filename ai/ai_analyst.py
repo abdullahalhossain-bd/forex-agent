@@ -30,7 +30,7 @@ class AIAnalyst:
     """
 
     GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 
     # Rough per-1K-token USD prices used only for cost *estimation* /
     # observability, not billing. Overridable via env if pricing changes.

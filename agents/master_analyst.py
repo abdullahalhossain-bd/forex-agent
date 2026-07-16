@@ -47,7 +47,7 @@ _gemini_client = None
 _key_manager = None
 MODEL = ""
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 # Day 90 — token economy for long-duration demo trading.
 # Was 1500 — that's ~1.5k tokens per call × ~5 calls/cycle × 6 pairs =
 # ~45k tokens/cycle. With 6 Groq keys × 100k TPD = 600k tokens/day,

@@ -420,7 +420,7 @@ for i in range(1, 10):
 if not gemini_keys:
     skip("Gemini", "All GEMINI_API_KEY_* commented out in .env")
 else:
-    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
     for env_name, key in gemini_keys:
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent?key={key}")

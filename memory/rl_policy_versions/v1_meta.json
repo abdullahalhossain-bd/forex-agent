@@ -1,0 +1,9 @@
+{
+  "version": "v1",
+  "saved_at": "2026-07-16T18:46:35+00:00",
+  "episodes": 1,
+  "avg_reward": 0.1,
+  "win_rate": 0.0,
+  "notes": "Curriculum trained on EURUSD 15m",
+  "path": "memory\\rl_policy_versions\\v1.zip"
+}

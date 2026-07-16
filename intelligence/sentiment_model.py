@@ -31,7 +31,7 @@ _key_manager = None
 
 # Separate models for each provider (Fixed)
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
 
 # Throttling
 _FALLBACK_THROTTLE_LOCK = threading.Lock()

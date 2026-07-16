@@ -65,6 +65,13 @@ class TradePermission:
     MIN_RR_TEST = 1.0
     BLOCKED_SETUP_QUALITIES = {"AVOID", "INVALID"}  # Removed "POOR" - allow marginal setups
 
+    # Confidence override for LOW-quality sessions: a LOW session is
+    # normally blocked, but a sufficiently confident analysis can still
+    # justify a trade. Named constant (was a bare `55` inline) so the
+    # threshold is easy to find and change in one place. User request:
+    # confidence >= 60 should be enough to trade even in a LOW session.
+    SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60
+
     @property
     def MIN_CONFIDENCE(self) -> int:
         return self.MIN_CONFIDENCE_TEST if _test_mode() else self.MIN_CONFIDENCE_PROD
@@ -176,15 +183,38 @@ class TradePermission:
         # In TEST_MODE: session quality is just a logged warning, NOT a
         # trade blocker. This lets the system place trades during off-hours
         # (Sydney/Tokyo only) so you can verify MT5 execution end-to-end.
-        # In production: LOW quality sessions block the trade.
+        # In production: LOW quality sessions are normally blocked, but
+        # high-confidence analysis may still justify a trade.
         if session_ctx:
-            quality = session_ctx.get("quality", "LOW")
+            # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
+            # "quality" key at all — it emits "session_grade" (values
+            # A+/A/B/C, from calculate_session_confidence()). Reading
+            # session_ctx.get("quality", "LOW") therefore ALWAYS fell
+            # back to the "LOW" default on every single trade, no matter
+            # how good the actual session setup was (even an A+ graded
+            # session read as LOW here) — forcing every trade through
+            # the strict low-quality confidence override gate below.
+            # Fix: read the real "quality" key if a caller ever sets one
+            # (forward-compatible), otherwise derive it from the actual
+            # session_grade the analyzer produces.
+            quality = session_ctx.get("quality")
+            if quality is None:
+                _grade = session_ctx.get("session_grade", "C")
+                quality = {"A+": "HIGH", "A": "HIGH", "B": "MEDIUM", "C": "LOW"}.get(_grade, "LOW")
+            conf = decision_out.get("confidence", 0)
             if _test_mode():
                 ok = True   # always pass in test mode
                 detail = f"{quality} (TEST_MODE: allowed)"
             else:
                 ok = quality in ("HIGH", "MEDIUM")
-                detail = quality
+                if not ok and quality == "LOW":
+                    ok = conf >= self.SESSION_LOW_QUALITY_MIN_CONFIDENCE
+                    detail = (
+                        f"{quality} (high-confidence override: {conf}%)"
+                        if ok else quality
+                    )
+                else:
+                    detail = quality
             checks.append({
                 "check":  "Session quality",
                 "passed": ok,
@@ -413,10 +443,11 @@ class TradePermission:
         execution_action = decision_out.get("decision") if allowed else "NO TRADE"
         # The new canonical fields (per institutional spec):
         execution_allowed = allowed
-        blocked_reason = None if allowed else (
-            checks[-1].get("detail") if checks and not checks[-1].get("passed", True)
-            else "Multiple checks failed"
-        )
+        if allowed:
+            blocked_reason = None
+        else:
+            _failed = next((c for c in reversed(checks) if not c.get("passed", True)), None)
+            blocked_reason = _failed.get("detail") if _failed else "Multiple checks failed"
         failed_checks = [
             {"check": c.get("check", "?"), "detail": c.get("detail", "")}
             for c in checks if not c.get("passed", True)

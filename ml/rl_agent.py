@@ -254,6 +254,22 @@ class RLAgent:
             log.error(f"[RL Agent] training failed: {e}")
             return {"error": str(e)}
 
+    def expected_observation_size(self) -> Optional[int]:
+        """Return the loaded PPO model's real observation vector length,
+        or None if no model is loaded (heuristic-only mode).
+
+        Callers should build/pad/truncate their feature vector to THIS
+        size rather than hardcoding a constant — a hardcoded size drifts
+        out of sync the moment the model is retrained with a different
+        feature count (this already happened twice: 16 → 24 → 167).
+        """
+        if self._model_loaded and self._model is not None:
+            try:
+                return int(self._model.observation_space.shape[0])
+            except Exception as e:
+                log.warning(f"[RL Agent] Could not read observation_space shape: {e}")
+        return None
+
     def status(self) -> Dict[str, Any]:
         """Return RL agent status for dashboard."""
         return {

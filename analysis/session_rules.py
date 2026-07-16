@@ -167,13 +167,20 @@ SESSION_STRATEGIES = {
 LONDON_OPEN_WINDOW = {"start": 8, "end": 10}
 
 # ── Minimum SMC Requirements per session ─────────────────────
-# ── Minimum SMC Requirements per session ─────────────────────
+# Lowered min_smc_score (50/55 → 40/45): 50 was rejecting a lot of
+# genuinely tradeable setups whose SMC score landed in the 30-45 range
+# (e.g. a real trending move without every single SMC factor present —
+# see fusion_score computation in session_analyzer.session_smc_fusion(),
+# which is 60% smc_score + 40% "requirements met" bonus, so a score in
+# the 30s can still represent a reasonably structured move). require_bos
+# is left as-is for LONDON/NEW_YORK/OVERLAP — BOS is a real structural
+# confirmation, not an arbitrary number, so it stays a hard requirement.
 SMC_REQUIREMENTS = {
-    "SYDNEY":            {"min_smc_score": 50, "require_bos": False, "require_ob": False},
-    "TOKYO":             {"min_smc_score": 50, "require_bos": False, "require_ob": False},
-    "LONDON":            {"min_smc_score": 50, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
-    "NEW_YORK":          {"min_smc_score": 50, "require_bos": True,  "require_ob": False},
-    "LONDON_NY_OVERLAP": {"min_smc_score": 55, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
+    "SYDNEY":            {"min_smc_score": 30, "require_bos": False, "require_ob": False},
+    "TOKYO":             {"min_smc_score": 30, "require_bos": False, "require_ob": False},
+    "LONDON":            {"min_smc_score": 40, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
+    "NEW_YORK":          {"min_smc_score": 30, "require_bos": True,  "require_ob": False},
+    "LONDON_NY_OVERLAP": {"min_smc_score": 30, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
     "DEAD_ZONE":         {"min_smc_score": 999, "require_bos": True, "require_ob": True},    # ← 999 এ ফেরত আনা হলো
-    "BETWEEN_SESSIONS":  {"min_smc_score": 50, "require_bos": False, "require_ob": False},
+    "BETWEEN_SESSIONS":  {"min_smc_score": 30, "require_bos": False, "require_ob": False},
 }

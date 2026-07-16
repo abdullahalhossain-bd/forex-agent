@@ -1476,7 +1476,15 @@ class AnalysisAgent:
                 rule_conf = 50.0  # minimum viable confidence
             master_sig = (master_ctx.get("master_signal") or "WAIT") if isinstance(master_ctx, dict) else "WAIT"
             master_conf = float(master_ctx.get("master_confidence", 50) or 50) if isinstance(master_ctx, dict) else 50.0
-            regime = (intermarket_ctx.get("macro_regime") or "UNKNOWN") if isinstance(intermarket_ctx, dict) else "UNKNOWN"
+            # FIX: this used to reassign `regime` (the MarketRegimeDetector
+            # dict from earlier in this function) to a plain macro-regime
+            # STRING for this one ensemble call. That silently turned
+            # `regime` into a non-dict for the rest of the function,
+            # including the later MasterDecisionEngine call ~180 lines
+            # down, which then always saw `isinstance(regime, dict) ==
+            # False` and passed regime=None. Using a distinct name keeps
+            # the original regime dict intact for everything downstream.
+            macro_regime_label = (intermarket_ctx.get("macro_regime") or "UNKNOWN") if isinstance(intermarket_ctx, dict) else "UNKNOWN"
 
             # Run the ensemble engine
             ensemble_decision = engine.decide(
@@ -1487,7 +1495,7 @@ class AnalysisAgent:
                 rule_confidence=rule_conf,
                 master_signal=master_sig,
                 master_confidence=master_conf,
-                regime=regime,
+                regime=macro_regime_label,
             )
             ensemble_ctx = ensemble_decision.to_dict()
 
@@ -1558,28 +1566,26 @@ class AnalysisAgent:
             import numpy as np
 
             agent = get_rl_agent()
-            # BUGFIX (RL observation-shape mismatch): the previous "16
-            # features" comment was wrong. Loading the actual trained
-            # model (ml/rl_policy/ppo_forex_latest.zip) with
-            # stable_baselines3 shows its real observation_space is
-            # Box(-inf, inf, (24,), float32) — not 16. Slicing to 16 here
-            # made every predict() call fail with:
-            #   "Unexpected observation shape (16,) for Box environment,
-            #    please use (24,) or (n_env, 24)"
-            # which silently fell back to the heuristic path every time.
-            # Slicing/padding to 24 matches the model that's actually
-            # loaded. If the model is ever retrained with a different
-            # feature count, update RL_OBSERVATION_SIZE below to match
-            # (and re-verify with agent.model.observation_space.shape).
-            RL_OBSERVATION_SIZE = 24
+            # FIX (RL observation-shape mismatch, recurring bug): a prior
+            # fix hardcoded RL_OBSERVATION_SIZE based on inspecting the
+            # model at one point in time (first 16, then 24). Each time
+            # the model gets retrained with a different feature count,
+            # that hardcoded number goes stale and every predict() call
+            # silently falls back to the heuristic path again — which is
+            # exactly what was happening here (model now expects 167).
+            # Fix: ask the loaded model for its real size every time, so
+            # this can never drift out of sync again. Falls back to the
+            # feature vector's own length when no model is loaded (pure
+            # heuristic mode, where the size doesn't matter).
+            rl_obs_size = agent.expected_observation_size() or len(full_feature_vector) or 1
             state = np.array(
-                list(full_feature_vector.values())[:RL_OBSERVATION_SIZE],
+                list(full_feature_vector.values())[:rl_obs_size],
                 dtype=np.float32,
             )
-            if len(state) < RL_OBSERVATION_SIZE:
-                state = np.pad(state, (0, RL_OBSERVATION_SIZE - len(state)))
-            elif len(state) > RL_OBSERVATION_SIZE:
-                state = state[:RL_OBSERVATION_SIZE]
+            if len(state) < rl_obs_size:
+                state = np.pad(state, (0, rl_obs_size - len(state)))
+            elif len(state) > rl_obs_size:
+                state = state[:rl_obs_size]
             state = np.nan_to_num(state, nan=0.0, posinf=1.0, neginf=-1.0)
 
             # Get ensemble signal for the RL agent to evaluate

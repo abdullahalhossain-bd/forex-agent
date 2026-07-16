@@ -365,30 +365,35 @@ class SessionAnalyzer:
         signal:   str,
     ) -> dict:
         """
-        Session requirements + SMC score fusion।
+        Session requirements + SMC score fusion — simplified.
 
-        London Open + Asian Low Sweep + Bullish CHoCH + OB = High Prob BUY
+        Plain-language rule: does this session allow trading right now,
+        and if so, does the SMC setup clear that session's bar?
 
-        Checks:
-          1. SMC score meets session minimum
-          2. BOS/OB requirements met
-          3. Signal aligns with session strategy
+          1. No SMC data yet            → PENDING, don't block.
+          2. SMC score < session minimum → blocked.
+          3. Session requires BOS but it's missing → blocked.
+          4. Otherwise → allowed, and fusion_score IS the SMC score
+             (no extra formula — what you see is what SMC actually found).
+
+        Note: the old version also checked `require_ob` (order block
+        required), but that flag is False for every session except
+        DEAD_ZONE — and DEAD_ZONE already blocks everything via
+        min_smc_score=999. So it never changed an outcome; removed as
+        dead logic rather than kept as a check that can never fail.
 
         Returns:
             {
                 "fusion_allowed": True,
-                "fusion_score": 88,
-                "fusion_grade": "A+",
+                "fusion_score": 72,
+                "fusion_grade": "A",
+                "issues": [],
                 "reason": "...",
             }
         """
-        # CRITICAL FIX (Day 82): If smc_ctx is empty or has no smc_score,
-        # mark fusion as PENDING instead of blocking trades.
-        # Previously: smc_score defaulted to 0, which ALWAYS failed min_smc_score check
-        # Impact: ALL trades were being blocked with "Execution filter: fusion"
         if not smc_ctx or "smc_score" not in smc_ctx:
             return {
-                "fusion_allowed": True,   # Don't block while waiting for SMC
+                "fusion_allowed": True,   # don't block while waiting for SMC
                 "fusion_score":   None,
                 "fusion_grade":   "PENDING",
                 "issues":         ["SMC context not populated — fusion deferred"],
@@ -398,27 +403,26 @@ class SessionAnalyzer:
         reqs      = SMC_REQUIREMENTS.get(session, SMC_REQUIREMENTS["BETWEEN_SESSIONS"])
         smc_score = smc_ctx.get("smc_score", 0)
         has_bos   = smc_ctx.get("smc_factors", {}).get("bos", False)
-        has_ob    = smc_ctx.get("smc_factors", {}).get("order_block", False)
 
         issues = []
-
         if smc_score < reqs["min_smc_score"]:
             issues.append(
                 f"SMC score {smc_score} < required {reqs['min_smc_score']} for {session}"
             )
         if reqs["require_bos"] and not has_bos:
             issues.append(f"BOS required for {session} but not detected")
-        if reqs["require_ob"] and not has_ob:
-            issues.append(f"Order Block required for {session} but not active")
 
-        allowed      = len(issues) == 0
-        fusion_score = round(smc_score * 0.6 + (40 if allowed else 0))
-        fusion_score = min(100, fusion_score)
+        allowed      = not issues
+        fusion_score = smc_score   # score IS the SMC score — no hidden math
 
-        if fusion_score >= 85:   grade = "A+"
-        elif fusion_score >= 55: grade = "A"    # Lowered from 70
-        elif fusion_score >= 40: grade = "B"
-        else:                    grade = "INVALID"
+        if fusion_score >= 80:
+            grade = "A+"
+        elif fusion_score >= 60:
+            grade = "A"
+        elif fusion_score >= reqs["min_smc_score"]:
+            grade = "B"
+        else:
+            grade = "INVALID"
 
         return {
             "fusion_allowed": allowed,

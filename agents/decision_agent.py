@@ -105,7 +105,22 @@ class DecisionAgent:
     # cross-layer aggregate confidence is below this floor, the decision
     # is downgraded to WAIT — trading is gated on system-wide agreement,
     # not on whichever single layer happened to shout loudest.
-    MIN_TRADE_CONFIDENCE = 55.0
+    MIN_TRADE_CONFIDENCE = 45.0  # Relaxed to let valid moderate-confidence trades proceed
+
+    # _aggregate_confidence() damps the weighted-average confidence based
+    # on how much of the whole system (by weight) actually voted BUY/SELL
+    # vs. abstained. `AGG_DAMPING_FLOOR` is the minimum multiplier applied
+    # even when participation is very low (e.g. only rule+master voted,
+    # RL/Ensemble/Unified/Adaptive all abstained — which is NORMAL, not a
+    # red flag, since those layers only vote when they have a real signal).
+    # Was hardcoded at 0.5, which meant a genuinely strong but isolated
+    # signal (e.g. rule=70%, master=75%) could get crushed to ~45-50%
+    # aggregate confidence purely from low participation — even though
+    # nothing was actually WRONG with the signal, just quiet on other
+    # layers. Raised to 0.65 so low participation is still visible (damps
+    # confidence down) but no longer disproportionately punishes a clean
+    # signal just because optional layers had nothing to say.
+    AGG_DAMPING_FLOOR = 0.65
 
     def __init__(self):
         # Day 53 — pattern-aware dynamic confidence scorer (optional)
@@ -181,8 +196,8 @@ class DecisionAgent:
         # but doesn't inflate the aggregate as if two independent layers
         # agreed. Once ML models are retrained and ml_available=True again,
         # it returns to full weight automatically.
-        ensemble_ctx = analysis_out.get("ensemble", {}) if isinstance(analysis_out, dict) else {}
-        if isinstance(ensemble_ctx, dict) and not ensemble_ctx.get("error"):
+        ensemble_ctx = analysis_out.get("ensemble") if isinstance(analysis_out, dict) else None
+        if isinstance(ensemble_ctx, dict) and ensemble_ctx and not ensemble_ctx.get("error"):
             e_decision = ensemble_ctx.get("decision", "WAIT")
             e_conf = float(ensemble_ctx.get("confidence", 0) or 0)
             e_ml_available = bool(ensemble_ctx.get("ml_available", True))
@@ -190,8 +205,8 @@ class DecisionAgent:
             sources.append(("ensemble", e_conf, e_weight, e_decision in ("BUY", "SELL")))
 
         # 5. RL Agent (0-1 scale -> *100)
-        rl_ctx = analysis_out.get("rl_agent", {}) if isinstance(analysis_out, dict) else {}
-        if isinstance(rl_ctx, dict) and not rl_ctx.get("error"):
+        rl_ctx = analysis_out.get("rl_agent") if isinstance(analysis_out, dict) else None
+        if isinstance(rl_ctx, dict) and rl_ctx and not rl_ctx.get("error"):
             rl_action = rl_ctx.get("action_name", "HOLD")
             rl_conf = float(rl_ctx.get("confidence", 0) or 0) * 100
             sources.append(("rl_agent", rl_conf, 1.5, rl_action in ("BUY", "SELL")))
@@ -199,8 +214,8 @@ class DecisionAgent:
         # 6/7. Unified Signal Engine consensus + Adaptive Decision
         # (confidence is a Low/Medium/High label here, not a number)
         _label_conf = {"High": 85.0, "Medium": 60.0, "Low": 30.0}
-        unified_ctx = analysis_out.get("unified_signal", {}) if isinstance(analysis_out, dict) else {}
-        if isinstance(unified_ctx, dict) and not unified_ctx.get("error"):
+        unified_ctx = analysis_out.get("unified_signal") if isinstance(analysis_out, dict) else None
+        if isinstance(unified_ctx, dict) and unified_ctx and not unified_ctx.get("error"):
             consensus = unified_ctx.get("consensus", {}) or {}
             u_action = consensus.get("action", "NO_TRADE")
             u_conf = _label_conf.get(consensus.get("confidence", "Low"), 30.0)
@@ -228,10 +243,10 @@ class DecisionAgent:
         participation_ratio = (part_weight / total_weight) if total_weight > 0 else 0.0
 
         # Damp by how much of the whole system actually agreed to vote.
-        # Floor the damping at 0.5 so one genuinely strong, isolated
-        # signal still reads as "weak support" rather than being crushed
-        # to near-zero.
-        damping = 0.5 + 0.5 * participation_ratio
+        # Floor the damping at AGG_DAMPING_FLOOR so one genuinely strong,
+        # isolated signal still reads as "some support" rather than being
+        # crushed disproportionately just because optional layers abstained.
+        damping = self.AGG_DAMPING_FLOOR + (1.0 - self.AGG_DAMPING_FLOOR) * participation_ratio
         agg_conf = weighted_avg * damping
 
         breakdown = [f"{l}={c:.0f}%" for l, c, w in participating]
@@ -664,7 +679,7 @@ class DecisionAgent:
         if (master_signal_for_vote in ("WAIT", "", "NO TRADE", None)
                 and llm_norm in ("WAIT", "NO TRADE", "HOLD", "", None)
                 and rule_signal in ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL")
-                and rule_conf >= 25):  # Lowered threshold for Barrier-1 promotion
+                and rule_conf >= 20):  # Lowered threshold for Barrier-1 promotion
             _rule_norm = "BUY" if "BUY" in rule_signal else "SELL"
             votes += [_rule_norm] * 3  # promote rule to master weight
             log.info(

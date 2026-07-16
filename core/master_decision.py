@@ -244,9 +244,18 @@ class MasterDecisionEngine:
         # ── Day 90 — Strategy selection ────────────────────────
         # Either use a pre-built strategy_context (passed by AnalysisAgent
         # which has all the right inputs) or build it here from regime.
+        # FIX: `strategy_choice = {}` used to mean two different things —
+        # "the selector genuinely chose WAIT" and "we never got strategy
+        # data at all" — and both looked identical below (strategy_family
+        # == "WAIT"), so a missing/failed selector call silently overrode
+        # validated BUY/SELL signals as if it were a deliberate stand-aside.
+        # `strategy_available` distinguishes the two so a missing selector
+        # can no longer masquerade as a real decision.
         strategy_choice: Dict[str, Any] = {}
+        strategy_available = False
         if strategy_context is not None:
             strategy_choice = strategy_context
+            strategy_available = True
         elif self.strategy_selector is not None and regime:
             try:
                 strategy_choice = self.strategy_selector.select(
@@ -254,15 +263,28 @@ class MasterDecisionEngine:
                     mtf_bias=mtf_bias,
                     structure=structure,
                 )
+                strategy_available = True
             except Exception as e:
-                log.debug(f"[MasterDecision] StrategySelector failed: {e}")
+                log.warning(f"[MasterDecision] StrategySelector failed: {e}")
                 strategy_choice = {}
+                strategy_available = False
+        else:
+            log.debug(
+                "[MasterDecision] No regime/strategy_context supplied — "
+                "skipping strategy-based override for this decision"
+            )
 
         # Strategy WAIT means "stand aside" — the engine may still proceed
         # but position_multiplier will be 0.
         strategy_family = strategy_choice.get("strategy", "WAIT")
         strategy_conf   = int(strategy_choice.get("confidence", 0))
-        strategy_risk   = float(strategy_choice.get("risk_mult", 0.0))
+        # FIX: default to 1.0 (no adjustment), not 0.0. A real WAIT choice
+        # from the selector always carries its own risk_mult of 0.0 (set
+        # explicitly in selector.py's `if strategy == STRATEGY_WAIT:
+        # final_risk = 0.0`), so this default only ever applies when
+        # strategy_choice is the missing-data {} — and missing data should
+        # leave position sizing to the validator, not silently zero it.
+        strategy_risk   = float(strategy_choice.get("risk_mult", 1.0))
         strategy_mods   = list(strategy_choice.get("active_modules", []))
         strategy_avoid  = list(strategy_choice.get("avoid", []))
         strategy_reason = str(strategy_choice.get("reason", ""))
@@ -349,7 +371,12 @@ class MasterDecisionEngine:
         # it's already NO_TRADE) — the selector said "stand aside".
         validator_mult = validation.position_multiplier
         strategy_adjusted_mult = round(validator_mult * strategy_risk, 3)
-        if strategy_family == "WAIT":
+        # FIX: only treat this as a deliberate "selector says stand aside"
+        # when the selector actually ran (strategy_available). If regime/
+        # strategy_context was never supplied, strategy_family defaults to
+        # "WAIT" with no meaning behind it — that must NOT override a
+        # validated BUY/SELL from the four intelligence layers.
+        if strategy_available and strategy_family == "WAIT":
             strategy_adjusted_mult = 0.0
             # If validation said BUY/SELL but strategy said WAIT, downgrade
             if validation.final_signal in ("BUY", "SELL"):
