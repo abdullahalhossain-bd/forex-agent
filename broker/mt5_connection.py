@@ -17,6 +17,26 @@ except ImportError:
     )
 
 
+def get_mt5_connection(
+    login: int,
+    password: str,
+    server: str,
+    path: str = None,
+    auto_connect: bool = True,
+) -> "MT5Connection":
+    """Module-level shortcut for MT5Connection.get_instance().
+
+    Use this everywhere an MT5 connection is needed instead of calling
+    MT5Connection(...) directly, so the whole process shares one real
+    terminal session per (login, server) instead of each caller silently
+    creating (and re-logging-in) its own.
+    """
+    return MT5Connection.get_instance(
+        login=login, password=password, server=server,
+        path=path, auto_connect=auto_connect,
+    )
+
+
 class MT5Connection:
     MAX_RETRIES = 3
     RETRY_DELAY_SEC = 5
@@ -85,6 +105,56 @@ class MT5Connection:
         # P1 fix (audit §4.1): counts total is_alive() calls so we know
         # when to run the periodic account_info() auth check.
         self._health_check_count = 0
+
+    # ==========================================================
+    # SINGLETON FACTORY
+    # ==========================================================
+    # Bug fix: multiple modules (core/runtime.py, data/fetcher.py,
+    # data/data_orchestrator.py, execution/execution_router.py) each called
+    # `MT5Connection(login=..., password=..., server=...)` directly whenever
+    # no shared instance had been explicitly injected into them. Every one
+    # of those calls is a brand-new object that independently runs
+    # mt5.shutdown() + mt5.initialize() + mt5.login() against the SAME
+    # underlying MT5 terminal, which is what produced the duplicate
+    # "MT5 CONNECTION" banners seen back-to-back in the logs (e.g.
+    # 16:58:37 and 16:58:47) — two full re-logins a few seconds apart,
+    # each one silently invalidating the other's session.
+    #
+    # get_mt5_connection() below is the fix: it's the one place that should
+    # be used to obtain an MT5Connection anywhere in the codebase. The same
+    # (login, server) pair always returns the exact same already-connected
+    # instance instead of building + logging in again.
+    _instances: dict[tuple, "MT5Connection"] = {}
+    _instances_lock = Lock()
+
+    @classmethod
+    def get_instance(
+        cls,
+        login: int,
+        password: str,
+        server: str,
+        path: str = None,
+        auto_connect: bool = True,
+    ) -> "MT5Connection":
+        """Return the shared MT5Connection for this (login, server), creating
+        and connecting it on first use. Subsequent calls with the same
+        (login, server) reuse the existing instance — no duplicate
+        mt5.initialize()/mt5.login() calls, no duplicate connection banners.
+        """
+        key = (login, server)
+        with cls._instances_lock:
+            inst = cls._instances.get(key)
+            if inst is None:
+                inst = cls(login=login, password=password, server=server, path=path)
+                cls._instances[key] = inst
+            elif password and inst.password != password:
+                # Credentials changed for this login/server — update them so
+                # the next reconnect uses the fresh password.
+                inst.password = password
+
+        if auto_connect and not inst.connected:
+            inst.connect()
+        return inst
 
     # ==========================================================
     # CONNECT

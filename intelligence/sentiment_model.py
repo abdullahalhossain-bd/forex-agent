@@ -44,12 +44,35 @@ _SENTIMENT_CYCLE_LOCK = threading.Lock()
 _sentiment_call_count_this_cycle: int = 0
 SENTIMENT_MAX_LLM_CALLS_PER_CYCLE = int(os.getenv("SENTIMENT_MAX_LLM_CALLS_PER_CYCLE", "5"))
 
+# Bug fix: with 60+ pairs/news-items per cycle and a 5-call cap, every item
+# past the 5th independently hit the cap check and emitted its own
+# "LLM skipped — sentiment cap reached" INFO log line — 30+ duplicate lines
+# per cycle, plus a lock acquisition for every single item even after the
+# cap was already known to be exhausted. Track whether we've already logged
+# the cap-reached event this cycle so repeats stay silent (still returns
+# False so callers correctly fall back to rule-based analysis), and expose
+# a cheap lock-free peek so callers can skip straight to the rule-based
+# path instead of calling into the LLM path at all once the budget is gone.
+_sentiment_cap_logged_this_cycle: bool = False
+
+
+def sentiment_cap_reached() -> bool:
+    """Cheap, lock-free peek so callers can skip straight to the rule-based
+    path (no log spam, no redundant lock acquisition) once the per-cycle
+    LLM budget is exhausted."""
+    return _sentiment_call_count_this_cycle >= SENTIMENT_MAX_LLM_CALLS_PER_CYCLE
+
 
 def _check_sentiment_cycle_cap() -> tuple[bool, str]:
-    global _sentiment_call_count_this_cycle
+    global _sentiment_call_count_this_cycle, _sentiment_cap_logged_this_cycle
     with _SENTIMENT_CYCLE_LOCK:
         if _sentiment_call_count_this_cycle >= SENTIMENT_MAX_LLM_CALLS_PER_CYCLE:
-            return False, f"sentiment cap: {SENTIMENT_MAX_LLM_CALLS_PER_CYCLE} calls/cycle reached"
+            first_time = not _sentiment_cap_logged_this_cycle
+            _sentiment_cap_logged_this_cycle = True
+            reason = f"sentiment cap: {SENTIMENT_MAX_LLM_CALLS_PER_CYCLE} calls/cycle reached"
+            if not first_time:
+                reason += "|_repeat_"  # tells analyze() not to log this one
+            return False, reason
         _sentiment_call_count_this_cycle += 1
         return True, "ok"
 
@@ -195,7 +218,10 @@ class SentimentModel:
                 confidence=0.0, source="rule_based",
             )
 
-        if LLM_AVAILABLE:
+        # Bug fix: once the per-cycle LLM budget is exhausted, skip the LLM
+        # path entirely instead of calling into it (and its "skipped" log)
+        # for every remaining item this cycle.
+        if LLM_AVAILABLE and not sentiment_cap_reached():
             try:
                 result = self._analyze_with_llm(text)
                 if result is not None:
@@ -209,7 +235,10 @@ class SentimentModel:
         # Cycle protection
         allowed, reason = _check_sentiment_cycle_cap()
         if not allowed:
-            log.info(f"[SentimentModel] LLM skipped — {reason}")
+            if reason.endswith("|_repeat_"):
+                log.debug(f"[SentimentModel] LLM skipped — {reason[:-len('|_repeat_')]}")
+            else:
+                log.info(f"[SentimentModel] LLM skipped — {reason}")
             return None
 
         # Throttle
@@ -346,10 +375,12 @@ _SENTIMENT_MODEL: Optional[SentimentModel] = None
 
 def reset_fallback_throttle_cycle() -> None:
     global _fallback_call_count_this_cycle, _sentiment_call_count_this_cycle
+    global _sentiment_cap_logged_this_cycle
     with _FALLBACK_THROTTLE_LOCK:
         _fallback_call_count_this_cycle = 0
     with _SENTIMENT_CYCLE_LOCK:
         _sentiment_call_count_this_cycle = 0
+        _sentiment_cap_logged_this_cycle = False
 
 
 def get_sentiment_model() -> SentimentModel:

@@ -172,7 +172,7 @@ class DataFetcher:
     def _init_mt5_connection(self, mt5_conn) -> None:
         """Wire up the shared MT5Connection (injected or self-built)."""
         try:
-            from broker.mt5_connection import MT5Connection
+            from broker.mt5_connection import get_mt5_connection
         except Exception as e:
             log.warning(
                 f"[DataFetcher] broker.mt5_connection unavailable ({e}) — "
@@ -197,11 +197,18 @@ class DataFetcher:
             )
             return
 
-        self._mt5_conn = MT5Connection(
+        # Bug fix: was `MT5Connection(...)` — built its own independent
+        # session (separate mt5.initialize()+login()) instead of reusing
+        # whatever the rest of the process already has open, which is what
+        # produced duplicate connection banners in the logs. Route through
+        # the singleton factory instead so it reuses (or creates once and
+        # shares) the connection for this (login, server).
+        self._mt5_conn = get_mt5_connection(
             login=MT5_LOGIN, password=MT5_PASSWORD,
             server=MT5_SERVER, path=MT5_PATH or None,
+            auto_connect=True,
         )
-        if self._mt5_conn.connect():
+        if self._mt5_conn.connected:
             self._owns_mt5_conn = True
         else:
             log.error("[DataFetcher] Fallback MT5Connection failed to connect")

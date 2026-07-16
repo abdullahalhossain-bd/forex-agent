@@ -315,15 +315,23 @@ def boot_market(registry: ServiceRegistry) -> PhaseResult:
         # records an explicit FAILED/DEGRADED status in the registry so
         # health() and monitoring can see it, rather than only a log line.
         import time as _time
-        from broker.mt5_connection import MT5Connection
+        from broker.mt5_connection import get_mt5_connection
         from config import MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH
 
         max_attempts = 3
         last_err: Optional[Exception] = None
         for attempt in range(1, max_attempts + 1):
             try:
-                conn = MT5Connection(login=MT5_LOGIN, password=MT5_PASSWORD,
-                                     server=MT5_SERVER, path=MT5_PATH or None)
+                # Bug fix: was `MT5Connection(...)` — a brand-new instance
+                # every boot/retry that independently re-ran mt5.initialize()
+                # + mt5.login(), even though data/fetcher.py,
+                # data/data_orchestrator.py, and execution_router.py may
+                # build their own MT5Connection too if not given this one.
+                # get_mt5_connection() ensures all of them converge on the
+                # SAME already-connected instance for this (login, server).
+                conn = get_mt5_connection(login=MT5_LOGIN, password=MT5_PASSWORD,
+                                          server=MT5_SERVER, path=MT5_PATH or None,
+                                          auto_connect=False)
                 registry.register_instance("mt5_connection", conn)
                 services.append("mt5_connection")
                 last_err = None
@@ -759,7 +767,17 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
             _CONFIG_INITIAL_BALANCE = 10000
         balance = registry.get("balance", _CONFIG_INITIAL_BALANCE)
         cb = CircuitBreaker(balance=balance)
-        dd = DrawdownController()
+        # Bug fix: this was still calling DrawdownController() with no
+        # argument, so it silently fell back to its own default
+        # (initial_balance=10000.0) regardless of the real account balance
+        # computed just above — while CircuitBreaker right next to it
+        # correctly received `balance`. On any account that isn't exactly
+        # $10,000 (e.g. a $99,170.98 live/demo balance), every drawdown %
+        # DrawdownController computed was measured against a fictitious
+        # $10,000 peak, so ordinary balance fluctuations could trigger
+        # false GREEN/YELLOW/ORANGE/RED transitions and false daily/weekly
+        # limit trips. Pass the same resolved `balance` here too.
+        dd = DrawdownController(initial_balance=balance)
         registry.register_instance("circuit_breaker", cb)
         registry.register_instance("drawdown_controller", dd)
         registry.register_instance("trade_permission", TradePermission())
@@ -773,7 +791,22 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
 
     try:
         from risk.autonomous_risk import AutonomousRiskManager
-        registry.register("autonomous_risk_manager", lambda r: AutonomousRiskManager())
+        # Bug fix: same $10,000-fallback issue as DrawdownController above —
+        # AutonomousRiskManager() with no args defaults to balance=10000.0,
+        # which also seeds its own internal DrawdownController with the
+        # wrong initial balance. Reuse the resolved balance from the risk
+        # phase above; `balance` may not exist if that block raised before
+        # reaching its assignment, so resolve it again defensively here.
+        try:
+            _arm_balance = balance
+        except NameError:
+            try:
+                from config import INITIAL_BALANCE as _CONFIG_INITIAL_BALANCE
+            except Exception:
+                _CONFIG_INITIAL_BALANCE = 10000
+            _arm_balance = registry.get("balance", _CONFIG_INITIAL_BALANCE)
+        registry.register("autonomous_risk_manager",
+                          lambda r, _b=_arm_balance: AutonomousRiskManager(balance=_b))
         services.append("autonomous_risk_manager")
     except Exception as e:
         log.warning("AutonomousRiskManager not available: %s", e)

@@ -162,10 +162,18 @@ class DataOrchestrator:
             if not MT5_AVAILABLE:
                 log.debug("[Orchestrator] MT5 not available (Linux/Mac) — will use API fallback")
                 return None
-            from broker.mt5_connection import MT5Connection
+            # Bug fix: was `MT5Connection(...)` here — even with this
+            # class's own single-construction guard, that still created a
+            # second, independent session from whatever core/runtime.py
+            # (or data/fetcher.py) already opened for the same
+            # (login, server), which is what produced duplicate connection
+            # banners in the logs. get_mt5_connection() reuses the shared
+            # instance instead.
+            from broker.mt5_connection import get_mt5_connection
             login, password, server = _get_mt5_credentials()
-            conn = MT5Connection(login=login, password=password, server=server)
-            if not conn.connect():
+            conn = get_mt5_connection(login=login, password=password, server=server,
+                                      auto_connect=True)
+            if not conn.connected:
                 log.warning("[Orchestrator] MT5 connect failed — using API fallback")
                 self._mt5_conn = None
                 return None

@@ -1,260 +1,60 @@
-2026-07-16 16:58:00,548 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
-2026-07-16 16:58:00,548 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
-2026-07-16 16:58:00,549 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
-2026-07-16 16:58:00,549 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
-2026-07-16 16:58:00,549 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
-2026-07-16 16:58:00,550 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
-2026-07-16 16:58:00,550 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
-2026-07-16 16:58:00,550 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
-2026-07-16 16:58:00,551 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
-2026-07-16 16:58:00,552 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
-2026-07-16 16:58:00,552 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
-2026-07-16 16:58:00,553 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
-2026-07-16 16:58:00,554 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
-2026-07-16 16:58:26,652 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:26,654 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
-2026-07-16 16:58:26,699 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:27,005 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:27,058 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:27,364 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:27,420 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:27,698 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:27,746 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
-2026-07-16 16:58:28,049 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:28,098 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:28,380 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:28,441 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:28,741 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:29,025 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:29,075 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:29,700 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:29,986 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:30,274 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:30,551 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:30,836 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:30,884 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:31,180 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:31,225 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:31,509 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:31,550 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:31,831 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:31,908 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:32,200 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
-2026-07-16 16:58:32,520 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 401 Unauthorized"
-2026-07-16 16:58:32,949 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-07-16 16:58:32,997 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
-2026-07-16 16:58:33,276 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 401 Unauthorized"
-2026-07-16 16:58:38,669 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
-2026-07-16 16:58:38,698 - core.runtime - INFO - Day 67 ConfluenceEngine wired
-2026-07-16 16:58:38,712 - core.runtime - INFO - Day 68 FeatureStore wired (27 feature rows, 0 labels)
-2026-07-16 16:58:38,736 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
-2026-07-16 16:58:38,744 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
-2026-07-16 16:58:38,762 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
-2026-07-16 16:58:39,253 - core.runtime - INFO - Day 71 RL Agent wired (source=ppo, model_loaded=True)
-2026-07-16 16:58:39,271 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
-2026-07-16 16:58:46,291 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
-2026-07-16 16:58:46,467 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
-2026-07-16 16:58:46,537 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
-2026-07-16 16:58:46,538 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
-2026-07-16 16:58:47,571 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
-2026-07-16 16:58:47,598 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
-2026-07-16 16:58:49,129 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
-2026-07-16 16:58:49,757 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
-2026-07-16 16:58:49,837 - core.service_registry - INFO - Service 'market_scanner' initialized
-2026-07-16 16:58:50,395 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
-2026-07-16 16:58:50,433 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USOUSD', 'UKOUSD', 'BTCUSD', 'ETHUSD', 'LTCUSD', 'XRPUSD', 'US30USD', 'NAS100USD', 'SPX500USD', 'GER40USD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'CADHKD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB', 'USDSAR', 'USDAED'] | Risk Balance: $99159.93 (config) | Auto-restart: ON
-2026-07-16 16:58:50,440 - root - INFO - [System] Prometheus metrics exporter started on :9090
-2026-07-16 16:58:50,897 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
-2026-07-16 16:58:51,095 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
-2026-07-16 16:58:51,244 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
-2026-07-16 16:58:51,245 - root - INFO - [System] Signal handlers installed (SIGINT, SIGTERM)
-2026-07-16 16:58:51,293 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
-2026-07-16 16:58:51,295 - telegram.ext.Application - INFO - Application started
-2026-07-16 16:59:01,140 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:03,208 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:05,229 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:07,108 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:09,002 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:12,682 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 16:59:12,699 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:30:00+00:00 | current=2026-07-16T10:59:12.699843+00:00 | close=2026-07-16T10:45:00+00:00 | seconds_left=-853s | naive_input=False | is_closed=True
-2026-07-16 16:59:21,889 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 16:59:44,679 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:48,157 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 16:59:48,208 - llm_key_manager - WARNING - [LLM Keys] groq key #3 rate-limited, disabled for 3185s
-2026-07-16 16:59:49,887 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 16:59:49,906 - llm_key_manager - WARNING - [LLM Keys] groq key #2 rate-limited, disabled for 1172s
-2026-07-16 16:59:53,217 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 16:59:54,346 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 16:59:55,669 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 12:30-14:30 BD Time)
-2026-07-16 17:00:00,527 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:00:00,543 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:00:00.543676+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-1s | naive_input=False | is_closed=True
-2026-07-16 17:00:20,605 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:00:26,476 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:00:26,658 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:00:27,720 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.51% or ATR=0.85×) | PA=NO_TRADE abstained: Pair GBPUSD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:00:32,598 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:00:32,616 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:00:32.616316+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-33s | naive_input=False | is_closed=True
-2026-07-16 17:00:55,445 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:00:58,877 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:01:00,206 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:01:01,838 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=0.31% or ATR=1.21×) | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 12:30-14:30 BD Time)
-2026-07-16 17:01:06,651 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:01:06,668 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:01:06.668315+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-67s | naive_input=False | is_closed=True
-2026-07-16 17:01:28,571 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:01:31,107 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:01:33,494 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:01:34,594 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.42% or ATR=1.31×) | PA=NO_TRADE abstained: Pair AUDUSD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:01:39,382 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:01:39,397 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:01:39.397194+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-99s | naive_input=False | is_closed=True
-2026-07-16 17:01:57,803 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:01,745 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:02,864 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=SELL(High) voted | ICT/AMD=NO_TRADE abstained: Step 5 failed: R:R ratio 1:6 criteria পূরণ করেনি (no Strong zone TP ≥ 1:6; neare | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 12:30-14:30 BD Time)
-2026-07-16 17:02:03,317 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:02:07,709 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:02:07,745 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:02:07.745001+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-128s | naive_input=False | is_closed=True
-2026-07-16 17:02:22,778 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:26,510 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:27,160 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=2.37% or ATR=1.64×) | PA=NO_TRADE abstained: Pair XAUUSD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:02:31,814 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:02:31,829 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:02:31.829115+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-152s | naive_input=False | is_closed=True
-2026-07-16 17:02:35,537 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:02:49,103 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:51,334 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 17:02:51,344 - llm_key_manager - WARNING - [LLM Keys] groq key #5 rate-limited, disabled for 21600s
-2026-07-16 17:02:54,467 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:02:55,068 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair USDCHF not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:02:59,784 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:02:59,799 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:02:59.798966+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-180s | naive_input=False | is_closed=True
-2026-07-16 17:03:07,760 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:03:22,055 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:03:27,029 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:03:28,018 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.67% or ATR=1.30×) | PA=NO_TRADE abstained: Pair NZDUSD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:03:33,016 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:03:33,034 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:03:33.034086+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-213s | naive_input=False | is_closed=True
-2026-07-16 17:03:40,008 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:03:53,841 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:03:58,803 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:00,419 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:02,415 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:04,637 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:06,346 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:08,400 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:09,519 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair EURGBP not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:04:12,232 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:04:14,143 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:04:14,158 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:04:14.158040+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-254s | naive_input=False | is_closed=True
-2026-07-16 17:04:30,252 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:34,497 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:04:35,096 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair EURJPY not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:04:40,138 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:04:40,152 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:04:40.152144+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-280s | naive_input=False | is_closed=True
-2026-07-16 17:04:44,620 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:05:03,649 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:05:09,248 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:05:10,404 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair EURCHF not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:05:15,610 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:05:15,627 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:05:15.627053+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-316s | naive_input=False | is_closed=True
-2026-07-16 17:05:16,881 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:05:36,807 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:05:41,948 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:05:43,012 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair EURAUD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:05:53,579 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:05:54,222 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:05:54,239 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:05:54.239602+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-354s | naive_input=False | is_closed=True
-2026-07-16 17:06:16,163 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:06:19,745 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 17:06:19,752 - llm_key_manager - WARNING - [LLM Keys] groq key #1 rate-limited, disabled for 957s
-2026-07-16 17:06:21,408 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 17:06:21,415 - llm_key_manager - WARNING - [LLM Keys] groq key #4 rate-limited, disabled for 983s
-2026-07-16 17:06:23,052 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 17:06:23,059 - llm_key_manager - WARNING - [LLM Keys] groq key #6 rate-limited, disabled for 4516s
-2026-07-16 17:06:24,756 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
-2026-07-16 17:06:25,090 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
-2026-07-16 17:06:25,475 - llm_key_manager - ERROR - [LLM Keys] gemini key #2 unauthorized — permanently disabled
-2026-07-16 17:06:25,813 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:06:27,746 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
-2026-07-16 17:06:28,039 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
-2026-07-16 17:06:28,048 - llm_key_manager - ERROR - [LLM Keys] gemini key #3 unauthorized — permanently disabled
-2026-07-16 17:06:30,465 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
-2026-07-16 17:06:30,735 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent "HTTP/1.1 401 Unauthorized"
-2026-07-16 17:06:30,740 - llm_key_manager - ERROR - [LLM Keys] gemini key #1 unauthorized — permanently disabled
-2026-07-16 17:06:30,740 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:06:32,870 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 5 failed: R:R ratio 1:6 criteria পূরণ করেনি (no Strong zone TP ≥ 1:6; neare | PA=NO_TRADE abstained: Pair EURCAD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:06:44,310 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:06:44,340 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:06:44.340015+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-404s | naive_input=False | is_closed=True
-2026-07-16 17:06:58,020 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:07:04,906 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-07-16 17:07:05,669 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-07-16 17:07:05,673 - llm_key_manager - WARNING - [LLM Keys] groq key #7 rate-limited, disabled for 4436s
-2026-07-16 17:07:05,673 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 736s
-2026-07-16 17:07:08,566 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=0.91% or ATR=1.22×) | PA=NO_TRADE abstained: Pair EURNZD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:07:21,203 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:07:21,219 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:07:21.219366+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-441s | naive_input=False | is_closed=True
-2026-07-16 17:07:30,245 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:07:33,683 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:07:36,164 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Pair GBPJPY not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:07:49,474 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:07:49,492 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:07:49.492812+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-469s | naive_input=False | is_closed=True
-2026-07-16 17:08:02,459 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:08:07,852 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 674s
-2026-07-16 17:08:09,619 - llm_key_manager - WARNING - [LLM Keys] sambanova key #1 rate-limited, disabled for 300s
-2026-07-16 17:08:30,136 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 4 failed: Price did not break swing low 1.08742 (no MSS) | PA=NO_TRADE abstained: Pair GBPCHF not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:08:41,941 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:08:42,483 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:08:42,498 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:08:42.498081+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-522s | naive_input=False | is_closed=True
-2026-07-16 17:08:57,282 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:09:05,626 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair GBPAUD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:09:18,393 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:09:19,017 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:09:19,031 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:09:19.031862+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-559s | naive_input=False | is_closed=True
-2026-07-16 17:09:50,054 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 572s
-2026-07-16 17:09:50,804 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:10:04,991 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:10:09,020 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair GBPCAD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:10:22,634 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:10:22,667 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:10:22.666923+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-623s | naive_input=False | is_closed=True
-2026-07-16 17:10:23,219 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:10:50,093 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair GBPNZD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:11:02,600 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:11:03,388 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:11:03,412 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:11:03.412735+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-663s | naive_input=False | is_closed=True
-2026-07-16 17:11:22,026 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 480s
-2026-07-16 17:11:22,027 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:11:25,013 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=BUY(Medium) voted | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.21% or ATR=1.29×) | PA=NO_TRADE abstained: Pair AUDJPY not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:11:35,661 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:11:36,312 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:11:36,325 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:11:36.325588+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-696s | naive_input=False | is_closed=True
-2026-07-16 17:11:59,108 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair AUDCHF not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:12:10,019 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:12:10,617 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:12:10,633 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:12:10.633567+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-731s | naive_input=False | is_closed=True
-2026-07-16 17:12:26,492 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 415s
-2026-07-16 17:12:26,493 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:12:42,431 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:12:49,056 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=0.59% or ATR=1.29×) | PA=NO_TRADE abstained: Pair AUDCAD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:13:01,128 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:13:01,142 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:13:01.142024+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-781s | naive_input=False | is_closed=True
-2026-07-16 17:13:14,649 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:13:21,867 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=0.60% or ATR=1.75×) | PA=NO_TRADE abstained: Pair AUDNZD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:13:34,657 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:13:34,670 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:13:34.670579+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-815s | naive_input=False | is_closed=True
-2026-07-16 17:13:46,969 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:13:53,596 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 328s
-2026-07-16 17:13:53,597 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:13:56,578 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=1.47% or ATR=1.35×) | PA=NO_TRADE abstained: Pair NZDJPY not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:14:08,861 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:14:08,879 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T10:45:00+00:00 | current=2026-07-16T11:14:08.879906+00:00 | close=2026-07-16T11:00:00+00:00 | seconds_left=-849s | naive_input=False | is_closed=True
-2026-07-16 17:14:19,197 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:14:29,914 - llm_key_manager - WARNING - [LLM Keys] sambanova key #1 rate-limited, disabled for 300s
-2026-07-16 17:14:50,113 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 5 failed: R:R ratio 1:6 criteria পূরণ করেনি (no Strong zone TP ≥ 1:6; neare | PA=NO_TRADE abstained: Pair NZDCHF not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:14:51,414 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:15:02,376 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:15:02,392 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T11:00:00+00:00 | current=2026-07-16T11:15:02.392696+00:00 | close=2026-07-16T11:15:00+00:00 | seconds_left=-2s | naive_input=False | is_closed=True
-2026-07-16 17:15:21,572 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 240s
-2026-07-16 17:15:21,572 - llm_key_manager - WARNING - [LLM Keys] All Gemini keys exhausted — next recovery in 0s
-2026-07-16 17:15:23,621 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:15:24,512 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 1 failed: Asian range too wide (width=0.89% or ATR=1.35×) | PA=NO_TRADE abstained: Pair NZDCAD not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
-2026-07-16 17:15:36,329 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-07-16 17:15:36,372 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-07-16T11:00:00+00:00 | current=2026-07-16T11:15:36.372230+00:00 | close=2026-07-16T11:15:00+00:00 | seconds_left=-36s | naive_input=False | is_closed=True
-2026-07-16 17:15:55,857 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-07-16 17:16:16,539 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Pair CADJPY not supported. Allowed: {'USDCAD', 'USDJPY', 'EURUSD'}
+2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 7 Groq key(s)
+2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 3 Gemini key(s)
+2026-07-16 20:46:36,175 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-07-16 20:46:36,176 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-07-16 20:46:36,177 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude (Anthropic) key(s)
+2026-07-16 20:46:36,178 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM (Zhipu AI) key(s)
+2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Keys] Total: 14 key(s) across 10 providers (Gemini=3, Cerebras=1, Groq=7, SambaNova=1, OpenRouter=1, GitHub=0, HuggingFace=1, Claude=0, GLM=0, DeepSeek=0)
+2026-07-16 20:46:36,179 - llm_key_manager - INFO - [LLM Throttle] effective config: MAX_LLM_CALLS_PER_CYCLE=8 | LLM_CALL_INTERVAL_SEC=2.0 | MAX_LLM_CALLS_PER_MIN=18
+2026-07-16 20:46:36,179 - core.runtime - INFO - LLM KeyManager wired: Groq=7 keys (7 active), Gemini=3 keys (3 active)
+2026-07-16 20:48:05,202 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:05,223 - huggingface_hub.utils._http - WARNING - Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+2026-07-16 20:48:05,289 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:05,641 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:05,697 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:06,057 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:06,115 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:06,413 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:06,472 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-07-16 20:48:07,084 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:07,148 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:07,463 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:07,519 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:07,881 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:08,180 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:08,231 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:10,059 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/processor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:10,342 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:10,640 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/video_preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:10,975 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/preprocessor_config.json "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:11,270 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:11,323 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:11,656 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:11,709 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:12,004 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:12,051 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:12,351 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:12,678 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/tokenizer_config.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:13,022 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main/additional_chat_templates?recursive=false&expand=false "HTTP/1.1 404 Not Found"
+2026-07-16 20:48:13,328 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2/tree/main?recursive=true&expand=false "HTTP/1.1 401 Unauthorized"
+2026-07-16 20:48:13,834 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/1_Pooling/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-07-16 20:48:13,885 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/1_Pooling%2Fconfig.json "HTTP/1.1 200 OK"
+2026-07-16 20:48:14,222 - httpx - INFO - HTTP Request: GET https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2 "HTTP/1.1 401 Unauthorized"
+2026-07-16 20:48:45,058 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-07-16 20:48:45,179 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-07-16 20:48:45,241 - core.runtime - INFO - Day 68 FeatureStore wired (54 feature rows, 0 labels)
+2026-07-16 20:48:45,307 - core.runtime - INFO - Day 69 ModelStore wired (12 models on disk)
+2026-07-16 20:48:45,328 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-07-16 20:48:45,378 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-07-16 20:48:47,670 - core.runtime - INFO - Day 71 RL Agent wired (source=ppo, model_loaded=True)
+2026-07-16 20:48:47,729 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-07-16 20:49:01,644 - ai.model_versioning - INFO - MLflow tracking enabled; TensorFlow autologging unavailable.
+2026-07-16 20:49:01,948 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-07-16 20:49:02,083 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-07-16 20:49:02,084 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-07-16 20:49:02,138 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-07-16 20:49:02,160 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan

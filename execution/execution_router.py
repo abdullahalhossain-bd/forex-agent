@@ -129,7 +129,7 @@ class ExecutionRouter:
         if self.mode == "mt5_demo":
             try:
                 from config import MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH
-                from broker.mt5_connection import MT5Connection
+                from broker.mt5_connection import get_mt5_connection
                 from broker.health_monitor import HealthMonitor
                 from broker.account_manager import AccountManager
                 from broker.order_manager import OrderManager
@@ -160,11 +160,17 @@ class ExecutionRouter:
                     log.warning("[ExecutionRouter] MT5_LOGIN not set — FALLING BACK TO SIMULATION")
                     self._init_simulation_mode()
                     return
-                self._mt5_conn = MT5Connection(
+                # Bug fix: was `MT5Connection(...)` — built yet another
+                # independent session instead of reusing whichever one
+                # core/runtime.py (or data/fetcher.py / data_orchestrator.py)
+                # already has open for this same (login, server). Route
+                # through the singleton factory so they all share one.
+                self._mt5_conn = get_mt5_connection(
                     login=MT5_LOGIN, password=MT5_PASSWORD,
                     server=MT5_SERVER, path=MT5_PATH or None,
+                    auto_connect=True,
                 )
-                if not self._mt5_conn.connect():
+                if not self._mt5_conn.connected:
                     msg = "MT5 demo connection failed."
                     if self._mt5_fallback_to_sim:
                         log.warning(f"[ExecutionRouter] {msg} FALLING BACK TO SIMULATION")
