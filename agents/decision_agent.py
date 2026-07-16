@@ -98,6 +98,15 @@ class DecisionAgent:
     SENTIMENT_AGREE_BOOST = 8
     SENTIMENT_DISAGREE_PENALTY = 10
 
+    # New: the decision engine's own combined confidence, computed from
+    # EVERY available layer (rule, LLM, MasterAnalyst, ML Ensemble, RL
+    # Agent, Unified Signal Engine, Adaptive Decision) via
+    # _aggregate_confidence(). If a BUY/SELL survives the vote but the
+    # cross-layer aggregate confidence is below this floor, the decision
+    # is downgraded to WAIT — trading is gated on system-wide agreement,
+    # not on whichever single layer happened to shout loudest.
+    MIN_TRADE_CONFIDENCE = 55.0
+
     def __init__(self):
         # Day 53 — pattern-aware dynamic confidence scorer (optional)
         self.confidence_engine = ConfidenceEngine() if ConfidenceEngine else None
@@ -123,6 +132,115 @@ class DecisionAgent:
                             f"continuing without 4-layer fusion gate: {e}")
                 self._signal_fusion = None
         self._signal_fusion_warned = False
+
+    def _aggregate_confidence(
+        self,
+        analysis_out: dict,
+        rule_signal: str, rule_conf: float,
+        llm_signal: str, llm_conf_for_vote: float,
+        master_signal_for_vote: str, master_conf_for_vote: float,
+    ):
+        """
+        Pull confidence from EVERY available layer/module and compute the
+        decision engine's OWN combined confidence — instead of just
+        taking the loudest single voice (old `_preserved_conf = max(rule,
+        llm, master)`, which is how "confidence 80%" could be displayed
+        even when the Ensemble, Unified Signal Engine, and Adaptive
+        Decision layers had all independently abstained/WAIT'd — see the
+        USDJPY log case: Ensemble 42%, MasterDecision WAIT, Unified
+        Signal Engine NO_TRADE (0.0/0.0), Adaptive Decision Low/0.00, yet
+        the OLD code showed 80% because that was just the raw LLM number).
+
+        Layers that abstain (WAIT/HOLD/NO_TRADE/error) contribute NO
+        confidence number, but their abstention still lowers the
+        `participation_ratio` — so one confident layer surrounded by
+        several abstaining layers reads as "weak overall support", not
+        as a clean 80%.
+
+        Returns (aggregate_confidence_0_100: float, breakdown: list[str]).
+        """
+        BUYSELL = ("BUY", "SELL", "STRONG_BUY", "STRONG_SELL")
+        sources = []  # (label, confidence_0_100, weight, participated)
+
+        # 1. Rule engine (Confluence/technical rules)
+        sources.append(("rule", float(rule_conf or 0), 1.0, rule_signal in BUYSELL))
+
+        # 2. LLM analyst
+        sources.append(("llm", float(llm_conf_for_vote or 0), 1.0, llm_signal in BUYSELL))
+
+        # 3. MasterAnalyst (LLM-synthesized, higher weight)
+        sources.append(("master", float(master_conf_for_vote or 0), 1.5, master_signal_for_vote in BUYSELL))
+
+        # 4. ML Ensemble (0-100 scale, highest weight — fuses ML+rules+LLM)
+        # NOTE: when ml_available=False, the Ensemble is running in
+        # degraded "rules-only" mode — its confidence is largely derived
+        # from the same rule/master signal already counted above, NOT an
+        # independent ML-fused opinion. Counting it at full weight here
+        # would double-count essentially the same vote. Halve its weight
+        # in that state so it still contributes (rules-only isn't worthless)
+        # but doesn't inflate the aggregate as if two independent layers
+        # agreed. Once ML models are retrained and ml_available=True again,
+        # it returns to full weight automatically.
+        ensemble_ctx = analysis_out.get("ensemble", {}) if isinstance(analysis_out, dict) else {}
+        if isinstance(ensemble_ctx, dict) and not ensemble_ctx.get("error"):
+            e_decision = ensemble_ctx.get("decision", "WAIT")
+            e_conf = float(ensemble_ctx.get("confidence", 0) or 0)
+            e_ml_available = bool(ensemble_ctx.get("ml_available", True))
+            e_weight = 2.0 if e_ml_available else 1.0
+            sources.append(("ensemble", e_conf, e_weight, e_decision in ("BUY", "SELL")))
+
+        # 5. RL Agent (0-1 scale -> *100)
+        rl_ctx = analysis_out.get("rl_agent", {}) if isinstance(analysis_out, dict) else {}
+        if isinstance(rl_ctx, dict) and not rl_ctx.get("error"):
+            rl_action = rl_ctx.get("action_name", "HOLD")
+            rl_conf = float(rl_ctx.get("confidence", 0) or 0) * 100
+            sources.append(("rl_agent", rl_conf, 1.5, rl_action in ("BUY", "SELL")))
+
+        # 6/7. Unified Signal Engine consensus + Adaptive Decision
+        # (confidence is a Low/Medium/High label here, not a number)
+        _label_conf = {"High": 85.0, "Medium": 60.0, "Low": 30.0}
+        unified_ctx = analysis_out.get("unified_signal", {}) if isinstance(analysis_out, dict) else {}
+        if isinstance(unified_ctx, dict) and not unified_ctx.get("error"):
+            consensus = unified_ctx.get("consensus", {}) or {}
+            u_action = consensus.get("action", "NO_TRADE")
+            u_conf = _label_conf.get(consensus.get("confidence", "Low"), 30.0)
+            sources.append(("unified_signal", u_conf, 1.0, u_action in ("BUY", "SELL")))
+
+            adaptive = unified_ctx.get("adaptive_decision", {}) or {}
+            if not adaptive.get("error"):
+                a_action = adaptive.get("action", "NO_TRADE")
+                a_score = float(adaptive.get("score", 0) or 0) * 100
+                sources.append(("adaptive_decision", a_score, 1.0, a_action in ("BUY", "SELL")))
+
+        participating = [(l, c, w) for l, c, w, p in sources if p]
+        total_weight = sum(w for _, _, w, _ in sources)
+        part_weight = sum(w for _, _, w in participating)
+
+        if not participating:
+            # Nobody actually voted BUY/SELL — don't show a hard 0%,
+            # fall back to the strongest raw number any layer reported,
+            # but flag every layer as abstained for the audit trail.
+            agg_conf = max((c for _, c, _, _ in sources), default=0.0)
+            breakdown = [f"{l}={c:.0f}%(abstained)" for l, c, w, p in sources]
+            return round(agg_conf, 1), breakdown
+
+        weighted_avg = sum(c * w for _, c, w in participating) / part_weight
+        participation_ratio = (part_weight / total_weight) if total_weight > 0 else 0.0
+
+        # Damp by how much of the whole system actually agreed to vote.
+        # Floor the damping at 0.5 so one genuinely strong, isolated
+        # signal still reads as "weak support" rather than being crushed
+        # to near-zero.
+        damping = 0.5 + 0.5 * participation_ratio
+        agg_conf = weighted_avg * damping
+
+        breakdown = [f"{l}={c:.0f}%" for l, c, w in participating]
+        abstained = [l for l, c, w, p in sources if not p]
+        if abstained:
+            breakdown.append("abstained: " + ", ".join(abstained))
+        breakdown.append(f"participation={part_weight:.1f}/{total_weight:.1f}")
+
+        return round(max(0.0, min(99.0, agg_conf)), 1), breakdown
 
     def decide(
         self,
@@ -210,18 +328,6 @@ class DecisionAgent:
         llm_conf = _safe_conf(llm_conf)
         master_conf = _safe_conf(master_conf)
 
-        # BUGFIX (confidence-zeroing): every early-return "NO TRADE" gate
-        # below (news/risk/session/dead-zone/fusion/SignalFusion) used to
-        # hardcode confidence=0, throwing away whatever the rule engine,
-        # LLM, and MasterAnalyst actually said. That's inconsistent with
-        # the later consensus/ConfidenceEngine/FusionV3 gates in this same
-        # function, which all explicitly PRESERVE the analysis-layer
-        # confidence for audit instead of zeroing it. _preserved_conf is
-        # the strongest of the three raw voter confidences, used by those
-        # early gates so "Confidence: 0%" no longer contradicts an LLM
-        # that reported e.g. 70-90%.
-        _preserved_conf = max(rule_conf, llm_conf, master_conf)
-
         # P0 fix (audit C7): mirror the same fail-safe for MasterAnalyst.
         # NOTE: master_sig/master_conf are now defined ABOVE this block
         # (Bug #1 fix — previously this branch crashed with UnboundLocalError).
@@ -247,6 +353,23 @@ class DecisionAgent:
             _master_excluded_original_conf = None
             master_signal_for_vote = master_sig
             master_conf_for_vote = master_conf
+
+        # New: decision engine's OWN combined confidence, pulled from
+        # EVERY available layer (rule, LLM, MasterAnalyst, ML Ensemble,
+        # RL Agent, Unified Signal Engine, Adaptive Decision) — replaces
+        # the old `_preserved_conf = max(rule, llm, master)`, which only
+        # looked at 3 layers and could show e.g. 80% from the LLM alone
+        # while 4 other layers had independently abstained/WAIT'd.
+        _preserved_conf, _agg_breakdown = self._aggregate_confidence(
+            analysis_out,
+            rule_signal, rule_conf,
+            llm_signal, llm_conf_for_vote,
+            master_signal_for_vote, master_conf_for_vote,
+        )
+        log.info(
+            f"[DecisionAgent] Aggregate confidence (all layers): "
+            f"{_preserved_conf:.0f}% | " + " | ".join(_agg_breakdown)
+        )
 
         # Day 41 Sentiment
         sent_ctx        = analysis_out.get("sentiment_ctx", {})
@@ -552,7 +675,14 @@ class DecisionAgent:
         buy_votes  = votes.count("BUY")
         sell_votes = votes.count("SELL")
 
-        base_conf = master_conf_for_vote if master_conf_for_vote > 0 else round((rule_conf + llm_conf_for_vote) / 2)
+        # Use the decision engine's own all-layer aggregate as the base
+        # confidence for a BUY/SELL verdict — it already reflects every
+        # module (rule/LLM/master/ensemble/RL/unified-signal/adaptive),
+        # not just MasterAnalyst or a rule+LLM average.
+        base_conf = _preserved_conf if _preserved_conf > 0 else (
+            master_conf_for_vote if master_conf_for_vote > 0
+            else round((rule_conf + llm_conf_for_vote) / 2)
+        )
 
         # Sentiment boost/reduction
         sentiment_boost = 0
@@ -622,12 +752,14 @@ class DecisionAgent:
                 _max_voter_label = f"llm:{llm_norm}"
 
             decision = "WAIT"
-            # Preserve strongest voter confidence — DON'T zero it.
-            adj_conf = max(0, min(99, _max_voter_conf))
+            # Use the all-layer aggregate confidence, not just the single
+            # strongest voter — DON'T zero it either way.
+            adj_conf = max(0, min(99, _preserved_conf))
             reasons  = [
                 f"No consensus — Master: {master_sig}, Rule: {rule_signal}, LLM: {llm_signal}",
                 f"Conflicting signals — wait for confirmation",
-                f"Strongest single voter: {_max_voter_label} ({_max_voter_conf:.0f}%) — preserved",
+                f"Strongest single voter: {_max_voter_label} ({_max_voter_conf:.0f}%) | "
+                f"Aggregate (all layers): {_preserved_conf:.0f}%",
                 f"Confidence NOT zeroed (architectural fix): analysis verdict retained for audit",
             ]
             if master_critique:
@@ -678,6 +810,27 @@ class DecisionAgent:
                     f"🎯 Day53 Confidence: {confidence_engine_result.get('reason')} "
                     f"({old_conf}% → {adj_conf}%)"
                 )
+
+        # ──────────────────────────────────────────────────────────
+        # Decision-engine confidence gate (all-layer aggregate).
+        # ──────────────────────────────────────────────────────────
+        # Voting/consensus above decides DIRECTION (BUY/SELL/WAIT). This
+        # gate decides whether the system as a WHOLE actually supports
+        # taking that trade: even if enough votes fired to pick a
+        # direction, if the all-layer aggregate confidence (rule, LLM,
+        # master, ensemble, RL agent, unified signal engine, adaptive
+        # decision) doesn't clear MIN_TRADE_CONFIDENCE, we downgrade to
+        # WAIT. This is what makes "trade or not" actually driven by the
+        # decision engine's own combined confidence, rather than by
+        # whichever single layer happened to vote loudest.
+        if decision in ("BUY", "SELL") and _preserved_conf < self.MIN_TRADE_CONFIDENCE:
+            reasons.append(
+                f"⛔ Decision engine gate: aggregate confidence {_preserved_conf:.0f}% "
+                f"< {self.MIN_TRADE_CONFIDENCE:.0f}% minimum — downgrading {decision} to WAIT "
+                f"(insufficient cross-layer agreement; vote direction alone isn't enough)"
+            )
+            decision = "WAIT"
+            adj_conf = _preserved_conf
 
         # Day 81+ hotfix: When LLM is unavailable, master_entry/sl/tp are
         # all None, and risk_out is a placeholder (entry=None). Fallback

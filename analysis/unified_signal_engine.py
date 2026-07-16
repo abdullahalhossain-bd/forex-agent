@@ -322,6 +322,12 @@ class UnifiedSignalEngine:
           - If 0 engines vote → NO_TRADE
         """
         votes = []  # list of (action, weight, confidence, engine_name)
+        # Diagnostic trail — one entry per sub-engine regardless of whether
+        # it voted, so a NO_TRADE/0.0 consensus can actually be explained
+        # instead of being a silent dead-end in the logs (previously you
+        # could see buy_score=0.0/sell_score=0.0 but never WHY each of the
+        # 3 engines individually abstained).
+        _vote_trail = []
 
         if stop_hunt_result:
             sig = stop_hunt_result.get("signal", {})
@@ -330,6 +336,13 @@ class UnifiedSignalEngine:
                 # Stop hunt signals are high-conviction
                 weight = 2.0
                 votes.append((action, weight, sig.get("confidence", "Medium"), "StopHunt"))
+                _vote_trail.append(f"StopHunt={action}({sig.get('confidence', '?')}) voted")
+            else:
+                _vote_trail.append(
+                    f"StopHunt={action} abstained: {str(sig.get('reason', 'no reason given'))[:80]}"
+                )
+        else:
+            _vote_trail.append("StopHunt=no_result abstained: engine returned nothing")
 
         if ict_result:
             sig = ict_result.get("signal", {})
@@ -338,6 +351,13 @@ class UnifiedSignalEngine:
                 # ICT 1:6 R:R is highest conviction
                 weight = 3.0
                 votes.append((action, weight, sig.get("confidence", "Medium"), "ICT/AMD"))
+                _vote_trail.append(f"ICT/AMD={action}({sig.get('confidence', '?')}) voted")
+            else:
+                _vote_trail.append(
+                    f"ICT/AMD={action} abstained: {str(sig.get('reason', 'no reason given'))[:80]}"
+                )
+        else:
+            _vote_trail.append("ICT/AMD=no_result abstained: engine returned nothing")
 
         if pa_result:
             sig = pa_result.get("signal", {})
@@ -346,9 +366,20 @@ class UnifiedSignalEngine:
                 # PA engine is mid-conviction (depends on checklist)
                 weight = 1.5
                 votes.append((action, weight, sig.get("confidence", "Medium"), "PA"))
+                _vote_trail.append(f"PA={action}({sig.get('confidence', '?')}) voted")
             elif action == "WAIT":
                 # WAIT from PA = abstain but lean toward no-trade
-                pass
+                _vote_trail.append(
+                    f"PA=WAIT abstained: {str(sig.get('reason', 'no reason given'))[:80]}"
+                )
+            else:
+                _vote_trail.append(
+                    f"PA={action} abstained: {str(sig.get('reason', 'no reason given'))[:80]}"
+                )
+        else:
+            _vote_trail.append("PA=no_result abstained: engine returned nothing")
+
+        log.info("[Unified] Vote trail: " + " | ".join(_vote_trail))
 
         # Tally votes by direction
         buy_score = sum(w for a, w, c, e in votes if a == "BUY")

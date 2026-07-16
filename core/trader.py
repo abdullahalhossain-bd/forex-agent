@@ -3346,7 +3346,7 @@ class AutonomousTraderSystem:
         try:
             from core.professional_tools import get_pair_selector
             selector = get_pair_selector(self.symbols)
-            pairs, session = selector.select_with_session(top_n=12)
+            pairs, session = selector.select_with_session(top_n=len(self.symbols))
             if pairs:
                 log.info(f"[System] Session-aware pair selection: {session} → {len(pairs)} pairs")
                 return pairs

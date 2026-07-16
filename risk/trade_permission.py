@@ -190,6 +190,7 @@ class TradePermission:
         # Co-founder fix: clearer log that shows WHY the gate failed
         aligned = decision_out.get("aligned_factors", 0)
         setup_q = decision_out.get("setup_quality", "UNKNOWN")
+        raw_setup_q = decision_out.get("raw_setup_quality", "")
         ok_aligned = aligned >= self.MIN_ALIGNED_FACTORS
         ok_quality = setup_q not in self.BLOCKED_SETUP_QUALITIES
         _reasons = []
@@ -197,8 +198,17 @@ class TradePermission:
             _reasons.append(f"factors {aligned}<{self.MIN_ALIGNED_FACTORS}")
         if not ok_quality:
             _reasons.append(f"quality={setup_q}")
+        # Transparency fix: setup_quality gets forced to AVOID whenever ANY gate
+        # fails (e.g. factor count), which hides what the scorer's real grade was.
+        # Show the real grade alongside it when they differ, so "AVOID" doesn't
+        # get misread as "the setup itself was graded poorly".
+        _quality_display = (
+            f"{setup_q} (real grade: {raw_setup_q})"
+            if raw_setup_q and raw_setup_q != setup_q
+            else setup_q
+        )
         _detail = (
-            f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {setup_q}"
+            f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
             + (f" — BLOCKED: {', '.join(_reasons)}" if _reasons else " — OK")
         )
         checks.append({

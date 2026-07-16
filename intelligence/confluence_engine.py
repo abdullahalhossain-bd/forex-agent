@@ -84,6 +84,7 @@ class ConfluenceDecision:
     market_story: str = ""
     risks: List[str] = field(default_factory=list)
     validation_gates: List[Dict[str, Any]] = field(default_factory=list)
+    raw_setup_quality: str = ""   # A+ / A / B / C / D — scorer's grade BEFORE gate overwrite to AVOID
     should_trade: bool = False
     block_reason: str = ""
     calibration: Dict[str, Any] = field(default_factory=dict)
@@ -182,6 +183,7 @@ class ConfluenceEngine:
             direction=direction,
             confidence=calibrated_conf,
             setup_quality=score.setup_quality if should_trade else "AVOID",
+            raw_setup_quality=score.setup_quality,
             aligned_factors=score.aligned_factors,
             total_factors=score.total_factors,
             buy_score=score.buy_score,
