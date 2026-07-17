@@ -58,9 +58,17 @@ class CapitalTier:
     tier_mult: float             # position size multiplier
 
 TIERS = {
-    1: CapitalTier(1, "Initial Live", 0.005, 0.015, 3, 80.0, "manual", 0.5),
-    2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, 5, 70.0, "semi_auto", 0.8),
-    3: CapitalTier(3, "Mature System", 0.01, 0.03, 7, 55.0, "fully_auto", 1.0),
+    # Log-driven fix (2026-07-17): tier-based min_confidence used to be
+    # 80/70/55, which meant a fresh/demo account (Tier 1, the default)
+    # needed 80% confidence to trade — far stricter than the 60% floor
+    # the operator actually wants, and it silently overrode
+    # trade_permission.MIN_CONFIDENCE (35%) since the effective gate is
+    # max(tier.min_confidence, trade_permission.MIN_CONFIDENCE).
+    # Unified to a flat 60% across all tiers so "confidence >= 60% →
+    # trade" is true regardless of which tier the account is on.
+    1: CapitalTier(1, "Initial Live", 0.005, 0.015, 3, 60.0, "manual", 0.5),
+    2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, 5, 60.0, "semi_auto", 0.8),
+    3: CapitalTier(3, "Mature System", 0.01, 0.03, 7, 60.0, "fully_auto", 1.0),
 }
 
 

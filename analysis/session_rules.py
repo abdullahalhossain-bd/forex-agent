@@ -109,7 +109,7 @@ SESSION_STRATEGIES = {
         "strategy":          "RANGE_TRADING",
         "action":            "Buy near range low, Sell near range high",
         "avoid":             "Breakout trades — false signals likely",
-        "min_confidence":    65,
+        "min_confidence":    60,  # was 65
         "risk_multiplier":   0.7,
         "note":              "Low volatility. Tight SL. Small targets.",
     },
@@ -117,7 +117,7 @@ SESSION_STRATEGIES = {
         "strategy":          "RANGE_TRADING",
         "action":            "JPY pairs: fade extremes. Range-bound entries.",
         "avoid":             "Trending breakouts — consolidation phase",
-        "min_confidence":    65,
+        "min_confidence":    60,  # was 65
         "risk_multiplier":   0.8,
         "note":              "JPY dominates. USDJPY, EURJPY best suited.",
     },
@@ -125,7 +125,7 @@ SESSION_STRATEGIES = {
         "strategy":          "LONDON_BREAKOUT",
         "action":            "Asian range breakout. Liquidity sweep + BOS entry.",
         "avoid":             "Counter-trend during strong London moves",
-        "min_confidence":    70,
+        "min_confidence":    60,  # was 70
         "risk_multiplier":   1.0,
         "note":              "Check Asian high/low for liquidity sweep direction.",
     },
@@ -133,7 +133,7 @@ SESSION_STRATEGIES = {
         "strategy":          "TREND_CONTINUATION",
         "action":            "Continue London trend. USD news-driven moves.",
         "avoid":             "Reversals without strong SMC confirmation",
-        "min_confidence":    72,
+        "min_confidence":    60,  # was 72
         "risk_multiplier":   1.0,
         "note":              "Follow London direction. Check order flow.",
     },
@@ -141,7 +141,7 @@ SESSION_STRATEGIES = {
         "strategy":          "A_PLUS_ONLY",
         "action":            "Full SMC confluence required. Institutional setups only.",
         "avoid":             "Anything below A+ grade",
-        "min_confidence":    85,
+        "min_confidence":    60,  # was 85 — unified to the 60% floor per operator request
         "risk_multiplier":   1.2,
         "note":              "Best trading window. Wait for perfect setup.",
     },
@@ -149,7 +149,10 @@ SESSION_STRATEGIES = {
         "strategy":          "NO_TRADE",
         "action":            "Do nothing. Prepare for next session.",
         "avoid":             "All trades",
-        "min_confidence":    999,  # impossible to meet
+        "min_confidence":    999,  # impossible to meet — intentional: this is a
+        # full session block (illiquid, wide spreads), not a confidence
+        # tuning knob, so it's left untouched. Ask if you want this session
+        # openable too — that's a different kind of risk than confidence.
         "risk_multiplier":   0.0,
         "note":              "Low liquidity. Spreads wide. High slippage risk.",
     },
@@ -157,7 +160,7 @@ SESSION_STRATEGIES = {
         "strategy":          "WAIT",
         "action":            "Wait for next session to open.",
         "avoid":             "Forcing trades",
-        "min_confidence":    80,
+        "min_confidence":    60,  # was 80
         "risk_multiplier":   0.6,
         "note":              "Transitioning between sessions. Low participation.",
     },

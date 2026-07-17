@@ -62,7 +62,7 @@ NY_SESSION_END      = 17    # 17:00 GMT
 
 ACCUMULATION_MAX_ATR_MULT = 3.0   # allow wider Asian accumulation ranges
 ACCUMULATION_MIN_CANDLES  = 3     # need ≥3 Asian session candles
-WICK_BODY_RATIO_MIN       = 1.2   # slightly looser wick requirement
+WICK_BODY_RATIO_MIN       = 1.1   # was 1.2 — slightly looser wick requirement
 MANIPULATION_REVERSAL_LOOKBACK = 12   # more room for the reversal to show up
 FVG_MIN_GAP_ATR_MULT      = 0.02  # smaller gaps still count as valid FVGs
 MIN_RR_RATIO              = 2.0   # 1:2 is the absolute floor; do not lower further
@@ -472,10 +472,18 @@ class ICTAMDSignalEngine:
         if len(scan_df) < 3:
             return ManipulationResult(note="Insufficient London candles")
 
-        # Build list of "valid sweep targets" = Strong/Medium zones + accumulation range
+        # Build list of "valid sweep targets" = Strong/Medium zones + accumulation range.
+        # Loosened (log-driven fix, 2026-07-17): Weak zones were hard-excluded,
+        # which meant on any cycle where price only had Weak zones nearby this
+        # gate returned "No sweep detected" no matter what price did — this was
+        # the single most common ICT/AMD abstain reason in execution.log. Weak
+        # zones are now included as a lowest-priority fallback target (still
+        # ranked below Strong/Medium in _check_sweep_at_target's scoring below),
+        # so a genuine sweep at a weaker zone can still register instead of
+        # being thrown away outright.
         sweep_targets: List[dict] = []
         for z in zones_all:
-            if z.strength in ("Strong", "Medium"):
+            if z.strength in ("Strong", "Medium", "Weak"):
                 sweep_targets.append({
                     "type": z.type,
                     "zone_top": z.zone_top,

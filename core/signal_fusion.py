@@ -194,8 +194,17 @@ class SignalFusion:
             else:
                 result.final_signal = "WAIT"
         elif len(agreeing) == 2 and len(signals) == 4:
-            # 2/4 — not enough
-            result.final_signal = "WAIT"
+            # Log-driven fix (2026-07-17): 2/4 agreement was an automatic
+            # WAIT regardless of confidence, even when the two agreeing
+            # layers (e.g. ml_ensemble + rl_agent) were both highly
+            # confident and the other two layers simply didn't vote
+            # (WAIT/HOLD), not actively opposing. Now handled the same
+            # way as the 2/3 case: allowed through if the weighted
+            # confidence clears the reduced threshold.
+            if weighted_conf >= self.REDUCED_THRESHOLD:
+                result.final_signal = majority
+            else:
+                result.final_signal = "WAIT"
         else:
             result.final_signal = "WAIT"
 

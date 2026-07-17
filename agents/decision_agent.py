@@ -122,6 +122,13 @@ class DecisionAgent:
     # signal just because optional layers had nothing to say.
     AGG_DAMPING_FLOOR = 0.65
 
+    # Log-driven fix (2026-07-17): used by the SignalFusion authoritative
+    # gate below. When the fusion engine abstains (fewer than 2 of 3
+    # layers agree), a single layer's own signal is still taken if its
+    # confidence clears this floor — per operator request, confidence
+    # >= 60% should be enough to trade even without multi-layer consensus.
+    CONFIDENCE_OVERRIDE_THRESHOLD = 60.0
+
     def __init__(self):
         # Day 53 — pattern-aware dynamic confidence scorer (optional)
         self.confidence_engine = ConfidenceEngine() if ConfidenceEngine else None
@@ -615,10 +622,48 @@ class DecisionAgent:
                 _fs_signal = getattr(fusion_verdict, "final_signal", "WAIT")
                 _fs_agreement = getattr(fusion_verdict, "agreement", "N/A")
                 _fs_conf = float(getattr(fusion_verdict, "master_confidence", 0.0) or 0.0)
-                # Treat WAIT or NO_TRADE from the fusion engine as a
-                # hard block. The engine returns WAIT on 2/4 (or fewer)
-                # agreement and NO_TRADE on strong disagreement.
+                # Log-driven fix (2026-07-17): this used to be an unconditional
+                # hard NO TRADE whenever fewer than 2 of the 3 layers
+                # (rule_engine / llm_analyst / master) agreed — REGARDLESS of
+                # confidence. That made this the single biggest blocker in
+                # the whole pipeline: production logs showed "Valid signal"
+                # failing on almost every symbol/cycle even at 60-72%
+                # confidence, because this gate returned NO TRADE before any
+                # confidence check downstream ever ran.
+                #
+                # Per operator request ("confidence >= 60% → take the
+                # trade"), a 2-layer consensus is no longer required. If the
+                # fusion engine itself didn't produce BUY/SELL, we instead
+                # look at the single strongest of the 3 layers directly —
+                # if IT has a clear BUY/SELL direction and its own confidence
+                # clears CONFIDENCE_OVERRIDE_THRESHOLD, we trade on that
+                # layer alone instead of blocking. Only if no layer clears
+                # that bar do we still return the hard NO TRADE.
                 if _fs_signal not in ("BUY", "SELL"):
+                    _candidates = [
+                        (("BUY" if "BUY" in str(rule_signal) else "SELL" if "SELL" in str(rule_signal) else "WAIT"), rule_conf, "rule_engine"),
+                        (("BUY" if "BUY" in str(llm_signal) else "SELL" if "SELL" in str(llm_signal) else "WAIT"), llm_conf, "llm_analyst"),
+                        (("BUY" if "BUY" in str(master_sig) else "SELL" if "SELL" in str(master_sig) else "WAIT"), master_conf, "master_analyst"),
+                    ]
+                    _directional = [c for c in _candidates if c[0] in ("BUY", "SELL")]
+                    _best = max(_directional, key=lambda c: c[1], default=None)
+                    if _best is not None and _best[1] >= self.CONFIDENCE_OVERRIDE_THRESHOLD:
+                        _ov_signal, _ov_conf, _ov_layer = _best
+                        log.info(
+                            f"[DecisionAgent] SignalFusion gate abstained "
+                            f"({_fs_signal}, consensus={_fs_agreement}) but "
+                            f"{_ov_layer} alone is {_ov_signal} at {_ov_conf:.0f}% "
+                            f"(>= {self.CONFIDENCE_OVERRIDE_THRESHOLD:.0f}% floor) "
+                            f"— overriding to trade on that signal"
+                        )
+                        return self._result(
+                            _ov_signal, max(_preserved_conf, _ov_conf), risk_out, [
+                                f"Confidence override: {_ov_layer} {_ov_signal} "
+                                f"{_ov_conf:.0f}% (SignalFusion consensus was "
+                                f"{_fs_signal}/{_fs_agreement}, but single-layer "
+                                f"confidence cleared the {self.CONFIDENCE_OVERRIDE_THRESHOLD:.0f}% floor)",
+                            ], pattern=pattern, pair=pair, timeframe=timeframe,
+                            regime=regime_label, analysis_out=analysis_out)
                     return self._result(
                         "NO TRADE", max(_preserved_conf, _fs_conf), risk_out, [
                             f"SignalFusion gate: {_fs_signal} "

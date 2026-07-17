@@ -384,8 +384,17 @@ class UncertaintyEstimator:
         ]
         base_confidence = np.mean(agreeing_confidences) if agreeing_confidences else 0.5
 
-        # Adjusted confidence: reduced by disagreement
-        adjusted_confidence = base_confidence * agreement
+        # Log-driven fix (2026-07-17): this used to be
+        # `adjusted_confidence = base_confidence * agreement`, which meant
+        # a model reporting genuine 90% confidence got silently reported
+        # as ~68% whenever only 3/4 ensemble members agreed (agreement=0.75)
+        # — the raw confidence never reached the rest of the pipeline at
+        # full strength. Per operator request, ML/RL/ensemble confidence
+        # should pass through at its real value; ensemble disagreement is
+        # still respected, but only via the separate `uncertainty` gate
+        # below (HIGH_UNCERTAINTY_THRESHOLD), not by silently shrinking
+        # the confidence number itself.
+        adjusted_confidence = base_confidence
 
         # ── Decision ──
         should_trade = (

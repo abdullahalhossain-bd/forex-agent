@@ -638,11 +638,27 @@ class MultiStrategyPAEngine:
             log.debug(f"[multi_strategy_pa_engine.py] lower-TF ATR/bias suppressed: {e}")
             lower_bias = "neutral"
 
-        # Aligned if: trend structure matches primary AND bias matches
-        aligned = (
-            lower_trend.structure == primary_trend.structure
-            and (lower_bias == primary_bias or primary_bias == "neutral")
+        # Loosened (log-driven fix, 2026-07-17): the old rule required an
+        # EXACT structure match (uptrend==uptrend) AND an exact bias match.
+        # In practice the lower TF is very often "sideways" while the
+        # primary TF has already broken into a clear trend — that's not a
+        # conflict, it's just the lower TF not having caught up yet, and it
+        # was blocking nearly every PA signal (see execution.log: "Step 5
+        # ... confirmation failed" on almost every cycle).
+        # New rule: only block on a genuine DISAGREEMENT — the lower TF
+        # trending the opposite way, or its S/R bias opposing the primary
+        # bias. A neutral/sideways lower TF, or a bias that simply hasn't
+        # formed yet, no longer counts as misalignment.
+        opposite_structure = (
+            (lower_trend.structure == "uptrend" and primary_trend.structure == "downtrend")
+            or (lower_trend.structure == "downtrend" and primary_trend.structure == "uptrend")
         )
+        opposing_bias = (
+            lower_bias != "neutral"
+            and primary_bias != "neutral"
+            and lower_bias != primary_bias
+        )
+        aligned = not (opposite_structure or opposing_bias)
 
         return {"lower_tf_used": lower_tf, "aligned": bool(aligned)}
 

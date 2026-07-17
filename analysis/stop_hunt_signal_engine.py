@@ -59,9 +59,13 @@ log = logging.getLogger(__name__)
 
 
 # ─── Tunable constants ────────────────────────────────────────
-WICK_BODY_RATIO_MIN     = 1.3   # slightly looser wick requirement
+# Loosened further (log-driven fix, 2026-07-17): production logs showed
+# "No stop hunt confirmed" on effectively every cycle. 1.3x wick/body was
+# rejecting genuine-looking reversal wicks that just missed the bar, and
+# an 6-candle reversal window was too tight for slower M15 reversals.
+WICK_BODY_RATIO_MIN     = 1.15  # was 1.3 — allow slightly smaller wicks
 WICK_BODY_RATIO_STRONG  = 1.8   # was 2.0
-REVERSAL_LOOKBACK       = 6     # more room for reversal to show up
+REVERSAL_LOOKBACK       = 8     # was 6 — more room for reversal to show up
 ZONE_NEAR_FACTOR        = 0.4   # body "near" zone = within 0.4× zone width
 SL_BUFFER_ATR_MULT      = 0.15  # SL = wick_extreme ± 0.15×ATR buffer
 MIN_RR_RATIO            = 1.4   # lowered further to allow more setups
