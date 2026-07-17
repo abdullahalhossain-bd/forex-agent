@@ -73,6 +73,26 @@ def _track_confidence(master_ctx, stage, value):
     except Exception:
         pass
 
+
+def _apply_confidence_penalty(signal_result: dict, amount: float, reason: str, source: str = "analysis") -> None:
+    """Lower confidence by a small amount instead of hard-blocking the trade."""
+    try:
+        if not isinstance(signal_result, dict):
+            return
+        current_conf = float(signal_result.get("confidence", 0) or 0)
+        new_conf = max(0, min(99, current_conf - amount))
+        signal_result["confidence"] = new_conf
+        penalties = signal_result.setdefault("confidence_penalties", [])
+        penalties.append({
+            "source": source,
+            "reason": reason,
+            "amount": amount,
+            "confidence": new_conf,
+        })
+    except Exception:
+        pass
+
+
 class AnalysisAgent:
     """
     Day 65 Unified Pipeline:
@@ -1113,12 +1133,18 @@ class AnalysisAgent:
             )
 
         elif conflict_result.get("has_conflict") and sentiment_result.get("confidence", 0) >= 70:
-            final_signal = "NO TRADE"
-            log.info("[AnalysisAgent] -> NO TRADE (high-confidence sentiment conflict)")
+            _apply_confidence_penalty(signal_result, 8, "sentiment_conflict", "analysis")
+            log.info(
+                "[AnalysisAgent] Confidence penalty: -8% due to sentiment conflict; "
+                f"preserving {final_signal} for downstream evaluation"
+            )
 
         elif fusion_result.get("has_conflict") and fusion_result.get("adjusted_conf", 100) < 45:
-            final_signal = "NO TRADE"
-            log.info("[AnalysisAgent] -> NO TRADE (vision/quant conflict — low confidence)")
+            _apply_confidence_penalty(signal_result, 10, "fusion_conflict", "analysis")
+            log.info(
+                "[AnalysisAgent] Confidence penalty: -10% due to fusion conflict; "
+                f"preserving {final_signal} for downstream evaluation"
+            )
 
         elif master_ctx.get("master_signal") in ("BUY", "SELL", "WAIT", "STRONG_BUY", "STRONG_SELL"):
             ma_signal    = master_ctx["master_signal"]
@@ -1140,8 +1166,18 @@ class AnalysisAgent:
                 final_signal = rule_sig_normalized
                 log.info(f"[AnalysisAgent] -> {final_signal} (Rule signal: {rule_sig} {rule_conf}% conf, master WAIT — rule override)")
             else:
-                final_signal = "NO TRADE" if ma_signal == "WAIT" else ma_signal
-                log.info(f"[AnalysisAgent] -> {final_signal} (MasterAnalyst override)")
+                if ma_signal == "WAIT":
+                    if final_signal in ("BUY", "SELL"):
+                        _apply_confidence_penalty(signal_result, 6, "master_wait", "analysis")
+                        log.info(
+                            f"[AnalysisAgent] MasterAnalyst WAIT; keeping {final_signal} with -6% penalty"
+                        )
+                    else:
+                        final_signal = "WAIT"
+                        log.info("[AnalysisAgent] -> WAIT (MasterAnalyst override with no directional fallback)")
+                else:
+                    final_signal = ma_signal
+                    log.info(f"[AnalysisAgent] -> {final_signal} (MasterAnalyst override)")
 
 
         # ── Day 66: News Intelligence integration ────────────────────
@@ -1329,14 +1365,15 @@ class AnalysisAgent:
                         f"BYPASSED (TEST_MODE=true)"
                     )
                 elif decision.setup_quality == "AVOID":
+                    _apply_confidence_penalty(signal_result, 12, "confluence_avoid", "analysis")
                     log.info(
-                        f"[AnalysisAgent] Day 67 Confluence: {final_signal} → NO TRADE "
+                        f"[AnalysisAgent] Day 67 Confluence: {final_signal} kept with -12% penalty "
                         f"(quality=AVOID, {decision.block_reason or 'failed validation'})"
                     )
-                    final_signal = "NO TRADE"
                 else:
+                    _apply_confidence_penalty(signal_result, 6, "confluence_quality", "analysis")
                     log.info(
-                        f"[AnalysisAgent] Day 67 Confluence: {final_signal} allowed "
+                        f"[AnalysisAgent] Day 67 Confluence: {final_signal} allowed with -6% penalty "
                         f"(quality={decision.setup_quality}, factors={decision.aligned_factors}/{decision.total_factors})"
                     )
             elif decision.should_trade and decision.direction in ("BUY", "SELL"):
@@ -1515,17 +1552,21 @@ class AnalysisAgent:
                         f"[AnalysisAgent] Day 70 Ensemble ABSTAINED: "
                         f"{ensemble_decision.abstain_reason}"
                     )
-                    final_signal = "NO TRADE"
+                    if final_signal in ("BUY", "SELL"):
+                        _apply_confidence_penalty(signal_result, 10, "ensemble_abstain", "analysis")
+                        log.info(
+                            f"[AnalysisAgent] Ensemble abstain; keeping {final_signal} with -10% penalty"
+                        )
             elif ensemble_decision.decision == "WAIT":
                 # Don't automatically block — only block if confidence is very low
                 # Day 81+ hotfix: In TEST_MODE, never let Ensemble WAIT block a trade
                 if ensemble_decision.confidence < 40 and not _test_mode:
                     if final_signal in ("BUY", "SELL"):
+                        _apply_confidence_penalty(signal_result, 8, "ensemble_wait", "analysis")
                         log.info(
-                            f"[AnalysisAgent] Day 70 Ensemble → WAIT "
+                            f"[AnalysisAgent] Day 70 Ensemble → WAIT with -8% penalty "
                             f"(conf {ensemble_decision.confidence:.0f}% < 40%)"
                         )
-                        final_signal = "NO TRADE"
                 else:
                     # WAIT with decent confidence OR TEST_MODE — let the original signal pass
                     log.info(
@@ -1611,11 +1652,11 @@ class AnalysisAgent:
                         f"BYPASSED (TEST_MODE=true), keeping {final_signal}"
                     )
                 elif ensemble_conf < 40:
+                    _apply_confidence_penalty(signal_result, 10, "rl_hold", "analysis")
                     log.warning(
-                        f"[AnalysisAgent] Day 71 RL VETO: Ensemble said {final_signal} "
+                        f"[AnalysisAgent] Day 71 RL penalty: Ensemble said {final_signal} "
                         f"but conf={ensemble_conf:.0f}% < 40% — {rl_action.reason[:80]}"
                     )
-                    final_signal = "NO TRADE"
                 else:
                     log.info(
                         f"[AnalysisAgent] Day 71 RL suggests HOLD but conf={ensemble_conf:.0f}% — "
@@ -1719,8 +1760,11 @@ class AnalysisAgent:
                         f"[AnalysisAgent] Day 73 Master Decision → WAIT "
                         f"(agreement {master_decision.agreement}, conf {master_decision.master_confidence:.0f}%)"
                     )
-                    if master_decision.override_reason:
-                        final_signal = "NO TRADE"
+                    if master_decision.override_reason and final_signal in ("BUY", "SELL"):
+                        _apply_confidence_penalty(signal_result, 8, "master_decision_wait", "analysis")
+                        log.info(
+                            f"[AnalysisAgent] MasterDecision WAIT; keeping {final_signal} with -8% penalty"
+                        )
         except Exception as e:
             log.warning(f"[AnalysisAgent] Day 73 MasterDecisionEngine failed: {e}")
             master_decision_ctx = {"error": str(e)}

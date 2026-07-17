@@ -40,7 +40,7 @@ log = get_logger("signal_validator")
 # Lowered from 5 to 2 — 5 was too strict, blocking most good trades.
 # With 7 factors, requiring 5 aligned means 71% agreement which is very rare.
 # 2 out of 7 (29%) allows good signals through while still maintaining confluence.
-MIN_ALIGNED_FACTORS = 2
+MIN_ALIGNED_FACTORS = 1
 
 # ── Top-weight factors that must NOT strongly disagree ──────────────
 # If any pair of these factors have opposing BUY/SELL directions AND
@@ -106,7 +106,7 @@ class SignalValidator:
         should_trade = (
             len(block_reasons) == 0
             and score.final_direction in ("BUY", "SELL")
-            and score.setup_quality in ("A+", "A", "B")
+            and score.setup_quality in ("A+", "A", "B", "C")
         )
 
         return {

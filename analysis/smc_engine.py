@@ -35,7 +35,7 @@ SCORE_WEIGHTS = {
     "confirmation_candle": 15,
 }
 
-MIN_TRADE_SCORE = 60   # এর নিচে হলে SMC signal = WAIT
+MIN_TRADE_SCORE = 45   # Lowered so marginal-but-valid SMC setups are not discarded outright
 
 
 class SMCEngine:
@@ -122,7 +122,15 @@ class SMCEngine:
             m15_sweep, m15_bos, m15_pat,
         )
         grade  = self._rank_zone(score, factors)
-        signal = direction if (score >= MIN_TRADE_SCORE and direction != "NEUTRAL") else "WAIT"
+        tradeable = (
+            score >= MIN_TRADE_SCORE
+            or (
+                direction != "NEUTRAL"
+                and score >= 30
+                and sum(bool(v) for v in factors.values()) >= 2
+            )
+        )
+        signal = direction if tradeable else "WAIT"
 
         result = {
             "symbol":        self.symbol,

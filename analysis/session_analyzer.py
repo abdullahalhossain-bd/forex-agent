@@ -341,9 +341,9 @@ class SessionAnalyzer:
         score = min(100, score)
 
         # ── Grade ─────────────────────────────────────────────
-        if score >= 85:     grade = "A+"
-        elif score >= 70:   grade = "A"
-        elif score >= 55:   grade = "B"
+        if score >= 75:     grade = "A+"
+        elif score >= 55:   grade = "A"
+        elif score >= 35:   grade = "B"
         else:               grade = "C"
 
         return {
@@ -405,21 +405,30 @@ class SessionAnalyzer:
         has_bos   = smc_ctx.get("smc_factors", {}).get("bos", False)
 
         issues = []
+        soft_floor = max(10, reqs["min_smc_score"] - 6)
         if smc_score < reqs["min_smc_score"]:
-            issues.append(
-                f"SMC score {smc_score} < required {reqs['min_smc_score']} for {session}"
-            )
+            if smc_score >= soft_floor and (not reqs["require_bos"] or has_bos or smc_score >= 20):
+                issues.append(
+                    f"SMC score {smc_score} below preferred {reqs['min_smc_score']} for {session} but above soft floor {soft_floor}; allowed with caution"
+                )
+            else:
+                issues.append(
+                    f"SMC score {smc_score} < required {reqs['min_smc_score']} for {session}"
+                )
         if reqs["require_bos"] and not has_bos:
-            issues.append(f"BOS required for {session} but not detected")
+            if smc_score >= soft_floor:
+                issues.append(f"BOS missing for {session} but score {smc_score} still exceeds soft floor; allowed with caution")
+            else:
+                issues.append(f"BOS required for {session} but not detected")
 
-        allowed      = not issues
+        allowed      = not any("required" in issue for issue in issues)
         fusion_score = smc_score   # score IS the SMC score — no hidden math
 
         if fusion_score >= 80:
             grade = "A+"
-        elif fusion_score >= 60:
+        elif fusion_score >= 50:
             grade = "A"
-        elif fusion_score >= reqs["min_smc_score"]:
+        elif fusion_score >= max(12, reqs["min_smc_score"] - 4):
             grade = "B"
         else:
             grade = "INVALID"

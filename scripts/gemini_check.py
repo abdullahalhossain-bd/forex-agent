@@ -4,7 +4,7 @@ from google.genai import errors
 
 def check_gemini_api():
     # আপনার API Key
-    api_key = "AQ.Ab8RN6Kzkhzaf-TSIO1V2DCXzcGg6WzThLMwn60dNrCwz3t_Ug" 
+    api_key = "AQ.Ab8RN6IRCCbIAplAGNXfwe4L5spKjikfxLq_a6RH38fagtGMog" 
     
     if not api_key or api_key == "YOUR_GEMINI_API_KEY":
         print("❌ ভুল: দয়া করে আপনার সঠিক Gemini API Key-টি বসান।")

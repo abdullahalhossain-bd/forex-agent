@@ -1283,20 +1283,20 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 
         if not _ma_test_mode:
             if session_ctx.get("is_dead_zone"):
-                # Heavy penalty but NOT zero — analysis is still valid.
-                weighted *= 0.3
+                # Soft penalty instead of collapse; keep the analysis signal alive.
+                weighted *= 0.85
                 _session_gate_penalty_applied = True
                 _session_gate_reason = f"dead_zone ({session_ctx.get('current_session', '?')})"
 
             if not session_ctx.get("session_trade_allowed", True):
-                weighted *= 0.3
+                weighted *= 0.9
                 _session_gate_penalty_applied = True
                 _session_gate_reason = (
                     f"session_trade_allowed=False ({session_ctx.get('current_session', '?')})"
                 )
 
             if not session_ctx.get("fusion_allowed", True):
-                weighted *= 0.5  # lighter penalty — SMC alignment is one factor
+                weighted *= 0.95  # mild penalty — SMC alignment is one factor
                 _session_gate_penalty_applied = True
                 _session_gate_reason = (
                     f"fusion_allowed=False "
@@ -1311,7 +1311,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             self._last_session_gate_penalty = {
                 "applied": _session_gate_penalty_applied,
                 "reason": _session_gate_reason,
-                "multiplier": 0.3 if "dead_zone" in _session_gate_reason or "trade_allowed" in _session_gate_reason else 0.5,
+                "multiplier": 0.85 if "dead_zone" in _session_gate_reason else 0.9 if "trade_allowed" in _session_gate_reason else 0.95,
             }
         except Exception:
             pass

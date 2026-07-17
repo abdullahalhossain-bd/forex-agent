@@ -144,9 +144,8 @@ class DecisionScorer:
         result.sell_score = round((sell_weighted / max_possible) * 100, 2)
         result.net_score = round(result.buy_score - result.sell_score, 2)
 
-        # Final direction — lowered threshold from 10 to 5
-        # Original 10 was too high, causing many setups to be NEUTRAL
-        if abs(result.net_score) < 5:
+        # Final direction — lowered threshold so more coherent setups remain directional
+        if abs(result.net_score) < 3:
             result.final_direction = "NEUTRAL"
         elif result.net_score > 0:
             result.final_direction = "BUY"
@@ -164,16 +163,16 @@ class DecisionScorer:
         if result.final_direction in ("BUY", "SELL"):
             aligned_pct = (result.aligned_factors / max(result.total_factors, 1)) * 100
             abs_net = abs(result.net_score)
-            if aligned_pct >= 60 and abs_net >= 30:
+            if aligned_pct >= 50 and abs_net >= 25:
                 result.setup_quality = "A+"
-            elif aligned_pct >= 40 and abs_net >= 20:
+            elif aligned_pct >= 35 and abs_net >= 15:
                 result.setup_quality = "A"
-            elif aligned_pct >= 25 and abs_net >= 10:
+            elif aligned_pct >= 20 and abs_net >= 8:
                 result.setup_quality = "B"
             else:
                 result.setup_quality = "AVOID"
-            # Base confidence from net score — lowered starting point from 40 to 30
-            result.confidence = min(95.0, 30.0 + abs_net * 0.9)
+            # Base confidence from net score — lowered starting point so modest edges still carry a usable confidence
+            result.confidence = min(95.0, 25.0 + abs_net * 0.9)
         else:
             result.setup_quality = "AVOID"
             result.confidence = 0.0

@@ -90,9 +90,9 @@ class SignalFusion:
     """Fuses 4-layer signals into a master decision."""
 
     # Position size thresholds
-    FULL_THRESHOLD = 75.0
-    HALF_THRESHOLD = 60.0
-    REDUCED_THRESHOLD = 50.0
+    FULL_THRESHOLD = 70.0
+    HALF_THRESHOLD = 55.0
+    REDUCED_THRESHOLD = 45.0
 
     def fuse(self, signals: List[LayerSignal]) -> FusionResult:
         """Fuse multiple layer signals into a single master decision."""

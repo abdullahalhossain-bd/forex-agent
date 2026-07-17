@@ -205,6 +205,52 @@ class TestEnsembleMlAvailableField(unittest.TestCase):
         self.assertEqual(decision.analysis_signal, "BUY")
 
 
+class TestHighConfidenceSoftOverride(unittest.TestCase):
+    """High-confidence signals should be allowed to pass even when consensus is thin."""
+
+    def test_decision_agent_uses_high_confidence_single_voter(self):
+        from agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent()
+        analysis_out = {
+            "final_signal": "WAIT",
+            "signal": {"signal": "BUY", "confidence": 68},
+            "llm": {"signal": "SELL", "confidence": 62},
+            "master_ctx": {"master_signal": "WAIT", "master_confidence": 0},
+            "sentiment_ctx": {"sentiment_bias": "NEUTRAL", "sentiment_score": 0},
+            "conflict": {"has_conflict": False, "confidence_adjustment": 0},
+            "ensemble": {},
+            "rl_agent": {},
+            "unified_signal": {},
+            "session_ctx": {},
+            "confluence": {},
+            "news": {"trade_allowed": True},
+        }
+        market_out = {"symbol": "EURUSD", "timeframe": "M15", "regime": {"regime": "NORMAL"}, "ind_ctx": {"close": 1.0850}}
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830, "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 1.5}
+
+        result = agent.decide(market_out, analysis_out, risk_out)
+        self.assertEqual(result["decision"], "BUY")
+        self.assertGreaterEqual(result["confidence"], 60)
+
+    def test_permission_allows_high_confidence_with_low_alignment(self):
+        from risk.trade_permission import TradePermission
+
+        perm = TradePermission()
+        decision_out = {
+            "decision": "BUY",
+            "confidence": 65,
+            "aligned_factors": 1,
+            "setup_quality": "B",
+        }
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830, "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 1.2}
+        news_ctx = {"news_trade_allowed": True, "news_reason": "clear"}
+
+        result = perm.check(decision_out=decision_out, risk_out=risk_out, news_ctx=news_ctx, session_ctx=None)
+        self.assertTrue(result["execution_allowed"])
+        self.assertEqual(result["execution_action"], "BUY")
+
+
 class TestLiveRiskManagerTierPromotion(unittest.TestCase):
     """Issue H5: LiveRiskManager.record_trade_result triggers tier promotion."""
 

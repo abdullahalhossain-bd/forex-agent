@@ -105,7 +105,7 @@ class DecisionAgent:
     # cross-layer aggregate confidence is below this floor, the decision
     # is downgraded to WAIT — trading is gated on system-wide agreement,
     # not on whichever single layer happened to shout loudest.
-    MIN_TRADE_CONFIDENCE = 45.0  # Relaxed to let valid moderate-confidence trades proceed
+    MIN_TRADE_CONFIDENCE = 60.0  # Operator-requested floor: trade when final confidence >= 60%
 
     # _aggregate_confidence() damps the weighted-average confidence based
     # on how much of the whole system (by weight) actually voted BUY/SELL
@@ -536,32 +536,30 @@ class DecisionAgent:
                    analysis_out=analysis_out)
 
             if not sess_trade_allowed:
-                return self._result("NO TRADE", _preserved_conf, risk_out, [
-                    f"Session gate: trade not allowed in {current_session} "
-                    f"(strategy={session_ctx.get('session_strategy', 'N/A')}) "
-                    f"(analysis confidence preserved)",
-                ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
-                   analysis_out=analysis_out)
+                reasons.append(
+                    f"⚠️ Session gate softened: {current_session} ({session_ctx.get('session_strategy', 'N/A')}) "
+                    f"reduced confidence instead of hard-blocking"
+                )
+                _preserved_conf = max(0, min(99, _preserved_conf - 6))
 
             if not fusion_allowed:
-                return self._result("NO TRADE", _preserved_conf, risk_out, [
-                    f"Fusion gate: SMC fusion rejected for {current_session} "
-                    f"(score={fusion_score}/100, grade={fusion_grade}) "
-                    f"(analysis confidence preserved)",
-                ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
-                   analysis_out=analysis_out)
+                reasons.append(
+                    f"⚠️ Fusion gate softened: {current_session} score={fusion_score}/100 "
+                    f"grade={fusion_grade} — applying a small penalty instead of hard-blocking"
+                )
+                _preserved_conf = max(0, min(99, _preserved_conf - 4))
 
             # If analysis_agent explicitly returned NO TRADE *and* there
             # is no upstream session/fusion reason captured above (e.g.
             # news block, vision/quant conflict, confluence quality
-            # rejection), honor that too — the upstream pipeline already
-            # weighed more context than the vote block has access to.
+            # rejection), preserve the analysis by continuing with a mild
+            # penalty rather than hard-blocking the signal.
             if final_signal == "NO TRADE":
-                return self._result("NO TRADE", _preserved_conf, risk_out, [
-                    "Analysis pipeline returned NO TRADE — honoring upstream verdict "
-                    "(analysis confidence preserved)",
-                ], pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
-                   analysis_out=analysis_out)
+                reasons.append(
+                    "⚠️ Upstream NO TRADE softened: continuing with the strongest directional layer "
+                    "when confidence is still above the trade floor"
+                )
+                _preserved_conf = max(0, min(99, _preserved_conf - 3))
         else:
             # TEST_MODE bypass: log but don't block. Preserve the old
             # narrow conflict-check behavior so TEST_MODE trades are
@@ -874,23 +872,21 @@ class DecisionAgent:
         # ──────────────────────────────────────────────────────────
         # Decision-engine confidence gate (all-layer aggregate).
         # ──────────────────────────────────────────────────────────
-        # Voting/consensus above decides DIRECTION (BUY/SELL/WAIT). This
-        # gate decides whether the system as a WHOLE actually supports
-        # taking that trade: even if enough votes fired to pick a
-        # direction, if the all-layer aggregate confidence (rule, LLM,
-        # master, ensemble, RL agent, unified signal engine, adaptive
-        # decision) doesn't clear MIN_TRADE_CONFIDENCE, we downgrade to
-        # WAIT. This is what makes "trade or not" actually driven by the
-        # decision engine's own combined confidence, rather than by
-        # whichever single layer happened to vote loudest.
+        # Normal mode: allow BUY/SELL when the all-layer aggregate is at
+        # least 60%. If it is below that floor, downgrade only by a small
+        # penalty instead of hard-blocking, so the signal remains visible to
+        # downstream permission/risk layers.
         if decision in ("BUY", "SELL") and _preserved_conf < self.MIN_TRADE_CONFIDENCE:
             reasons.append(
-                f"⛔ Decision engine gate: aggregate confidence {_preserved_conf:.0f}% "
-                f"< {self.MIN_TRADE_CONFIDENCE:.0f}% minimum — downgrading {decision} to WAIT "
-                f"(insufficient cross-layer agreement; vote direction alone isn't enough)"
+                f"⚠️ Decision engine gate: aggregate confidence {_preserved_conf:.0f}% "
+                f"< {self.MIN_TRADE_CONFIDENCE:.0f}% floor — applying penalty instead of hard WAIT"
             )
-            decision = "WAIT"
-            adj_conf = _preserved_conf
+            adj_conf = max(0, min(99, _preserved_conf - 5))
+            if adj_conf < 60:
+                decision = "WAIT"
+                reasons.append("⚠️ Final confidence below 60% after penalty — WAIT")
+            else:
+                reasons.append(f"✅ Confidence retained at {adj_conf:.0f}% for downstream execution")
 
         # Day 81+ hotfix: When LLM is unavailable, master_entry/sl/tp are
         # all None, and risk_out is a placeholder (entry=None). Fallback
@@ -937,6 +933,39 @@ class DecisionAgent:
                                 f"failed, disabling for this session: {e}")
                     self._master_engine_warned = True
                 self._master_engine = None
+
+        signal_ctx = analysis_out.get("signal", {}) if isinstance(analysis_out, dict) else {}
+        llm_ctx = analysis_out.get("llm", {}) if isinstance(analysis_out, dict) else {}
+        ensemble_ctx_out = analysis_out.get("ensemble", {}) if isinstance(analysis_out, dict) else {}
+        rl_ctx_out = analysis_out.get("rl_agent", {}) if isinstance(analysis_out, dict) else {}
+        session_ctx_out = analysis_out.get("session_ctx", {}) if isinstance(analysis_out, dict) else {}
+        confluence_ctx_out = analysis_out.get("confluence", {}) if isinstance(analysis_out, dict) else {}
+        unified_ctx_out = analysis_out.get("unified_signal", {}) if isinstance(analysis_out, dict) else {}
+        confidence_penalties = signal_ctx.get("confidence_penalties", []) if isinstance(signal_ctx, dict) else []
+        tech_conf = signal_ctx.get("confidence", 0) if isinstance(signal_ctx, dict) else 0
+        llm_conf_out = llm_ctx.get("confidence", 0) if isinstance(llm_ctx, dict) else 0
+        master_conf_out = master_ctx.get("master_confidence", 0) if isinstance(master_ctx, dict) else 0
+        ml_conf_out = ensemble_ctx_out.get("confidence", 0) if isinstance(ensemble_ctx_out, dict) else 0
+        rl_conf_out = rl_ctx_out.get("confidence", 0) if isinstance(rl_ctx_out, dict) else 0
+        fusion_conf_out = unified_ctx_out.get("consensus", {}).get("confidence", "Low") if isinstance(unified_ctx_out, dict) else "Low"
+        session_grade_out = session_ctx_out.get("session_grade", "N/A") if isinstance(session_ctx_out, dict) else "N/A"
+        confluence_q_out = confluence_ctx_out.get("setup_quality", "UNKNOWN") if isinstance(confluence_ctx_out, dict) else "UNKNOWN"
+        risk_reason_out = risk_out.get("reject_reason", "") if isinstance(risk_out, dict) else ""
+        log.info(
+            "[DecisionAgent] FINAL_DECISION | decision=%s confidence=%s | tech=%s llm=%s master=%s ml=%s rl=%s fusion=%s session=%s confluence=%s risk=%s | penalties=%s",
+            decision,
+            adj_conf,
+            tech_conf,
+            llm_conf_out,
+            master_conf_out,
+            ml_conf_out,
+            rl_conf_out,
+            fusion_conf_out,
+            session_grade_out,
+            confluence_q_out,
+            "approved" if risk_approved else f"blocked:{risk_reason_out or 'unknown'}",
+            ", ".join([f"{p['source']}:{p['reason']}(-{p['amount']:.0f})" for p in confidence_penalties]) if confidence_penalties else "none",
+        )
 
         return self._result(
             decision, adj_conf, risk_out, reasons,

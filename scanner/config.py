@@ -25,8 +25,24 @@ FOREX_PAIRS = [
     "XAGUSD",  # Silver
 ]
 
-# ── Default scan subset — scans ALL 30 pairs every cycle ──
-DEFAULT_SCAN_PAIRS = list(FOREX_PAIRS)
+# ── Engine-supported pairs ──────────────────────────────────
+# analysis/multi_strategy_pa_engine.ALLOWED_PAIRS only covers these 11
+# symbols. Scanning the other 19 in FOREX_PAIRS burns market-data reads
+# and LLM calls on pairs that the PA engine will immediately reject with
+# "Pair X not supported" and abstain (NO_TRADE) — pure waste. Keep this
+# list in sync with ALLOWED_PAIRS in multi_strategy_pa_engine.py; when a
+# new pair is added there, add it here too.
+_PA_ENGINE_SUPPORTED_PAIRS = {
+    "EURUSD", "USDJPY", "USDCAD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCHF",
+    "EURGBP", "EURJPY", "GBPJPY", "XAUUSD",
+}
+
+# ── Default scan subset — was "scan ALL 30 pairs every cycle", which
+# meant ~19 of them (EURCHF, EURAUD, XAGUSD, etc.) always came back
+# NO_TRADE / abstained regardless of setup quality, while still
+# consuming a market-data fetch + LLM call each cycle. Restricted to
+# the pairs the PA engine can actually evaluate. ──
+DEFAULT_SCAN_PAIRS = [p for p in FOREX_PAIRS if p in _PA_ENGINE_SUPPORTED_PAIRS]
 
 # ── Correlation groups (same underlying risk) ──
 # Updated for 30 pairs — correlated groups are blocked from

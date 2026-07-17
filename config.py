@@ -190,7 +190,7 @@ MONITORING_INTERVAL = 60  # seconds between health checks
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # Anthropic + OpenRouter intentionally disabled — MasterAnalyst now uses
 # the same Groq/Gemini chain as AIAnalyst (per user request, free-tier only).
 # ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

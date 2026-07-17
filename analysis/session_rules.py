@@ -103,13 +103,24 @@ SESSION_CHARACTERISTICS = {
     },
 }
 
+# ── Confidence floor — ONE knob instead of six ────────────────
+# Previously every session repeated its own "min_confidence": 60 with a
+# different "was 65/70/72/85" history comment. Same number, six places,
+# six comment threads — hard to see at a glance that they'd all already
+# converged. Consolidated here. Change this ONE value to retune every
+# tradeable session at once. DEAD_ZONE is intentionally NOT driven by
+# this constant (see below) — it's a full session block, not a
+# confidence level, and mixing the two here would make an accidental
+# edit able to silently reopen trading in the illiquid dead-zone hours.
+BASE_MIN_CONFIDENCE = 60
+
 # ── Strategy Modes Per Session ────────────────────────────────
 SESSION_STRATEGIES = {
     "SYDNEY": {
         "strategy":          "RANGE_TRADING",
         "action":            "Buy near range low, Sell near range high",
         "avoid":             "Breakout trades — false signals likely",
-        "min_confidence":    60,  # was 65
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   0.7,
         "note":              "Low volatility. Tight SL. Small targets.",
     },
@@ -117,7 +128,7 @@ SESSION_STRATEGIES = {
         "strategy":          "RANGE_TRADING",
         "action":            "JPY pairs: fade extremes. Range-bound entries.",
         "avoid":             "Trending breakouts — consolidation phase",
-        "min_confidence":    60,  # was 65
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   0.8,
         "note":              "JPY dominates. USDJPY, EURJPY best suited.",
     },
@@ -125,7 +136,7 @@ SESSION_STRATEGIES = {
         "strategy":          "LONDON_BREAKOUT",
         "action":            "Asian range breakout. Liquidity sweep + BOS entry.",
         "avoid":             "Counter-trend during strong London moves",
-        "min_confidence":    60,  # was 70
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   1.0,
         "note":              "Check Asian high/low for liquidity sweep direction.",
     },
@@ -133,7 +144,7 @@ SESSION_STRATEGIES = {
         "strategy":          "TREND_CONTINUATION",
         "action":            "Continue London trend. USD news-driven moves.",
         "avoid":             "Reversals without strong SMC confirmation",
-        "min_confidence":    60,  # was 72
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   1.0,
         "note":              "Follow London direction. Check order flow.",
     },
@@ -141,7 +152,7 @@ SESSION_STRATEGIES = {
         "strategy":          "A_PLUS_ONLY",
         "action":            "Full SMC confluence required. Institutional setups only.",
         "avoid":             "Anything below A+ grade",
-        "min_confidence":    60,  # was 85 — unified to the 60% floor per operator request
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   1.2,
         "note":              "Best trading window. Wait for perfect setup.",
     },
@@ -149,10 +160,9 @@ SESSION_STRATEGIES = {
         "strategy":          "NO_TRADE",
         "action":            "Do nothing. Prepare for next session.",
         "avoid":             "All trades",
-        "min_confidence":    999,  # impossible to meet — intentional: this is a
-        # full session block (illiquid, wide spreads), not a confidence
-        # tuning knob, so it's left untouched. Ask if you want this session
-        # openable too — that's a different kind of risk than confidence.
+        "min_confidence":    999,  # impossible to meet — intentional full
+        # session block (illiquid, wide spreads), not a confidence knob.
+        # Not tied to BASE_MIN_CONFIDENCE on purpose (see comment above).
         "risk_multiplier":   0.0,
         "note":              "Low liquidity. Spreads wide. High slippage risk.",
     },
@@ -160,7 +170,7 @@ SESSION_STRATEGIES = {
         "strategy":          "WAIT",
         "action":            "Wait for next session to open.",
         "avoid":             "Forcing trades",
-        "min_confidence":    60,  # was 80
+        "min_confidence":    BASE_MIN_CONFIDENCE,
         "risk_multiplier":   0.6,
         "note":              "Transitioning between sessions. Low participation.",
     },
@@ -190,12 +200,20 @@ LONDON_OPEN_WINDOW = {"start": 8, "end": 10}
 # Lowered min_smc_score another notch (30/40 → 20/30) so setups that
 # clear roughly the middle of the observed range can pass. require_bos
 # stays untouched — that's a real structural check, not a tunable score.
+# Base SMC score floor — one knob, mirrors BASE_MIN_CONFIDENCE above.
+# LONDON keeps a slightly higher bar (BASE_MIN_SMC_SCORE + 10) since it's
+# the breakout session where a real SMC read matters most; everything
+# else shares the base value. require_bos stays per-session — that's a
+# structural confirmation (did price actually break structure), not a
+# tunable score, so it is NOT touched by this simplification.
+BASE_MIN_SMC_SCORE = 12
+
 SMC_REQUIREMENTS = {
-    "SYDNEY":            {"min_smc_score": 20, "require_bos": False, "require_ob": False},
-    "TOKYO":             {"min_smc_score": 20, "require_bos": False, "require_ob": False},
-    "LONDON":            {"min_smc_score": 30, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
-    "NEW_YORK":          {"min_smc_score": 20, "require_bos": True,  "require_ob": False},
-    "LONDON_NY_OVERLAP": {"min_smc_score": 20, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
-    "DEAD_ZONE":         {"min_smc_score": 999, "require_bos": True, "require_ob": True},    # ← 999 এ ফেরত আনা হলো
-    "BETWEEN_SESSIONS":  {"min_smc_score": 20, "require_bos": False, "require_ob": False},
+    "SYDNEY":            {"min_smc_score": BASE_MIN_SMC_SCORE,      "require_bos": False, "require_ob": False},
+    "TOKYO":             {"min_smc_score": BASE_MIN_SMC_SCORE,      "require_bos": False, "require_ob": False},
+    "LONDON":            {"min_smc_score": BASE_MIN_SMC_SCORE + 8, "require_bos": True,  "require_ob": False},
+    "NEW_YORK":          {"min_smc_score": BASE_MIN_SMC_SCORE,      "require_bos": True,  "require_ob": False},
+    "LONDON_NY_OVERLAP": {"min_smc_score": BASE_MIN_SMC_SCORE + 3, "require_bos": True,  "require_ob": False},
+    "DEAD_ZONE":         {"min_smc_score": 999,                     "require_bos": True,  "require_ob": True},
+    "BETWEEN_SESSIONS":  {"min_smc_score": BASE_MIN_SMC_SCORE,      "require_bos": False, "require_ob": False},
 }

@@ -55,7 +55,7 @@ class TradePermission:
     # the gate was never actually enforcing the documented production
     # threshold, which is how single-indicator 42%-confidence trades
     # (e.g. lone RSI oversold) kept reaching MT5.
-    MIN_CONFIDENCE_PROD  = 35  # Lowered for better trade frequency (was 40)
+    MIN_CONFIDENCE_PROD  = 60  # Operator-requested floor: trade when confidence >= 60%
     MIN_CONFIDENCE_TEST  = 10
 
     # Co-founder fix: raised thresholds for institutional-grade entries
@@ -105,9 +105,18 @@ class TradePermission:
         # overwrite `decision_out["decision"] = "NO TRADE"` at the
         # analysis layer.
         # ──────────────────────────────────────────────────────────────
+        conf = decision_out.get("confidence", 0)
         if execution_filters:
             for gate_name, gate_result in execution_filters.items():
-                if isinstance(gate_result, dict) and gate_result.get("blocked"):
+                blocked = isinstance(gate_result, dict) and gate_result.get("blocked")
+                if blocked and gate_name in {"session", "fusion"} and conf >= self.MIN_CONFIDENCE:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": f"soft override at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
+                    })
+                    passed += 1
+                elif blocked:
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
                         "passed": False,
@@ -170,7 +179,6 @@ class TradePermission:
         if ok: passed += 1
 
         # 4. Confidence
-        conf = decision_out.get("confidence", 0)
         ok   = conf >= self.MIN_CONFIDENCE
         checks.append({
             "check":  "Min confidence",
@@ -251,16 +259,24 @@ class TradePermission:
             if raw_setup_q and raw_setup_q != setup_q
             else setup_q
         )
-        _detail = (
-            f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
-            + (f" — BLOCKED: {', '.join(_reasons)}" if _reasons else " — OK")
-        )
+        if conf >= self.MIN_CONFIDENCE and (not ok_aligned or not ok_quality):
+            _detail = (
+                f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
+                f" — soft override at {conf:.0f}% confidence"
+            )
+            _passed = True
+        else:
+            _detail = (
+                f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
+                + (f" — BLOCKED: {', '.join(_reasons)}" if _reasons else " — OK")
+            )
+            _passed = ok_aligned and ok_quality
         checks.append({
             "check":  "Confluence quality",
-            "passed": ok_aligned and ok_quality,
+            "passed": _passed,
             "detail": _detail,
         })
-        if ok_aligned and ok_quality: passed += 1
+        if _passed: passed += 1
         total += 1
 
         # Day 97+ Book rule: Min R:R
@@ -483,7 +499,8 @@ class TradePermission:
                 f"[TradePermission] ALLOWED "
                 f"({passed}/{total} checks passed) | "
                 f"Analysis: {_analysis_signal} {_analysis_conf:.0f}% | "
-                f"Execution: {execution_action}"
+                f"Execution: {execution_action} | "
+                f"Confidence floor={self.MIN_CONFIDENCE}%"
             )
         else:
             log.info(
