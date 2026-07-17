@@ -51,7 +51,7 @@ def _env_int(name: str, default: int) -> int:
 
 # Defaults — overridable via .env
 DEFAULT_MIN_DAILY_TRADES = 3
-DEFAULT_MAX_DAILY_TRADES = 15
+DEFAULT_MAX_DAILY_TRADES = 20
 
 
 @dataclass
@@ -104,7 +104,7 @@ class TradeFrequencyController:
         count = self.trade_count_today()
         if count >= self._max_daily:
             log.warning(
-                f"[TradeFrequency] BLOCKED — {count}/{self._max_daily} trades today (daily cap hit)"
+                f"[TradeFrequency] BLOCKED — {count}/{self._max_daily} trades today (daily cap hit) | source=risk/trade_frequency.py:can_trade_now() | config=MAX_DAILY_TRADES={self._max_daily}"
             )
             return False
         return True

@@ -3,23 +3,26 @@ intelligence/signal_validator.py — Signal validation gates
 ============================================================
 
 Day 67 — Pre-trade validation that runs AFTER the confluence score is
-computed but BEFORE the trade is allowed. Implements three professional
-trader safeguards:
+computed but BEFORE the trade is allowed.
 
-1. **Minimum Aligned Factor Rule** — fewer than MIN_ALIGNED_FACTORS (see
-   below; currently 2) aligned factors → WAIT. Originally set to 5, but
-   lowered because 5 was too strict and blocked most good trades — see
-   the MIN_ALIGNED_FACTORS constant for the full rationale.
-2. **Contradiction Detector** — if 2+ top-weight factors strongly disagree,
-   the trade is blocked (e.g. SMC BUY + News Strong USD Bearish = conflict)
-3. **False Signal Protection** — sequential gates:
-      Signal → Confluence → Risk → News → Correlation → Execution
+Confidence-pipeline simplification (institutional refactor):
+  - Gates 1+2 (confluence quality + factor count) COLLAPSED into one
+    soft check.  Previously they duplicated decision_score.py's own
+    AVOID/factor-count logic and could hard-block trades that
+    decision_score had already scored with nonzero confidence.
+  - Gate 3 (contradiction) converted from hard BLOCK to a confidence
+    deduction proportional to the strength of the disagreeing factors.
+    A single weak/conflicting secondary factor no longer nukes an
+    otherwise excellent trade.
+  - Gates 4-6 (risk, news, correlation) remain as hard BLOCKs —
+    they protect against genuine danger, not low confidence.
 
 Each gate returns:
     {
         "passed": bool,
         "reason": str,
         "severity": "OK" | "WARNING" | "BLOCK",
+        "confidence_penalty": float,  # NEW: deduction applied to confidence
         "details": dict
     }
 """
@@ -56,6 +59,7 @@ class ValidationResult:
     passed: bool
     severity: str         # OK / WARNING / BLOCK
     reason: str
+    confidence_penalty: float = 0.0  # NEW: deduction to apply to confidence
     details: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -102,12 +106,27 @@ class SignalValidator:
         gates.append(self._gate_correlation(correlation_blocked))
 
         # Final decision
+        # Confidence-pipeline simplification: only Gates 4-6 (risk, news,
+        # correlation) can hard-BLOCK.  Gates 1-3 are now soft (WARNING
+        # with confidence deductions).  We also accept any directional
+        # signal — quality "C" / "AVOID" no longer blocks.
         block_reasons = [g.reason for g in gates if g.severity == "BLOCK"]
+        # Sum up all soft penalties from Gates 1-3
+        total_soft_penalty = sum(g.confidence_penalty for g in gates if g.severity == "WARNING")
+
         should_trade = (
             len(block_reasons) == 0
             and score.final_direction in ("BUY", "SELL")
-            and score.setup_quality in ("A+", "A", "B", "C")
         )
+
+        from utils.confidence_trace import confidence_trace
+        if total_soft_penalty > 0:
+            confidence_trace.record(
+                module="signal_validator",
+                before=score.confidence,
+                after=max(0, score.confidence - total_soft_penalty),
+                reason=f"soft penalties from gates: -{total_soft_penalty:.1f} (no hard block)",
+            )
 
         return {
             "passed": should_trade,
@@ -115,18 +134,27 @@ class SignalValidator:
             "gates": [g.to_dict() for g in gates],
             "block_reason": block_reasons[0] if block_reasons else "",
             "all_gates_passed": len(block_reasons) == 0,
+            "confidence_penalty": total_soft_penalty,  # NEW: for downstream consumers
         }
 
     # ── Individual gates ────────────────────────────────────────────
 
     def _gate_confluence_quality(self, score: ConfluenceScore) -> ValidationResult:
-        """Gate 1: Setup quality must be A+, A, or B."""
-        if score.setup_quality == "AVOID":
+        """Gate 1 (softened): Setup quality check.
+
+        Confidence-pipeline simplification: this gate no longer hard-blocks.
+        It was duplicating decision_score.py's own AVOID classification.
+        Now it only emits a WARNING with a small confidence deduction when
+        quality is low, so the signal flows downstream instead of dying here.
+        """
+        if score.setup_quality in ("AVOID", "C"):
+            penalty = 5.0  # small deduction, not a kill
             return ValidationResult(
                 gate="confluence",
-                passed=False,
-                severity="BLOCK",
-                reason=f"Setup quality AVOID (net={score.net_score}, aligned={score.aligned_factors})",
+                passed=True,  # always pass now
+                severity="WARNING",
+                reason=f"Setup quality {score.setup_quality} (net={score.net_score}, aligned={score.aligned_factors}) — soft penalty applied",
+                confidence_penalty=penalty,
                 details={"setup_quality": score.setup_quality, "net_score": score.net_score},
             )
         return ValidationResult(
@@ -138,14 +166,20 @@ class SignalValidator:
         )
 
     def _gate_factor_count(self, score: ConfluenceScore) -> ValidationResult:
-        """Gate 2: At least MIN_ALIGNED_FACTORS aligned factors required
-        (currently 2 — see module-level constant for rationale)."""
+        """Gate 2 (softened): Aligned factor count check.
+
+        Confidence-pipeline simplification: merged with Gate 1.
+        Previously duplicated decision_score.py's own factor counting.
+        Now: only a WARNING with a small deduction when below threshold.
+        """
         if score.aligned_factors < MIN_ALIGNED_FACTORS:
+            penalty = 3.0  # small deduction, not a block
             return ValidationResult(
                 gate="factor_count",
-                passed=False,
-                severity="BLOCK",
-                reason=f"Only {score.aligned_factors}/{score.total_factors} factors aligned (need ≥{MIN_ALIGNED_FACTORS})",
+                passed=True,  # always pass now
+                severity="WARNING",
+                reason=f"Only {score.aligned_factors}/{score.total_factors} factors aligned (need ≥{MIN_ALIGNED_FACTORS}) — soft penalty",
+                confidence_penalty=penalty,
                 details={
                     "aligned_factors": score.aligned_factors,
                     "total_factors": score.total_factors,
@@ -161,8 +195,17 @@ class SignalValidator:
         )
 
     def _gate_contradiction(self, score: ConfluenceScore) -> ValidationResult:
-        """Gate 3: No strong contradictions among top-weight factors."""
+        """Gate 3 (softened): Contradiction detector.
+
+        Confidence-pipeline simplification: previously a hard BLOCK when
+        ANY pair of top-weight factors strongly disagreed.  Now: a
+        proportional confidence deduction based on the STRENGTH of the
+        disagreeing factors.  One weak/conflicting secondary factor no
+        longer nukes an otherwise excellent trade.  The deduction is
+        capped at 15 points so the trade is weakened but not killed.
+        """
         contradictions: List[str] = []
+        total_penalty = 0.0
         top_factors = [f for f in score.factors if f.name in TOP_WEIGHT_FACTORS]
         for i, f1 in enumerate(top_factors):
             for f2 in top_factors[i + 1:]:
@@ -175,13 +218,20 @@ class SignalValidator:
                         f"{f1.name}={f1.direction}({f1.strength:.0f}) vs "
                         f"{f2.name}={f2.direction}({f2.strength:.0f})"
                     )
+                    # Proportional penalty: average strength of the
+                    # disagreeing pair, scaled down.  Capped per-pair at 8.
+                    avg_strength = (f1.strength + f2.strength) / 2.0
+                    total_penalty += min(8.0, (avg_strength - CONTRADICTION_STRENGTH_THRESHOLD) * 0.2)
+        # Cap total contradiction penalty at 15
+        total_penalty = min(15.0, total_penalty)
         if contradictions:
             return ValidationResult(
                 gate="contradiction",
-                passed=False,
-                severity="BLOCK",
-                reason=f"Contradiction: {'; '.join(contradictions)}",
-                details={"contradictions": contradictions},
+                passed=True,  # always pass now — apply deduction instead
+                severity="WARNING",
+                reason=f"Contradiction: {'; '.join(contradictions)} — soft penalty -{total_penalty:.1f}",
+                confidence_penalty=total_penalty,
+                details={"contradictions": contradictions, "penalty": total_penalty},
             )
         return ValidationResult(
             gate="contradiction",

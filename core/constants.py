@@ -209,13 +209,14 @@ def _env_float(name: str, default: float) -> float:
 
 
 # ── Max Trades Per Day ──────────────────────────────────────
-# Was duplicated in: live_risk_manager.TIERS (3/5/7),
-# autonomous_risk.MAX_TRADES_PER_DAY (5), safety_controller (3),
-# circuit_breaker (5), kill_switch (3).
-MAX_TRADES_PER_DAY_TIER_1: int = _env_int("MAX_TRADES_PER_DAY_TIER_1", 3)
-MAX_TRADES_PER_DAY_TIER_2: int = _env_int("MAX_TRADES_PER_DAY_TIER_2", 5)
-MAX_TRADES_PER_DAY_TIER_3: int = _env_int("MAX_TRADES_PER_DAY_TIER_3", 7)
-MAX_TRADES_PER_DAY_DEFAULT: int = MAX_TRADES_PER_DAY_TIER_1
+# Single source of truth.  All tiers share the same cap;
+# override per-tier or globally via .env if needed.
+# Consumers: live_risk_manager.TIERS, trade_frequency, strict_risk_manager.
+MAX_TRADES_PER_DAY: int = _env_int("MAX_TRADES_PER_DAY", 20)
+MAX_TRADES_PER_DAY_TIER_1: int = _env_int("MAX_TRADES_PER_DAY_TIER_1", MAX_TRADES_PER_DAY)
+MAX_TRADES_PER_DAY_TIER_2: int = _env_int("MAX_TRADES_PER_DAY_TIER_2", MAX_TRADES_PER_DAY)
+MAX_TRADES_PER_DAY_TIER_3: int = _env_int("MAX_TRADES_PER_DAY_TIER_3", MAX_TRADES_PER_DAY)
+MAX_TRADES_PER_DAY_DEFAULT: int = MAX_TRADES_PER_DAY
 
 
 def get_max_trades_per_day(tier: int = 1) -> int:

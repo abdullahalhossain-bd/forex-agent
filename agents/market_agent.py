@@ -13,6 +13,10 @@ from utils.logger import get_logger
 
 log = get_logger("market_agent")
 
+# FIX (agents-folder audit): track how many cycles fell through to legacy
+# indicators so silent degradation is visible (not just DEBUG logs).
+_legacy_fallback_count = 0
+
 
 class MarketAgent:
     """
@@ -29,10 +33,22 @@ class MarketAgent:
         self.timeframe = timeframe
         # Day 93 — orchestrator handles MT5-vs-API choice
         self._orchestrator = get_data_orchestrator()
-        # Keep DataFetcher for backward-compat (some MTF calls still use it)
-        self._fetcher = get_data_fetcher()
+        # FIX (agents-folder audit): removed unused self._fetcher — was
+        # assigned but never referenced anywhere in the class body.
+        # The MTF analyzer below creates its own fetcher internally.
 
     def run(self) -> dict:
+        # ── Short-circuit: skip symbols known to be unavailable on broker ──
+        # This prevents ~30 non-existent symbols (USOUSD, BTCUSD, etc.) from
+        # wasting MTF fetch time and triggering recovery pauses every cycle.
+        try:
+            from data.fetcher import is_symbol_unavailable
+            if is_symbol_unavailable(self.symbol):
+                log.debug(f"[MarketAgent] {self.symbol} — skipped (not on broker)")
+                return {"error": "symbol_unavailable", "skipped": True}
+        except Exception:
+            pass
+
         log.info(f"[MarketAgent] Running for {self.symbol} {self.timeframe}")
 
         # MTF — wrap in try/except so MTF failure doesn't kill the cycle
@@ -47,6 +63,14 @@ class MarketAgent:
         # ── Day 93 — Fetch via Orchestrator (MT5 first, API fallback) ──
         df = self._orchestrator.get_candles(self.symbol, self.timeframe, limit=300)
         if df is None:
+            # Distinguish "symbol doesn't exist" from "connection lost".
+            # fetcher.mark_symbol_unavailable() was already called for code=-1.
+            try:
+                from data.fetcher import is_symbol_unavailable
+                if is_symbol_unavailable(self.symbol):
+                    return {"error": "symbol_unavailable", "skipped": True}
+            except Exception:
+                pass
             log.error(f"[MarketAgent] Data fetch failed for {self.symbol} (MT5 + API both unavailable)")
             return {"error": "fetch_failed"}
 
@@ -74,6 +98,17 @@ class MarketAgent:
                 log.info(f"[MarketAgent] Used ExtendedIndicators (pandas-ta, {len(df.columns)} cols)")
             except Exception as e:
                 log.warning(f"[MarketAgent] ExtendedIndicators failed ({e}) — falling back to legacy Indicators")
+                import logging as _logging
+                global _legacy_fallback_count
+                _legacy_fallback_count += 1
+                # Rate-limit: only WARN once per 50 consecutive fallbacks
+                if _legacy_fallback_count <= 1 or _legacy_fallback_count % 50 == 1:
+                    log.warning(
+                        f"[MarketAgent] ⚠️ LEGACY INDICATOR FALLBACK — "
+                        f"total occurrences: {_legacy_fallback_count} (rate-limited log)"
+                    )
+                else:
+                    log.debug(f"[MarketAgent] Legacy indicator fallback (#{_legacy_fallback_count})")
                 ind    = Indicators()
                 df     = ind.add_all(df)
                 ind_ctx = ind.get_ai_context(df)

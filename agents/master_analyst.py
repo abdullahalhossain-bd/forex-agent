@@ -196,15 +196,24 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 9. **History**: How did similar setups perform in the last 20 trades on this pair?
 10. **Self-Critique**: What am I missing? What's the bear case for my bull trade (or vice versa)?
 
-# SESSION RULES (critical — follow strictly)
-1. DEAD_ZONE or session_trade_allowed=false → return WAIT immediately, no exceptions.
-2. LONDON_NY_OVERLAP → only A+ setups (3+ confluences, full SMC alignment).
+# SESSION RULES (soft guidance — the code-level pipeline already enforces these
+# as execution gates; your job is to reflect their severity in confidence, NOT
+# to issue a second, independent WAIT verdict that overrides the code path).
+# The code already blocks dead-zone / no-trade-session execution. If your
+# analysis produces BUY/SELL, report it honestly — the execution layer will
+# decide whether to actually place the trade. Do NOT self-censor to WAIT just
+# because the session is suboptimal; instead, reflect the reduced confidence
+# that a suboptimal session warrants.)
+1. DEAD_ZONE → reflect in confidence (lower it noticeably), but still analyze
+   the setup honestly so the audit trail shows what the market was doing.
+2. LONDON_NY_OVERLAP → prefer A+ setups (3+ confluences). Weaker setups in
+   overlap still get analyzed — just with appropriate confidence reduction.
 3. LONDON → LONDON_BREAKOUT strategy. Look for Asian range sweep + BOS confirmation.
 4. NEW_YORK → TREND_CONTINUATION from London. Don't reverse without strong SMC.
 5. TOKYO/SYDNEY → RANGE_TRADING only. Fade extremes, avoid breakout entries.
 6. london_open_window=true → wait for liquidity sweep THEN enter on BOS, never before.
-7. If pair_session_label is POOR or AVOID → lower confidence by 15% or WAIT.
-8. in_session_transition=true → extra caution. Reduce position size or WAIT.
+7. If pair_session_label is POOR or AVOID → lower confidence by 10-15%.
+8. in_session_transition=true → extra caution. Reduce confidence slightly.
 
 # GLOBAL MACRO RULES (Day 65)
 9. Forex is NOT isolated. Check macro_pair_bias and macro_regime FIRST.
@@ -223,11 +232,16 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 12. event_risk_elevated=true (FOMC/NFP/CPI within 60min) → reduce confidence by event_risk_penalty.
 13. trading_mode=DEFENSIVE (VIX elevated) → only A+ setups. CAUTIOUS → reduce confidence 10%.
 
-# CONFIDENCE CALIBRATION (be honest — fake confidence loses money)
+# CONFIDENCE CALIBRATION (be honest — the code pipeline decides whether
+# to execute; your confidence helps it calibrate position size, not whether
+# to self-veto. LOW confidence does NOT mean WAIT — it means the execution
+# layer should size conservatively or skip if overall confluence is weak.)
 - 85-100: A+ setup. 4+ confluences aligned. HTF + SMC + macro + session all agree.
 - 70-84:  A setup. 3+ confluences. One minor concern noted in self_critique.
-- 55-69:  B setup. 2 confluences. Smaller position size, tighter SL.
-- 0-54:   Not tradeable. Return WAIT with explicit reason.
+- 55-69:  B setup. 2 confluences. Smaller position size justified, tighter SL.
+- 30-54:  C setup. 1 confluence or mixed signals. Report honestly — the
+  execution layer will decide whether to trade at this confidence level.
+- 0-29:   Very weak. Report WAIT with reason, but still explain what you see.
 
 # TRADE PLAN REQUIREMENTS
 - Entry: precise price level (not zone), with reasoning.
@@ -1209,20 +1223,29 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         session_ctx      = session_ctx or {}
         intermarket_ctx  = intermarket_ctx or {}
 
-        win_rate      = memory_ctx.get("overall_win_rate", 50)
-        smc_score     = smc_ctx.get("smc_score", 50)
-        session_score = session_ctx.get("session_score", 50)
-        macro_score   = intermarket_ctx.get("macro_score", 50)
+        # FIX (agents-folder audit): exclude factors whose context was empty/missing
+        # from the weighted average and re-normalize. Previously all 7 factors
+        # defaulted to 50 (neutral) when context was unavailable, which diluted
+        # the confidence — a missing engine silently contributed a "meh" score
+        # instead of being excluded. Now only factors with real data participate.
+        available = {}  # factor_name -> (weight_fraction, value)
+        available["llm"]       = (0.30, llm_conf)
+        available["technical"] = (0.20, technical_conf)
+        available["sentiment"] = (0.10, sentiment_conf) if sentiment_ctx else None
+        available["history"]  = (0.08, memory_ctx.get("overall_win_rate", 50)) if memory_ctx else None
+        available["smc"]       = (0.10, smc_ctx.get("smc_score", 50)) if smc_ctx and smc_ctx.get("smc_score") is not None else None
+        available["session"]   = (0.12, session_ctx.get("session_score", 50)) if session_ctx and session_ctx.get("session_score") is not None else None
+        available["macro"]     = (0.10, intermarket_ctx.get("macro_score", 50)) if intermarket_ctx and intermarket_ctx.get("macro_score") is not None else None
 
-        weighted = (
-            llm_conf       * 0.30 +
-            technical_conf * 0.20 +
-            sentiment_conf * 0.10 +
-            win_rate       * 0.08 +
-            smc_score      * 0.10 +
-            session_score  * 0.12 +
-            macro_score    * 0.10
-        )
+        # Filter out None entries (missing data) and normalize weights
+        present = {k: (w, v) for k, (w, v) in available.items() if v is not None}
+        total_w = sum(w for w, _ in present.values())
+
+        if total_w > 0:
+            weighted = sum(v * w for _, (w, v) in present.values()) / total_w
+        else:
+            # No context data at all — fall back to LLM + technical only
+            weighted = (llm_conf * 0.60 + technical_conf * 0.40)
 
         # Session risk multiplier adjustment
         sess_risk = session_ctx.get("session_risk_mult", 1.0)
@@ -1279,39 +1302,58 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             _ma_test_mode = False
 
         _session_gate_penalty_applied = False
-        _session_gate_reason = ""
+        _session_gate_reasons = []  # track ALL reasons, not just the last one
+        _session_gate_multipliers = []  # track each multiplier applied
 
         if not _ma_test_mode:
             if session_ctx.get("is_dead_zone"):
-                # Soft penalty instead of collapse; keep the analysis signal alive.
-                weighted *= 0.85
+                _multiplier = 0.85
+                weighted *= _multiplier
                 _session_gate_penalty_applied = True
-                _session_gate_reason = f"dead_zone ({session_ctx.get('current_session', '?')})"
+                _session_gate_reasons.append(
+                    f"dead_zone ({session_ctx.get('current_session', '?')})"
+                )
+                _session_gate_multipliers.append(("dead_zone", _multiplier))
 
             if not session_ctx.get("session_trade_allowed", True):
-                weighted *= 0.9
+                _multiplier = 0.9
+                weighted *= _multiplier
                 _session_gate_penalty_applied = True
-                _session_gate_reason = (
+                _session_gate_reasons.append(
                     f"session_trade_allowed=False ({session_ctx.get('current_session', '?')})"
                 )
+                _session_gate_multipliers.append(("session_trade_allowed", _multiplier))
 
             if not session_ctx.get("fusion_allowed", True):
-                weighted *= 0.95  # mild penalty — SMC alignment is one factor
+                _multiplier = 0.95  # mild penalty — SMC alignment is one factor
+                weighted *= _multiplier
                 _session_gate_penalty_applied = True
-                _session_gate_reason = (
+                _session_gate_reasons.append(
                     f"fusion_allowed=False "
                     f"(score={session_ctx.get('fusion_score', '?')}, "
                     f"grade={session_ctx.get('fusion_grade', '?')})"
                 )
+                _session_gate_multipliers.append(("fusion_allowed", _multiplier))
 
         # Stash the penalty info on the function's return path via instance
         # attribute so analyze() can pick it up and add it to master_ctx.
-        # (Cannot return tuple here without changing the signature widely.)
+        # FIX (agents-folder audit): stores ALL reasons and multipliers,
+        # not just the last one.  Old code used fragile substring matching
+        # on a single reason string, so when two+ penalties applied
+        # (common: dead zone + session_trade_allowed=False), only the
+        # last was recorded in the audit trail.
         try:
             self._last_session_gate_penalty = {
                 "applied": _session_gate_penalty_applied,
-                "reason": _session_gate_reason,
-                "multiplier": 0.85 if "dead_zone" in _session_gate_reason else 0.9 if "trade_allowed" in _session_gate_reason else 0.95,
+                "reasons": _session_gate_reasons,
+                "multipliers": _session_gate_multipliers,
+                "combined_multiplier": (
+                    1.0 if not _session_gate_multipliers
+                    else max(0.01, 1.0 - sum(
+                        (1.0 - m) for _, m in _session_gate_multipliers
+                    ))
+                ) if _session_gate_penalty_applied else 1.0,
+                "reason": "; ".join(_session_gate_reasons) if _session_gate_reasons else "",
             }
         except Exception:
             pass

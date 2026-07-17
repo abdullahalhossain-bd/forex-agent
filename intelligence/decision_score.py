@@ -158,8 +158,13 @@ class DecisionScorer:
             if f.direction == result.final_direction and f.is_meaningful
         )
 
-        # Setup quality rating (only if direction is BUY/SELL)
-        # Lowered thresholds — original was too strict, blocking most trades.
+        # Confidence-pipeline simplification: continuous confidence formula.
+        # Previously: two independent hard thresholds (aligned_pct AND abs_net)
+        # that BOTH had to clear, else setup_quality=AVOID and confidence=0.
+        # Now: a single continuous confidence from net_score (no cliff),
+        # and quality bands are purely informational labels — they no longer
+        # force confidence to zero.  Weak setups get low-but-nonlinear
+        # confidence instead of being killed.
         if result.final_direction in ("BUY", "SELL"):
             aligned_pct = (result.aligned_factors / max(result.total_factors, 1)) * 100
             abs_net = abs(result.net_score)
@@ -170,12 +175,23 @@ class DecisionScorer:
             elif aligned_pct >= 20 and abs_net >= 8:
                 result.setup_quality = "B"
             else:
-                result.setup_quality = "AVOID"
-            # Base confidence from net score — lowered starting point so modest edges still carry a usable confidence
-            result.confidence = min(95.0, 25.0 + abs_net * 0.9)
+                result.setup_quality = "C"  # was "AVOID" — now just a weak label
+            # Continuous confidence: linear ramp from ~10 (near-zero edge)
+            # to ~95 (very strong edge).  No cliff — every net_score > 3
+            # produces a usable, nonzero confidence.
+            result.confidence = min(95.0, max(10.0, 10.0 + abs_net * 1.2))
         else:
-            result.setup_quality = "AVOID"
+            result.setup_quality = "NEUTRAL"
             result.confidence = 0.0
+
+        from utils.confidence_trace import confidence_trace
+        confidence_trace.record(
+            module="decision_score",
+            before=abs(result.net_score),
+            after=result.confidence,
+            reason=f"direction={result.final_direction}, quality={result.setup_quality}, "
+                   f"net={result.net_score}, aligned={result.aligned_factors}/{result.total_factors}",
+        )
 
         return result
 

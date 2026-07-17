@@ -35,7 +35,10 @@ SCORE_WEIGHTS = {
     "confirmation_candle": 15,
 }
 
-MIN_TRADE_SCORE = 45   # Lowered so marginal-but-valid SMC setups are not discarded outright
+MIN_TRADE_SCORE = 45   # Soft floor (informational only) — score flows downstream as
+                       # confidence rather than being hard-blocked here.
+                       # The old code used this as a hard "signal=WAIT" cliff
+                       # that discarded all directional evidence below 45.
 
 
 class SMCEngine:
@@ -121,16 +124,28 @@ class SMCEngine:
             h4_sweep, h4_bos, h4_choch, nearest_ob, nearest_fvg,
             m15_sweep, m15_bos, m15_pat,
         )
-        grade  = self._rank_zone(score, factors)
-        tradeable = (
-            score >= MIN_TRADE_SCORE
-            or (
-                direction != "NEUTRAL"
-                and score >= 30
-                and sum(bool(v) for v in factors.values()) >= 2
-            )
+        # Compute grade from score + factors (informational only —
+        # not used as a hard gate anywhere downstream).
+        grade = self._rank_zone(score, factors)
+
+        # Confidence-pipeline simplification: score flows downstream as
+        # continuous confidence, not a hard WAIT cliff.
+        # Previously: `tradeable = score >= 45` (or a secondary path),
+        # `signal = direction if tradeable else "WAIT"` — this discarded
+        # directional evidence whenever score < 45.
+        # Now: signal always follows direction. The score becomes
+        # `smc_score` in the AI context, and downstream consumers
+        # (decision_score, signal_validator, decision_agent) decide
+        # whether the overall confluence is sufficient.
+        signal = direction if direction != "NEUTRAL" else "WAIT"
+
+        from utils.confidence_trace import confidence_trace
+        confidence_trace.record(
+            module="smc_engine",
+            before=score,
+            after=score,
+            reason=f"direction={direction}, score={score}/100, grade={grade} (no hard cutoff, MIN_TRADE_SCORE={MIN_TRADE_SCORE} is informational)",
         )
-        signal = direction if tradeable else "WAIT"
 
         result = {
             "symbol":        self.symbol,
@@ -274,7 +289,7 @@ class SMCEngine:
             return "A"
         if score >= MIN_TRADE_SCORE:
             return "B"
-        return "INVALID"
+        return "C"  # was "INVALID" — now just a weak label, not a block
 
     # ═══════════════════════════════════════════════════════
     # EXPLANATION BUILDER

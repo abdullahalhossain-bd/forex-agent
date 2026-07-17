@@ -59,7 +59,7 @@ MAX_DAILY_LOSS_PCT       = 1.5     # halt for day at -1.5%
 MAX_WEEKLY_LOSS_PCT      = 5.0     # halt for week at -5%
 MAX_DRAWDOWN_PCT         = 10.0    # halt completely at -10% (was 20%)
 MAX_OPEN_POSITIONS       = 3       # max 3 trades at once
-MAX_TRADES_PER_DAY       = 5       # max 5 trades/day
+MAX_TRADES_PER_DAY       = 20      # max 20 trades/day (synced with core.constants.MAX_TRADES_PER_DAY)
 MAX_CONSECUTIVE_LOSSES   = 3       # cooldown after 3 losses
 COOLDOWN_HOURS           = 4       # cooldown duration
 
@@ -229,7 +229,7 @@ class StrictRiskManager:
         # Check 6: Max trades per day
         if self.day_trade_count >= MAX_TRADES_PER_DAY:
             return RiskCheckResult(False,
-                f"MAX DAILY TRADES: {self.day_trade_count}/{MAX_TRADES_PER_DAY}",
+                f"MAX DAILY TRADES: {self.day_trade_count}/{MAX_TRADES_PER_DAY} | source=risk/strict_risk_manager.py:check() | config=MAX_TRADES_PER_DAY={MAX_TRADES_PER_DAY}",
                 state)
 
         # Check 7: Correlation control — same cluster conflict

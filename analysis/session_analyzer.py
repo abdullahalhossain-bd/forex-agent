@@ -421,7 +421,14 @@ class SessionAnalyzer:
             else:
                 issues.append(f"BOS required for {session} but not detected")
 
-        allowed      = not any("required" in issue for issue in issues)
+        # Confidence-pipeline simplification: fusion_allowed is now ALWAYS True.
+        # Previously: `allowed = not any("required" in issue ...)` which
+        # hard-blocked when SMC score was below the session minimum.
+        # Now: always allowed — low SMC scores flow downstream as reduced
+        # confidence rather than a kill-switch here.  The `issues` list
+        # is still populated so downstream consumers can see WHY the
+        # score was low and apply proportional penalties.
+        allowed = True
         fusion_score = smc_score   # score IS the SMC score — no hidden math
 
         if fusion_score >= 80:
@@ -431,7 +438,15 @@ class SessionAnalyzer:
         elif fusion_score >= max(12, reqs["min_smc_score"] - 4):
             grade = "B"
         else:
-            grade = "INVALID"
+            grade = "C"  # was "INVALID" — now just a low grade, not a block
+
+        from utils.confidence_trace import confidence_trace
+        confidence_trace.record(
+            module="session_analyzer_fusion",
+            before=fusion_score,
+            after=fusion_score,
+            reason=f"session={session}, smc={smc_score}, grade={grade}, issues={len(issues)} (fusion always allowed)",
+        )
 
         return {
             "fusion_allowed": allowed,

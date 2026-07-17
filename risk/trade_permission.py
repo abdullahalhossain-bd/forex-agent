@@ -95,6 +95,7 @@ class TradePermission:
 
         checks = []
         passed = 0
+        total = 0
 
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
         # The new `execution_filters` dict (produced by AnalysisAgent)
@@ -178,6 +179,115 @@ class TradePermission:
         })
         if ok: passed += 1
 
+        # ── ENTRY QUALITY: SOFT SCORING ───────────────────────────
+        # Runs BEFORE the confidence gate so penalties reduce the
+        # effective confidence.  Only extreme cases (SL/TP wrong side,
+        # averaging into losers, opposite-direction stacking) still
+        # hard-block.  All other entry-quality issues (exhaustion,
+        # indecision, small candles, chasing, etc.) become confidence
+        # penalties.  Entry quality alone NEVER rejects the trade.
+        _eq_penalty = 0
+        _conf_before_eq = conf
+        if risk_out.get("approved"):
+            try:
+                from risk.entry_quality_guardrails import run_all_entry_quality_checks
+                _df_eq = None
+                _ind_ctx = decision_out.get("ind_ctx", {}) or {}
+                _df_eq = decision_out.get("_df")
+                if _df_eq is None and isinstance(session_ctx, dict):
+                    _df_eq = session_ctx.get("_df")
+                _eq_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                if _df_eq is not None and len(_df_eq) > 0:
+                    _eq_result = run_all_entry_quality_checks(
+                        df=_df_eq,
+                        symbol=_eq_symbol,
+                        direction=decision_out.get("decision", "WAIT"),
+                        entry_price=float(risk_out.get("entry", 0) or 0),
+                        stop_loss=float(risk_out.get("sl_price", 0) or 0),
+                        take_profit=float(risk_out.get("tp_price", 0) or 0),
+                        ind_ctx=_ind_ctx,
+                    )
+                    _should_execute = _eq_result.get("should_execute", True)
+                    _eq_penalty = _eq_result.get("confidence_penalty", 0)
+                    _eq_report = _eq_result.get("per_check_report", [])
+                    _block_reason = _eq_result.get("block_reason")
+                    _quality_score = _eq_result.get("quality_score", 100)
+
+                    if not _should_execute:
+                        # EXTREME HARD BLOCK only (SL wrong side, TP wrong side,
+                        # averaging into losers, opposite-direction stacking)
+                        total += 1
+                        checks.append({
+                            "check":  "Entry quality guardrails",
+                            "passed": False,
+                            "detail": (
+                                f"EXTREME BLOCK: {_block_reason} "
+                                f"(quality={_quality_score}/100)"
+                            ),
+                        })
+                        log.info("[Entry Quality Report]")
+                        for _line in _eq_report:
+                            log.info(f"  {_line}")
+                        result = {
+                            "execution_allowed": False,
+                            "blocked_reason":    f"Entry quality: {_block_reason}",
+                            "failed_checks":     [
+                                {"check": "Entry quality guardrails",
+                                 "detail": f"EXTREME BLOCK: {_block_reason}"}
+                            ],
+                            "execution_action":  "NO TRADE",
+                            "allowed":       False,
+                            "passed":        passed,
+                            "total":         total,
+                            "checks":        checks,
+                            "final_action":  "NO TRADE",
+                            "entry":         risk_out.get("entry"),
+                            "sl":            risk_out.get("sl_price"),
+                            "tp":            risk_out.get("tp_price"),
+                            "lot":           risk_out.get("lot", 0),
+                            "rr":            risk_out.get("rr_ratio", 0),
+                        }
+                        log.info(
+                            f"[TradePermission] EXTREME BLOCK by entry quality: "
+                            f"{_block_reason} (quality={_quality_score}/100)"
+                        )
+                        return result
+                    else:
+                        # SOFT SCORING: apply penalty, always pass
+                        conf = max(0, conf - _eq_penalty)
+                        total += 1
+                        passed += 1
+                        _detail = f"quality={_quality_score}/100"
+                        if _eq_penalty > 0:
+                            _detail += (
+                                f", penalty=-{_eq_penalty}, "
+                                f"conf: {_conf_before_eq:.0f}% -> {conf:.0f}%"
+                            )
+                        else:
+                            _detail += ", all checks passed"
+                        checks.append({
+                            "check":  "Entry quality guardrails",
+                            "passed": True,
+                            "detail": _detail,
+                        })
+                        # Log detailed per-check report
+                        log.info("[Entry Quality Report]")
+                        for _line in _eq_report:
+                            log.info(f"  {_line}")
+                        if _eq_penalty > 0:
+                            log.info(f"  {'─' * 30}")
+                            log.info(f"  Total Penalty:     -{_eq_penalty}")
+                            log.info(f"  Confidence Before: {_conf_before_eq:.0f}")
+                            log.info(f"  Confidence After:  {conf:.0f}")
+                        else:
+                            log.info("  All checks passed - no penalty")
+                # If _df is None, skip guardrails (can't run without price data)
+            except ImportError:
+                log.debug("[TradePermission] entry_quality_guardrails not available - skipping")
+            except Exception as _eq_e:
+                log.warning(f"[TradePermission] Entry quality check error (non-fatal): {_eq_e}")
+        # ── END ENTRY QUALITY ──────────────────────────────────────
+
         # 4. Confidence
         ok   = conf >= self.MIN_CONFIDENCE
         checks.append({
@@ -229,9 +339,9 @@ class TradePermission:
                 "detail": detail,
             })
             if ok: passed += 1
-            total = 5
+            total += 5
         else:
-            total = 4
+            total += 4
 
         # ARCHITECTURAL FIX: account for execution_filters checks already added
         # at the top of this method. Each execution filter that was checked
@@ -345,103 +455,6 @@ class TradePermission:
             total += 1
 
         allowed = passed == total   # সব check pass করতে হবে
-
-        # ── Round-22 audit fix: Entry Quality Guardrails ───────────────
-        # R1 fix from risk/ folder audit. This 1,716-line module was built
-        # from a real-trade post-mortem (GBPUSD M5, 2026-07-02) but was
-        # NEVER wired into the live pipeline — 0 importers. It checks 12
-        # entry-quality red flags including:
-        #   1. Chasing filter (block entries after extended move without pullback)
-        #   2. SL must be swing-anchored
-        #   3. TP must have prior price-action test
-        #   4. Indecision candle filter
-        #   5. Indicator confluence required
-        #   6. Round number awareness
-        #   7-12. Additional post-mortem fixes (rejection wick, averaging
-        #         into losers, fresh high rejection, etc.)
-        #
-        # Now: if all other gates passed, run guardrails as the FINAL check
-        # before allowing the trade. If any BLOCK-severity flag fires, the
-        # trade is denied. WARNING-severity flags are logged but don't block.
-        if allowed and risk_out.get("approved"):
-            try:
-                from risk.entry_quality_guardrails import run_all_entry_quality_checks
-                _df = None
-                _ind_ctx = decision_out.get("ind_ctx", {}) or {}
-                # Round-30 fix F1: check decision_out["_df"] directly.
-                # Previously only checked inside `if isinstance(session_ctx, dict):`
-                # which meant if session_ctx was None, df was never found.
-                # Now: check decision_out first (set by trader.py L1258),
-                # then fall back to session_ctx.
-                _df = decision_out.get("_df")
-                if _df is None and isinstance(session_ctx, dict):
-                    _df = session_ctx.get("_df")
-                _eq_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
-                if _df is not None and len(_df) > 0:
-                    _eq_result = run_all_entry_quality_checks(
-                        df=_df,
-                        symbol=_eq_symbol,
-                        direction=decision_out.get("decision", "WAIT"),
-                        entry_price=float(risk_out.get("entry", 0) or 0),
-                        stop_loss=float(risk_out.get("sl_price", 0) or 0),
-                        take_profit=float(risk_out.get("tp_price", 0) or 0),
-                        ind_ctx=_ind_ctx,
-                    )
-                    _should_execute = _eq_result.get("should_execute", True)
-                    _block_reason = _eq_result.get("block_reason")
-                    _quality_score = _eq_result.get("quality_score", 100)
-                    _eq_warnings = _eq_result.get("warnings", [])
-
-                    if not _should_execute:
-                        checks.append({
-                            "check":  "Entry quality guardrails",
-                            "passed": False,
-                            "detail": f"BLOCKED: {_block_reason} (quality={_quality_score}/100)",
-                        })
-                        allowed = False
-                        result = {
-                            # New canonical fields
-                            "execution_allowed": False,
-                            "blocked_reason":    f"Entry quality: {_block_reason}",
-                            "failed_checks":     [{"check": "Entry quality guardrails",
-                                                   "detail": f"BLOCKED: {_block_reason}"}],
-                            "execution_action":  "NO TRADE",
-                            # Legacy fields
-                            "allowed":       False,
-                            "passed":        passed,
-                            "total":         total + 1,
-                            "checks":        checks,
-                            "final_action":  "NO TRADE",
-                            "entry":         risk_out.get("entry"),
-                            "sl":            risk_out.get("sl_price"),
-                            "tp":            risk_out.get("tp_price"),
-                            "lot":           risk_out.get("lot", 0),
-                            "rr":            risk_out.get("rr_ratio", 0),
-                        }
-                        log.info(
-                            f"[TradePermission] BLOCKED by entry quality guardrails: "
-                            f"{_block_reason} (quality={_quality_score}/100) | "
-                            f"Analysis verdict preserved upstream"
-                        )
-                        return result
-                    else:
-                        checks.append({
-                            "check":  "Entry quality guardrails",
-                            "passed": True,
-                            "detail": f"quality={_quality_score}/100" + (
-                                f" ({len(_eq_warnings)} warnings)" if _eq_warnings else ""
-                            ),
-                        })
-                        total += 1
-                        if _eq_warnings:
-                            log.debug(
-                                f"[TradePermission] Entry quality warnings: {_eq_warnings}"
-                            )
-                # If _df is None, skip guardrails (can't run without price data)
-            except ImportError:
-                log.debug("[TradePermission] entry_quality_guardrails not available — skipping")
-            except Exception as _eq_e:
-                log.warning(f"[TradePermission] Entry quality check error (non-fatal): {_eq_e}")
 
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
         # Previously: `final_action = decision_out.get("decision") if allowed else "NO TRADE"`

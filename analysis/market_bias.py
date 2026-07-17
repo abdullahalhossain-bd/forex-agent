@@ -179,9 +179,33 @@ class MarketBiasEngine:
             elif net <= -1: bias = 'SELL'
             else:           bias = 'NEUTRAL'
 
-        # Reduce confidence if conflicts
+        # Confidence-pipeline simplification: replace flat -15 × N penalty
+        # with diminishing-returns per conflict, capped so minor conflicts
+        # can no longer stack confidence to zero.
+        #
+        # Old:  confidence = max(0, confidence - 15 * len(warnings))
+        #   1 conflict → -15, 2 → -30, 3 → -45, 4 → -60 (crushed to 0)
+        #
+        # New:  each successive conflict deducts less than the previous.
+        #   1st conflict → -8, 2nd → -6, 3rd → -4, 4th+ → -3 each.
+        #   Total cap: confidence cannot be reduced below 25 by conflicts.
         if warnings:
-            confidence = max(0, confidence - 15 * len(warnings))
+            deduction_per_conflict = [8, 6, 4]  # diminishing
+            total_deduction = 0
+            for i in range(len(warnings)):
+                if i < len(deduction_per_conflict):
+                    total_deduction += deduction_per_conflict[i]
+                else:
+                    total_deduction += 3  # floor for extra conflicts
+            confidence = max(25, confidence - total_deduction)
+
+            from utils.confidence_trace import confidence_trace
+            confidence_trace.record(
+                module="market_bias",
+                before=min(100, confidence + total_deduction),
+                after=confidence,
+                reason=f"{len(warnings)} conflict(s), diminishing deduction -{total_deduction}, floored at 25",
+            )
 
         # ── Recommendation ─────────────────────────────────
         recommendation = self._recommendation(bias, confidence, warnings)

@@ -1582,31 +1582,98 @@ def run_all_entry_quality_checks(
     # 12. Exhaustion filter (NEW — USDJPY post-mortem)
     results.append(check_exhaustion_filter(df, direction))
 
+    # ── SOFT SCORING: penalties instead of hard blocks ────────────
+    # Each failed entry-quality check contributes a confidence penalty
+    # rather than a hard block.  Only extreme / safety cases (SL or TP
+    # on the WRONG SIDE, averaging into losers, opposite-direction
+    # stacking) still produce should_execute=False.
+    #
+    # Operator-specified penalty values:
+    #   Momentum exhaustion   -> -5 ~ -10  (mid: -8)
+    #   Small body candles    -> -3 ~ -8   (mid: -5)
+    #   Weak consolidation    -> -5
+    #   Low momentum          -> -5
+    #   Weak breakout         -> -5
+    #   Poor candle quality   -> -5
+
+    _PENALTY_MAP = {
+        "chasing_filter":             8,   # momentum exhaustion (mid -5 to -10)
+        "indecision_candles":         5,   # small body candles (mid -3 to -8)
+        "sl_swing_anchor":            3,   # WARNING: not structurally anchored
+        "tp_structure_validation":    3,   # WARNING: unconfirmed territory
+        "indicator_confluence":       5,   # low momentum / weak breakout
+        "round_number_tp":            2,   # minor
+        "rejection_wick_at_entry":    5,   # poor candle quality
+        "fresh_high_rejection":       5,   # weak breakout
+        "tp_above_unconfirmed_spike": 3,   # minor
+        "exhaustion_filter":          8,   # momentum exhaustion (mid -5 to -10)
+    }
+
+    _DISPLAY_NAMES = {
+        "chasing_filter":              "Chasing Filter",
+        "sl_swing_anchor":             "SL Swing Anchor",
+        "tp_structure_validation":     "TP Structure",
+        "indecision_candles":          "Indecision",
+        "indicator_confluence":        "Confluence",
+        "round_number_tp":             "Round Number TP",
+        "rejection_wick_at_entry":     "Rejection Wick",
+        "averaging_into_losers":       "Averaging",
+        "fresh_high_rejection":        "Fresh High Reject",
+        "tp_above_unconfirmed_spike":  "Spike TP",
+        "opposite_direction_stacking": "Opposite Stack",
+        "exhaustion_filter":           "Exhaustion",
+    }
+
+    # Extreme hard-blocks: only these keep should_execute=False
+    _EXTREME_FLAGS = {"averaging_into_losers", "opposite_direction_stacking"}
+    _EXTREME_REASON_KW = {"WRONG SIDE"}
+
     passed_count = sum(1 for r in results if r.passed)
-    block_count = sum(1 for r in results if not r.passed and r.severity == "BLOCK")
-    warning_count = sum(1 for r in results if not r.passed and r.severity == "WARNING")
-    all_passed = passed_count == len(results)
-    should_execute = block_count == 0
+    confidence_penalty = 0
+    per_check_report = []
+    extreme_block_reason = None
+    warning_reasons = []
 
-    block_reason = next(
-        (r.reason for r in results if not r.passed and r.severity == "BLOCK"), None
-    )
-    warnings = [r.reason for r in results if not r.passed and r.severity == "WARNING"]
+    for r in results:
+        display = _DISPLAY_NAMES.get(r.flag_name, r.flag_name)
+        if r.passed:
+            per_check_report.append(f"{display:<22} PASS")
+        else:
+            is_extreme = (
+                r.flag_name in _EXTREME_FLAGS
+                or any(kw in r.reason for kw in _EXTREME_REASON_KW)
+            )
+            if is_extreme:
+                per_check_report.append(f"{display:<22} BLOCK (extreme)")
+                extreme_block_reason = extreme_block_reason or r.reason
+            else:
+                penalty = _PENALTY_MAP.get(r.flag_name, 3)
+                confidence_penalty += penalty
+                per_check_report.append(f"{display:<22} FAIL (-{penalty})")
+                warning_reasons.append(r.reason)
 
-    # Quality score: 100 base - (blocks × 25) - (warnings × 10), clamped [0, 100]
-    quality_score = max(0, min(100, 100 - (block_count * 25) - (warning_count * 10)))
+    block_count = 1 if extreme_block_reason else 0
+    warning_count = len(warning_reasons)
+    should_execute = extreme_block_reason is None
+    block_reason = extreme_block_reason
+
+    # Quality score: 100 - total penalty, clamped [0, 100]
+    quality_score = max(0, min(100, 100 - confidence_penalty))
 
     return {
-        "all_passed":      bool(all_passed),
-        "passed_count":    int(passed_count),
-        "total_count":     len(results),
-        "block_count":     int(block_count),
-        "warning_count":   int(warning_count),
-        "should_execute":  bool(should_execute),
-        "results":         [r.to_dict() for r in results],
-        "block_reason":    block_reason,
-        "warnings":        warnings,
-        "quality_score":   int(quality_score),
+        "all_passed":           bool(passed_count == len(results)),
+        "passed_count":         int(passed_count),
+        "total_count":          len(results),
+        "block_count":          int(block_count),
+        "warning_count":        int(warning_count),
+        "should_execute":       bool(should_execute),
+        "results":              [r.to_dict() for r in results],
+        "block_reason":         block_reason,
+        "warnings":             warning_reasons,
+        "quality_score":        int(quality_score),
+        # NEW soft-scoring fields
+        "confidence_penalty":   int(confidence_penalty),
+        "per_check_report":     per_check_report,
     }
 
 

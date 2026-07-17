@@ -34,6 +34,30 @@ except ImportError:
     )
 
 # ─────────────────────────────────────────────────────────────
+# UNAVAILABLE SYMBOL TRACKING
+# ─────────────────────────────────────────────────────────────
+# Symbols that the broker doesn't support are remembered here
+# so downstream code can skip them silently instead of
+# triggering recovery pauses every cycle.
+_UNAVAILABLE_SYMBOLS: set = set()
+
+
+def mark_symbol_unavailable(symbol: str) -> None:
+    """Record that a symbol is not available on the current broker."""
+    _UNAVAILABLE_SYMBOLS.add(symbol.upper())
+
+
+def is_symbol_unavailable(symbol: str) -> bool:
+    """Check if a symbol has been confirmed unavailable on the broker."""
+    return symbol.upper() in _UNAVAILABLE_SYMBOLS
+
+
+def get_unavailable_symbols() -> set:
+    """Return the full set of unavailable symbols (for diagnostics)."""
+    return set(_UNAVAILABLE_SYMBOLS)
+
+
+# ─────────────────────────────────────────────────────────────
 # MT5 TIMEFRAME MAPPING
 # ─────────────────────────────────────────────────────────────
 # Built lazily — only resolved when MT5 is available, so importing
@@ -421,11 +445,20 @@ class DataFetcher:
             # locked wrapper, not a direct mt5.symbol_select() call.
             if not self._mt5_conn.symbol_select(symbol, True):
                 error_code, error_msg = mt5.last_error()
-                log.error(
-                    f"[MT5] Failed to select symbol '{symbol}': "
-                    f"code={error_code}, msg={error_msg}. "
-                    f"Check if symbol exists on your broker."
-                )
+                # code=-1 means symbol doesn't exist on this broker.
+                # Mark it so the system can skip it silently on future cycles
+                # instead of triggering recovery pauses.
+                if error_code == -1:
+                    mark_symbol_unavailable(symbol)
+                    log.info(
+                        f"[MT5] Symbol '{symbol}' not available on broker "
+                        f"(code=-1) — marked unavailable, will be skipped"
+                    )
+                else:
+                    log.error(
+                        f"[MT5] Failed to select symbol '{symbol}': "
+                        f"code={error_code}, msg={error_msg}"
+                    )
                 return None
 
             log.debug(f"[MT5] Symbol selected: {symbol}")

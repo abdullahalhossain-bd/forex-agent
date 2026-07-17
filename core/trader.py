@@ -784,7 +784,11 @@ class AITrader:
             # Don't send Telegram alert for market fetch failures — they're
             # common (market closed, symbol temporarily unavailable) and
             # would spam the user. Just log locally.
-            log.warning(f"[Market] {self.symbol} data fetch failed — skipping this cycle")
+            _is_unavailable = market_out.get("skipped") or "symbol_unavailable" in market_out.get("error", "")
+            if _is_unavailable:
+                log.debug(f"[Market] {self.symbol} skipped — not available on broker")
+            else:
+                log.warning(f"[Market] {self.symbol} data fetch failed — skipping this cycle")
             try:
                 from core.trade_decision_log import log_decision
                 log_decision(symbol=self.symbol, signal="NO TRADE",
@@ -796,6 +800,17 @@ class AITrader:
                 debugger.record_final("NO_TRADE", "Market data fetch failed")
                 debugger.log_cycle_summary()
                 debugger.save_to_file()
+            # Return WITHOUT "error" key for unavailable symbols — they must
+            # NOT count as cycle errors for recovery pause logic.
+            if _is_unavailable:
+                return {
+                    "symbol": self.symbol,
+                    "timeframe": self.timeframe,
+                    "version": self.VERSION,
+                    "final_action": "NO TRADE",
+                    "trade_allowed": False,
+                    "skipped_unavailable": True,
+                }
             return self._error_result(f"Market Agent: {market_out['error']}")
 
         # Record market data success
@@ -1684,6 +1699,17 @@ class AITrader:
 
         self._print_final(result)
 
+        # ── Phase 7: Structured per-decision audit log ──
+        # Emits a fixed-format, grep-parseable block with all individual
+        # confidence components (technical, ML, RL, LLM, master, SMC,
+        # session, fusion, confluence) plus bonuses, penalties, and the
+        # exact reason chain.  Pure logging — never mutates state.
+        try:
+            from utils.decision_logger import log_decision_block
+            log_decision_block(result, analysis_out)
+        except Exception as e:
+            log.warning(f"DecisionLogger error (non-fatal): {e}")
+
         # ── Day 81+ — Record final outcome in signal debugger ──
         if debugger:
             final_action = result.get("final_action") or result.get("decision", "WAIT")
@@ -2322,6 +2348,15 @@ class AITrader:
             "approval_mode": self._approval.mode_name,
         }
 
+    @staticmethod
+    def _rl_conf_100(rl_ctx: dict) -> float:
+        """Convert RL confidence from 0-1 scale to 0-100 scale."""
+        try:
+            v = float(rl_ctx.get("confidence", 0) or 0)
+            return min(99.0, v * 100) if v <= 1.0 else v
+        except (TypeError, ValueError):
+            return 0.0
+
     def _build_result(
         self,
         market_out,
@@ -2415,6 +2450,35 @@ class AITrader:
             "closed_trades": closed_trades or [],
             # Day 76 — full sizer breakdown for journal/telegram/dashboard.
             "position_sizing": risk_out.get("position_sizing"),
+
+            # ── Phase 6: Individual confidence source visibility ──
+            # Previously _build_result() was the bottleneck that collapsed
+            # all 10 confidence sources into 3 keys (rule_conf, llm_conf,
+            # confidence).  Now each source is individually accessible in
+            # the report dict so main.py, dashboards, and diagnostics can
+            # see exactly what each module contributed.
+            "master_confidence": (analysis_out.get("master_ctx") or {}).get("master_confidence", 0),
+            "master_signal": (analysis_out.get("master_ctx") or {}).get("master_signal", "WAIT"),
+            "ml_confidence": (analysis_out.get("ensemble") or {}).get("confidence", 0),
+            "ml_available": (analysis_out.get("ensemble") or {}).get("ml_available", True),
+            "rl_confidence": self._rl_conf_100(analysis_out.get("rl_agent") or {}),
+            "smc_score": (analysis_out.get("smc_ctx") or {}).get("smc_score", 0),
+            "smc_grade": (analysis_out.get("smc_ctx") or {}).get("smc_grade", "N/A"),
+            "session_score": (analysis_out.get("session_ctx") or {}).get("session_score", 0),
+            "session_confidence": (analysis_out.get("session_ctx") or {}).get("session_confidence", 0),
+            "session_grade": (analysis_out.get("session_ctx") or {}).get("session_grade", "N/A"),
+            "confluence_confidence": (analysis_out.get("confluence") or {}).get("confidence", 0),
+            "confluence_quality": (analysis_out.get("confluence") or {}).get("setup_quality", "UNKNOWN"),
+            "fusion_confidence": dec_out.get("_fusion_conf", 0),
+            "per_source_confidence": dec_out.get("per_source_confidence", {}),
+            # Raw aggregate confidence before voting adjustments (from decision_agent)
+            "raw_confidence": (dec_out.get("per_source_confidence") or {}).get("aggregate_raw", dec_out.get("confidence", 0)),
+            # Phase 7: confidence trace (full before/after audit trail)
+            "confidence_trace": dec_out.get("confidence_trace", []),
+            # Reasons list for the decision block logger
+            "reasons": dec_out.get("reasons", []),
+            # Pattern (from decision_agent extraction)
+            "pattern": dec_out.get("pattern"),
         }
 
     def _print_final(self, r: dict) -> None:
@@ -2959,6 +3023,17 @@ class AutonomousTraderSystem:
                     log.debug(f"[System] Weekend guard check skipped (non-fatal): {e}")
 
                 for symbol in active_symbols:
+                    # ── Skip symbols known to be unavailable on broker ──
+                    # Avoids wasting cycle time on 30+ non-existent symbols
+                    # (USOUSD, BTCUSD, etc.) that would all fail and
+                    # trigger spurious recovery pauses.
+                    try:
+                        from data.fetcher import is_symbol_unavailable
+                        if is_symbol_unavailable(symbol):
+                            continue
+                    except Exception:
+                        pass
+
                     trader = self.traders.get(symbol) or self._spawn_trader(symbol)
                     try:
                         if self._manual_pause_active():

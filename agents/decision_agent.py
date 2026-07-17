@@ -98,14 +98,16 @@ class DecisionAgent:
     SENTIMENT_AGREE_BOOST = 8
     SENTIMENT_DISAGREE_PENALTY = 10
 
-    # New: the decision engine's own combined confidence, computed from
-    # EVERY available layer (rule, LLM, MasterAnalyst, ML Ensemble, RL
-    # Agent, Unified Signal Engine, Adaptive Decision) via
-    # _aggregate_confidence(). If a BUY/SELL survives the vote but the
-    # cross-layer aggregate confidence is below this floor, the decision
-    # is downgraded to WAIT — trading is gated on system-wide agreement,
-    # not on whichever single layer happened to shout loudest.
-    MIN_TRADE_CONFIDENCE = 60.0  # Operator-requested floor: trade when final confidence >= 60%
+    # Confidence-pipeline simplification: consolidated the old
+    # MIN_TRADE_CONFIDENCE and CONFIDENCE_OVERRIDE_THRESHOLD into a
+    # single floor.  Previously both were 60.0 doing almost the same
+    # job in different code paths — a duplicated threshold that made
+    # the code harder to reason about.  Now: one constant, one place.
+    CONFIDENCE_FLOOR = 60.0  # Single consolidated confidence floor
+
+    # Keep backward-compatible aliases so any external reference to the
+    # old names still works.
+    MIN_TRADE_CONFIDENCE = CONFIDENCE_FLOOR
 
     # _aggregate_confidence() damps the weighted-average confidence based
     # on how much of the whole system (by weight) actually voted BUY/SELL
@@ -123,11 +125,8 @@ class DecisionAgent:
     AGG_DAMPING_FLOOR = 0.65
 
     # Log-driven fix (2026-07-17): used by the SignalFusion authoritative
-    # gate below. When the fusion engine abstains (fewer than 2 of 3
-    # layers agree), a single layer's own signal is still taken if its
-    # confidence clears this floor — per operator request, confidence
-    # >= 60% should be enough to trade even without multi-layer consensus.
-    CONFIDENCE_OVERRIDE_THRESHOLD = 60.0
+    # gate below.  Now an alias for the single consolidated floor.
+    CONFIDENCE_OVERRIDE_THRESHOLD = CONFIDENCE_FLOOR
 
     def __init__(self):
         # Day 53 — pattern-aware dynamic confidence scorer (optional)
@@ -645,13 +644,13 @@ class DecisionAgent:
                     ]
                     _directional = [c for c in _candidates if c[0] in ("BUY", "SELL")]
                     _best = max(_directional, key=lambda c: c[1], default=None)
-                    if _best is not None and _best[1] >= self.CONFIDENCE_OVERRIDE_THRESHOLD:
+                    if _best is not None and _best[1] >= self.CONFIDENCE_FLOOR:
                         _ov_signal, _ov_conf, _ov_layer = _best
                         log.info(
                             f"[DecisionAgent] SignalFusion gate abstained "
                             f"({_fs_signal}, consensus={_fs_agreement}) but "
                             f"{_ov_layer} alone is {_ov_signal} at {_ov_conf:.0f}% "
-                            f"(>= {self.CONFIDENCE_OVERRIDE_THRESHOLD:.0f}% floor) "
+                            f"(>= {self.CONFIDENCE_FLOOR:.0f}% floor) "
                             f"— overriding to trade on that signal"
                         )
                         return self._result(
@@ -659,7 +658,7 @@ class DecisionAgent:
                                 f"Confidence override: {_ov_layer} {_ov_signal} "
                                 f"{_ov_conf:.0f}% (SignalFusion consensus was "
                                 f"{_fs_signal}/{_fs_agreement}, but single-layer "
-                                f"confidence cleared the {self.CONFIDENCE_OVERRIDE_THRESHOLD:.0f}% floor)",
+                                f"confidence cleared the {self.CONFIDENCE_FLOOR:.0f}% floor)",
                             ], pattern=pattern, pair=pair, timeframe=timeframe,
                             regime=regime_label, analysis_out=analysis_out)
                     return self._result(

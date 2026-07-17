@@ -57,6 +57,16 @@ class CapitalTier:
     approval_mode: str           # manual / semi_auto / fully_auto
     tier_mult: float             # position size multiplier
 
+# Import from the single source of truth (core.constants).
+# Keeps TIERS in sync with get_max_trades_per_day().
+def _max_trades() -> int:
+    try:
+        from core.constants import get_max_trades_per_day
+        return get_max_trades_per_day()
+    except Exception:
+        return 20
+
+
 TIERS = {
     # Log-driven fix (2026-07-17): tier-based min_confidence used to be
     # 80/70/55, which meant a fresh/demo account (Tier 1, the default)
@@ -66,9 +76,9 @@ TIERS = {
     # max(tier.min_confidence, trade_permission.MIN_CONFIDENCE).
     # Unified to a flat 60% across all tiers so "confidence >= 60% →
     # trade" is true regardless of which tier the account is on.
-    1: CapitalTier(1, "Initial Live", 0.005, 0.015, 3, 60.0, "manual", 0.5),
-    2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, 5, 60.0, "semi_auto", 0.8),
-    3: CapitalTier(3, "Mature System", 0.01, 0.03, 7, 60.0, "fully_auto", 1.0),
+    1: CapitalTier(1, "Initial Live", 0.005, 0.015, _max_trades(), 60.0, "manual", 0.5),
+    2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, _max_trades(), 60.0, "semi_auto", 0.8),
+    3: CapitalTier(3, "Mature System", 0.01, 0.03, _max_trades(), 60.0, "fully_auto", 1.0),
 }
 
 
@@ -435,11 +445,16 @@ class LiveRiskManager:
         perm.checks.append({"check": "confidence", "passed": True, "detail": f"{confidence:.0f}% ≥ {min_conf:.0f}%"})
 
         # ── Check 3: Daily trade count ──────────────────────────────
-        if self._trades_today >= tier.max_trades_per_day:
-            perm.reject_reason = f"Max trades/day reached ({self._trades_today}/{tier.max_trades_per_day})"
+        _max_daily = tier.max_trades_per_day
+        if self._trades_today >= _max_daily:
+            perm.reject_reason = (
+                f"Max trades/day reached ({self._trades_today}/{_max_daily}) | "
+                f"source=risk/live_risk_manager.py:check_trade_permission() | "
+                f"config=TIERS[tier={tier.tier}].max_trades_per_day={_max_daily}"
+            )
             perm.checks.append({"check": "daily_trades", "passed": False, "detail": perm.reject_reason})
             return perm
-        perm.checks.append({"check": "daily_trades", "passed": True, "detail": f"{self._trades_today}/{tier.max_trades_per_day}"})
+        perm.checks.append({"check": "daily_trades", "passed": True, "detail": f"{self._trades_today}/{_max_daily}"})
 
         # ── Check 4: Spread check ───────────────────────────────────
         max_spread = 5.0  # max 5 pips spread
