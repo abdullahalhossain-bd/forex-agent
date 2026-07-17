@@ -426,3 +426,8 @@ timestamp,cycle,symbol,timeframe,session,decision,confidence,entry,sl,tp1,tp2,lo
 2026-07-16T19:41:34+00:00,4,AUDUSD,15m,New York,NO TRADE,70.0,0.69929,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
 2026-07-16T19:41:59+00:00,5,USDCAD,15m,New York,NO TRADE,70.0,1.40496,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
 2026-07-16T19:43:07+00:00,6,XAUUSD,15m,New York,NO TRADE,61.6,3976.12,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-17T07:16:22+00:00,1,EURUSD,15m,London/Tokyo,NO TRADE,49.6,1.14484,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-17T07:16:53+00:00,2,GBPUSD,15m,London/Tokyo,NO TRADE,70.0,1.34702,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-17T07:17:30+00:00,3,USDJPY,15m,London/Tokyo,NO TRADE,52.3,162.172,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-17T07:18:14+00:00,4,AUDUSD,15m,London/Tokyo,NO TRADE,49.6,0.69877,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-17T07:18:50+00:00,5,USDCAD,15m,London/Tokyo,NO TRADE,71.0,1.40322,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,

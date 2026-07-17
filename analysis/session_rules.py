@@ -175,12 +175,24 @@ LONDON_OPEN_WINDOW = {"start": 8, "end": 10}
 # the 30s can still represent a reasonably structured move). require_bos
 # is left as-is for LONDON/NEW_YORK/OVERLAP — BOS is a real structural
 # confirmation, not an arbitrary number, so it stays a hard requirement.
+#
+# Round-31 fix (log-driven recalibration, 2026-07-17): a 24h production
+# log (execution.log / trader.log) showed confidence 60-75% BUY signals
+# with good R:R (1:2) getting BLOCKED by this gate alone — 82 straight
+# "Fusion gate: SMC fusion rejected for NEW_YORK" rejections, with the
+# actual smc_score distribution mostly landing at 0-35 (median ~15-20),
+# only occasionally touching 30-35. The 30 requirement for NEW_YORK was
+# therefore rejecting almost everything, not filtering out genuinely bad
+# setups — the achievable range and the requirement barely overlapped.
+# Lowered min_smc_score another notch (30/40 → 20/30) so setups that
+# clear roughly the middle of the observed range can pass. require_bos
+# stays untouched — that's a real structural check, not a tunable score.
 SMC_REQUIREMENTS = {
-    "SYDNEY":            {"min_smc_score": 30, "require_bos": False, "require_ob": False},
-    "TOKYO":             {"min_smc_score": 30, "require_bos": False, "require_ob": False},
-    "LONDON":            {"min_smc_score": 40, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
-    "NEW_YORK":          {"min_smc_score": 30, "require_bos": True,  "require_ob": False},
-    "LONDON_NY_OVERLAP": {"min_smc_score": 30, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
+    "SYDNEY":            {"min_smc_score": 20, "require_bos": False, "require_ob": False},
+    "TOKYO":             {"min_smc_score": 20, "require_bos": False, "require_ob": False},
+    "LONDON":            {"min_smc_score": 30, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
+    "NEW_YORK":          {"min_smc_score": 20, "require_bos": True,  "require_ob": False},
+    "LONDON_NY_OVERLAP": {"min_smc_score": 20, "require_bos": True,  "require_ob": False},   # ← ob False করা হলো
     "DEAD_ZONE":         {"min_smc_score": 999, "require_bos": True, "require_ob": True},    # ← 999 এ ফেরত আনা হলো
-    "BETWEEN_SESSIONS":  {"min_smc_score": 30, "require_bos": False, "require_ob": False},
+    "BETWEEN_SESSIONS":  {"min_smc_score": 20, "require_bos": False, "require_ob": False},
 }

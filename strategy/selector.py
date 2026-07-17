@@ -173,7 +173,7 @@ class StrategySelector:
 
         # ── Step 1: Determine raw strategy family ──────────
         strategy = self._pick_strategy(
-            r_regime, r_direction, r_strength, mtf_bias, structure
+            r_regime, r_direction, r_strength, mtf_bias, structure, r_volatility
         )
 
         # ── Step 2: Conflict check — MTF বা structure এ কি conflict আছে ──
@@ -261,6 +261,7 @@ class StrategySelector:
         strength:     str,
         mtf_bias:     Optional[Dict[str, Any]],
         structure:    Optional[Dict[str, Any]],
+        volatility:   str = "NORMAL",
     ) -> str:
         """
         মূল routing logic।
@@ -271,7 +272,22 @@ class StrategySelector:
              (pullback to OB/FVG)
           4. TRENDING + strong → TREND_FOLLOW
           5. CHoCH detected → REVERSAL
-          6. Fallback → WAIT
+          6. CHOPPY (ADX<15) + some volatility → SCALP (small, tactical)
+          7. Fallback → WAIT
+
+        ── Round-32 fix (log-driven, 2026-07-17): CHOPPY previously fell
+        straight through to the "Unknown regime → WAIT" fallback, i.e.
+        it was a hard-coded no-trade regime with STRATEGY_SCALP fully
+        built (module list + avoid list already defined above) but never
+        reachable. That's the right call when the market is ALSO dead
+        quiet (LOW volatility — nothing to scalp), but a genuinely choppy
+        market can still have small tradeable swings; the book's "not
+        worth trading" note (market_regime.py) is about swing/trend
+        strategies, not necessarily about tight, small-size scalping.
+        So: CHOPPY + LOW volatility → still WAIT (truly dead market).
+        CHOPPY + NORMAL/HIGH volatility → SCALP, with size already
+        naturally capped by _position_multiplier's WEAK-strength 0.6x
+        (CHOPPY almost always reports WEAK strength).
         """
         # CHoCH detected → reversal priority
         if structure:
@@ -310,6 +326,11 @@ class StrategySelector:
             if self.conservative:
                 return STRATEGY_WAIT
             return STRATEGY_TREND_FOLLOW
+
+        if regime == "CHOPPY":
+            if volatility == "LOW":
+                return STRATEGY_WAIT
+            return STRATEGY_SCALP
 
         # Unknown regime
         return STRATEGY_WAIT
@@ -434,6 +455,7 @@ class StrategySelector:
         if strategy == STRATEGY_SMC_PULLBACK:    base += 5
         if strategy == STRATEGY_REVERSAL:        base -= 5  # reversal risky
         if strategy == STRATEGY_BREAKOUT:        base -= 5  # false breakout risk
+        if strategy == STRATEGY_SCALP:           base -= 10  # CHOPPY-routed, extra caution
 
         return max(0, min(100, int(base)))
 

@@ -4290,5 +4290,155 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 144,
+    "timestamp": "2026-07-17T07:16:22.719277",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 49.6,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "sideways",
+    "rsi": 62.76938,
+    "patterns": [
+      "doji",
+      "evening_star"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "Analysis pipeline returned NO TRADE \u2014 honoring upstream verdict (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 145,
+    "timestamp": "2026-07-17T07:16:53.202531",
+    "symbol": "GBPUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 70.0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "sideways",
+    "rsi": 53.60664,
+    "patterns": [
+      "bearish_pin_bar"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "Analysis pipeline returned NO TRADE \u2014 honoring upstream verdict (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 146,
+    "timestamp": "2026-07-17T07:17:30.805786",
+    "symbol": "USDJPY",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 52.3,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "bearish",
+    "rsi": 24.82581,
+    "patterns": [
+      "evening_star",
+      "three_bar_reversal_bearish",
+      "breakout_bearish",
+      "bearish_pin_bar"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "SELL",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for LONDON (score=25/100, grade=INVALID) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 147,
+    "timestamp": "2026-07-17T07:18:13.941580",
+    "symbol": "AUDUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 49.6,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "sideways",
+    "rsi": 53.59425,
+    "patterns": [],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for LONDON (score=0/100, grade=INVALID) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 148,
+    "timestamp": "2026-07-17T07:18:50.129697",
+    "symbol": "USDCAD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 71.0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "TRENDING",
+    "trend": "strong_bearish",
+    "rsi": 38.86153,
+    "patterns": [
+      "evening_star",
+      "three_bar_reversal_bearish",
+      "doji",
+      "doji"
+    ],
+    "rule_signal": "STRONG_SELL",
+    "llm_signal": "SELL",
+    "reasons": [
+      "Fusion gate: SMC fusion rejected for LONDON (score=20/100, grade=INVALID) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]
