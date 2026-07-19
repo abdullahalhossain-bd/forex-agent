@@ -204,6 +204,17 @@ def run_unified_backtest(
     from backtest.broker_sim import BrokerSimulator, DEFAULT_SPREAD_PIPS
     from backtest.metrics import calculate_metrics
 
+    # CRITICAL FIX (reproducibility -- same bug as run_backtest.py's legacy
+    # loop): BrokerSimulator draws slippage from np.random.normal() and
+    # partial-fill behavior from stdlib random.random()/random.uniform(),
+    # neither seeded anywhere in this module. Without this, repeat runs of
+    # the identical shared-kernel backtest will silently drift in P&L just
+    # like the legacy loop did before it was fixed.
+    import random as _random
+    _random.seed(42)
+    import numpy as _np
+    _np.random.seed(42)
+
     try:
         trader = _make_backtest_trader(symbol, timeframe, starting_balance, db_path)
     except Exception as e:
@@ -240,6 +251,15 @@ def run_unified_backtest(
                 result.hold_bars = i - opened_at
                 closed_trades.append(result)
                 entry_bar.pop(trade.trade_id, None)
+                # FIX (visibility gap): previously only OPEN was logged, never
+                # how/when a trade resolved -- made it impossible to tell
+                # from the log alone whether the strategy was even taking
+                # exits (vs. e.g. every trade silently timing out).
+                if verbose:
+                    log.info(f"  [{current_time}] {result.exit_reason} {result.direction} "
+                              f"{result.symbol} @ {result.exit_price:.5f} "
+                              f"pnl=${result.pnl_usd:.2f} ({result.pnl_pips:+.1f}p) "
+                              f"balance=${broker.get_balance():.2f}")
             else:
                 trade.hold_bars = i - opened_at
                 if trade.hold_bars > max_hold_bars:
@@ -247,6 +267,11 @@ def run_unified_backtest(
                     closed.hold_bars = trade.hold_bars
                     closed_trades.append(closed)
                     entry_bar.pop(trade.trade_id, None)
+                    if verbose:
+                        log.info(f"  [{current_time}] TIMEOUT {closed.direction} "
+                                  f"{closed.symbol} @ {closed.exit_price:.5f} "
+                                  f"pnl=${closed.pnl_usd:.2f} ({closed.pnl_pips:+.1f}p) "
+                                  f"balance=${broker.get_balance():.2f}")
                 else:
                     still_open.append(trade)
         open_trades = still_open

@@ -15,9 +15,25 @@ logging.basicConfig(level=logging.WARNING, format="%(asctime)s | %(levelname)-8s
 log = logging.getLogger("backtest_runner")
 log.setLevel(logging.INFO)
 
+def _stable_symbol_hash(symbol: str) -> int:
+    """CRITICAL FIX: Python's built-in hash() randomizes string hashes per
+    process (PYTHONHASHSEED, on by default since 3.3) for security reasons.
+    Using hash(symbol) as part of a "reproducible" seed meant the *same*
+    --synthetic backtest command produced a genuinely different random
+    price series on every single run -- explaining why repeated "identical"
+    backtests showed wildly different win rates/PF/drawdown (29 trades
+    WR=55% one run, 23 trades WR=43% the next, 25 trades WR=96% after
+    that, all from the "same" command). A backtest that can't reproduce
+    itself cannot be statistically validated at all. Fixed with a stable,
+    deterministic hash (sum of char codes) that gives the same value in
+    every process, every machine, every run.
+    """
+    return sum(ord(c) for c in symbol)
+
+
 def generate_synthetic_data(symbol, bars=500, seed=42):
     """Generate realistic synthetic OHLC data with proper candle structure."""
-    np.random.seed(seed + hash(symbol) % 1000)
+    np.random.seed((seed + _stable_symbol_hash(symbol)) % (2**32 - 1))
     dates = pd.date_range("2023-01-01", periods=bars, freq="1h")
 
     # Build close prices with trend + volatility cycles
@@ -85,7 +101,20 @@ def generate_synthetic_data(symbol, bars=500, seed=42):
 
     return df
 
-def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=0.02, warmup_bars=50, max_open_trades=3, max_hold_bars=100, spread_pips=None, commission_per_lot=7.0, slippage_pips=2.0, verbose=False):
+def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=0.02, warmup_bars=50, max_open_trades=3, max_hold_bars=100, spread_pips=None, commission_per_lot=7.0, slippage_pips=2.0, verbose=False, sim_seed=42):
+    # CRITICAL FIX (reproducibility, part 2): BrokerSimulator draws slippage
+    # from np.random.normal() and partial-fill behavior from Python's stdlib
+    # `random` module -- a SEPARATE generator from numpy's, never seeded
+    # anywhere in this file. Even after fixing the synthetic-data seed, repeat
+    # runs of the identical backtest still drifted in P&L ($-531 / -527 /
+    # -551 across 3 identical-trade-count runs) purely from unseeded
+    # execution-cost simulation. Seed both here, explicitly, so the full
+    # pipeline (data -> signals -> simulated execution) is one deterministic
+    # function of (data, seed) -- a hard prerequisite for any of the
+    # Monte Carlo/bootstrap/t-test results to mean anything.
+    import random as _random
+    _random.seed(sim_seed)
+    np.random.seed(sim_seed)
     from backtest.broker_sim import BrokerSimulator, DEFAULT_SPREAD_PIPS
     from backtest.metrics import calculate_metrics
     from analysis._engine_utils import atr_value
@@ -115,8 +144,28 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
     SIGNAL_COOLDOWN_BARS = 20  # mirrors stop_hunt_signal_engine.py's 20-candle scan window
     last_signal = {}  # (strategy_name, action) -> {"bar": i, "sl": sl}
     total_bars = len(df)
+
+    # ROBUSTNESS FIX #1 (confidence gate): the unified engine's consensus
+    # already computes a Low/Medium/High confidence bucket, but this loop
+    # used to take ANY BUY/SELL regardless of bucket. Low-confidence =
+    # exactly one engine voted with no corroboration — that's the highest
+    # false-positive-rate bucket. Requiring Medium+ cuts trade *count* but
+    # raises trade *quality*, which is the stated goal (robustness > frequency).
+    MIN_CONFIDENCE = {"Low": 0, "Medium": 1, "High": 2}
+    MIN_CONFIDENCE_REQUIRED = 1  # Medium or better
+
+    # ROBUSTNESS FIX #2 (correlation cap): two concurrent same-symbol,
+    # same-direction trades are not two independent statistical draws --
+    # they're ~one bet with double commission/slippage drag, and they
+    # inflate the apparent trade count that Monte Carlo/t-test treat as
+    # independent samples. Block opening a new trade in the same direction
+    # on the same symbol while one is already open (max_open_trades still
+    # caps total concurrent exposure across directions/strategies).
+    open_directions = set()  # currently-open {action} for this symbol
+
     log.info(f"Starting: {symbol} {timeframe} | {total_bars} bars | balance=${starting_balance} | risk={risk_pct*100}%")
-    rejection_stats = {"NO_TRADE": 0, "WAIT": 0, "engine_error": 0, "max_trades": 0, "total_bars": 0}
+    rejection_stats = {"NO_TRADE": 0, "WAIT": 0, "engine_error": 0, "max_trades": 0, "total_bars": 0,
+                        "low_confidence": 0, "correlated_direction": 0}
     for i in range(warmup_bars, total_bars):
         current_time = df.index[i]
         rejection_stats["total_bars"] += 1
@@ -128,6 +177,12 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
                 result.hold_bars = i - opened_at
                 closed_trades.append(result)
                 entry_bar.pop(trade.trade_id, None)
+                # FIX (visibility gap): previously only OPEN was logged -- no
+                # way to see from the log whether/how trades resolved.
+                if verbose:
+                    log.info(f"  [{current_time}] {result.exit_reason} {result.direction} {result.symbol} "
+                             f"@ {result.exit_price:.5f} pnl=${result.pnl_usd:.2f} ({result.pnl_pips:+.1f}p) "
+                             f"balance=${broker.get_balance():.2f}")
             else:
                 trade.hold_bars = i - opened_at
                 if trade.hold_bars > max_hold_bars:
@@ -135,8 +190,15 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
                     closed.hold_bars = trade.hold_bars
                     closed_trades.append(closed)
                     entry_bar.pop(trade.trade_id, None)
+                    if verbose:
+                        log.info(f"  [{current_time}] TIMEOUT {closed.direction} {closed.symbol} "
+                                 f"@ {closed.exit_price:.5f} pnl=${closed.pnl_usd:.2f} ({closed.pnl_pips:+.1f}p) "
+                                 f"balance=${broker.get_balance():.2f}")
                 else: still_open.append(trade)
         open_trades = still_open
+        # Rebuild the correlation set from what's ACTUALLY still open (not
+        # incrementally), so it never drifts out of sync with real state.
+        open_directions = {t.direction for t in open_trades}
         if len(open_trades) >= max_open_trades:
             rejection_stats["max_trades"] += 1
             equity_curve.append(broker.get_balance()); continue
@@ -159,6 +221,26 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
                 log.info(f"  [{current_time}] WAIT — SH={sh_sig} ICT={ict_sig} PA={pa_sig} patterns={pat_count} "
                          f"BUY={consensus.get('buy_score',0)} SELL={consensus.get('sell_score',0)}")
             equity_curve.append(broker.get_balance()); continue
+
+        # ROBUSTNESS FIX #1: reject Low-confidence consensus outright. Low
+        # means exactly one engine voted with no corroboration -- letting
+        # these through was pure false-positive fuel with no offsetting
+        # edge evidence.
+        conf_bucket = consensus.get("confidence", "Low")
+        if MIN_CONFIDENCE.get(conf_bucket, 0) < MIN_CONFIDENCE_REQUIRED:
+            rejection_stats["low_confidence"] += 1
+            equity_curve.append(broker.get_balance()); continue
+
+        # ROBUSTNESS FIX #2: don't stack a second same-direction trade on
+        # the same symbol on top of one already open. Two same-direction
+        # positions are correlated risk, not two independent statistical
+        # samples -- stacking them inflates trade count without adding real
+        # diversification, which is what was destabilizing the Monte
+        # Carlo/t-test/bootstrap results.
+        if action in open_directions:
+            rejection_stats["correlated_direction"] += 1
+            equity_curve.append(broker.get_balance()); continue
+
         signal_data = None; strategy_name = "unified"
         for en, er in [("stop_hunt", result.get("stop_hunt", {}).get("signal", {})), ("ict_amd", result.get("ict_amd", {}).get("signal", {})), ("pa", result.get("multi_strategy_pa", {}).get("signal", {}))]:
             if er.get("action") == action: signal_data = er; strategy_name = en; break
@@ -189,7 +271,17 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
             equity_curve.append(broker.get_balance()); continue
         last_signal[key] = {"bar": i, "sl": sl}
 
-        risk_amount = broker.get_balance() * risk_pct
+        # ROBUSTNESS FIX #3: scale risk with conviction instead of firing
+        # every trade at the same fixed 2% fraction. A grade-C fallback
+        # trade (no sub-engine confirmed the consensus action; generic
+        # 1.5x/3x ATR stops) and a High-confidence 2-engine ICT trade were
+        # previously sized identically. Fractional sizing by grade/confidence
+        # reduces the variance of the return stream -- which directly helps
+        # Sharpe/t-stat stability -- without requiring any extra "edge".
+        size_mult = {"High": 1.0, "Medium": 0.7}.get(conf_bucket, 0.5)
+        if grade == "C":
+            size_mult = min(size_mult, 0.5)  # unconfirmed fallback setup -> half size, floor
+        risk_amount = broker.get_balance() * risk_pct * size_mult
         sl_dist = abs(entry - sl) / (0.01 if symbol.endswith("JPY") else 0.0001)
         pvl = 10.0
         lot = risk_amount / (sl_dist * pvl) if sl_dist > 0 else 0.01
@@ -197,7 +289,8 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
         trade = broker.open_trade(symbol=symbol, direction=action, entry_price=entry, sl=sl, tp=tp, lot=lot, bar_time=current_time, confidence=int(conf), strategy=strategy_name, confluence_factors=conf_factor, quality_grade=grade)
         entry_bar[trade.trade_id] = i
         open_trades.append(trade)
-        if verbose: log.info(f"  [{current_time}] OPEN {action} {symbol} @ {entry:.5f} lot={lot} ({strategy_name})")
+        open_directions.add(action)
+        if verbose: log.info(f"  [{current_time}] OPEN {action} {symbol} @ {entry:.5f} lot={lot} (mult={size_mult}x) ({strategy_name})")
         equity_curve.append(broker.get_balance())
     last_close = float(df.iloc[-1]["close"]); last_time = df.index[-1]
     for trade in open_trades: closed_trades.append(broker.close_trade(trade, last_close, last_time, "end_of_backtest"))

@@ -465,7 +465,27 @@ class ICTAMDSignalEngine:
 
         Weak zone sweeps → manipulation_detected = False (not reliable).
         """
-        london_df = _filter_by_session(df, LONDON_SESSION_START, LONDON_SESSION_END)
+        # CRITICAL FIX (stale-zone bug): this used to call
+        # _filter_by_session(df, ...) directly on the full, ever-growing
+        # history passed in (df.iloc[:i+1] in the backtest loop spans day 1
+        # through the current day). _filter_by_session only matches on
+        # hour-of-day with NO date restriction, so "London session" silently
+        # meant "every London-session candle ever seen so far" -- weeks or
+        # months mixed together. A stop-hunt/manipulation sweep detected
+        # against that mixed set could anchor to an arbitrary old candle
+        # (e.g. a January high) and get reused as "today's" setup in March,
+        # producing an FVG entry price hundreds of pips from the actual
+        # current market -- impossible to fill in real trading, and the
+        # direct cause of the repeated stale entry prices (1.05268, 0.96577,
+        # 0.93680, ...) recurring for weeks in the backtest log. Restrict to
+        # the current trading day first (matching _step1_accumulation's
+        # own today_df pattern), THEN filter by session hour.
+        try:
+            latest_date = df.index[-1].date()
+            today_df = df[df.index.date == latest_date]
+        except Exception:
+            today_df = df
+        london_df = _filter_by_session(today_df, LONDON_SESSION_START, LONDON_SESSION_END)
 
         # If no session info, fall back to last 20 candles
         scan_df = london_df if len(london_df) >= 3 else df.tail(20)
