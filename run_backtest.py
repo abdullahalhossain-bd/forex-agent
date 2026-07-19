@@ -7,9 +7,9 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.setdefault("TEST_MODE", "true")
-os.environ.setdefault("MT5_LOGIN", "12345")
-os.environ.setdefault("MT5_PASSWORD", "dummy")
-os.environ.setdefault("MT5_SERVER", "dummy")
+os.environ.setdefault("MT5_LOGIN", "108647429")
+os.environ.setdefault("MT5_PASSWORD", "O@L5PnXe")
+os.environ.setdefault("MT5_SERVER", "MetaQuotes-Demo")
 import numpy as np, pandas as pd
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("backtest_runner")
@@ -217,6 +217,102 @@ def run_backtest(symbol, df, timeframe="H1", starting_balance=10000.0, risk_pct=
 
     return {"trades": closed_trades, "metrics": metrics, "equity_curve": equity_curve, "symbol": symbol, "timeframe": timeframe, "bars": total_bars, "rejection_stats": rejection_stats}
 
+def _load_pair_df(pair: str, tf: str, bars: int, synthetic: bool):
+    """Single data-loading path shared by run_pairs() and main() — MT5 or
+    synthetic. Returns None (with a printed reason) if data can't be loaded.
+    """
+    if synthetic:
+        return generate_synthetic_data(pair, bars=bars)
+    try:
+        import MetaTrader5 as mt5
+    except ImportError:
+        print("MT5 not installed. Use --synthetic.")
+        return None
+    if not mt5.initialize():
+        print("ERROR: MT5 not available. Use --synthetic.")
+        return None
+    tf_map = {"M15": mt5.TIMEFRAME_M15, "M30": mt5.TIMEFRAME_M30, "H1": mt5.TIMEFRAME_H1,
+              "H4": mt5.TIMEFRAME_H4, "D1": mt5.TIMEFRAME_D1}
+    rates = mt5.copy_rates_from_pos(pair, tf_map[tf], 0, bars)
+    mt5.shutdown()
+    if rates is None or len(rates) == 0:
+        print(f"No data for {pair}")
+        return None
+    df = pd.DataFrame(rates)
+    df["time"] = pd.to_datetime(df["time"], unit="s")
+    df.set_index("time", inplace=True)
+    df.rename(columns={"tick_volume": "volume"}, inplace=True)
+    # NOTE: no indicator computation here — audit fix (§6.5, four divergent
+    # RSI/ATR/ADX implementations). Indicators are now computed exactly once,
+    # inside backtest.unified_engine._build_market_out(), via the same
+    # canonical chain (data/indicator_registry -> data/indicators_ext ->
+    # data/indicators) MarketAgent uses live. Raw OHLCV is all this loader
+    # is responsible for.
+    return df
+
+
+def run_pairs(ns: "argparse.Namespace") -> list:
+    """Run the SHARED-KERNEL backtest (backtest.unified_engine.run_unified_backtest,
+    which drives the exact same AnalysisAgent -> DecisionAgent -> RiskEngine ->
+    PositionSizer core.trader.AITrader.evaluate_decision_core() Demo/Real use)
+    for one or more pairs, save CSVs, and return the list of
+    UnifiedBacktestResult objects.
+
+    This is the ONE backtest entry point used by both:
+      - `python run_backtest.py` (this script's own CLI, see main())
+      - `python main.py --mode backtest` (see main.py:_run_backtest())
+    Previously those were two disconnected/broken paths (§6.4 of the
+    execution-parity audit); now both call this function.
+    """
+    from backtest.unified_engine import run_unified_backtest
+
+    pairs = [p.strip().upper() for p in ns.pairs.split(",")] if getattr(ns, "pairs", "") else [ns.pair.upper()]
+    results = []
+    for pair in pairs:
+        print(f"\n{'='*60}\n  [Shared Kernel] Backtesting {pair} {ns.tf} | {ns.bars} bars\n{'='*60}\n")
+        df = _load_pair_df(pair, ns.tf, ns.bars, getattr(ns, "synthetic", False))
+        if df is None:
+            continue
+        result = run_unified_backtest(
+            symbol=pair, df=df, timeframe=ns.tf,
+            starting_balance=ns.balance,
+            max_open_trades=getattr(ns, "max_trades", 3),
+            max_hold_bars=getattr(ns, "max_hold", 100),
+            spread_pips=getattr(ns, "spread", None),
+            commission_per_lot=getattr(ns, "commission", 7.0),
+            slippage_pips=getattr(ns, "slippage", 2.0),
+            db_path=f"backtest/backtest_run_{pair}_{ns.tf}.db",
+            verbose=getattr(ns, "verbose", False),
+        )
+        results.append(result)
+        if result.error:
+            print(f"  ERROR: {result.error}")
+            continue
+        if result.metrics:
+            print(result.metrics.to_table())
+        if result.trades:
+            trades_df = pd.DataFrame([t.to_dict() for t in result.trades])
+            csv_path = f"backtest/results_{pair}_{ns.tf}.csv"
+            trades_df.to_csv(csv_path, index=False)
+            print(f"\n  Trades saved to: {csv_path}")
+        if result.rejection_stats:
+            total = result.rejection_stats.get("total_bars", 0)
+            if total:
+                print(f"\n  Rejection summary ({total} bars evaluated):")
+                for reason, count in sorted(result.rejection_stats.items(), key=lambda x: x[1], reverse=True):
+                    if reason != "total_bars" and count:
+                        print(f"    {reason:20s}: {count:4d} ({count/total*100:.1f}%)")
+    if len(results) > 1:
+        print(f"\n{'='*60}\n  MULTI-PAIR SUMMARY (shared kernel)\n{'='*60}")
+        for r in results:
+            m = r.metrics
+            if m:
+                print(f"  {r.symbol:10s} : {m.total_trades:3d} trades | WR={m.win_rate:.1f}% | "
+                      f"PF={m.profit_factor:.2f} | P&L=${m.total_pnl_usd:.2f}")
+        print("=" * 60)
+    return results
+
+
 def main():
     parser = argparse.ArgumentParser(description="Event-Driven Backtest Runner")
     parser.add_argument("--synthetic", action="store_true")
@@ -241,12 +337,32 @@ def main():
     parser.add_argument("--report", action="store_true",
                          help="No-op flag for compatibility — a full text report is always printed. "
                               "Kept so old commands using --report don't error out.")
+    parser.add_argument("--legacy-engine", action="store_true",
+                         help="Use the OLD UnifiedSignalEngine-only backtest loop instead of the "
+                              "shared decision kernel (backtest.unified_engine). This engine has "
+                              "no risk engine, no confidence/news/session gating, and validates "
+                              "different logic than Demo/Real trade on — see the execution-parity "
+                              "audit (Critical items 1-3). Kept only for A/B comparison against "
+                              "old numbers; NOT representative of live behavior. Default is now "
+                              "the shared kernel, which IS what Demo/Real run.")
     args = parser.parse_args()
 
     if args.days is not None:
         BARS_PER_DAY = {"M15": 96, "M30": 48, "H1": 24, "H4": 6, "D1": 1}
         args.bars = args.days * BARS_PER_DAY.get(args.tf, 24)
 
+    if not args.legacy_engine:
+        # Default path (execution-parity audit fix): run through the SAME
+        # engine `main.py --mode backtest` uses, which is the same decision
+        # core (AnalysisAgent -> DecisionAgent -> RiskEngine -> PositionSizer)
+        # Demo/Real run. See run_pairs()'s docstring.
+        run_pairs(args)
+        return
+
+    log.warning("[run_backtest] --legacy-engine requested: running the OLD "
+                "UnifiedSignalEngine-only loop (no risk engine, no confidence/"
+                "news/session gates). Results from this mode do NOT predict "
+                "Demo/Real behavior — see execution-parity audit, Critical items 1-3.")
     pairs = [p.strip().upper() for p in args.pairs.split(",")] if args.pairs else [args.pair.upper()]
     all_results = []
     for pair in pairs:

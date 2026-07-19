@@ -118,6 +118,25 @@ class AnalysisAgent:
         # FIX: add fetcher for H4 data (reusable across calls)
         from data.fetcher import get_data_fetcher
         self._h4_fetcher         = get_data_fetcher()
+        # PERFORMANCE FIX (execution-parity audit follow-up, backtest smoke
+        # test, 2026-07-19): SentimentDataProvider and InstitutionalFlowEngine
+        # both implement their own instance-level `self._cache` dict (5min /
+        # 6h TTL respectively) but run() used to construct a BRAND NEW
+        # instance of each on every single call — i.e. every bar in a
+        # backtest, every cycle live. A fresh instance means a fresh empty
+        # `self._cache = {}`, so the cache never actually hit; every bar
+        # re-fetched yfinance/COT data over the network, which is what made
+        # a multi-hundred-bar backtest take hours instead of minutes. Fix:
+        # construct both ONCE here (matching self.intermarket_engine above,
+        # which already got this right — its internal MacroDataProvider's
+        # cache DOES work because IntermarketEngine itself is a single
+        # instance reused for AnalysisAgent's whole lifetime). No behavior
+        # change to WHAT is computed, no change to signal-generation logic —
+        # this is purely fixing where these objects' caches actually live so
+        # the caching code that was already written and intended actually
+        # takes effect, in both backtest and live.
+        self.sentiment_data_provider  = SentimentDataProvider()
+        self.institutional_flow_engine = InstitutionalFlowEngine()
 
     def run(self, market_output: dict, memory_ctx: dict = None) -> dict:
         if "error" in market_output:
@@ -442,7 +461,7 @@ class AnalysisAgent:
         sentiment_result = {}
         conflict_result  = {}
         try:
-            sent_provider    = SentimentDataProvider()
+            sent_provider    = self.sentiment_data_provider
             sent_data        = sent_provider.get_all(symbol)
             sent_provider.print_summary(sent_data)
 
@@ -732,7 +751,7 @@ class AnalysisAgent:
         institutional_result = {}
         institutional_ctx    = {}
         try:
-            inst_engine = InstitutionalFlowEngine()
+            inst_engine = self.institutional_flow_engine
             retail_long = retail_sentiment_result.get("long_pct", 50.0)
             institutional_result = inst_engine.analyze(symbol, retail_long_pct=retail_long, df=df)
             inst_engine.print_summary(institutional_result)

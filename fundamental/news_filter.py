@@ -24,6 +24,25 @@ try:
 except ImportError:
     _CLOUDSCRAPER_AVAILABLE = False
 
+# PERFORMANCE FIX (execution-parity audit follow-up, 2026-07-19): Layer 0
+# (fetch_faireconomy) already has proper cooldown/backoff on failure — see
+# faireconomy_cache.py's _blocked_until. But Layer 0 returns [] both when
+# it genuinely found zero high-impact events AND when it's in cooldown with
+# no cached data — _fetch_events() can't tell those apart, so an empty
+# result always falls through to Layer 1 (cloudscraper) and Layer 2 (plain
+# requests) against forexfactory.com/calendar, with NO cooldown of their
+# own. When that site is blocking the scraper (403, as in this backtest's
+# sandbox), every single call — i.e. every bar in a backtest — pays the
+# full cloudscraper handshake + retry cost again, forever. This module-
+# level cooldown (persists across NewsFilter() instances, since a fresh
+# instance is constructed per call — see agents/analysis_agent.py) skips
+# Layers 1/2 for FF_SCRAPE_COOLDOWN_SECONDS after a failure, going straight
+# to the Layer 3 hardcoded fallback instead. No change to what data is
+# used on failure (same hardcoded fallback as before) — only how often the
+# doomed network call is retried.
+_ff_scrape_blocked_until = 0.0
+FF_SCRAPE_COOLDOWN_SECONDS = 300.0  # 5 minutes
+
 VOLATILITY_MAP = {
     "non-farm":        {"level": "EXTREME", "pips": (80, 150)},
     "nfp":             {"level": "EXTREME", "pips": (80, 150)},
@@ -276,10 +295,25 @@ class NewsFilter:
 
     # ── Fetch chain ────────────────────────────────────────────
     def _fetch_events(self) -> tuple[list, str]:
+        global _ff_scrape_blocked_until
+
         # ── Layer 0: shared FairEconomy cache (Day 92) ──
         events = fetch_faireconomy(self.WATCHED_CURRENCIES, self.HIGH_IMPACT_KEYWORDS)
         if events:
             return events, "faireconomy_json"
+
+        # Cooldown check (see module-level comment above): if the FF scrape
+        # layers failed recently, skip straight to the hardcoded fallback
+        # instead of re-attempting a doomed cloudscraper/requests call.
+        now_mono = time.monotonic()
+        if now_mono < _ff_scrape_blocked_until:
+            log.debug(
+                f"[NewsFilter] FF scrape in cooldown "
+                f"({_ff_scrape_blocked_until - now_mono:.0f}s remaining) — "
+                f"skipping to hardcoded fallback"
+            )
+            events = self._hardcoded_fallback()
+            return events, "hardcoded_fallback"
 
         # ── Layer 1: cloudscraper ──
         if _CLOUDSCRAPER_AVAILABLE:
@@ -295,6 +329,10 @@ class NewsFilter:
             events = self._parse_ff(html)
             if events:
                 return events, "forexfactory_requests"
+
+        # Both scrape layers failed — start the cooldown so subsequent
+        # calls in this run (e.g. the next bar in a backtest) skip them.
+        _ff_scrape_blocked_until = now_mono + FF_SCRAPE_COOLDOWN_SECONDS
 
         # ── Layer 3: hardcoded fallback ──
         log.warning("Live Forex Factory fetch fully failed → hardcoded fallback")

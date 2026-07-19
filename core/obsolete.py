@@ -19,6 +19,22 @@ Runtime code is expected to import `OBSOLETE_MODULES` and surface it in
 health reports so operators can see exactly what is intentionally not
 wired in.
 
+CORRECTION (execution-parity audit §6.6, 2026-07-19): several entries
+below describe `ict_amd_signal_engine.py` / `unified_signal_engine.py` as
+having "superseded" the deleted Day-61/62 SMC/liquidity modules. That is
+true only in the narrow sense that they replaced those specific modules'
+*functionality* — it does NOT mean either module is the live decision
+pipeline. `agents/analysis_agent.py` never imports them at module scope;
+`UnifiedSignalEngine` is wired in as a single, lazily-imported,
+try/except-wrapped, informational vote (weight 1.0) among ~29 other
+analysis modules that feed `strategy.signal_engine.SignalEngine` /
+`core.master_decision`, which is what actually sets `final_signal` live.
+Do not read "superseded by X" below as "X is now the live pipeline."
+The live pipeline is `core.trader.AITrader.evaluate_decision_core()`
+(AnalysisAgent -> DecisionAgent -> RiskEngine -> PositionSizer), which as
+of the same audit fix is also what `backtest/unified_engine.py` replays
+bar-by-bar — see that module's docstring for the shared-kernel design.
+
 This file is the single source of truth — do not duplicate this list
 elsewhere.
 """
@@ -586,13 +602,20 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
         ObsoleteCategory.DEAD,
         "658 lines. 0 importers. Third 'production-ready' attempt (alongside "
         "production_hardening.py and production_excellence.py). Only production_hardening.py is live.",
-        "Archived to .dead_code_archived in Round-29.",
+        "FIX (execution-parity audit item 8, 2026-07-19): this entry claimed "
+        "'Archived to .dead_code_archived in Round-29' but the file was still "
+        "present under its live .py name with 0 importers — an alternate, "
+        "self-contained trading engine sitting as a landmine for anyone who "
+        "ran it directly expecting it to be 'the' engine. Actually renamed "
+        "to core/production_trading_system.py.dead_code_archived now.",
     ),
     ObsoleteEntry(
         "core/production_excellence.py",
         ObsoleteCategory.DEAD,
         "517 lines. 0 importers. Another abandoned 'production-ready' attempt.",
-        "Archived to .dead_code_archived in Round-29.",
+        "FIX (execution-parity audit item 8, 2026-07-19): same registry/reality "
+        "mismatch as production_trading_system.py above — actually renamed to "
+        "core/production_excellence.py.dead_code_archived now.",
     ),
     ObsoleteEntry(
         "core/monitoring_system.py",
