@@ -97,61 +97,10 @@ class UnifiedBacktestResult:
     error: Optional[str] = None
 
 
-def _build_market_out(df_slice: "pd.DataFrame", symbol: str, timeframe: str) -> dict:
-    """Build a MarketAgentResult-shaped dict from a historical slice, using
-    the SAME canonical indicator registry MarketAgent uses live — not a
-    separate/duplicate indicator formula. Falls back through the identical
-    chain agents/market_agent.py uses (indicator_registry -> ExtendedIndicators
-    -> legacy Indicators) so behavior matches live bar-for-bar.
-    """
-    df = df_slice.copy()
-    ind_ctx = {}
-    try:
-        from data.indicator_registry import add_canonical_indicators, get_ai_context as _get_ctx
-        df = add_canonical_indicators(df, include_patterns=True)
-        ind_ctx = _get_ctx(df)
-    except Exception as e_registry:
-        log.warning(f"[unified_engine] indicator_registry unavailable ({e_registry}) — "
-                    f"falling back to ExtendedIndicators, then legacy Indicators")
-        try:
-            from data.indicators_ext import ExtendedIndicators
-            ind_ext = ExtendedIndicators()
-            df = ind_ext.add_all(df, include_patterns=True)
-            ind_ctx = ind_ext.get_ai_context(df)
-        except Exception:
-            from data.indicators import Indicators
-            ind = Indicators()
-            df = ind.add_all(df)
-            ind_ctx = ind.get_ai_context(df)
-
-    try:
-        from analysis.market_regime import MarketRegimeDetector
-        regime_detector = MarketRegimeDetector()
-        regime_result = regime_detector.detect(df)
-        regime_ctx = regime_detector.get_ai_context(regime_result)
-    except Exception as e:
-        log.debug(f"[unified_engine] regime detection unavailable: {e}")
-        regime_result, regime_ctx = {}, {}
-
-    return {
-        "df": df,
-        "ind_ctx": ind_ctx,
-        "regime": regime_result,
-        "regime_ctx": regime_ctx,
-        # Matches MarketAgent's own dict-shaped default when MTF data
-        # isn't available ({"bias": ..., "confidence": ...} — NOT a bare
-        # string; MarketBiasEngine/SignalEngine/MasterAnalyst all call
-        # .get() on this and crash on a string). MTF bias is intentionally
-        # NOT computed from historical data here (see module docstring
-        # "KNOWN LIMITATIONS") — this is a documented parity gap, not an
-        # oversight: computing a true historical MTF bias would need
-        # synchronized higher-timeframe candle slices at every bar, which
-        # is real follow-up work, not a one-line fix.
-        "mtf_bias": {"bias": "NEUTRAL", "confidence": "LOW"},
-        "symbol": symbol,
-        "timeframe": timeframe,
-        "data_source": "historical_replay",
-    }
+# market_out construction moved to core.data_provider.HistoricalMT5Provider
+# (formal DataProvider abstraction — see that module). Kept out of this
+# file so backtest/demo/real share ONE definition of "how a market_out
+# dict gets built from a historical slice", not one copy per caller.
 
 
 def _make_backtest_trader(symbol: str, timeframe: str, starting_balance: float,
@@ -175,6 +124,7 @@ def _make_backtest_trader(symbol: str, timeframe: str, starting_balance: float,
         paper_balance=starting_balance,
         execution_mode="backtest",
         paper_trader=paper,
+        db=db,
     )
     return trader
 
@@ -203,6 +153,8 @@ def run_unified_backtest(
     """
     from backtest.broker_sim import BrokerSimulator, DEFAULT_SPREAD_PIPS
     from backtest.metrics import calculate_metrics
+    from core.data_provider import HistoricalMT5Provider
+    from core.execution_adapter import HistoricalExecutionAdapter
 
     # CRITICAL FIX (reproducibility -- same bug as run_backtest.py's legacy
     # loop): BrokerSimulator draws slippage from np.random.normal() and
@@ -226,6 +178,13 @@ def run_unified_backtest(
     broker = BrokerSimulator(starting_balance=starting_balance,
                               commission_per_lot=commission_per_lot,
                               slippage_pips=slippage_pips)
+    # Formal ExecutionAdapter/DataProvider boundary — see
+    # core/execution_adapter.py and core/data_provider.py. `broker` still
+    # owns the actual fill state; `adapter`/`provider` are the named
+    # abstraction the target architecture calls for, wrapping the same
+    # objects rather than duplicating their logic.
+    adapter = HistoricalExecutionAdapter(broker)
+    provider = HistoricalMT5Provider(df, symbol, timeframe)
 
     open_trades, closed_trades, equity_curve = [], [], [starting_balance]
     entry_bar: dict = {}
@@ -281,9 +240,9 @@ def run_unified_backtest(
             equity_curve.append(broker.get_balance())
             continue
 
-        df_slice = df.iloc[:i + 1]
+        provider.advance_to(i)
         try:
-            market_out = _build_market_out(df_slice, symbol, timeframe)
+            market_out = provider.get_market_out(symbol, timeframe)
         except Exception as e:
             rejection_stats["engine_error"] += 1
             if verbose:
@@ -339,11 +298,11 @@ def run_unified_backtest(
             equity_curve.append(broker.get_balance())
             continue
 
-        trade = broker.open_trade(symbol=symbol, direction=action, entry_price=entry,
-                                   sl=sl, tp=tp, lot=lot, bar_time=current_time,
-                                   confidence=int(confidence) if confidence else 0,
-                                   strategy="unified_decision_core",
-                                   confluence_factors=0, quality_grade="B")
+        trade = adapter.open_trade(symbol=symbol, direction=action, entry_price=entry,
+                                    sl=sl, tp=tp, lot=lot, bar_time=current_time,
+                                    confidence=int(confidence) if confidence else 0,
+                                    strategy="unified_decision_core",
+                                    confluence_factors=0, quality_grade="B")
         entry_bar[trade.trade_id] = i
         open_trades.append(trade)
         if verbose:

@@ -127,6 +127,7 @@ class AITrader:
         approval: ApprovalMode = None,
         registry: "Optional[ServiceRegistry]" = None,
         paper_trader: "Optional[PaperTrader]" = None,
+        db: "Optional[TraderDB]" = None,
     ):
         self.balance = balance
         self.symbol = self._clean_symbol(symbol)
@@ -190,7 +191,20 @@ class AITrader:
             self._memory = TradeMemory(seed_rules=seed_rules)
         self._learning = LearningEngine()
         # Same for TraderDB — share the registry's connection if available.
-        if registry is not None:
+        # EXECUTION-PARITY FIX: previously this ignored any `db` the caller
+        # passed in and always fell back to TraderDB() (the hardcoded live
+        # "database/trader.db" path) whenever no registry was supplied.
+        # backtest/unified_engine.py's _make_backtest_trader() builds an
+        # isolated backtest DB and passes it as `paper_trader`'s db, but
+        # AITrader's own top-level self._db (used by ExecutionRouter,
+        # decision logging, etc.) never received it — so a backtest run
+        # was unconditionally opening a second connection to the LIVE
+        # database. Now: explicit `db` argument wins, then registry, then
+        # the live default (unchanged behavior for Demo/Real, which never
+        # pass `db` explicitly).
+        if db is not None:
+            self._db = db
+        elif registry is not None:
             shared_db = registry.try_resolve("db")
             self._db = shared_db if shared_db is not None else TraderDB()
         else:

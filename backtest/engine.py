@@ -33,6 +33,26 @@ except Exception as e:
 
 
 class BacktestEngine:
+    """
+    DEPRECATED (execution-parity audit, 2026-07-19). This is a standalone,
+    strategy-object-based backtester that does NOT call AITrader.
+    evaluate_decision_core() and therefore does NOT run the same Analysis
+    -> Decision -> Risk -> Sizing -> Permission pipeline Demo/Real use. It
+    predates backtest/unified_engine.py and was never wired into main.py's
+    live path (confirmed: main.py's old `--mode backtest` constructed this
+    class and returned without calling it).
+
+    Do not use this for anything whose result needs to predict Demo/Real
+    behavior. Use backtest.unified_engine.run_unified_backtest instead —
+    that is the one engine that shares AITrader's decision core.
+
+    Current callers (research/experiment_runner.py's fallback example
+    strategy, scripts/diagnostics/test_backtest_pipeline.py's import
+    smoke-test) are non-production / diagnostic-only. Left in place with
+    this notice rather than deleted outright so those two call sites don't
+    break on import; if you don't need this class for anything else,
+    delete it and repoint both callers to unified_engine.
+    """
     def __init__(
         self,
         initial_balance: float = 10000.0,
