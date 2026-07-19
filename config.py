@@ -198,16 +198,26 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 # ── Execution Mode ─────────────────────────────────────────────
-# "mt5_demo" -> Real MT5 demo account execution (DEFAULT — user has MT5 set up)
-# "paper"    -> Legacy paper mode (ExecutionRouter no longer supports this —
-#               will raise ValueError if set).  Kept for backward compat
-#               reference only.
+# "mt5_demo"  -> Real MT5 demo account execution (DEFAULT — user has MT5 set up)
+# "mt5_live"  -> Real MT5 REAL-MONEY account execution (execution-parity
+#                audit, §9). Uses the exact same order-placement code path
+#                as mt5_demo — MT5's API doesn't distinguish demo/real at
+#                the call level, only the account credentials differ —
+#                gated by ALLOW_REAL_MONEY_TRADING + MT5_REAL_* below.
+#                Never falls back to demo/simulation on failure — see
+#                execution/execution_router.py.
+# "backtest"  -> Router is inert; backtest.unified_engine drives fills
+#                through backtest.broker_sim.BrokerSimulator directly.
+# "paper"     -> Legacy paper mode (ExecutionRouter no longer supports this —
+#                will raise ValueError if set).  Kept for backward compat
+#                reference only.
 #
 # Day 81+ hotfix: was defaulting to "paper", but ExecutionRouter only
-# accepts "mt5_demo" and raises ValueError for anything else.  If .env
+# accepted "mt5_demo" and raised ValueError for anything else.  If .env
 # failed to load (e.g. wrong working dir, missing file), the bot would
 # crash on boot with "Unknown EXECUTION_MODE: paper".  Default is now
-# "mt5_demo" to match the only supported mode.
+# "mt5_demo" — the safest, always-available mode — regardless of how
+# many modes ExecutionRouter supports.
 EXECUTION_MODE = os.getenv("EXECUTION_MODE", "mt5_demo").lower()
 
 # ── SIMULATION MODE ─────────────────────────────────────────────
@@ -329,13 +339,41 @@ USE_SCANNER = os.getenv("USE_SCANNER", "false").lower() == "true"
 # 3 = autonomous (default — no human gate)
 APPROVAL_MODE = int(os.getenv("APPROVAL_MODE", "3"))
 
-# ── MT5 Broker Credentials ─────────────────────────────────────
+# ── MT5 Broker Credentials (DEMO — default account) ─────────────
 MT5_LOGIN_ENV = os.getenv("MT5_LOGIN", "0")
 MT5_LOGIN = int(MT5_LOGIN_ENV) if MT5_LOGIN_ENV and MT5_LOGIN_ENV.isdigit() and MT5_LOGIN_ENV != "0" else None
 MT5_PASSWORD = os.getenv("MT5_PASSWORD")
 MT5_SERVER = os.getenv("MT5_SERVER")
 MT5_PATH = os.getenv("MT5_PATH")  # Optional: MT5 terminal.exe path override
 MT5_INVESTOR = os.getenv("MT5_INVESTOR")
+
+# ── REAL-MONEY execution gate (execution-parity audit, §9) ──────
+# execution/execution_router.py imports these four names when
+# EXECUTION_MODE=mt5_live. They previously did not exist in this file
+# at all, so any attempt to actually use mt5_live raised a bare
+# ImportError instead of the router's intended, explicit
+# RuntimeError("ALLOW_REAL_MONEY_TRADING is not set...") — a Critical
+# bug: the safety message was unreachable because the import itself
+# failed first.
+#
+# ALLOW_REAL_MONEY_TRADING is a SEPARATE opt-in from EXECUTION_MODE on
+# purpose: setting EXECUTION_MODE=mt5_live alone is not enough to place
+# a real order. Both this flag AND real credentials below must be set.
+# Default is always False/empty — real trading is never on by an
+# unattended default in any environment (dev, staging, or prod).
+ALLOW_REAL_MONEY_TRADING = os.getenv("ALLOW_REAL_MONEY_TRADING", "false").lower() == "true"
+
+# Deliberately separate variable names from MT5_LOGIN/PASSWORD/SERVER
+# above (never aliased to them) so a real account can't be reached by
+# accident just because demo credentials happen to be set.
+MT5_REAL_LOGIN_ENV = os.getenv("MT5_REAL_LOGIN", "0")
+MT5_REAL_LOGIN = (
+    int(MT5_REAL_LOGIN_ENV)
+    if MT5_REAL_LOGIN_ENV and MT5_REAL_LOGIN_ENV.isdigit() and MT5_REAL_LOGIN_ENV != "0"
+    else None
+)
+MT5_REAL_PASSWORD = os.getenv("MT5_REAL_PASSWORD")
+MT5_REAL_SERVER = os.getenv("MT5_REAL_SERVER")
 
 # ── Telegram ───────────────────────────────────────────────────
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
@@ -494,11 +532,17 @@ class Config:
     ABSOLUTE_SAFETY = ABSOLUTE_SAFETY
     TRADING_MODE_CONFIDENCE = TRADING_MODE_CONFIDENCE
 
-    # MT5
+    # MT5 (demo)
     MT5_LOGIN = MT5_LOGIN
     MT5_PASSWORD = MT5_PASSWORD
     MT5_SERVER = MT5_SERVER
     MT5_PATH = MT5_PATH
+
+    # MT5 (real money — execution-parity audit §9)
+    ALLOW_REAL_MONEY_TRADING = ALLOW_REAL_MONEY_TRADING
+    MT5_REAL_LOGIN = MT5_REAL_LOGIN
+    MT5_REAL_PASSWORD = MT5_REAL_PASSWORD
+    MT5_REAL_SERVER = MT5_REAL_SERVER
 
     # Telegram
     TELEGRAM_TOKEN = TELEGRAM_TOKEN

@@ -127,6 +127,24 @@ class AnalysisAgent:
         ind_ctx   = market_output["ind_ctx"]
         regime    = market_output["regime"]
         mtf_bias  = market_output["mtf_bias"]
+        # FIX (execution-parity audit — found via backtest smoke test):
+        # mtf_bias arrives as a dict on the success path (MarketAgent's
+        # mtf.print_summary() -> get_bias() -> {"bias":..., "confidence":...})
+        # but as a bare string ("NEUTRAL") on the failure-default path —
+        # both in agents/market_agent.py (MTF analysis raised) and in
+        # backtest/unified_engine.py's historical replay (MTF isn't
+        # computed at all there). Several downstream consumers
+        # (MarketBiasEngine.analyze, SignalEngine.generate,
+        # MasterAnalyst.analyze) call `mtf_bias.get(...)` unconditionally
+        # and crashed with AttributeError whenever the string form reached
+        # them. A few call sites in this file already had their own
+        # one-off `{"bias": mtf_bias} if isinstance(mtf_bias, str) else
+        # mtf_bias` guard, but not all of them — normalizing once, here,
+        # at the point mtf_bias enters this function, closes the gap for
+        # every consumer instead of requiring each new call site to
+        # remember to guard it individually.
+        if isinstance(mtf_bias, str):
+            mtf_bias = {"bias": mtf_bias, "confidence": "LOW"}
         symbol    = market_output["symbol"]
         timeframe = market_output.get("timeframe", "15m")
 

@@ -138,7 +138,16 @@ def _build_market_out(df_slice: "pd.DataFrame", symbol: str, timeframe: str) -> 
         "ind_ctx": ind_ctx,
         "regime": regime_result,
         "regime_ctx": regime_ctx,
-        "mtf_bias": "NEUTRAL",  # matching MarketAgent's own default when MTF data isn't available
+        # Matches MarketAgent's own dict-shaped default when MTF data
+        # isn't available ({"bias": ..., "confidence": ...} — NOT a bare
+        # string; MarketBiasEngine/SignalEngine/MasterAnalyst all call
+        # .get() on this and crash on a string). MTF bias is intentionally
+        # NOT computed from historical data here (see module docstring
+        # "KNOWN LIMITATIONS") — this is a documented parity gap, not an
+        # oversight: computing a true historical MTF bias would need
+        # synchronized higher-timeframe candle slices at every bar, which
+        # is real follow-up work, not a one-line fix.
+        "mtf_bias": {"bias": "NEUTRAL", "confidence": "LOW"},
         "symbol": symbol,
         "timeframe": timeframe,
         "data_source": "historical_replay",

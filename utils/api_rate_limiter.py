@@ -35,6 +35,19 @@ from utils.logger import get_logger
 log = get_logger("api_rate_limiter")
 
 
+# ── Backtest replay fast-fail (execution-parity audit, §12-13) ──
+# backtest/unified_engine.py sets this True before a replay run.
+# When True, rate_limited_get() skips rate-limit waiting AND retry/
+# backoff entirely and returns None on the first non-2xx response —
+# every caller already degrades gracefully on None (see module
+# docstrings across news_filter.py, fundamental/*, sentiment/*), so
+# this only changes HOW FAST that fallback triggers, not what a
+# backtest run's analysis output looks like. Does not affect Demo/Real
+# in any way (default False, only ever set by the backtest entry
+# point).
+BACKTEST_REPLAY_MODE = False
+
+
 class _ProviderState:
     """Per-provider rate-limit state."""
 
@@ -145,6 +158,14 @@ def rate_limited_get(
     with _PROVIDERS_LOCK:
         state = _PROVIDERS.get(provider)
     max_retries = state.max_retries if state else 0
+
+    if BACKTEST_REPLAY_MODE:
+        # See module-level comment on BACKTEST_REPLAY_MODE. Skip the
+        # provider rate-limit wait (replaying historical bars isn't a
+        # live request burst against today's rate-limit window) and
+        # collapse retries to a single attempt with no backoff sleep.
+        state = None
+        max_retries = 0
 
     # Day 99+ FIX (Issue #5): browser-like default headers.
     browser_headers = {

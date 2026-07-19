@@ -730,6 +730,14 @@ class AITrader:
         pattern = self._extract_pattern(market_out)
         regime_str = market_out.get("regime", {}).get("regime", "")
         pat_ctx = self._memory.get_pattern_context(self.symbol, regime_str, pattern)
+        # FIX (execution-parity audit — NameError found via backtest smoke
+        # test, 2nd+ run against a DB with existing trade history): 'ind'
+        # and 'latest_price' were both referenced below but never defined
+        # in this method — only in run_cycle() (the method this was
+        # extracted from), at market_out.get("ind_ctx", {}) / ind.get
+        # ("close") or ind.get("price") respectively (see line ~1225).
+        ind = market_out.get("ind_ctx", {}) or {}
+        latest_price = ind.get("close") or ind.get("price")
 
         # Day 37 hotfix: initialize BEFORE the conditional so that a fresh
         # symbol with no trade history yet (total_trades == 0) never hits

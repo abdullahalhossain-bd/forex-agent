@@ -54,7 +54,7 @@ class MarketAgentResult(TypedDict, total=False):
     ind_ctx: dict
     regime: dict
     regime_ctx: dict
-    mtf_bias: str
+    mtf_bias: dict
     symbol: str
     timeframe: str
     data_source: str
@@ -161,7 +161,11 @@ class MarketAgent:
         log.info(f"[MarketAgent] Running for {self.symbol} {self.timeframe}")
 
         # ── MTF bias — wrapped so MTF failure doesn't kill the cycle ──
-        mtf_bias = "NEUTRAL"
+        # Default shape matches MultiTimeframeAnalyzer.get_bias()'s
+        # success-path return ({"bias": ..., "confidence": ...}) — not a
+        # bare string — because downstream consumers (MarketBiasEngine,
+        # SignalEngine, MasterAnalyst) all call `.get()` on this value.
+        mtf_bias = {"bias": "NEUTRAL", "confidence": "LOW"}
         try:
             mtf = MultiTimeframeAnalyzer(self.symbol)
             mtf_data = mtf.analyze(["1d", "4h", "1h", "15m"])

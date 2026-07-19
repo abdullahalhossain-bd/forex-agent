@@ -772,12 +772,17 @@ Examples:
         help="System mode",
     )
     parser.add_argument("--pairs", help="Comma-separated currency pairs (e.g., EURUSD,GBPUSD)")
-    parser.add_argument("--timeframe", help="Trading timeframe (e.g., 15m, 1h, 4h)")
+    parser.add_argument("--timeframe", help="Trading timeframe (e.g., 15m, 1h, 4h). In --mode backtest, "
+                                             "MT5-style aliases (M15, H1, H4, D1) are also accepted.")
     parser.add_argument("--paper", action="store_true", help="Force paper trading mode")
     parser.add_argument("--no-telegram", action="store_true", help="Disable Telegram notifications")
     parser.add_argument("--balance", type=float, help="Starting balance override")
     parser.add_argument("--max-cycles", type=int, help="Max trading cycles (for testing)")
     parser.add_argument("--disable-news-block", action="store_true", help="Allow trading even when the news filter would otherwise block")
+    # --mode backtest options (delegated to run_backtest.run_pairs() — see _run_backtest()).
+    parser.add_argument("--bars", type=int, default=500, help="[backtest mode] Number of historical bars to replay")
+    parser.add_argument("--days", type=int, default=None, help="[backtest mode] Convenience alias for --bars, in days")
+    parser.add_argument("--synthetic", action="store_true", help="[backtest mode] Use synthetic OHLCV data instead of MT5")
 
     args = parser.parse_args()
 
@@ -786,8 +791,9 @@ Examples:
         print("[main] News block disabled via CLI override")
 
     if getattr(args, "paper", False):
-        print("[main] WARNING: --paper has no effect — paper trading mode was "
-              "removed from this system (EXECUTION_MODE is always mt5_demo).")
+        print("[main] WARNING: --paper has no effect — legacy paper trading mode was "
+              "removed from this system. EXECUTION_MODE is mt5_demo by default, or "
+              "mt5_live if explicitly opted into (see config.py ALLOW_REAL_MONEY_TRADING).")
 
     setup_logging()
     logger = logging.getLogger("main")
@@ -844,12 +850,63 @@ Examples:
 
 
 def _run_backtest(args):
-    """Run the backtesting engine."""
-    from backtest.engine import BacktestEngine
+    """Run a backtest via the shared decision kernel.
 
-    logging.info("[Backtest] Starting backtest engine...")
-    engine = BacktestEngine()
-    logging.info("[Backtest] Backtest complete — check reports/")
+    FIX (execution-parity audit §6.4 — Critical, "dead code"): this used
+    to do `engine = BacktestEngine(); log.info("Backtest complete")` and
+    return — it never called `run_strategy()`, so anyone using
+    `main.py --mode backtest` (as opposed to the standalone
+    `run_backtest.py` script) got a misleading "complete" log line and
+    zero actual backtest activity, no error raised.
+
+    Now this delegates to `run_backtest.run_pairs()` — the SAME function
+    the standalone `python run_backtest.py` CLI uses, which drives
+    `backtest.unified_engine.run_unified_backtest()` (the shared
+    AnalysisAgent -> DecisionAgent -> RiskEngine -> PositionSizer kernel
+    Demo/Real also use). There is now exactly one backtest implementation,
+    reachable from two entry points, instead of three disconnected ones
+    (this dead stub, the old UnifiedSignalEngine-only run_backtest.py
+    loop, and the never-imported BacktestEngine class).
+    """
+    import run_backtest as _rb
+
+    pairs_arg = args.pairs if getattr(args, "pairs", None) else None
+    tf_raw = (args.timeframe or "H1").upper()
+    # main.py's --timeframe accepts live-style aliases ("15m","1h"); the
+    # shared backtest kernel/broker-sim use MT5-style ("M15","H1"). Accept
+    # either so `--mode backtest --timeframe 1h` and `--tf H1` both work.
+    TF_ALIAS = {"15M": "M15", "30M": "M30", "1H": "H1", "4H": "H4", "1D": "D1"}
+    tf = TF_ALIAS.get(tf_raw, tf_raw)
+    if tf not in ("M15", "M30", "H1", "H4", "D1"):
+        logging.warning(f"[Backtest] Unrecognized timeframe '{args.timeframe}', defaulting to H1")
+        tf = "H1"
+
+    ns = argparse.Namespace(
+        pair=(pairs_arg.split(",")[0].strip().upper() if pairs_arg else "EURUSD"),
+        pairs=pairs_arg or "",
+        tf=tf,
+        bars=getattr(args, "bars", 500) or 500,
+        days=getattr(args, "days", None),
+        balance=getattr(args, "balance", None) or 10000.0,
+        spread=None,
+        commission=7.0,
+        slippage=2.0,
+        max_trades=3,
+        max_hold=100,
+        synthetic=getattr(args, "synthetic", False),
+        verbose=True,
+        json=False,
+    )
+
+    logging.info(f"[Backtest] Starting shared-kernel backtest: pairs={ns.pairs or ns.pair} "
+                 f"tf={ns.tf} bars={ns.bars} synthetic={ns.synthetic}")
+    results = _rb.run_pairs(ns)
+    if not results:
+        logging.error("[Backtest] No results produced — check data source "
+                       "(pass --synthetic if MT5 is not available) and logs/ for errors.")
+        return
+    logging.info(f"[Backtest] Complete — {len(results)} pair(s) run. "
+                 f"CSVs written to backtest/results_<PAIR>_<TF>.csv")
 
 
 def _print_obsolete_registry():
