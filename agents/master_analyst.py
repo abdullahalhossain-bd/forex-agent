@@ -25,6 +25,7 @@
 # ============================================================
 
 import json
+import math
 import os
 import re
 from datetime import datetime
@@ -358,6 +359,14 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             "final_confidence": final_conf,
             "llm_raw":          raw,
             "error":            None,
+            # FIX (review): _calculate_final_confidence() builds this audit
+            # trail specifically so callers can see WHY confidence was
+            # penalized by session/fusion gates, but it was previously only
+            # stashed on self._last_session_gate_penalty and never returned
+            # — the explanation vanished before reaching decision_agent.py.
+            "session_gate_penalty": getattr(
+                self, "_last_session_gate_penalty", {"applied": False}
+            ),
         }
 
         log.info(
@@ -1343,16 +1352,25 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         # (common: dead zone + session_trade_allowed=False), only the
         # last was recorded in the audit trail.
         try:
+            # FIX (review): `weighted` above is reduced multiplicatively,
+            # one gate at a time (weighted *= _multiplier). The reported
+            # combined_multiplier previously used an additive approximation
+            # (1 - sum(1 - m)) that does NOT equal the actual compounded
+            # effect and drifts further off as more gates stack — e.g.
+            # dead_zone(0.85) + session_trade_allowed=False(0.9):
+            #   real effect    = 0.85 * 0.90 = 0.765
+            #   old (wrong)    = 1 - (0.15 + 0.10) = 0.750
+            # Use math.prod so this field actually matches what happened
+            # to the confidence score.
+            _combined = (
+                math.prod(m for _, m in _session_gate_multipliers)
+                if _session_gate_multipliers else 1.0
+            )
             self._last_session_gate_penalty = {
                 "applied": _session_gate_penalty_applied,
                 "reasons": _session_gate_reasons,
                 "multipliers": _session_gate_multipliers,
-                "combined_multiplier": (
-                    1.0 if not _session_gate_multipliers
-                    else max(0.01, 1.0 - sum(
-                        (1.0 - m) for _, m in _session_gate_multipliers
-                    ))
-                ) if _session_gate_penalty_applied else 1.0,
+                "combined_multiplier": _combined,
                 "reason": "; ".join(_session_gate_reasons) if _session_gate_reasons else "",
             }
         except Exception:
@@ -1423,6 +1441,11 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             # never actually got excluded downstream.
             "_llm_parse_failed": result.get("_llm_parse_failed", False),
             "_llm_unavailable":  result.get("_llm_unavailable", False),
+            # FIX (review): was computed but never exposed to downstream
+            # consumers — see analyze()'s result dict for details.
+            "session_gate_penalty": result.get(
+                "session_gate_penalty", {"applied": False}
+            ),
         }
 
     def print_summary(self, result: dict) -> None:

@@ -375,6 +375,17 @@ class DecisionAgent:
             master_signal_for_vote = master_sig
             master_conf_for_vote = master_conf
 
+        # Single source of truth for which layers decide() excluded from
+        # voting this cycle — threaded through to _result() so the
+        # aligned_factors fallback there can't recount an excluded layer
+        # (see _result()'s docstring for the bug this closes).
+        _excluded_layers = tuple(
+            name for name, excluded in (
+                ("master", _master_excluded_reason is not None),
+                ("llm", _llm_excluded_reason is not None),
+            ) if excluded
+        )
+
         # New: decision engine's OWN combined confidence, pulled from
         # EVERY available layer (rule, LLM, MasterAnalyst, ML Ensemble,
         # RL Agent, Unified Signal Engine, Adaptive Decision) — replaces
@@ -443,6 +454,7 @@ class DecisionAgent:
                 tp=master_ctx.get("master_tp1") or risk_out.get("tp_price"),
                 pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
                 analysis_out=analysis_out,
+                excluded_layers=_excluded_layers,
             )
 
         # Gates (only reached in non-TEST_MODE or when final_signal is not BUY/SELL)
@@ -637,10 +649,26 @@ class DecisionAgent:
                 # layer alone instead of blocking. Only if no layer clears
                 # that bar do we still return the hard NO TRADE.
                 if _fs_signal not in ("BUY", "SELL"):
+                    # BUGFIX: this used to build candidates from the RAW
+                    # `master_sig`/`master_conf` — but when MasterAnalyst
+                    # was parse-failed/unavailable, decide() deliberately
+                    # excludes it from voting via `master_signal_for_vote`
+                    # /`master_conf_for_vote` (raw master_sig/master_conf
+                    # are intentionally left unmutated ONLY for audit-trail
+                    # display). Using the raw values here let an excluded,
+                    # possibly-stale MasterAnalyst vote single-handedly
+                    # trigger a trade through this override path — the
+                    # exact "excluded vote still counts" bug this codebase
+                    # has already fixed twice for other layers. LLM didn't
+                    # have this problem because llm_signal itself gets
+                    # mutated to "WAIT" on exclusion, so reusing it here
+                    # happened to be safe by coincidence; master_sig is
+                    # never mutated, so it must use the _for_vote variant
+                    # explicitly.
                     _candidates = [
                         (("BUY" if "BUY" in str(rule_signal) else "SELL" if "SELL" in str(rule_signal) else "WAIT"), rule_conf, "rule_engine"),
-                        (("BUY" if "BUY" in str(llm_signal) else "SELL" if "SELL" in str(llm_signal) else "WAIT"), llm_conf, "llm_analyst"),
-                        (("BUY" if "BUY" in str(master_sig) else "SELL" if "SELL" in str(master_sig) else "WAIT"), master_conf, "master_analyst"),
+                        (("BUY" if "BUY" in str(llm_signal) else "SELL" if "SELL" in str(llm_signal) else "WAIT"), llm_conf_for_vote, "llm_analyst"),
+                        (("BUY" if "BUY" in str(master_signal_for_vote) else "SELL" if "SELL" in str(master_signal_for_vote) else "WAIT"), master_conf_for_vote, "master_analyst"),
                     ]
                     _directional = [c for c in _candidates if c[0] in ("BUY", "SELL")]
                     _best = max(_directional, key=lambda c: c[1], default=None)
@@ -660,7 +688,8 @@ class DecisionAgent:
                                 f"{_fs_signal}/{_fs_agreement}, but single-layer "
                                 f"confidence cleared the {self.CONFIDENCE_FLOOR:.0f}% floor)",
                             ], pattern=pattern, pair=pair, timeframe=timeframe,
-                            regime=regime_label, analysis_out=analysis_out)
+                            regime=regime_label, analysis_out=analysis_out,
+                            excluded_layers=_excluded_layers)
                     return self._result(
                         "NO TRADE", max(_preserved_conf, _fs_conf), risk_out, [
                             f"SignalFusion gate: {_fs_signal} "
@@ -754,12 +783,24 @@ class DecisionAgent:
 
         adj_conf = max(0, min(99, base_conf + conf_adjustment + sentiment_boost))
 
+        # BUGFIX: sentiment_score is a raw external value (SentimentEngine
+        # output), realistically a float — but the reasons list below used
+        # to format it with `:+d`, which raises ValueError for any
+        # non-integer (e.g. 42.3). That crash would fire in the exact
+        # branch that's about to return a live BUY/SELL decision. Coerce
+        # to a clean int for display only; the underlying comparisons
+        # elsewhere in this function still use the original float value.
+        try:
+            _sentiment_score_disp = int(round(float(sentiment_score)))
+        except (TypeError, ValueError):
+            _sentiment_score_disp = 0
+
         if buy_votes > sell_votes and buy_votes >= self.MIN_CONSENSUS:
             decision = "BUY"
             reasons = [
                 f"MasterAnalyst: {master_sig} | {master_story[:80]}",
                 f"Rule: {rule_signal} ({rule_conf}%) | LLM: {llm_signal} ({llm_conf}%)",
-                f"Sentiment: {sentiment_bias} (score {sentiment_score:+d}, adj {sentiment_boost:+d}%)",
+                f"Sentiment: {sentiment_bias} (score {_sentiment_score_disp:+d}, adj {sentiment_boost:+d}%)",
                 f"Risk: approved | Lot {risk_out.get('lot', risk_out.get('lot_size', 0))}",
             ]
             if master_risks:
@@ -772,7 +813,7 @@ class DecisionAgent:
             reasons = [
                 f"MasterAnalyst: {master_sig} | {master_story[:80]}",
                 f"Rule: {rule_signal} ({rule_conf}%) | LLM: {llm_signal} ({llm_conf}%)",
-                f"Sentiment: {sentiment_bias} (score {sentiment_score:+d}, adj {sentiment_boost:+d}%)",
+                f"Sentiment: {sentiment_bias} (score {_sentiment_score_disp:+d}, adj {sentiment_boost:+d}%)",
                 f"Risk: approved | Lot {risk_out.get('lot', risk_out.get('lot_size', 0))}",
             ]
             if master_risks:
@@ -972,6 +1013,7 @@ class DecisionAgent:
             pattern=pattern, pair=pair, timeframe=timeframe, regime=regime_label,
             confidence_engine_result=confidence_engine_result,
             analysis_out=analysis_out,
+            excluded_layers=_excluded_layers,
         )
 
     # ──────────────────────────────────────────────────────────
@@ -997,7 +1039,20 @@ class DecisionAgent:
                 entry=None, sl=None, tp=None,
                 pattern=None, pair=None, timeframe=None, regime=None,
                 confidence_engine_result=None,
-                analysis_out=None) -> dict:
+                analysis_out=None,
+                excluded_layers: tuple = ()) -> dict:
+        """
+        Args:
+            excluded_layers: names ("master", "llm") of layers decide()
+                excluded from voting this cycle (parse-failed/unavailable).
+                BUGFIX: the aligned_factors fallback below used to
+                re-derive vote counts straight from analysis_out, which
+                has no knowledge of decide()'s local exclusion flags — an
+                excluded layer's stale signal could still count toward
+                aligned_factors, overstating confluence quality relative
+                to what decision was actually based on. Passing the
+                exclusion set through closes that gap.
+        """
         # Day 97+ FIX: extract aligned_factors + setup_quality from confluence
         # engine so TradePermission can check them. Previously these fields
         # were missing from dec_out → trade_permission saw "0 factors, UNKNOWN".
@@ -1012,9 +1067,20 @@ class DecisionAgent:
         # Day 97+ Fallback: if no confluence data, infer from vote count
         if aligned_factors == 0 and decision in ("BUY", "SELL"):
             # Count how many agents voted for this direction
+            # BUGFIX: previously always re-read master/llm signal fresh
+            # from analysis_out, with no way to know decide() had already
+            # excluded a parse-failed/unavailable layer from voting — an
+            # excluded layer could still inflate this fallback count and
+            # report a higher aligned_factors/setup_quality than the
+            # decision was actually based on. Force excluded layers to
+            # "WAIT" here too, so this count matches decide()'s real basis.
             master_sig = (analysis_out or {}).get("master_ctx", {}).get("master_signal", "WAIT")
             llm_sig = (analysis_out or {}).get("llm", {}).get("signal", "WAIT")
             rule_sig = (analysis_out or {}).get("signal", {}).get("signal", "WAIT")
+            if "master" in excluded_layers:
+                master_sig = "WAIT"
+            if "llm" in excluded_layers:
+                llm_sig = "WAIT"
             votes = 0
             if master_sig in ("BUY", "SELL"): votes += 1
             if llm_sig in ("BUY", "SELL"): votes += 1

@@ -183,7 +183,11 @@ class ForexAISystem:
     def _resolve_symbols(self) -> list[str]:
         pairs_arg = getattr(self.args, "pairs", None)
         if pairs_arg:
-            return [clean_symbol(p.strip()) for p in pairs_arg.split(",")]
+            return [
+                clean_symbol(p.strip())
+                for p in pairs_arg.split(",")
+                if p.strip()  # drop empty tokens from trailing/double commas
+            ]
         return [clean_symbol(s) for s in SYMBOLS]
 
     # ─────────────────────────────────────────────
@@ -224,8 +228,14 @@ class ForexAISystem:
                 print()
             print(f"  Config: MAX_LOT={MAX_LOT} | APPROVAL_MODE={APPROVAL_MODE} | MAX_OPEN_TRADES={MAX_OPEN_TRADES}")
             print()
-        except Exception:
-            pass
+        except Exception as e:
+            # This banner reports whether permissive test gates (10% confidence
+            # threshold, force-approved 0.01 lot) are active. Swallowing the
+            # failure here would mean an operator starts the system with no
+            # indication of whether TEST_MODE is on — that's a safety signal,
+            # not cosmetic output, so surface it loudly instead of hiding it.
+            print(f"  ⚠️  Could not display TEST_MODE/SIMULATION_MODE banner: {e}")
+            logging.error(f"[System] Safety-mode banner failed to render: {e}", exc_info=True)
 
         # Override config-driven settings if CLI args were supplied.
         self._apply_cli_overrides()
@@ -282,8 +292,15 @@ class ForexAISystem:
         print()
         self._print_boot_summary()
 
-        # Critical phases: BOOTSTRAP and PERSISTENCE must succeed.
-        for critical in (Phase.BOOTSTRAP, Phase.PERSISTENCE):
+        # Critical phases that must succeed before trading can start.
+        # RISK/SAFETY/EXECUTION added alongside the runtime.py fix that made
+        # boot_risk/boot_safety/boot_execution/boot_broker actually report
+        # ok=False on failure instead of always claiming success — without
+        # checking them here too, that fix would have no effect: initialize()
+        # would still return True and start_trading() would still run with
+        # no risk engine, no safety guard, or no order path wired.
+        for critical in (Phase.BOOTSTRAP, Phase.PERSISTENCE, Phase.RISK,
+                         Phase.SAFETY, Phase.EXECUTION, Phase.BROKER):
             r = self.runtime.lifecycle.last_result(critical)
             if r is None or not r.ok:
                 return False
@@ -352,8 +369,11 @@ class ForexAISystem:
                 _acct = _mt5_conn.account_info()
                 if _acct is not None:
                     _mt5_balance_str = f" | MT5 Balance: ${getattr(_acct, 'balance', '?')}"
-        except Exception:
-            pass
+        except Exception as e:
+            # Not fatal (paper/demo runs may not have a live MT5 connection
+            # yet), but a broken MT5 lookup at startup is worth a debug trail
+            # rather than disappearing entirely.
+            logging.debug(f"[System] Could not read MT5 account balance at startup: {e}")
         logging.info(
             f"[System] Trading started | Mode: {self.execution_mode.upper()} | "
             f"Pairs: {self.symbols} | Risk Balance: ${self.balance} (config)"
@@ -410,6 +430,18 @@ class ForexAISystem:
         #     the process stops restarting, notifies the operator, and
         #     exits non-zero so a process supervisor / on-call alert can
         #     take over instead of looping silently forever.
+        # NOTE ON SEMANTICS: a clean/graceful return from trading_engine.run()
+        # is counted toward consecutive_failures exactly like an exception.
+        # This is intentional given this module's contract: the trader is
+        # expected to loop internally forever, so ANY return — exception or
+        # not — is treated as anomalous and restart-worthy. This assumption
+        # only breaks if trading_engine.run() is ever changed to legitimately
+        # return early and often (e.g. a designed periodic restart, or a
+        # max_cycles-style batch completion faster than MIN_STABLE_RUN_SEC) —
+        # in that case this loop would falsely declare "permanent failure"
+        # and halt autonomous trading after MAX_RESTARTS clean cycles. If
+        # trading_engine.run() semantics ever change, this loop must change
+        # with it.
         BASE_RESTART_DELAY_SEC = 10
         MAX_RESTART_DELAY_SEC = 300
         MIN_STABLE_RUN_SEC = 300
@@ -572,8 +604,6 @@ class ForexAISystem:
     def _notify_startup(self, notifier):
         """Send startup notification via Telegram."""
         try:
-            import asyncio
-
             msg = (
                 f"🤖 FOREX AI System Started\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -596,7 +626,6 @@ class ForexAISystem:
         if not notifier:
             return
         try:
-            import asyncio
             msg = (
                 f"🔄 AUTO-RESTART #{restart_count}\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
@@ -614,8 +643,21 @@ class ForexAISystem:
         report_dir = PROJECT_ROOT / "reports"
         report_dir.mkdir(parents=True, exist_ok=True)
         path = report_dir / "latest_report.json"
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(report, f, indent=2, default=str)
+        tmp_path = path.with_suffix(".json.tmp")
+        try:
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(report, f, indent=2, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            # Atomic on POSIX and Windows (Python 3.3+) — readers of
+            # latest_report.json never observe a partially-written file.
+            os.replace(tmp_path, path)
+        except Exception as e:
+            logging.error(f"[System] Failed to write final report to {path}: {e}")
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _shutdown(self):
         """Graceful shutdown sequence."""

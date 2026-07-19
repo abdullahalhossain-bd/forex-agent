@@ -817,7 +817,14 @@ class AnalysisAgent:
         news_ctx    = news_filter.get_ai_context(news_result)
 
         # ── 10. Classic LLM Analyst ──────────────────────────
-        llm_result = AIAnalyst().analyze(
+        # BUGFIX: previously instantiated AIAnalyst() three separate times
+        # for analyze()/print_summary()/get_ai_context() — one call chain
+        # should use one instance, both to avoid 3x init cost (API client
+        # setup, config load, etc.) and because print_summary/get_ai_context
+        # were operating on throwaway objects rather than the one that
+        # actually produced llm_result.
+        ai_analyst = AIAnalyst()
+        llm_result = ai_analyst.analyze(
             ind_ctx          = ind_ctx,
             pat_ctx          = pat_ctx,
             sr_ctx           = sr_ctx,
@@ -828,8 +835,8 @@ class AnalysisAgent:
             fib_ctx          = fib_ctx,
             symbol           = symbol,
         )
-        AIAnalyst().print_summary(llm_result)
-        llm_ctx = AIAnalyst().get_ai_context(llm_result)
+        ai_analyst.print_summary(llm_result)
+        llm_ctx = ai_analyst.get_ai_context(llm_result)
 
         # ── 11. VISION AI (Day 47) ────────────────────────────
         vision_result = {}
@@ -1408,21 +1415,31 @@ class AnalysisAgent:
             timeframe = market_output.get("timeframe", "15m") if isinstance(market_output, dict) else "15m"
 
             engineer = get_feature_engineer()
+            # LEAKAGE FIX: this dict used to include "signal" (signal_result),
+            # "confluence" (confluence_ctx), and "master_ctx" — but the label
+            # saved a few lines below is derived from `final_signal`, which by
+            # THIS point in the pipeline already IS the master/confluence
+            # decision layered on top of signal_result. Training on features
+            # built from the same decision that produced the label is
+            # textbook label leakage: any model/RL agent trained on this
+            # feature store will show inflated backtest accuracy that will
+            # not reproduce live, because at live-inference time the
+            # equivalent feature won't yet encode the answer.
+            # Kept only genuinely pre-decision, market-state context.
+            # Also dropped the old `master_ctx.get("llm", {})` line — nothing
+            # in this file ever writes master_ctx["llm"], so it always
+            # evaluated to `{}` (dead code).
             unified_for_features = {
                 "smc_ctx": smc_ctx,
                 "session_ctx": session_ctx,
                 "intermarket_ctx": intermarket_ctx,
                 "sentiment_ctx": sentiment_ctx,
                 "news_intelligence": news_intel_ctx,
-                "signal": signal_result,
                 "bias_ctx": bias_ctx,
                 "fib_ctx": fib_ctx,
                 "sr_ctx": sr_ctx,
                 "advanced_pat_ctx": advanced_pat_ctx,
                 "mtf_bias": market_output.get("mtf_bias") if isinstance(market_output, dict) else None,
-                "confluence": confluence_ctx,
-                "master_ctx": master_ctx,
-                "llm": (master_ctx or {}).get("llm", {}) if isinstance(master_ctx, dict) else {},
             }
             full_feature_vector = engineer.build_feature_vector(
                 df=df, analysis_out=unified_for_features, pair=symbol, timeframe=timeframe,
@@ -1695,7 +1712,16 @@ class AnalysisAgent:
                 _ml_conf = float(ml_prediction_ctx.get("probability", 0.5)) * 100
 
             _rl_sig = rl_ctx.get("action_name", "HOLD") if isinstance(rl_ctx, dict) else "HOLD"
-            _rl_conf = float(rl_ctx.get("confidence", 50) or 50) * 100 if isinstance(rl_ctx, dict) else 50.0
+            # BUGFIX: rl_ctx["confidence"] is a fractional 0-1 value (see the
+            # `.2f` no-percent-sign log format used for it elsewhere in this
+            # file, vs. `.0f` + "%" used for every 0-100-scale confidence).
+            # The old fallback default of 50 was on the WRONG scale for this
+            # multiplication: 50 * 100 = 5000, an impossible confidence that
+            # would corrupt MasterDecisionEngine's weighting any time rl_ctx
+            # was missing the key (e.g. RL agent failure). Default must be
+            # 0.5 (i.e. 50 after scaling), matching every other layer's
+            # "unknown = 50% confidence" convention.
+            _rl_conf = float(rl_ctx.get("confidence", 0.5) or 0.5) * 100 if isinstance(rl_ctx, dict) else 50.0
 
             _llm_sig = (master_ctx.get("master_signal") or "WAIT") if isinstance(master_ctx, dict) else "WAIT"
             _llm_conf = float(master_ctx.get("master_confidence", 0) or 0) if isinstance(master_ctx, dict) else 0.0

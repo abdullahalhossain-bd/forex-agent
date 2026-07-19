@@ -118,15 +118,28 @@ class AutomatedRetrainingSystem:
         
         self.logger.info(f"Scheduled model retraining every {self.retraining_interval} days")
         
-        # Run in a separate thread
-        import threading
+        # Run in a separate thread (threading already imported at module top)
         thread = threading.Thread(target=self._run_scheduler, daemon=True)
         thread.start()
     
     def _run_scheduler(self):
-        """Run the scheduler in a loop"""
+        """Run the scheduler in a loop.
+
+        BUGFIX (audit follow-up): this loop had no exception handling. If
+        `schedule.run_pending()` (or the `schedule` library itself) ever
+        raised, the exception would propagate out of this daemon thread's
+        target function, silently killing the thread — scheduled
+        retraining would stop forever with no crash, no log, and no
+        visibility for an operator that it had happened. Since
+        `_retrain_models` already catches its own exceptions internally,
+        anything that reaches here is unexpected; log it and keep the
+        scheduler loop alive rather than let it die silently.
+        """
         while True:
-            schedule.run_pending()
+            try:
+                schedule.run_pending()
+            except Exception as e:
+                self.logger.error(f"Scheduler loop error (continuing): {e}", exc_info=True)
             time.sleep(60)  # Check every minute
     
     def _retrain_models(self):
@@ -136,10 +149,26 @@ class AutomatedRetrainingSystem:
         try:
             # Update data first
             data_status = data_updater.update_all_pairs()
-            
-            # Check if data update was successful
-            if not all(data_status.values()):
-                self.logger.error("Data update failed - skipping retraining")
+
+            # BUGFIX (audit follow-up): previously `if not all(data_status
+            # .values())` aborted retraining for EVERY pair the moment a
+            # single pair's data update failed (e.g. one flaky broker/API
+            # call for GBPJPY blocked EURUSD, USDJPY, etc. too) — this
+            # contradicted the resilience pattern used everywhere else in
+            # this file (_load_all_forex_data already skips individual
+            # pairs with missing data; the per-pair training loop below
+            # already isolates exceptions per pair). Only treat this as
+            # fatal when NO pair updated successfully, which is the actual
+            # signal of a systemic failure (e.g. broker/API entirely down)
+            # rather than one pair having a bad day.
+            failed_pairs = [p for p, ok in data_status.items() if not ok]
+            if failed_pairs:
+                self.logger.warning(
+                    f"Data update failed for {failed_pairs} — "
+                    f"continuing retraining with the remaining pairs"
+                )
+            if data_status and not any(data_status.values()):
+                self.logger.error("Data update failed for ALL pairs — skipping retraining entirely")
                 return False
             
             # Get latest data
@@ -204,7 +233,29 @@ class AutomatedRetrainingSystem:
             # Add prefix to columns
             prefixed_data = data.add_prefix(f"{pair.replace('/', '_')}_")
             combined = pd.concat([combined, prefixed_data], axis=1)
-        
+
+        # BUGFIX (audit follow-up): pd.concat(axis=1) does an implicit
+        # OUTER join on the index. If any pair's data has a slightly
+        # different index than the others (a missed candle, a different
+        # history start date, a broker feed hiccup on just one symbol),
+        # that timestamp's row becomes NaN for every OTHER pair's columns
+        # too — and since _create_features builds cross-pair columns
+        # (f'{other}_returns') straight out of this combined frame, a
+        # single misaligned pair can silently shrink the usable training
+        # window for every pair, not just itself. There was previously no
+        # visibility into this at all. This doesn't change behavior (the
+        # downstream notna()/isfinite() filtering already handles it
+        # correctly) — it just makes a real but silent data-quality issue
+        # observable instead of invisible.
+        if not combined.empty:
+            rows_with_any_gap = int(combined.isna().any(axis=1).sum())
+            if rows_with_any_gap:
+                self.logger.warning(
+                    f"_load_all_forex_data: {rows_with_any_gap}/{len(combined)} rows have a "
+                    f"gap in at least one pair's columns after alignment across "
+                    f"{len(all_data)} pairs — these rows will be dropped downstream"
+                )
+
         return combined
     
     @staticmethod
@@ -867,6 +918,18 @@ class AutomatedRetrainingSystem:
 
         # Also consider MAE (kept as-is: same relative-only bar as before,
         # MAE is a secondary/tie-breaker metric here, not the primary gate)
+        #
+        # BUGFIX (audit follow-up): as written, this MAE check ran
+        # unconditionally whenever the MSE gate above didn't return True —
+        # including when MSE was NOT significant, or even when the new
+        # model's MSE was outright WORSE than production's. That let a
+        # regressed-on-its-primary-metric model still get promoted purely
+        # because MAE happened to clear the 5% bar, completely bypassing
+        # the significance check this function's own docstring says is
+        # required ("Both conditions must hold"). A tie-breaker must not
+        # be able to override the primary gate on its own — it should only
+        # settle genuinely close calls. Guard: MAE can only promote when
+        # MSE is at least not worse than the current production model.
         new_mae = new_metrics.get('val_mae', float('inf'))
         current_mae = current_metrics.get('val_mae', float('inf'))
 
@@ -875,9 +938,9 @@ class AutomatedRetrainingSystem:
         if _bad(current_mae):
             current_mae = float('inf')
 
-        if new_mae < current_mae * 0.95:
+        if new_mse <= current_mse and new_mae < current_mae * 0.95:
             return True
-        
+
         return False
 
 # Singleton instance

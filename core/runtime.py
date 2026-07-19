@@ -67,6 +67,12 @@ class Runtime:
         self._booted = False
 
     def boot(self, until: Optional[Phase] = None) -> None:
+        if self._booted:
+            log.warning(
+                "Runtime.boot() called on an already-booted Runtime — ignoring. "
+                "Call shutdown() first if a re-boot is genuinely intended."
+            )
+            return
         register_default_phases(self.lifecycle)
         self.lifecycle.boot(until=until)
         self._booted = True
@@ -743,6 +749,8 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
     master PositionSizer that fuses them all.
     """
     services = []
+    core_risk_failed = False
+    core_risk_error = None
     try:
         from risk.risk_engine import RiskEngine
         from risk.circuit_breaker import CircuitBreaker
@@ -787,7 +795,15 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
         services.extend(["circuit_breaker", "drawdown_controller",
                          "trade_permission", "risk_engine_factory"])
     except Exception as e:
-        log.error("Risk core init failed: %s", e)
+        # CRITICAL: RiskEngine/CircuitBreaker/TradePermission/DrawdownController
+        # are the pre-trade risk gates. If they fail to load, the system must
+        # NOT report a successful boot and proceed to trade ungated — that
+        # would mean live orders can execute with no circuit breaker and no
+        # drawdown control. Same failure-reporting pattern as boot_persistence.
+        log.critical("CRITICAL: Risk core init failed — trading must not proceed "
+                     "ungated: %s", e, exc_info=True)
+        core_risk_failed = True
+        core_risk_error = str(e)
 
     try:
         from risk.autonomous_risk import AutonomousRiskManager
@@ -901,6 +917,10 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
         log.warning("PositionSizer init failed: %s", e)
 
     get_bus().publish("system.startup", {"phase": "risk", "services": services}, source="runtime")
+    if core_risk_failed:
+        return PhaseResult(phase=Phase.RISK, ok=False, duration_sec=0.0,
+                           services_registered=services,
+                           error=f"Critical risk core failed: {core_risk_error}")
     return PhaseResult(phase=Phase.RISK, ok=True, duration_sec=0.0,
                        services_registered=services)
 
@@ -908,21 +928,33 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
 def boot_safety(registry: ServiceRegistry) -> PhaseResult:
     """Phase 13 — SafetyGuard + SpreadMonitor."""
     services = []
+    safety_guard_failed = False
+    safety_guard_error = None
     try:
         from broker.safety_guard import SafetyGuard
         registry.register("safety_guard", lambda r: SafetyGuard(paper_trader=r.try_resolve("paper_trader")))
         services.append("safety_guard")
     except Exception as e:
-        log.warning("SafetyGuard not available: %s", e)
+        # CRITICAL: SafetyGuard is the primary pre-trade safety gate. Report
+        # ok=False rather than silently proceeding without it — same
+        # reasoning as the risk-core failure in boot_risk above.
+        log.critical("CRITICAL: SafetyGuard init failed — trading must not "
+                     "proceed without this gate: %s", e, exc_info=True)
+        safety_guard_failed = True
+        safety_guard_error = str(e)
 
     try:
         from broker.spread_monitor import SpreadMonitor
         registry.register_instance("spread_monitor", SpreadMonitor())
         services.append("spread_monitor")
     except Exception as e:
-        log.warning("SpreadMonitor not available: %s", e)
+        log.warning("SpreadMonitor not available (non-critical): %s", e)
 
     get_bus().publish("system.startup", {"phase": "safety", "services": services}, source="runtime")
+    if safety_guard_failed:
+        return PhaseResult(phase=Phase.SAFETY, ok=False, duration_sec=0.0,
+                           services_registered=services,
+                           error=f"SafetyGuard failed: {safety_guard_error}")
     return PhaseResult(phase=Phase.SAFETY, ok=True, duration_sec=0.0,
                        services_registered=services)
 
@@ -939,6 +971,8 @@ def boot_execution(registry: ServiceRegistry) -> PhaseResult:
     শেয়ার হয়।
     """
     services = []
+    router_failed = False
+    router_error = None
 
     try:
         from execution.execution_router import ExecutionRouter
@@ -955,9 +989,19 @@ def boot_execution(registry: ServiceRegistry) -> PhaseResult:
                 "found in registry, router created its own connection (check boot_market phase)"
             )
     except Exception as e:
-        log.error("ExecutionRouter init failed: %s", e)
+        # CRITICAL: ExecutionRouter is the only path orders reach the broker.
+        # If it fails to construct, nothing downstream can trade — report
+        # ok=False instead of letting boot appear to succeed.
+        log.critical("CRITICAL: ExecutionRouter init failed — no order path "
+                     "exists: %s", e, exc_info=True)
+        router_failed = True
+        router_error = str(e)
 
     get_bus().publish("system.startup", {"phase": "execution", "services": services}, source="runtime")
+    if router_failed:
+        return PhaseResult(phase=Phase.EXECUTION, ok=False, duration_sec=0.0,
+                           services_registered=services,
+                           error=f"ExecutionRouter failed: {router_error}")
     return PhaseResult(phase=Phase.EXECUTION, ok=True, duration_sec=0.0,
                        services_registered=services)
 
@@ -986,39 +1030,75 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
         return PhaseResult(phase=Phase.BROKER, ok=True, duration_sec=0.0,
                            services_registered=[], skipped=True)
 
+    account_broker_failed = False
+    account_broker_error = None
+    om = None
+
+    # ── CRITICAL: AccountManager + OrderManager — the actual order path.
+    # Kept in its own try block, and each service is added to `services`
+    # immediately on success, so a later failure in a non-critical service
+    # (journal_bridge, economic_calendar, ...) can no longer erase these
+    # from the reported PhaseResult the way a single batched extend() did.
     try:
         from broker.account_manager import AccountManager
         from broker.order_manager import OrderManager
-        from broker.journal_bridge import JournalBridge
-        from broker.health_monitor import HealthMonitor as BrokerHealthMonitor
-        from broker.economic_calendar import EconomicCalendar
 
-        db = registry.try_resolve("db")
         conn = registry.try_resolve("mt5_connection")
         account_mgr = AccountManager(conn)
         registry.register_instance("account_manager", account_mgr)
+        services.append("account_manager")
+
         om = OrderManager(conn, account_mgr)
         registry.register_instance("order_manager", om)
-        registry.register_instance("journal_bridge", JournalBridge(db=db))
-        registry.register_instance("broker_health_monitor", BrokerHealthMonitor(conn))
-        registry.register_instance("economic_calendar", EconomicCalendar())
-        services.extend(["account_manager", "order_manager", "journal_bridge",
-                         "broker_health_monitor", "economic_calendar"])
+        services.append("order_manager")
+    except Exception as e:
+        log.critical("CRITICAL: AccountManager/OrderManager init failed — no "
+                     "order path exists: %s", e, exc_info=True)
+        account_broker_failed = True
+        account_broker_error = str(e)
 
-        # ── Round-30: MT5 Trade State Recovery ────────────────────
-        # After all broker services are registered, synchronize with MT5's
-        # actual position/trade state. This makes the bot restart-safe:
-        #   - Open positions are seeded into PositionManager
-        #   - Trades that closed during downtime are reconciled in the DB
-        #   - No trade is forgotten, no close is missed
+    # ── NON-CRITICAL: journal, broker health, economic calendar — each
+    # isolated so one failing import can't take out the others.
+    db = registry.try_resolve("db")
+    conn = registry.try_resolve("mt5_connection")
+    try:
+        from broker.journal_bridge import JournalBridge
+        registry.register_instance("journal_bridge", JournalBridge(db=db))
+        services.append("journal_bridge")
+    except Exception as e:
+        log.warning("JournalBridge init failed (non-critical): %s", e)
+
+    try:
+        from broker.health_monitor import HealthMonitor as BrokerHealthMonitor
+        registry.register_instance("broker_health_monitor", BrokerHealthMonitor(conn))
+        services.append("broker_health_monitor")
+    except Exception as e:
+        log.warning("BrokerHealthMonitor init failed (non-critical): %s", e)
+
+    try:
+        from broker.economic_calendar import EconomicCalendar
+        registry.register_instance("economic_calendar", EconomicCalendar())
+        services.append("economic_calendar")
+    except Exception as e:
+        log.warning("EconomicCalendar init failed (non-critical): %s", e)
+
+    # ── Round-30: MT5 Trade State Recovery ────────────────────────────
+    # Runs whenever OrderManager is available, independent of whether the
+    # non-critical services above succeeded — recovery only needs `om`.
+    if om is not None:
         try:
             from execution.trade_recovery import recover_mt5_state
 
-            # Get learning DB (memory/database.py Database instance)
+            # Reuse the trade_memory instance registered by boot_persistence
+            # instead of constructing a second, independent TradeMemory()
+            # (which would open a second DB handle and redo seed_rules work
+            # for no reason).
             learning_db = None
             try:
-                from memory.trade_memory import TradeMemory
-                tm = TradeMemory()
+                tm = registry.try_resolve("trade_memory")
+                if tm is None:
+                    from memory.trade_memory import TradeMemory
+                    tm = TradeMemory()
                 learning_db = tm.db
             except Exception:
                 pass
@@ -1041,10 +1121,11 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
         except Exception as _recovery_e:
             log.warning(f"[Runtime] MT5 trade recovery failed (non-fatal): {_recovery_e}")
 
-    except Exception as e:
-        log.error("Broker subsystem init failed: %s", e)
-
     get_bus().publish("system.startup", {"phase": "broker", "services": services}, source="runtime")
+    if account_broker_failed:
+        return PhaseResult(phase=Phase.BROKER, ok=False, duration_sec=0.0,
+                           services_registered=services,
+                           error=f"AccountManager/OrderManager failed: {account_broker_error}")
     return PhaseResult(phase=Phase.BROKER, ok=True, duration_sec=0.0,
                        services_registered=services)
 

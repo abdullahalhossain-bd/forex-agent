@@ -52,10 +52,34 @@ class RiskAgent:
                 f"Daily loss limit hit ({self.daily_loss_pc:.1f}%)"
             )
 
-        atr = ind_ctx.get("atr", 0.0005)
+        # FIX (review): previously defaulted missing ATR to a hardcoded
+        # 0.0005 — a plausible value for a 4/5-digit pair like EURUSD, but
+        # wrong by ~100x for JPY pairs and by 1000x+ for metals/indices/
+        # crypto. A silent wrong-scale guess produces a too-tight SL and
+        # an oversized lot for the real risk taken — exactly backwards
+        # for a risk-management module. Fail safe instead: if ATR is
+        # missing or non-positive, refuse to guess and reject the trade
+        # with an explicit reason rather than silently mis-sizing it.
+        atr = ind_ctx.get("atr")
+        if atr is None or atr <= 0:
+            return self._no_trade(
+                f"ATR unavailable or invalid for {symbol} "
+                f"(atr={atr!r}) — refusing to guess a default SL distance"
+            )
         csym = clean_symbol(symbol)
         pip = get_pip_size(csym)
         pip_val_std = get_pip_value_usd(csym)
+
+        # FIX (review): pip_val_std is used as a divisor below
+        # (risk_amount / (sl_pips * pip_val_std)). Previously there was
+        # no guard for pip_val_std == 0 — an unrecognized/mis-cleaned
+        # symbol returning 0 from get_pip_value_usd() would raise an
+        # unhandled ZeroDivisionError mid-cycle instead of failing safe.
+        if pip_val_std <= 0:
+            return self._no_trade(
+                f"Invalid pip value for {symbol} (pip_val_std={pip_val_std!r}) "
+                f"— cannot size position, refusing to guess"
+            )
 
         # Regime-based SL multiplier
         volatility = regime.get("volatility", "NORMAL")
@@ -141,6 +165,13 @@ class RiskAgent:
             "rr_ratio":        0,
             "risk_usd":        0,
             "risk_amount_usd": 0,
+            # FIX (review): the approved-path dict in calculate() includes
+            # "balance", "risk_pc", and "risk_percent" — this dict didn't,
+            # so any downstream code expecting a uniform schema regardless
+            # of approval status would KeyError on the no-trade path.
+            "balance":         self.balance,
+            "risk_pc":         self.MAX_RISK_PERCENT,
+            "risk_percent":    self.MAX_RISK_PERCENT,
         }
 
     def print_summary(self, result: dict) -> None:

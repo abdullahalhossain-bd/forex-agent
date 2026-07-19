@@ -141,13 +141,40 @@ class ModelVersionManager:
         else:
             self.logger.info("MLflow not installed — model_versioning running in degraded mode.")
     
+    def _resolve_version_dir(self, version: str) -> str:
+        """Resolve a `version` identifier to a path under self.model_dir,
+        rejecting anything that could escape it.
+
+        BUGFIX (audit follow-up): save/load/delete/compare all previously
+        did `os.path.join(self.model_dir, version)` directly with zero
+        validation on `version`. `delete_model_version` then calls
+        `shutil.rmtree()` on the result — so a version string containing
+        `..` path components (from a bug upstream, a hand-edited call
+        site, or this manager ever being exposed behind an API/CLI that
+        takes a version as external input) could delete or read/write
+        files anywhere the process has permissions, not just inside
+        model_dir. `version` is internally-generated today (see
+        automated_retraining.py's `f"{pair}_{timestamp}"`), but this
+        class has no way to enforce that invariant from its own call
+        sites, so it enforces it here instead.
+        """
+        if not isinstance(version, str) or not version.strip():
+            raise ValueError("version must be a non-empty string")
+        if os.path.isabs(version) or os.sep in version or (os.altsep and os.altsep in version):
+            raise ValueError(f"Invalid version identifier: {version!r}")
+        model_dir_abs = os.path.normpath(os.path.abspath(self.model_dir))
+        version_dir = os.path.normpath(os.path.abspath(os.path.join(self.model_dir, version)))
+        if os.path.commonpath([version_dir, model_dir_abs]) != model_dir_abs:
+            raise ValueError(f"Invalid version identifier (path traversal attempt): {version!r}")
+        return version_dir
+
     def save_model_version(self, model: Any, version: str, metrics: Dict, 
                           params: Dict, notes: str = "") -> str:
         """Save a model version with metadata"""
         with self._lock:
             try:
                 # Create version directory
-                version_dir = os.path.join(self.model_dir, version)
+                version_dir = self._resolve_version_dir(version)
                 os.makedirs(version_dir, exist_ok=True)
 
                 # Save model
@@ -157,13 +184,22 @@ class ModelVersionManager:
                 # BUGFIX (audit follow-up): model files are now written
                 # atomically (write to temp file in the same dir, then
                 # os.replace()) so a crash mid-save can never leave a
-                # truncated/corrupt model.keras / model.h5 / model.pkl
-                # behind that load_model_version() would later choke on.
+                # truncated/corrupt model.keras / model.pkl behind that
+                # load_model_version() would later choke on.
+                #
+                # BUGFIX (audit follow-up): this used to have a second
+                # `elif isinstance(model, tf.keras.Model): ...model.h5...`
+                # branch for "legacy" saves. In TF2, `from tensorflow
+                # import keras` and `tf.keras` are the SAME module object,
+                # so `keras.Model is tf.keras.Model` — any model that
+                # fails the first isinstance check also fails the second.
+                # That branch was dead code that could never execute,
+                # which silently implied legacy .h5 support that didn't
+                # actually exist. Removed; load_model_version still
+                # supports reading a pre-existing .h5 file if one is ever
+                # placed in a version directory by hand.
                 if TF_AVAILABLE and isinstance(model, keras.Model):
                     model_path = os.path.join(version_dir, 'model.keras')
-                    _atomic_write_bytes(model_path, lambda tmp: model.save(tmp))
-                elif TF_AVAILABLE and isinstance(model, tf.keras.Model):
-                    model_path = os.path.join(version_dir, 'model.h5')
                     _atomic_write_bytes(model_path, lambda tmp: model.save(tmp))
                 else:
                     # For sklearn models
@@ -210,7 +246,7 @@ class ModelVersionManager:
         """Load a model version with metadata"""
         with self._lock:
             try:
-                version_dir = os.path.join(self.model_dir, version)
+                version_dir = self._resolve_version_dir(version)
 
                 if not os.path.exists(version_dir):
                     raise ValueError(f"Model version {version} not found")
@@ -295,6 +331,18 @@ class ModelVersionManager:
                         try:
                             with open(metadata_path, 'r') as f:
                                 metadata = json.load(f)
+                            # BUGFIX (audit follow-up): the final sort below
+                            # keys on metadata['created_at'] with no
+                            # fallback. One legacy/hand-edited metadata.json
+                            # missing that field used to raise an uncaught
+                            # KeyError from inside .sort(), crashing this
+                            # method (and therefore get_latest_model_version)
+                            # entirely instead of just skipping the one bad
+                            # entry — the same defensive pattern already
+                            # used for corrupted JSON below.
+                            if 'created_at' not in metadata:
+                                self.logger.error(f"Metadata for {version} missing 'created_at' — skipping")
+                                continue
                             versions.append(metadata)
                         except Exception as e:
                             self.logger.error(f"Error reading metadata for {version}: {e}")
@@ -339,14 +387,29 @@ class ModelVersionManager:
 
                     if _is_valid_number(val1) and _is_valid_number(val2):
                         diff = val2 - val1
-                        pct_change = ((val2 - val1) / val1) * 100 if val1 != 0 else 0
-
-                        comparison['metrics_comparison'][metric] = {
-                            'version1': val1,
-                            'version2': val2,
-                            'difference': diff,
-                            'percent_change': pct_change
-                        }
+                        # BUGFIX (audit follow-up): val1 == 0 previously
+                        # reported percent_change as a literal 0, which
+                        # reads as "no change" — but a metric going from 0
+                        # to any nonzero value is an undefined/infinite
+                        # percent change, not 0%. Reporting 0 here actively
+                        # misleads anyone reading the comparison. Report
+                        # None with a note instead, same as the
+                        # non-numeric/NaN case below.
+                        if val1 != 0:
+                            comparison['metrics_comparison'][metric] = {
+                                'version1': val1,
+                                'version2': val2,
+                                'difference': diff,
+                                'percent_change': (diff / val1) * 100,
+                            }
+                        else:
+                            comparison['metrics_comparison'][metric] = {
+                                'version1': val1,
+                                'version2': val2,
+                                'difference': diff,
+                                'percent_change': None,
+                                'note': 'percent_change undefined: version1 value is 0',
+                            }
                     elif val1 is not None or val2 is not None:
                         comparison['metrics_comparison'][metric] = {
                             'version1': val1,
@@ -377,7 +440,7 @@ class ModelVersionManager:
         """Delete a model version"""
         with self._lock:
             try:
-                version_dir = os.path.join(self.model_dir, version)
+                version_dir = self._resolve_version_dir(version)
 
                 if not os.path.exists(version_dir):
                     self.logger.warning(f"Model version {version} not found")

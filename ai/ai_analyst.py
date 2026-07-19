@@ -91,12 +91,62 @@ class AIAnalyst:
         with self._usage_lock:
             return dict(self._usage_totals)
 
+    def shutdown(self, wait: bool = False) -> None:
+        """Release the internal LLM-call thread pool.
+
+        BUGFIX (audit follow-up): __init__ creates a ThreadPoolExecutor
+        but nothing ever closed it. In long-running production use this
+        is harmless (one AIAnalyst instance for the process lifetime),
+        but if the app ever recreates AIAnalyst (hot-reload, per-request
+        instantiation, tests), the old executor's worker threads leak
+        indefinitely. Call this on teardown; safe to call multiple times.
+        `wait=False` by default so shutdown never blocks on an in-flight
+        provider call — matching this class's "never block the trading
+        loop" design elsewhere (see _call_with_timeout).
+        """
+        try:
+            self._call_executor.shutdown(wait=wait, cancel_futures=True)
+        except TypeError:
+            # cancel_futures kwarg added in Python 3.9; degrade gracefully
+            # on older runtimes rather than raising.
+            self._call_executor.shutdown(wait=wait)
+        except Exception:
+            pass
+
+    def __del__(self):
+        # Best-effort safety net only — explicit shutdown() is preferred.
+        try:
+            self.shutdown(wait=False)
+        except Exception:
+            pass
+
     def _call_with_timeout(self, fn, *args, timeout: float, **kwargs):
         """Run a blocking provider call with a hard wall-clock deadline.
 
         Returns the call's result, or None if it raised or exceeded
         `timeout` (matching the existing "None means try the next
         fallback" convention used throughout analyze()).
+
+        BUGFIX (audit follow-up): ``future.result(timeout=...)`` only stops
+        *waiting* on the future — it does NOT cancel the underlying thread.
+        If ``fn`` is mid-retry (e.g. ``_call_groq``'s own 3-attempt loop
+        with exponential backoff), that thread keeps running in the
+        background after this method returns, silently occupying one of
+        the 4 executor workers and still burning real API/rate-limit
+        budget on a result nobody will use. Across 6 symbols polled every
+        cycle, repeated timeouts could eventually exhaust the pool and
+        make *future* calls queue for real (compounding the very problem
+        this wrapper exists to prevent).
+
+        A true hard-cancel of an in-flight blocking HTTP call isn't
+        possible with ``ThreadPoolExecutor`` alone. This is mitigated two
+        ways: (1) callers now pass an absolute ``deadline`` through to the
+        provider call so its internal retry loop stops scheduling *new*
+        attempts once the caller has already given up (see ``_call_groq``,
+        ``_call_gemini``, ``_call_openai_compat``), and (2) each provider
+        call now also passes a request-level timeout to the SDK itself
+        where supported, so the in-flight socket call is aborted at the
+        transport layer rather than relying on this wrapper alone.
         """
         future = self._call_executor.submit(fn, *args, **kwargs)
         try:
@@ -183,14 +233,22 @@ class AIAnalyst:
         mtf_bias:   str = "NEUTRAL",
         symbol:     str = "EURUSD",
         advanced_pat_ctx: dict = None,
+        timeframe:  str = "15M",
         **kwargs,
     ) -> dict:
         """
         সব technical context নিয়ে LLM analyst এর opinion নেয়।
         Returns structured dict।
         """
+        # BUGFIX (audit follow-up): TIMEFRAME was previously hardcoded to
+        # "15M" inside _build_context regardless of what timeframe this
+        # analyst was actually being run on. The prompt explicitly asks the
+        # LLM to weigh session/timing context (rule 6 in _build_prompt) —
+        # a silently wrong timeframe label would mislead that judgment if
+        # this analyst is ever invoked on a different chart. Default
+        # preserves existing behavior; callers can now pass the real value.
         context = self._build_context(
-            ind_ctx, pat_ctx, sr_ctx, regime, signal, mtf_bias, symbol, advanced_pat_ctx
+            ind_ctx, pat_ctx, sr_ctx, regime, signal, mtf_bias, symbol, advanced_pat_ctx, timeframe
         )
         prompt  = self._build_prompt(context)
 
@@ -202,7 +260,16 @@ class AIAnalyst:
         try:
             from core.llm_cache import get_llm_cache
             _cache = get_llm_cache()
-            _cache_key = _cache.make_key("groq", self.GROQ_MODEL, prompt)
+            # BUGFIX: cache key is intentionally provider/model-agnostic.
+            # The cache's purpose is "same prompt within 5 min → reuse the
+            # answer, whichever backend produced it" (see comment above).
+            # Hardcoding "groq"/GROQ_MODEL here mislabeled every cache
+            # entry as a Groq response even when Gemini/Cerebras/SambaNova/
+            # OpenRouter actually served it (see cache-store call below),
+            # which silently broke model-versioning: if GROQ_MODEL was ever
+            # changed, stale non-Groq answers cached under the old key
+            # would still be returned as if freshly generated.
+            _cache_key = _cache.make_key("ai_analyst", "any", prompt)
             _cached = _cache.get(_cache_key)
             if _cached is not None:
                 log.debug(f"[AIAnalyst] LLM cache HIT — skipping API call")
@@ -228,7 +295,7 @@ class AIAnalyst:
         # Primary: Groq
         raw = None
         if self._groq_client and time.monotonic() < deadline:
-            raw = self._call_with_timeout(self._call_groq, prompt, timeout=_remaining())
+            raw = self._call_with_timeout(self._call_groq, prompt, timeout=_remaining(), deadline=deadline)
 
         # ── PRIMARY FALLBACK: Gemini (moved up — most reliable after Groq) ──
         # Cerebras (Cloudflare 403) and SambaNova (410 Gone) are known broken.
@@ -240,7 +307,7 @@ class AIAnalyst:
             if _gem_client is None and self._key_manager is not None:
                 _gem_client = self._key_manager.get_gemini_client()
             if _gem_client is not None:
-                raw = self._call_with_timeout(self._call_gemini, prompt, timeout=_remaining())
+                raw = self._call_with_timeout(self._call_gemini, prompt, timeout=_remaining(), deadline=deadline)
 
         # ── Day 91 — Cerebras / SambaNova / OpenRouter fallback ──
         # All three are OpenAI-compatible; reuse _call_openai_compat
@@ -258,6 +325,7 @@ class AIAnalyst:
                     model_env="CEREBRAS_MODEL",
                     default_model="llama3.1-8b-instruct",
                     prompt=prompt,
+                    deadline=deadline,
                 )
         if raw is None and self._key_manager is not None and time.monotonic() < deadline:
             if self._key_manager.has_any_sambanova:
@@ -274,6 +342,7 @@ class AIAnalyst:
                     # 2026-Q3). Override via SAMBANOVA_MODEL env var.
                     default_model="DeepSeek-V3",
                     prompt=prompt,
+                    deadline=deadline,
                 )
         if raw is None and self._key_manager is not None and time.monotonic() < deadline:
             if self._key_manager.has_any_openrouter:
@@ -295,6 +364,7 @@ class AIAnalyst:
                         model_env=None,  # use explicit model below
                         default_model=or_model,
                         prompt=prompt,
+                        deadline=deadline,
                     )
                     if raw is not None:
                         break
@@ -305,6 +375,8 @@ class AIAnalyst:
             return self._fallback_result("No LLM available (or all providers timed out)", rule_signal=signal)
 
         # ── Day 90 — cache store ───────────────────────────────
+        # Stored under the provider-agnostic key regardless of which
+        # backend produced `raw` — see the lookup-side comment above.
         try:
             _cache.set(_cache_key, raw, token_estimate=400)
         except Exception:
@@ -319,7 +391,7 @@ class AIAnalyst:
 
     # ── Context builder ────────────────────────────────────────
     def _build_context(
-        self, ind, pat, sr, regime, signal, mtf_bias, symbol, advanced_pat=None
+        self, ind, pat, sr, regime, signal, mtf_bias, symbol, advanced_pat=None, timeframe="15M"
     ) -> str:
         adv_patterns_str = "None"
         if advanced_pat and isinstance(advanced_pat, dict):
@@ -327,7 +399,7 @@ class AIAnalyst:
 
         return f"""
 SYMBOL        : {symbol}
-TIMEFRAME     : 15M
+TIMEFRAME     : {timeframe}
 
 -- PRICE & TREND --
 Close         : {ind.get('close', 'N/A')}
@@ -405,7 +477,7 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
 }}"""
 
     # ── LLM callers (multi-key retry) ───────────────────────────
-    def _call_groq(self, prompt: str) -> str | None:
+    def _call_groq(self, prompt: str, deadline: float | None = None) -> str | None:
         """Call Groq with multi-key retry. If current key fails, tries next.
 
         If ALL keys are exhausted (e.g. Groq free-tier TPD hit), waits
@@ -417,6 +489,18 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         symbol cycle to MAX_LLM_CALLS_PER_CYCLE (default 5).  Also
         enforces LLM_CALL_INTERVAL_SEC between calls (default 1.0s)
         to prevent the Groq free-tier rate-limit storm.
+
+        Args:
+            deadline: absolute ``time.monotonic()`` cutoff, forwarded by
+                ``analyze()`` via ``_call_with_timeout``. BUGFIX (audit
+                follow-up): this method's own 3-attempt retry loop
+                (up to ~7s of backoff sleep alone, plus 3x API latency)
+                previously ran with no awareness of the caller's overall
+                budget. If the outer wrapper's ``future.result(timeout=...)``
+                already gave up, this loop kept running anyway in the
+                background thread — see ``_call_with_timeout`` docstring.
+                Checking the deadline before each retry stops it from
+                scheduling further attempts once the caller has moved on.
         """
         # Per-cycle throttle check
         if hasattr(self, '_key_manager') and self._key_manager:
@@ -427,6 +511,9 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
 
         max_retries = 3
         for attempt in range(max_retries):
+            if deadline is not None and time.monotonic() >= deadline:
+                log.debug("[AIAnalyst] Groq: deadline already elapsed — abandoning remaining retries")
+                return None
             client = self._groq_client
             if client is None and hasattr(self, '_key_manager') and self._key_manager:
                 client = self._key_manager.get_groq_client()
@@ -460,7 +547,7 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                 log.warning("No Groq client available — falling back")
                 return None
             try:
-                resp = client.chat.completions.create(
+                create_kwargs = dict(
                     model=self.GROQ_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
@@ -469,24 +556,32 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     # MasterAnalyst's (just signal + reasoning, no full plan).
                     max_tokens=int(os.getenv("AI_ANALYST_MAX_TOKENS", "400")),
                 )
-                # Success — mark key as healthy
-                if hasattr(self, '_key_manager') and self._key_manager:
-                    usage = getattr(resp, "usage", None)
-                    total_tokens = 0
-                    if usage is not None:
-                        prompt_tokens = getattr(usage, "prompt_tokens", 0) or 0
-                        completion_tokens = getattr(usage, "completion_tokens", 0) or 0
-                        total_tokens = prompt_tokens + completion_tokens
-                    self._key_manager.mark_groq_success(tokens_used=total_tokens, client=client)
-                # BUGFIX (audit follow-up): token usage tracking (see
-                # __init__/_record_usage). Groq's response follows the
-                # OpenAI usage schema.
+                if deadline is not None:
+                    # BUGFIX (audit follow-up): request-level timeout so a
+                    # hung/slow socket call is actually aborted by the SDK's
+                    # transport layer, instead of relying solely on the
+                    # outer ThreadPoolExecutor wrapper (which can only stop
+                    # *waiting*, not cancel the in-flight call — see
+                    # _call_with_timeout). The groq SDK (httpx-based) mirrors
+                    # the OpenAI client's per-call `timeout` kwarg; guarded
+                    # with a fallback in case an older SDK version doesn't
+                    # accept it.
+                    create_kwargs["timeout"] = max(0.5, deadline - time.monotonic())
+                try:
+                    resp = client.chat.completions.create(**create_kwargs)
+                except TypeError:
+                    create_kwargs.pop("timeout", None)
+                    resp = client.chat.completions.create(**create_kwargs)
+                # Success — mark key as healthy and record usage (single
+                # lookup, reused for both — was computed twice before).
                 usage = getattr(resp, "usage", None)
-                self._record_usage(
-                    "groq",
-                    prompt_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
-                    completion_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
-                )
+                prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+                completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+                if hasattr(self, '_key_manager') and self._key_manager:
+                    self._key_manager.mark_groq_success(
+                        tokens_used=(prompt_tokens or 0) + (completion_tokens or 0), client=client
+                    )
+                self._record_usage("groq", prompt_tokens=prompt_tokens, completion_tokens=completion_tokens)
                 return resp.choices[0].message.content
             except Exception as e:
                 from core.llm_key_manager import log_llm_call_failure
@@ -510,7 +605,10 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     if info.get("rate_limited"):
                         base_delay *= 2
                     delay = base_delay + random.uniform(0, 0.25)
-                    time.sleep(delay)
+                    if deadline is not None:
+                        delay = min(delay, max(0.0, deadline - time.monotonic()))
+                    if delay > 0:
+                        time.sleep(delay)
         return None
 
     # ── Day 91 — OpenAI-compatible fallback (Cerebras / SambaNova / OpenRouter)
@@ -524,6 +622,7 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         model_env: str | None,
         default_model: str,
         prompt: str,
+        deadline: float | None = None,
     ) -> str | None:
         """Generic OpenAI-compatible chat completion call.
 
@@ -531,6 +630,10 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         the same /v1/chat/completions endpoint with .chat.completions.
         create() surface. This helper avoids duplicating the call+retry
         boilerplate across three near-identical blocks.
+
+        Args:
+            deadline: see ``_call_groq`` — bounds retries/backoff to the
+                caller's remaining budget (audit follow-up).
 
         Returns:
             str response text on success, None on failure (caller should
@@ -550,16 +653,26 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
             model = os.getenv(model_env, default_model)
 
         for attempt in range(max_retries):
+            if deadline is not None and time.monotonic() >= deadline:
+                log.debug(f"[AIAnalyst] {provider_name}: deadline already elapsed — abandoning remaining retries")
+                return None
             try:
                 client = client_getter()
                 if client is None:
                     return None
-                resp = client.chat.completions.create(
+                create_kwargs = dict(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.2,
                     max_tokens=max_tokens,
                 )
+                if deadline is not None:
+                    create_kwargs["timeout"] = max(0.5, deadline - time.monotonic())
+                try:
+                    resp = client.chat.completions.create(**create_kwargs)
+                except TypeError:
+                    create_kwargs.pop("timeout", None)
+                    resp = client.chat.completions.create(**create_kwargs)
                 success_marker()
                 usage = getattr(resp, "usage", None)
                 self._record_usage(
@@ -580,13 +693,25 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     base_delay = 2 ** attempt
                     if info.get("rate_limited"):
                         base_delay *= 2
-                    time.sleep(base_delay + random.uniform(0, 0.25))
+                    delay = base_delay + random.uniform(0, 0.25)
+                    if deadline is not None:
+                        delay = min(delay, max(0.0, deadline - time.monotonic()))
+                    if delay > 0:
+                        time.sleep(delay)
         return None
 
-    def _call_gemini(self, prompt: str) -> str | None:
-        """Call Gemini with multi-key retry."""
+    def _call_gemini(self, prompt: str, deadline: float | None = None) -> str | None:
+        """Call Gemini with multi-key retry.
+
+        Args:
+            deadline: see ``_call_groq`` — bounds retries/backoff to the
+                caller's remaining budget (audit follow-up).
+        """
         max_retries = 3
         for attempt in range(max_retries):
+            if deadline is not None and time.monotonic() >= deadline:
+                log.debug("[AIAnalyst] Gemini: deadline already elapsed — abandoning remaining retries")
+                return None
             client = self._gemini_client
             if client is None and hasattr(self, '_key_manager') and self._key_manager:
                 client = self._key_manager.get_gemini_client()
@@ -594,10 +719,22 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                 log.warning("No Gemini client available")
                 return None
             try:
-                resp = client.models.generate_content(
-                    model=self.GEMINI_MODEL,
-                    contents=prompt,
-                )
+                generate_kwargs = dict(model=self.GEMINI_MODEL, contents=prompt)
+                if deadline is not None:
+                    # Best-effort request-level timeout (audit follow-up —
+                    # same rationale as _call_groq). google-genai's
+                    # HttpOptions.timeout is milliseconds; wrapped in a
+                    # broad except since SDK versions vary and this must
+                    # never break a call that would otherwise succeed.
+                    try:
+                        from google.genai import types as _genai_types
+                        remaining_ms = max(500, int((deadline - time.monotonic()) * 1000))
+                        generate_kwargs["config"] = _genai_types.GenerateContentConfig(
+                            http_options=_genai_types.HttpOptions(timeout=remaining_ms)
+                        )
+                    except Exception:
+                        pass
+                resp = client.models.generate_content(**generate_kwargs)
                 if hasattr(self, '_key_manager') and self._key_manager:
                     usage = getattr(resp, "usage_metadata", None)
                     total_tokens = 0
@@ -630,7 +767,11 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     base_delay = 2 ** attempt
                     if info.get("rate_limited"):
                         base_delay *= 2
-                    time.sleep(base_delay + random.uniform(0, 0.25))
+                    delay = base_delay + random.uniform(0, 0.25)
+                    if deadline is not None:
+                        delay = min(delay, max(0.0, deadline - time.monotonic()))
+                    if delay > 0:
+                        time.sleep(delay)
         return None
 
     # ── Response parser ────────────────────────────────────────
@@ -665,10 +806,26 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         try:
             parsed = parse_llm_json(raw)
             if isinstance(parsed, dict):
+                # BUGFIX (audit follow-up): confidence used to be parsed
+                # inline with `int(parsed.get("confidence", 0))` inside this
+                # same try block. If the LLM returned a non-numeric value
+                # for just that one field (e.g. "high", null, "N/A" —
+                # observed from lower-tier fallback models under load),
+                # the raised ValueError/TypeError was caught by the except
+                # below and discarded the ENTIRE otherwise-valid response —
+                # a good analysis/reasoning/signal thrown away because of
+                # one malformed field. Parse confidence defensively so a
+                # bad value degrades to 0 instead of nuking the whole parse.
+                raw_confidence = parsed.get("confidence", 0)
+                try:
+                    confidence = min(99, max(0, int(raw_confidence)))
+                except (TypeError, ValueError):
+                    log.debug(f"[AIAnalyst] Non-numeric confidence field ({raw_confidence!r}) — defaulting to 0")
+                    confidence = 0
                 return {
                     "analysis":         parsed.get("analysis", "No analysis provided"),
                     "signal":           parsed.get("signal", "WAIT"),
-                    "confidence":       min(99, max(0, int(parsed.get("confidence", 0)))),
+                    "confidence":       confidence,
                     "reasoning":        parsed.get("reasoning", ""),
                     "key_risk":         parsed.get("key_risk", "Unknown"),
                     "invalidation":     parsed.get("invalidation", "Unknown"),
