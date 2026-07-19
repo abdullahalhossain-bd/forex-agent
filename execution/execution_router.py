@@ -102,7 +102,13 @@ class ExecutionRouter:
                 None দিলে আগের মতোই নিজে connection বানাবে (backward
                 compatible)।
         """
-        self.mode = "mt5_demo"
+        # BUG FIX (execution-parity audit): this used to hardcode
+        # `self.mode = "mt5_demo"` regardless of the `mode` argument the
+        # caller passed in — meaning AITrader(execution_mode=...) could
+        # never actually select anything else, and "Real" money execution
+        # had no way to be reached even once implemented below. The `mode`
+        # parameter is now honored.
+        self.mode = (mode or "mt5_demo").lower()
         self._mt5_executor = None
         self._db = db
         self._simulation_mode = False
@@ -126,7 +132,57 @@ class ExecutionRouter:
             self._init_simulation_mode()
             return
 
-        if self.mode == "mt5_demo":
+        # Backtest mode never places broker orders — backtest.unified_engine
+        # calls AITrader.evaluate_decision_core() directly and routes fills
+        # through backtest.broker_sim.BrokerSimulator, never through this
+        # router. This branch exists only so constructing an AITrader with
+        # execution_mode="backtest" doesn't hit the `else: raise ValueError`
+        # below if something does touch self._router.
+        if self.mode == "backtest":
+            self._init_simulation_mode()
+            log.info("[ExecutionRouter] Mode: BACKTEST (router inert — "
+                     "backtest.unified_engine drives fills directly)")
+            return
+
+        if self.mode in ("mt5_demo", "mt5_live"):
+            if self.mode == "mt5_live":
+                # ── REAL MONEY — explicit, non-bypassable safety gate ──
+                # Per the execution-parity audit: "Real" execution did not
+                # exist as a code path before this fix. It is deliberately
+                # NOT a one-line config flip. Two independent conditions
+                # must both be true, and neither is the default:
+                #   1. ALLOW_REAL_MONEY_TRADING=true in the environment
+                #      (not .env-committed by default — see config.py).
+                #   2. Separate MT5_REAL_* credentials configured — real
+                #      and demo credentials are never allowed to be the
+                #      same variable, so a stale/default demo login can't
+                #      silently end up trading a real account.
+                # Failure here raises, never silently falls back to demo
+                # or simulation — going quiet about "I couldn't get you
+                # into a real account" is fine; going quiet about "I put
+                # your real-money trade into a demo/sim account instead"
+                # would hide a correctness bug behind an apparently-working
+                # system, which is worse.
+                from config import ALLOW_REAL_MONEY_TRADING, MT5_REAL_LOGIN, MT5_REAL_PASSWORD, MT5_REAL_SERVER
+                if not ALLOW_REAL_MONEY_TRADING:
+                    raise RuntimeError(
+                        "EXECUTION_MODE=mt5_live requested but ALLOW_REAL_MONEY_TRADING "
+                        "is not set to true. Real-money execution requires an explicit, "
+                        "separate opt-in — set ALLOW_REAL_MONEY_TRADING=true AND "
+                        "MT5_REAL_LOGIN/MT5_REAL_PASSWORD/MT5_REAL_SERVER in your "
+                        "environment (not just MT5_LOGIN/PASSWORD/SERVER, which remain "
+                        "demo-only) before this mode will initialize."
+                    )
+                if not (MT5_REAL_LOGIN and MT5_REAL_PASSWORD and MT5_REAL_SERVER):
+                    raise RuntimeError(
+                        "ALLOW_REAL_MONEY_TRADING=true but MT5_REAL_LOGIN/"
+                        "MT5_REAL_PASSWORD/MT5_REAL_SERVER are not fully set — "
+                        "refusing to initialize real-money execution with incomplete "
+                        "or fallback credentials."
+                    )
+                _login, _password, _server = MT5_REAL_LOGIN, MT5_REAL_PASSWORD, MT5_REAL_SERVER
+                _mt5_fallback_to_sim_effective = False  # a real-money order NEVER silently
+                                                          # becomes a simulated one on failure
             try:
                 from config import MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH
                 from broker.mt5_connection import get_mt5_connection
@@ -135,14 +191,20 @@ class ExecutionRouter:
                 from broker.order_manager import OrderManager
                 from broker.journal_bridge import JournalBridge
             except Exception as e:
-                if self._mt5_fallback_to_sim:
+                if self.mode == "mt5_demo" and self._mt5_fallback_to_sim:
                     log.warning(f"[ExecutionRouter] MT5 imports failed ({e}) — falling back to SIMULATION")
                     self._init_simulation_mode()
                     return
                 raise
 
-            if not self._mt5_fallback_to_sim:
-                validate_mt5_config()
+            if self.mode == "mt5_demo":
+                if not self._mt5_fallback_to_sim:
+                    validate_mt5_config()
+            else:
+                self._mt5_fallback_to_sim = False  # real money: see above, no silent fallback
+
+            if self.mode == "mt5_live":
+                MT5_LOGIN, MT5_PASSWORD, MT5_SERVER = _login, _password, _server
 
             if mt5_conn is not None:
                 self._mt5_conn = mt5_conn

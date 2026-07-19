@@ -670,6 +670,396 @@ class AITrader:
     def get_signal(self, show_chart: bool = False, auto_paper_trade: bool = True) -> dict:
         return self.run_cycle(show_chart=show_chart, auto_paper_trade=auto_paper_trade)
 
+    def evaluate_decision_core(self, market_out: dict, session_ctx: dict, debugger=None) -> dict:
+        """
+        SHARED DECISION CORE — Backtest / Demo / Real execution parity.//
+
+        This is the SINGLE implementation of Analysis -> Decision -> Risk ->
+        Position Sizing -> Safety Guard (Permission + Correlation) used by
+        EVERY execution mode. It is extracted verbatim from run_cycle() (the
+        live/demo trading loop) so that a historical replay in backtest mode
+        calls the exact same code object as live trading -- not a
+        reimplementation, not an approximation.
+
+        Per the project's execution-parity requirement, only these things
+        may legitimately differ between modes, and NONE of them live in
+        this method:
+          - where `market_out` came from (live MT5 tick vs. a historical
+            bar built from MT5 history) -- caller's responsibility
+          - what happens to the resulting decision (real MT5 order vs.
+            BrokerSimulator fill vs. paper trade) -- caller's responsibility
+          - account balance bookkeeping (MT5 account vs. simulated ledger)
+
+        Args:
+            market_out: MarketAgentResult-shaped dict (df, ind_ctx, regime,
+                regime_ctx, mtf_bias, ...). Backtest builds this from a
+                historical slice using the SAME canonical indicator
+                registry live uses (data/indicator_registry.py) -- see
+                backtest/unified_engine.py.
+            session_ctx: output of SessionAnalyzer().get_current_session()
+                (or, in backtest, the historical-time equivalent).
+            debugger: optional signal-pipeline debugger (live-cycle
+                instrumentation); safe to leave None in backtest.
+
+        Returns:
+            dict with keys: analysis_out, dec_out, risk_out, perm_out,
+            memory_ctx, pat_ctx, vec_ctx, entry, session_ctx.
+        """
+        log.info("[3/9] Analysis Agent...")
+        analysis_out = self._analysis.run(market_out)
+        if "error" in analysis_out:
+            try:
+                from core.trade_decision_log import log_decision
+                log_decision(symbol=self.symbol, signal="NO TRADE",
+                             reject_stage="analysis_agent",
+                             reject_reason=f"Analysis error: {analysis_out.get('error')}")
+            except Exception as e: pass
+            # Return a dict with the SAME shape the success path returns
+            # (see the `return {...}` at the bottom of this method) so
+            # every caller can unpack it identically and just check
+            # `"error" in core["analysis_out"]` — instead of returning
+            # self._error_result()'s differently-shaped dict here, which
+            # would break unpacking in run_cycle() / any backtest caller.
+            return {
+                "analysis_out": analysis_out, "dec_out": {}, "risk_out": {},
+                "perm_out": {}, "memory_ctx": {}, "pat_ctx": {}, "vec_ctx": {},
+                "entry": None, "session_ctx": session_ctx,
+            }
+
+        memory_ctx = self._memory.get_context_for_ai(self.symbol)
+        pattern = self._extract_pattern(market_out)
+        regime_str = market_out.get("regime", {}).get("regime", "")
+        pat_ctx = self._memory.get_pattern_context(self.symbol, regime_str, pattern)
+
+        # Day 37 hotfix: initialize BEFORE the conditional so that a fresh
+        # symbol with no trade history yet (total_trades == 0) never hits
+        # the UnboundLocalError that used to crash every symbol's cycle.
+        vec_ctx = {}
+
+        if memory_ctx["total_trades"] > 0:
+            log.info(
+                f"[Memory] Trades: {memory_ctx['total_trades']} | "
+                f"WR: {memory_ctx['overall_win_rate']}% | "
+                f"Pattern wins: {pat_ctx.get('similar_wins', 0)} | "
+                f"losses: {pat_ctx.get('similar_losses', 0)}"
+            )
+            if pat_ctx.get("warning"):
+                log.info("[Memory] Warning: similar setups produced more losses than wins")
+
+            vec_ctx = self._memory.get_pattern_context(
+                pair=self.symbol,
+                trend=ind.get("trend"),
+                rsi=ind.get("rsi"),
+                pattern=pattern,
+                regime=regime_str,
+            )
+
+        log.info("[4/9] Decision Agent...")
+        # Day 81+ hotfix: analysis_out may come from an early-return path
+        # (dead zone, error, etc.) that doesn't include a "signal" key.
+        # Use defensive `.get()` so we never raise KeyError here.
+        # _build_result() already uses `.get("signal", {})` for the same
+        # reason — this brings run_cycle() in line with that pattern.
+        signal_data = analysis_out.get("signal") or {}
+        # Day 81+ hotfix #2: when LLM is unavailable (all Groq keys
+        # rate-limited, Gemini auth failed), master_ctx.master_entry
+        # is None, so signal_data["entry"] is None. The fallback to
+        # ind.get("close", 0) returns 0 if ind_ctx.close is missing,
+        # which causes the RiskEngine to compute SL/TP around 0 (e.g.
+        # SL=-0.00072, TP=0.00144) — a guaranteed instant stop-out.
+        # Use latest_price (already extracted from market_out above)
+        # as the second-tier fallback so entry is always a real price.
+        entry = signal_data.get("entry") or ind.get("close") or ind.get("price") or latest_price or 0
+        # Day 72 fix: normalize STRONG_BUY/STRONG_SELL to BUY/SELL for approved check
+        _final_norm = analysis_out.get("final_signal", "WAIT")
+        if "STRONG_BUY" in str(_final_norm):
+            _final_norm = "BUY"
+        elif "STRONG_SELL" in str(_final_norm):
+            _final_norm = "SELL"
+        placeholder_risk = {
+            "approved": _final_norm in ("BUY", "SELL"),
+            "lot": 0,
+            "sl_pips": 0,
+            "tp_pips": 0,
+            "rr_ratio": 0,
+            "reject_reason": None,
+            # Audit fix: explicit marker so decision_agent.py doesn't have
+            # to infer "placeholder vs. real rejection" from all-zero
+            # fields (a real RiskEngine rejection can also be all-zero).
+            "is_placeholder": True,
+        }
+        dec_out = self._decision.decide(market_out, analysis_out, placeholder_risk)
+        self._decision.print_summary(dec_out)
+        if debugger:
+            debugger.record("decision",
+                            dec_out.get("decision", "WAIT"),
+                            f"conf={dec_out.get('confidence', 0):.0f}%")
+
+        log.info("[5/9] Risk Engine...")
+        # Day 81+ hotfix (Day 90 bugfix): sync live open positions into
+        # RiskEngine so the correlation check uses authoritative PaperTrader
+        # state instead of potentially-stale daily_risk.json open_pairs list.
+        #
+        # Day 90 bugfix history:
+        #   Previously this was wrapped in a try/except that logged at DEBUG
+        #   level — meaning any failure was silently swallowed and the
+        #   operator never knew. Worse, RiskEngine had TWO duplicate
+        #   sync_open_positions methods (Python kept the second one that
+        #   never set _live_open_pairs), so even when this call "succeeded",
+        #   the correlation check still fell back to the stale file state.
+        #
+        #   Both bugs are now fixed:
+        #     1. risk_engine.py has ONE sync_open_positions method that sets
+        #        BOTH _live_open_pairs (in-memory) and daily_risk.json (file)
+        #     2. This call logs failures at WARNING level (visible in prod)
+        #        and is no longer wrapped in a try/except that hides errors.
+        #        If PaperTrader.get_open_positions() raises, we log + fall
+        #        back to an empty list (no open positions = no correlation
+        #        blocks), which is safer than silently using stale state.
+        _live_open = self._get_live_open_pairs()
+
+        if hasattr(self._risk, "sync_open_positions"):
+            try:
+                self._risk.sync_open_positions(_live_open)
+            except Exception as e:
+                # Day 90 bugfix: log at WARNING so silent failures are visible.
+                # RiskEngine.sync_open_positions now has its own internal
+                # try/except + counters, so this outer catch is just a
+                # safety net for unexpected attribute errors etc.
+                log.warning(
+                    f"[Risk] sync_open_positions raised: {e} — "
+                    f"correlation check may use stale daily_risk.json state"
+                )
+        else:
+            # Day 90 bugfix: surface this — should never happen with the
+            # merged RiskEngine, but if it does we need to know.
+            log.warning(
+                f"[Risk] self._risk ({type(self._risk).__name__}) has no "
+                f"sync_open_positions method — correlation check will use "
+                f"stale daily_risk.json state"
+            )
+
+        risk_out = self._risk.evaluate(
+            signal=dec_out["decision"],
+            entry=entry,
+            atr=ind.get("atr", 0.0005),
+            regime=market_out["regime"],
+        )
+
+        # Audit fix: fail CLOSED on new entries when we can't trust our
+        # picture of live exposure/PnL. Two independent degraded-state
+        # signals are checked:
+        #   1. _mt5_sync_ok=False  → _get_live_open_pairs() couldn't reach
+        #      MT5 this cycle, so the correlation check above may have run
+        #      against an incomplete/empty position list.
+        #   2. _mt5_disconnect_cycles beyond threshold → the close-detector
+        #      hasn't been able to poll MT5 for several cycles in a row,
+        #      so any losses that occurred during the outage haven't been
+        #      folded into daily PnL — the circuit breaker is blind.
+        # Existing open positions are left alone (we don't touch SL/TP or
+        # force-close); only NEW entries are blocked.
+        if (
+            self.execution_mode == "mt5_demo"
+            and risk_out.get("approved")
+            and dec_out.get("decision") in ("BUY", "SELL")
+        ):
+            if not getattr(self, "_mt5_sync_ok", True):
+                risk_out["approved"] = False
+                risk_out["lot"] = 0.0
+                risk_out["reject_reason"] = (
+                    "MT5 position sync unavailable this cycle — refusing new "
+                    "entry (fail-closed; existing positions unaffected)"
+                )
+                log.error(f"[Risk] {self.symbol} — {risk_out['reject_reason']}")
+            elif getattr(self, "_mt5_disconnect_cycles", 0) >= self._MT5_DISCONNECT_FAIL_CLOSED_THRESHOLD:
+                risk_out["approved"] = False
+                risk_out["lot"] = 0.0
+                risk_out["reject_reason"] = (
+                    f"MT5 unreachable for {self._mt5_disconnect_cycles} consecutive "
+                    f"cycles — daily PnL/circuit breaker may be stale, refusing new "
+                    f"entry (fail-closed)"
+                )
+                log.error(f"[Risk] {self.symbol} — {risk_out['reject_reason']}")
+
+        self._risk.print_summary(risk_out)
+        if debugger:
+            risk_status = "OK" if risk_out.get("approved") else "REJECT"
+            # Day 81+ crash fix: reject_reason can be None (not a string),
+            # so we can't do [:20] on it directly. Coerce to string first.
+            _reject_reason = risk_out.get("reject_reason") or "approved"
+            debugger.record("risk", risk_status,
+                            f"lot={risk_out.get('lot', 0)} "
+                            f"reason={str(_reject_reason)[:20]}")
+
+        daily = self._risk.get_daily_summary()
+        log.info(
+            f"Daily PnL — Net: ${daily['net_usd']} | "
+            f"Loss: {daily['daily_loss_pc']}% | "
+            f"Limit left: {daily['limit_remaining_pc']}%"
+        )
+
+        # ── Day 76 — Smart Capital Allocation override ───────────────
+        # Run the master PositionSizer on top of RiskEngine's base lot.
+        # This applies Kelly × Volatility × Confidence × Correlation ×
+        # Drawdown × Loss-streak multipliers and may shrink, grow, or
+        # block the lot.  When the sizer is not wired, risk_out passes
+        # through unchanged (fully backward-compatible).
+        risk_out = self._apply_advanced_sizing(risk_out, dec_out, market_out, analysis_out)
+
+        # Co-founder fix: SYNC dec_out with FINAL risk_out so final report
+        # and learning agent see REAL lot/sl/tp/entry, not placeholder values.
+        dec_out["lot"]    = risk_out.get("lot", dec_out.get("lot", 0))
+        dec_out["entry"]  = risk_out.get("entry",  dec_out.get("entry"))
+        dec_out["sl"]     = risk_out.get("sl_price", dec_out.get("sl"))
+        dec_out["tp"]     = risk_out.get("tp_price", dec_out.get("tp"))
+        dec_out["sl_pips"] = risk_out.get("sl_pips", dec_out.get("sl_pips", 0))
+        dec_out["tp_pips"] = risk_out.get("tp_pips", dec_out.get("tp_pips", 0))
+        dec_out["rr"]     = risk_out.get("rr_ratio", dec_out.get("rr", 0))
+
+        # Round-30 fix F1: pass df into dec_out so trade_permission's
+        # entry_quality_guardrails can access OHLCV data. Without this,
+        # the guardrails code looks for decision_out.get("_df"), finds
+        # None, and silently skips all 12 entry-quality checks.
+        dec_out["_df"] = market_out.get("df")
+        dec_out["_symbol"] = self.symbol
+
+        log.info("[6/9] Safety Guard (Permission + Correlation)...")
+        perm_out = self._perm.check(
+            decision_out=dec_out,
+            risk_out=risk_out,
+            news_ctx=analysis_out.get("news_ctx", {}),
+            session_ctx=self._session_permission_context(session_ctx),
+            execution_filters=analysis_out.get("execution_filters", {}),
+        )
+
+        # Day 97+ Book Page 15: Signal Persistence Filter
+        # Suppress entries when signal is flip-flopping (unstable)
+        if perm_out["allowed"]:
+            try:
+                from core.signal_persistence import get_signal_persistence_filter
+                spf = get_signal_persistence_filter()
+                final_sig = perm_out.get("final_action", "WAIT")
+                if not spf.is_stable(self.symbol, final_sig):
+                    perm_out["allowed"] = False
+                    perm_out["execution_allowed"] = False
+                    perm_out["final_action"] = "NO TRADE"
+                    perm_out["execution_action"] = "NO TRADE"
+                    perm_out["blocked_reason"] = "Signal flip-flopping (unstable)"
+                    perm_out["checks"].append({
+                        "check": "Signal persistence",
+                        "passed": False,
+                        "detail": f"Signal flip-flopping (unstable)",
+                    })
+                spf.record(self.symbol, final_sig, dec_out.get("confidence", 0))
+            except Exception as e:
+                log.warning(f"Suppressed exception at line 798: {e}")
+                pass
+
+        # Day 97+ Book Page 15: Regime Suppression
+        # Suppress entries in known false-signal regimes
+        if perm_out["allowed"]:
+            try:
+                from core.regime_suppression import get_regime_suppressor
+                rs = get_regime_suppressor()
+                regime_ctx = market_out.get("regime", {})
+                ind_ctx = market_out.get("ind_ctx", {})
+                suppress, reason = rs.should_suppress(
+                    symbol=self.symbol,
+                    regime=regime_ctx,
+                    session=session_ctx,
+                    news_ctx=analysis_out.get("news_ctx", {}),
+                    ind_ctx=ind_ctx,
+                )
+                if suppress:
+                    perm_out["allowed"] = False
+                    perm_out["execution_allowed"] = False
+                    perm_out["final_action"] = "NO TRADE"
+                    perm_out["execution_action"] = "NO TRADE"
+                    perm_out["blocked_reason"] = f"Regime suppression: {reason}"
+                    perm_out["checks"].append({
+                        "check": "Regime suppression",
+                        "passed": False,
+                        "detail": reason,
+                    })
+            except Exception as e:
+                log.warning(f"Suppressed exception at line 825: {e}")
+                pass
+
+        if self._paper.has_open_position(self.symbol, perm_out.get("final_action")):
+            perm_out["allowed"] = False
+            perm_out["execution_allowed"] = False
+            perm_out["final_action"] = "NO TRADE"
+            perm_out["execution_action"] = "NO TRADE"
+            perm_out["blocked_reason"] = f"{self.symbol} {dec_out.get('decision')} already open"
+            perm_out["checks"].append(
+                {
+                    "check": "Duplicate trade",
+                    "passed": False,
+                    "detail": f"{self.symbol} {dec_out.get('decision')} already open",
+                }
+            )
+
+        # Correlation check — same underlying-risk group already has an open
+        # position (e.g. EURUSD BUY blocks a fresh GBPUSD BUY). Lot size, SL
+        # distance, and daily loss are already enforced inside RiskEngine
+        # above; news/confidence/session/duplicate are TradePermission above;
+        # this is the last piece of the Day 37 "Safety Guard" checklist.
+        if perm_out["allowed"]:
+            open_pairs = [t.get("pair") for t in self._paper.get_open_positions()]
+            self._corr_filter.sync_open(open_pairs)
+            still_allowed = self._corr_filter.allow(
+                [{"symbol": self.symbol, "signal": perm_out["final_action"]}]
+            )
+            if not still_allowed:
+                perm_out["allowed"] = False
+                perm_out["execution_allowed"] = False
+                perm_out["final_action"] = "NO TRADE"
+                perm_out["execution_action"] = "NO TRADE"
+                perm_out["blocked_reason"] = "Correlated pair group already has an open position"
+                perm_out["checks"].append(
+                    {
+                        "check": "Correlation filter",
+                        "passed": False,
+                        "detail": "Correlated pair group already has an open position",
+                    }
+                )
+
+        self._perm.print_summary(perm_out)
+        if debugger:
+            perm_status = "OK" if perm_out.get("allowed") else "BLOCK"
+            debugger.record("permission", perm_status,
+                            f"{perm_out.get('passed', 0)}/{perm_out.get('total', 0)} checks")
+
+        # Day 81+ hotfix: log permission outcome to execution.log
+        try:
+            from core.execution_logger import log_permission_checked
+            log_permission_checked(
+                symbol=self.symbol,
+                allowed=perm_out.get("allowed", False),
+                passed=perm_out.get("passed", 0),
+                total=perm_out.get("total", 0),
+                failed_checks=[c.get("check", "?") for c in perm_out.get("checks", [])
+                               if not c.get("passed", True)],
+                decision=dec_out.get("decision"),
+                confidence=dec_out.get("confidence", 0),
+            )
+        except Exception as e:
+            log.warning(f"Suppressed exception at line 881: {e}")
+            pass
+
+        return {
+            "analysis_out": analysis_out,
+            "dec_out": dec_out,
+            "risk_out": risk_out,
+            "perm_out": perm_out,
+            "memory_ctx": memory_ctx,
+            "pat_ctx": pat_ctx,
+            "vec_ctx": vec_ctx,
+            "entry": entry,
+            "session_ctx": session_ctx,
+        }
+
+
     def run_cycle(self, show_chart: bool = False, auto_paper_trade: bool = True) -> dict:
         log.info("━" * 52)
         log.info(f"  AITrader {self.VERSION} — {self.symbol} {self.timeframe}")
@@ -1091,7 +1481,15 @@ class AITrader:
                 log.debug(f"[Trader] Candle-close check skipped (non-fatal): {e}")
 
         log.info("[3/9] Analysis Agent...")
-        analysis_out = self._analysis.run(market_out)
+        _core = self.evaluate_decision_core(market_out, session_ctx, debugger)
+        analysis_out = _core["analysis_out"]
+        dec_out      = _core["dec_out"]
+        risk_out     = _core["risk_out"]
+        perm_out     = _core["perm_out"]
+        memory_ctx   = _core["memory_ctx"]
+        pat_ctx      = _core["pat_ctx"]
+        vec_ctx      = _core["vec_ctx"]
+        entry        = _core["entry"]
         if "error" in analysis_out:
             try:
                 from core.trade_decision_log import log_decision
@@ -1100,327 +1498,6 @@ class AITrader:
                              reject_reason=f"Analysis error: {analysis_out.get('error')}")
             except Exception as e: pass
             return self._error_result(f"Analysis Agent: {analysis_out['error']}")
-
-        memory_ctx = self._memory.get_context_for_ai(self.symbol)
-        pattern = self._extract_pattern(market_out)
-        regime_str = market_out.get("regime", {}).get("regime", "")
-        pat_ctx = self._memory.get_pattern_context(self.symbol, regime_str, pattern)
-
-        # Day 37 hotfix: initialize BEFORE the conditional so that a fresh
-        # symbol with no trade history yet (total_trades == 0) never hits
-        # the UnboundLocalError that used to crash every symbol's cycle.
-        vec_ctx = {}
-
-        if memory_ctx["total_trades"] > 0:
-            log.info(
-                f"[Memory] Trades: {memory_ctx['total_trades']} | "
-                f"WR: {memory_ctx['overall_win_rate']}% | "
-                f"Pattern wins: {pat_ctx.get('similar_wins', 0)} | "
-                f"losses: {pat_ctx.get('similar_losses', 0)}"
-            )
-            if pat_ctx.get("warning"):
-                log.info("[Memory] Warning: similar setups produced more losses than wins")
-
-            vec_ctx = self._memory.get_pattern_context(
-                pair=self.symbol,
-                trend=ind.get("trend"),
-                rsi=ind.get("rsi"),
-                pattern=pattern,
-                regime=regime_str,
-            )
-
-        log.info("[4/9] Decision Agent...")
-        # Day 81+ hotfix: analysis_out may come from an early-return path
-        # (dead zone, error, etc.) that doesn't include a "signal" key.
-        # Use defensive `.get()` so we never raise KeyError here.
-        # _build_result() already uses `.get("signal", {})` for the same
-        # reason — this brings run_cycle() in line with that pattern.
-        signal_data = analysis_out.get("signal") or {}
-        # Day 81+ hotfix #2: when LLM is unavailable (all Groq keys
-        # rate-limited, Gemini auth failed), master_ctx.master_entry
-        # is None, so signal_data["entry"] is None. The fallback to
-        # ind.get("close", 0) returns 0 if ind_ctx.close is missing,
-        # which causes the RiskEngine to compute SL/TP around 0 (e.g.
-        # SL=-0.00072, TP=0.00144) — a guaranteed instant stop-out.
-        # Use latest_price (already extracted from market_out above)
-        # as the second-tier fallback so entry is always a real price.
-        entry = signal_data.get("entry") or ind.get("close") or ind.get("price") or latest_price or 0
-        # Day 72 fix: normalize STRONG_BUY/STRONG_SELL to BUY/SELL for approved check
-        _final_norm = analysis_out.get("final_signal", "WAIT")
-        if "STRONG_BUY" in str(_final_norm):
-            _final_norm = "BUY"
-        elif "STRONG_SELL" in str(_final_norm):
-            _final_norm = "SELL"
-        placeholder_risk = {
-            "approved": _final_norm in ("BUY", "SELL"),
-            "lot": 0,
-            "sl_pips": 0,
-            "tp_pips": 0,
-            "rr_ratio": 0,
-            "reject_reason": None,
-            # Audit fix: explicit marker so decision_agent.py doesn't have
-            # to infer "placeholder vs. real rejection" from all-zero
-            # fields (a real RiskEngine rejection can also be all-zero).
-            "is_placeholder": True,
-        }
-        dec_out = self._decision.decide(market_out, analysis_out, placeholder_risk)
-        self._decision.print_summary(dec_out)
-        if debugger:
-            debugger.record("decision",
-                            dec_out.get("decision", "WAIT"),
-                            f"conf={dec_out.get('confidence', 0):.0f}%")
-
-        log.info("[5/9] Risk Engine...")
-        # Day 81+ hotfix (Day 90 bugfix): sync live open positions into
-        # RiskEngine so the correlation check uses authoritative PaperTrader
-        # state instead of potentially-stale daily_risk.json open_pairs list.
-        #
-        # Day 90 bugfix history:
-        #   Previously this was wrapped in a try/except that logged at DEBUG
-        #   level — meaning any failure was silently swallowed and the
-        #   operator never knew. Worse, RiskEngine had TWO duplicate
-        #   sync_open_positions methods (Python kept the second one that
-        #   never set _live_open_pairs), so even when this call "succeeded",
-        #   the correlation check still fell back to the stale file state.
-        #
-        #   Both bugs are now fixed:
-        #     1. risk_engine.py has ONE sync_open_positions method that sets
-        #        BOTH _live_open_pairs (in-memory) and daily_risk.json (file)
-        #     2. This call logs failures at WARNING level (visible in prod)
-        #        and is no longer wrapped in a try/except that hides errors.
-        #        If PaperTrader.get_open_positions() raises, we log + fall
-        #        back to an empty list (no open positions = no correlation
-        #        blocks), which is safer than silently using stale state.
-        _live_open = self._get_live_open_pairs()
-
-        if hasattr(self._risk, "sync_open_positions"):
-            try:
-                self._risk.sync_open_positions(_live_open)
-            except Exception as e:
-                # Day 90 bugfix: log at WARNING so silent failures are visible.
-                # RiskEngine.sync_open_positions now has its own internal
-                # try/except + counters, so this outer catch is just a
-                # safety net for unexpected attribute errors etc.
-                log.warning(
-                    f"[Risk] sync_open_positions raised: {e} — "
-                    f"correlation check may use stale daily_risk.json state"
-                )
-        else:
-            # Day 90 bugfix: surface this — should never happen with the
-            # merged RiskEngine, but if it does we need to know.
-            log.warning(
-                f"[Risk] self._risk ({type(self._risk).__name__}) has no "
-                f"sync_open_positions method — correlation check will use "
-                f"stale daily_risk.json state"
-            )
-
-        risk_out = self._risk.evaluate(
-            signal=dec_out["decision"],
-            entry=entry,
-            atr=ind.get("atr", 0.0005),
-            regime=market_out["regime"],
-        )
-
-        # Audit fix: fail CLOSED on new entries when we can't trust our
-        # picture of live exposure/PnL. Two independent degraded-state
-        # signals are checked:
-        #   1. _mt5_sync_ok=False  → _get_live_open_pairs() couldn't reach
-        #      MT5 this cycle, so the correlation check above may have run
-        #      against an incomplete/empty position list.
-        #   2. _mt5_disconnect_cycles beyond threshold → the close-detector
-        #      hasn't been able to poll MT5 for several cycles in a row,
-        #      so any losses that occurred during the outage haven't been
-        #      folded into daily PnL — the circuit breaker is blind.
-        # Existing open positions are left alone (we don't touch SL/TP or
-        # force-close); only NEW entries are blocked.
-        if (
-            self.execution_mode == "mt5_demo"
-            and risk_out.get("approved")
-            and dec_out.get("decision") in ("BUY", "SELL")
-        ):
-            if not getattr(self, "_mt5_sync_ok", True):
-                risk_out["approved"] = False
-                risk_out["lot"] = 0.0
-                risk_out["reject_reason"] = (
-                    "MT5 position sync unavailable this cycle — refusing new "
-                    "entry (fail-closed; existing positions unaffected)"
-                )
-                log.error(f"[Risk] {self.symbol} — {risk_out['reject_reason']}")
-            elif getattr(self, "_mt5_disconnect_cycles", 0) >= self._MT5_DISCONNECT_FAIL_CLOSED_THRESHOLD:
-                risk_out["approved"] = False
-                risk_out["lot"] = 0.0
-                risk_out["reject_reason"] = (
-                    f"MT5 unreachable for {self._mt5_disconnect_cycles} consecutive "
-                    f"cycles — daily PnL/circuit breaker may be stale, refusing new "
-                    f"entry (fail-closed)"
-                )
-                log.error(f"[Risk] {self.symbol} — {risk_out['reject_reason']}")
-
-        self._risk.print_summary(risk_out)
-        if debugger:
-            risk_status = "OK" if risk_out.get("approved") else "REJECT"
-            # Day 81+ crash fix: reject_reason can be None (not a string),
-            # so we can't do [:20] on it directly. Coerce to string first.
-            _reject_reason = risk_out.get("reject_reason") or "approved"
-            debugger.record("risk", risk_status,
-                            f"lot={risk_out.get('lot', 0)} "
-                            f"reason={str(_reject_reason)[:20]}")
-
-        daily = self._risk.get_daily_summary()
-        log.info(
-            f"Daily PnL — Net: ${daily['net_usd']} | "
-            f"Loss: {daily['daily_loss_pc']}% | "
-            f"Limit left: {daily['limit_remaining_pc']}%"
-        )
-
-        # ── Day 76 — Smart Capital Allocation override ───────────────
-        # Run the master PositionSizer on top of RiskEngine's base lot.
-        # This applies Kelly × Volatility × Confidence × Correlation ×
-        # Drawdown × Loss-streak multipliers and may shrink, grow, or
-        # block the lot.  When the sizer is not wired, risk_out passes
-        # through unchanged (fully backward-compatible).
-        risk_out = self._apply_advanced_sizing(risk_out, dec_out, market_out, analysis_out)
-
-        # Co-founder fix: SYNC dec_out with FINAL risk_out so final report
-        # and learning agent see REAL lot/sl/tp/entry, not placeholder values.
-        dec_out["lot"]    = risk_out.get("lot", dec_out.get("lot", 0))
-        dec_out["entry"]  = risk_out.get("entry",  dec_out.get("entry"))
-        dec_out["sl"]     = risk_out.get("sl_price", dec_out.get("sl"))
-        dec_out["tp"]     = risk_out.get("tp_price", dec_out.get("tp"))
-        dec_out["sl_pips"] = risk_out.get("sl_pips", dec_out.get("sl_pips", 0))
-        dec_out["tp_pips"] = risk_out.get("tp_pips", dec_out.get("tp_pips", 0))
-        dec_out["rr"]     = risk_out.get("rr_ratio", dec_out.get("rr", 0))
-
-        # Round-30 fix F1: pass df into dec_out so trade_permission's
-        # entry_quality_guardrails can access OHLCV data. Without this,
-        # the guardrails code looks for decision_out.get("_df"), finds
-        # None, and silently skips all 12 entry-quality checks.
-        dec_out["_df"] = market_out.get("df")
-        dec_out["_symbol"] = self.symbol
-
-        log.info("[6/9] Safety Guard (Permission + Correlation)...")
-        perm_out = self._perm.check(
-            decision_out=dec_out,
-            risk_out=risk_out,
-            news_ctx=analysis_out.get("news_ctx", {}),
-            session_ctx=self._session_permission_context(session_ctx),
-            execution_filters=analysis_out.get("execution_filters", {}),
-        )
-
-        # Day 97+ Book Page 15: Signal Persistence Filter
-        # Suppress entries when signal is flip-flopping (unstable)
-        if perm_out["allowed"]:
-            try:
-                from core.signal_persistence import get_signal_persistence_filter
-                spf = get_signal_persistence_filter()
-                final_sig = perm_out.get("final_action", "WAIT")
-                if not spf.is_stable(self.symbol, final_sig):
-                    perm_out["allowed"] = False
-                    perm_out["execution_allowed"] = False
-                    perm_out["final_action"] = "NO TRADE"
-                    perm_out["execution_action"] = "NO TRADE"
-                    perm_out["blocked_reason"] = "Signal flip-flopping (unstable)"
-                    perm_out["checks"].append({
-                        "check": "Signal persistence",
-                        "passed": False,
-                        "detail": f"Signal flip-flopping (unstable)",
-                    })
-                spf.record(self.symbol, final_sig, dec_out.get("confidence", 0))
-            except Exception as e:
-                log.warning(f"Suppressed exception at line 798: {e}")
-                pass
-
-        # Day 97+ Book Page 15: Regime Suppression
-        # Suppress entries in known false-signal regimes
-        if perm_out["allowed"]:
-            try:
-                from core.regime_suppression import get_regime_suppressor
-                rs = get_regime_suppressor()
-                regime_ctx = market_out.get("regime", {})
-                ind_ctx = market_out.get("ind_ctx", {})
-                suppress, reason = rs.should_suppress(
-                    symbol=self.symbol,
-                    regime=regime_ctx,
-                    session=session_ctx,
-                    news_ctx=analysis_out.get("news_ctx", {}),
-                    ind_ctx=ind_ctx,
-                )
-                if suppress:
-                    perm_out["allowed"] = False
-                    perm_out["execution_allowed"] = False
-                    perm_out["final_action"] = "NO TRADE"
-                    perm_out["execution_action"] = "NO TRADE"
-                    perm_out["blocked_reason"] = f"Regime suppression: {reason}"
-                    perm_out["checks"].append({
-                        "check": "Regime suppression",
-                        "passed": False,
-                        "detail": reason,
-                    })
-            except Exception as e:
-                log.warning(f"Suppressed exception at line 825: {e}")
-                pass
-
-        if self._paper.has_open_position(self.symbol, perm_out.get("final_action")):
-            perm_out["allowed"] = False
-            perm_out["execution_allowed"] = False
-            perm_out["final_action"] = "NO TRADE"
-            perm_out["execution_action"] = "NO TRADE"
-            perm_out["blocked_reason"] = f"{self.symbol} {dec_out.get('decision')} already open"
-            perm_out["checks"].append(
-                {
-                    "check": "Duplicate trade",
-                    "passed": False,
-                    "detail": f"{self.symbol} {dec_out.get('decision')} already open",
-                }
-            )
-
-        # Correlation check — same underlying-risk group already has an open
-        # position (e.g. EURUSD BUY blocks a fresh GBPUSD BUY). Lot size, SL
-        # distance, and daily loss are already enforced inside RiskEngine
-        # above; news/confidence/session/duplicate are TradePermission above;
-        # this is the last piece of the Day 37 "Safety Guard" checklist.
-        if perm_out["allowed"]:
-            open_pairs = [t.get("pair") for t in self._paper.get_open_positions()]
-            self._corr_filter.sync_open(open_pairs)
-            still_allowed = self._corr_filter.allow(
-                [{"symbol": self.symbol, "signal": perm_out["final_action"]}]
-            )
-            if not still_allowed:
-                perm_out["allowed"] = False
-                perm_out["execution_allowed"] = False
-                perm_out["final_action"] = "NO TRADE"
-                perm_out["execution_action"] = "NO TRADE"
-                perm_out["blocked_reason"] = "Correlated pair group already has an open position"
-                perm_out["checks"].append(
-                    {
-                        "check": "Correlation filter",
-                        "passed": False,
-                        "detail": "Correlated pair group already has an open position",
-                    }
-                )
-
-        self._perm.print_summary(perm_out)
-        if debugger:
-            perm_status = "OK" if perm_out.get("allowed") else "BLOCK"
-            debugger.record("permission", perm_status,
-                            f"{perm_out.get('passed', 0)}/{perm_out.get('total', 0)} checks")
-
-        # Day 81+ hotfix: log permission outcome to execution.log
-        try:
-            from core.execution_logger import log_permission_checked
-            log_permission_checked(
-                symbol=self.symbol,
-                allowed=perm_out.get("allowed", False),
-                passed=perm_out.get("passed", 0),
-                total=perm_out.get("total", 0),
-                failed_checks=[c.get("check", "?") for c in perm_out.get("checks", [])
-                               if not c.get("passed", True)],
-                decision=dec_out.get("decision"),
-                confidence=dec_out.get("confidence", 0),
-            )
-        except Exception as e:
-            log.warning(f"Suppressed exception at line 881: {e}")
-            pass
 
         log.info("[7/9] Learning Agent...")
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
