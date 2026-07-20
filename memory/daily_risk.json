@@ -1,13 +1,23 @@
 {
   "date": "2026-07-20",
   "total_loss_usd": 0,
-  "total_win_usd": 0,
-  "open_trades": 4,
+  "total_win_usd": 0.0,
+  "open_trades": 1,
   "open_pairs": [
     "EURCHF",
-    "GBPCAD",
     "USDCNH",
     "USDJPY"
   ],
-  "trades": []
+  "trades": [
+    {
+      "symbol": "GBPCAD",
+      "pnl_usd": 0.0,
+      "time": "2026-07-20T13:12:18.697779+00:00"
+    },
+    {
+      "symbol": "GBPCAD",
+      "pnl_usd": 0.0,
+      "time": "2026-07-20T13:15:12.984080+00:00"
+    }
+  ]
 }

@@ -114,6 +114,18 @@ class ExecutionRouter:
         self._simulation_mode = False
         self._reconnect_lock = threading.Lock()
         self._owns_mt5_conn = False
+        # Bugfix (Telegram alert clarity): execute() returns bare `None` on
+        # every rejection path, and the only caller-visible signal was the
+        # dict-vs-None check — the actual reason (already computed and
+        # passed to _log_event() at each return-None site) was logged to
+        # execution.log but never reached the caller, so downstream alerts
+        # could only say "execution_router returned None" with no context.
+        # This router instance can be shared across multiple concurrently-
+        # running AITrader symbols (registry "execution_router"), so a
+        # plain instance attribute would race between symbols; use
+        # thread-local storage so each calling thread reads back only its
+        # own most recent failure.
+        self._failure_local = threading.local()
 
         try:
             from config import SIMULATION_MODE
@@ -127,6 +139,22 @@ class ExecutionRouter:
             self._mt5_fallback_to_sim = bool(MT5_FALLBACK_TO_SIMULATION)
         except Exception:
             self._mt5_fallback_to_sim = True
+
+    @property
+    def last_failure_reason(self) -> str | None:
+        """Reason for this calling thread's most recent execute() -> None.
+
+        Read this immediately after an execute() call returns None to get
+        a human-readable reason for alerts/logs, without changing execute()'s
+        existing `dict | None` return contract (which 4 call sites depend on).
+        """
+        return getattr(self._failure_local, "reason", None)
+
+    def _fail(self, reason: str) -> None:
+        """Record `reason` for this thread and return None (the existing
+        rejection sentinel). Call as `return self._fail(reason)`."""
+        self._failure_local.reason = reason
+        return None
 
         if self._simulation_mode:
             self._init_simulation_mode()
@@ -392,6 +420,7 @@ class ExecutionRouter:
     # ─────────────────────────────────────────────
 
     def execute(self, decision_result: dict) -> dict | None:
+        self._failure_local.reason = None  # clear any stale reason from a prior call on this thread
         # ── HARD GATE 1: decision must be BUY/SELL ──
         if decision_result.get("decision") not in ("BUY", "SELL"):
             log.info(f"[ExecutionRouter] No action — decision={decision_result.get('decision')}")
@@ -408,7 +437,7 @@ class ExecutionRouter:
                        symbol=decision_result.get("symbol", "?"),
                        reason="hard_gate: trade_allowed=False",
                        stage="permission_bypass_blocked")
-            return None
+            return self._fail("hard_gate: trade_allowed=False")
 
         # ── HARD GATE 3: lot cap ──
         lot = decision_result.get("lot", 0.01)
@@ -433,7 +462,7 @@ class ExecutionRouter:
                        symbol=decision_result.get("symbol", "?"),
                        reason=f"invalid lot={lot}",
                        stage="lot_validation")
-            return None
+            return self._fail(f"invalid lot={lot}")
 
         return self._execute_mt5_demo(decision_result)
 
@@ -456,7 +485,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason="mt5 disconnected after poll timeout",
                        stage="connection_check")
-            return None
+            return self._fail("mt5 disconnected after poll timeout")
 
         # ── ABSOLUTE_SAFETY hard gate ─────────────────────────────
         safe, reason = _check_absolute_safety(symbol)
@@ -467,7 +496,7 @@ class ExecutionRouter:
             )
             _log_event("router.execute.fail", symbol=symbol, reason=reason,
                        stage="absolute_safety")
-            return None
+            return self._fail(f"absolute_safety: {reason}")
 
         # ── direction guard ───────────────────────────────────────
         if direction not in ("BUY", "SELL"):
@@ -475,7 +504,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason=f"invalid direction={direction}",
                        stage="direction_validation")
-            return None
+            return self._fail(f"invalid direction={direction}")
 
         # ── lot guard ─────────────────────────────────────────────
         if lot <= 0:
@@ -483,7 +512,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason=f"invalid lot={lot}",
                        stage="lot_validation")
-            return None
+            return self._fail(f"invalid lot={lot}")
 
         # ── entry price validation ────────────────────────────────
         if decision_result.get("entry") is None:
@@ -492,7 +521,7 @@ class ExecutionRouter:
                 _log_event("router.execute.fail", symbol=symbol,
                            reason="entry price is None",
                            stage="entry_price_validation")
-                return None
+                return self._fail("entry price is None")
 
         # ── broker permission check ───────────────────────────────
         if self._simulation_mode:
@@ -509,7 +538,7 @@ class ExecutionRouter:
                 _log_event("router.execute.fail", symbol=symbol,
                            reason=f"trading_permission: {perm['failed_checks']}",
                            stage="trading_permission")
-                return None
+                return self._fail(f"trading_permission: {perm['failed_checks']}")
             broker_symbol = perm["broker_symbol"]
 
         # ── broker_symbol guard ───────────────────────────────────
@@ -518,7 +547,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason="broker_symbol is None",
                        stage="broker_symbol_validation")
-            return None
+            return self._fail("broker_symbol is None")
 
         # ── place order ───────────────────────────────────────────
         try:
@@ -538,7 +567,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason=f"place_market_order raised: {e}",
                        stage="order_send")
-            return None
+            return self._fail(f"place_market_order raised: {e}")
 
         if not order_result.get("success"):
             log.error(
@@ -548,7 +577,7 @@ class ExecutionRouter:
                        reason=order_result.get('reason', 'unknown'),
                        stage="order_result",
                        retcode=order_result.get('retcode'))
-            return None
+            return self._fail(f"broker rejected order: {order_result.get('reason', 'unknown')}")
 
         filled_entry = order_result.get("price", decision_result.get("entry"))
         ticket       = order_result.get("ticket")

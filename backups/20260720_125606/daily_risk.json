@@ -1,0 +1,17 @@
+{
+  "date": "2026-07-20",
+  "total_loss_usd": 0.54,
+  "total_win_usd": 0,
+  "open_trades": 2,
+  "open_pairs": [
+    "GBPCAD",
+    "USDCNH"
+  ],
+  "trades": [
+    {
+      "symbol": "GBPCAD",
+      "pnl_usd": -0.54,
+      "time": "2026-07-20T12:19:51.111414+00:00"
+    }
+  ]
+}

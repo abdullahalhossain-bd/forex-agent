@@ -54,6 +54,21 @@ POSITION_CONFIRM_TIMEOUT_SEC = 2.0
 POSITION_CONFIRM_POLL_INTERVAL_SEC = 0.2
 
 
+def _get_spread_limit_pips(symbol: str) -> float:
+    """Return the max allowed spread for this symbol.
+
+    The production safety layer already defines symbol-specific thresholds
+    in broker.account_manager. Reuse that logic here so the order manager
+    and the account manager stay consistent.
+    """
+    try:
+        from broker.account_manager import _spread_limit
+
+        return float(_spread_limit(symbol))
+    except Exception:
+        return 10.0
+
+
 def _confirm_position_appeared(
     broker_symbol: str,
     ticket: int,
@@ -235,13 +250,16 @@ class OrderManager:
                 else:
                     pip_size = 0.0001  # fallback for 5-digit pairs
                 spread_pips = (tick.ask - tick.bid) / pip_size
-                # Reject if spread > 10 pips (abnormally wide)
-                if spread_pips > 10.0:
+                spread_limit_pips = _get_spread_limit_pips(symbol)
+                if spread_pips > spread_limit_pips:
                     log.warning(
                         f"[OrderManager] SPREAD REJECTED: {symbol} spread={spread_pips:.1f} pips "
-                        f"(>10 pips threshold) — likely news/volatility. Order rejected."
+                        f"(>{spread_limit_pips:.1f} pips threshold) — likely news/volatility. Order rejected."
                     )
-                    return {"success": False, "reason": f"Spread too wide ({spread_pips:.1f} pips)"}
+                    return {
+                        "success": False,
+                        "reason": f"Spread too wide ({spread_pips:.1f} pips > {spread_limit_pips:.1f} pips limit)",
+                    }
         except Exception as e:
             log.warning(f"[OrderManager] Spread check failed (proceeding): {e}")
 
