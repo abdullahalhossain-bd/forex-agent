@@ -978,6 +978,7 @@ class DeploymentGate:
 
 if __name__ == "__main__":
     import sys
+    from pathlib import Path
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from backtest.mt5_bulk_fetcher import MT5BulkFetcher
 

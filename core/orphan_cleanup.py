@@ -100,7 +100,12 @@ def reconcile_open_positions(
         cur = conn.cursor()
 
         # Find all OPEN trades
-        cur.execute("SELECT id, pair, type, lot, entry, open_time FROM trades WHERE status = 'OPEN'")
+        # BUGFIX: mt5_ticket was never in this SELECT, so the ticket-based
+        # matching branch below (row["mt5_ticket"]) was always falling
+        # through to "mt5_ticket" not in row.keys() → None — meaning every
+        # reconciliation used the ambiguous pair+type fallback, even after
+        # the mt5_ticket column existed. Now it's selected and actually used.
+        cur.execute("SELECT id, pair, type, lot, entry, open_time, mt5_ticket FROM trades WHERE status = 'OPEN'")
         open_rows = cur.fetchall()
         log.info(f"[OrphanCleanup] DB open trades: {len(open_rows)}")
 

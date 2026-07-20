@@ -484,7 +484,15 @@ class _OpenAICompatClient:
         }
         # Pass through any extra OpenAI-compatible kwargs (top_p, stream, etc.)
         # but skip ones we already set or that aren't supported.
-        skip = {"model", "messages", "max_tokens", "temperature"}
+        # BUGFIX: "timeout" is an SDK-level kwarg (openai/groq clients use it
+        # to bound the HTTP request), not a Cerebras/SambaNova/OpenRouter
+        # JSON body field. It was previously falling through into `payload`
+        # and getting sent as part of the request body, which Cerebras
+        # rejects with "HTTP 400: property 'timeout' is unsupported"
+        # (wrong_api_format). Pull it out here and use it as the actual
+        # HTTP request timeout instead of forwarding it to the API.
+        skip = {"model", "messages", "max_tokens", "temperature", "timeout"}
+        http_timeout = extra.get("timeout") or 60
         for k, v in extra.items():
             if k not in skip and v is not None:
                 payload[k] = v
@@ -499,7 +507,7 @@ class _OpenAICompatClient:
         try:
             from curl_cffi import requests as _curl_requests  # type: ignore
             resp = _curl_requests.post(
-                url, json=payload, headers=headers, timeout=60,
+                url, json=payload, headers=headers, timeout=http_timeout,
                 impersonate="chrome120",
             )
         except ImportError:
@@ -514,7 +522,7 @@ class _OpenAICompatClient:
             resp = None
 
         if resp is None:
-            resp = requests.post(url, json=payload, headers=headers, timeout=60)
+            resp = requests.post(url, json=payload, headers=headers, timeout=http_timeout)
 
         if resp.status_code != 200:
             # Surface the actual error body so callers can detect 429 / 403 etc.

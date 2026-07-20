@@ -1366,9 +1366,10 @@ def boot_automation(registry: ServiceRegistry) -> PhaseResult:
         try:
             h = registry.try_resolve("error_handler")
             if h and hasattr(h, "log_error"):
+                category = evt.payload.get("channel", "runtime") if isinstance(evt.payload, dict) else "runtime"
                 h.log_error(
-                    category=evt.payload.get("channel", "runtime") if isinstance(evt.payload, dict) else "runtime",
-                    message=str(evt.payload),
+                    error=f"[{category}] {evt.payload}",
+                    severity="ERROR",
                 )
         except Exception as e:
             log.warning("Suppressed exception in _on_sys_error automation callback: %s", e)

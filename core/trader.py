@@ -1678,6 +1678,24 @@ class AITrader:
                         "trade_allowed": result["trade_allowed"],
                         "risk_approved": result.get("risk_approved", True),
                         "timeframe": self.timeframe,
+                        # BUGFIX: these were already computed in `result` by
+                        # _build_result() (trend/rsi/regime/session — same
+                        # data that lands correctly in the `analysis` table
+                        # every cycle) but never forwarded here. journal_bridge
+                        # .log_mt5_open() reads exactly these keys off
+                        # decision_result to fill the trades table's
+                        # pattern/regime/trend/rsi/session columns — without
+                        # them every real MT5 trade recorded NULL for all
+                        # five, permanently losing the strategy context that
+                        # produced that specific trade.
+                        "trend": result.get("trend"),
+                        "rsi": result.get("rsi"),
+                        "regime": result.get("regime"),
+                        "session": result.get("session"),
+                        "pattern": (result.get("pattern_context") or {}).get("pattern")
+                                   or result.get("rule_signal"),
+                        "mtf_bias": result.get("mtf_bias"),
+                        "llm_signal": result.get("llm_signal"),
                     }
                 )
             if trade:

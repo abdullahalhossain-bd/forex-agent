@@ -211,6 +211,19 @@ class TraderDB:
             if "error_message" not in existing_cols:
                 conn.execute("ALTER TABLE trades ADD COLUMN error_message TEXT")
                 log.info("[DB] Migration: added 'error_message' column to trades table")
+            if "mt5_ticket" not in existing_cols:
+                # BUGFIX: the MT5 order ticket was already being captured
+                # (buried inside context_json['mt5_order_ticket']) but never
+                # written to its own column. core/orphan_cleanup.py has
+                # ticket-based matching logic that reads row["mt5_ticket"]
+                # specifically to avoid ambiguous pair+type matching (which
+                # can wrongly close a still-open trade — e.g. when two
+                # positions share the same pair/direction — losing its real
+                # exit_price/pnl forever). Without this column that safer
+                # path was permanently dead code. Add it so ticket-based
+                # reconciliation actually runs.
+                conn.execute("ALTER TABLE trades ADD COLUMN mt5_ticket INTEGER")
+                log.info("[DB] Migration: added 'mt5_ticket' column to trades table")
 
     # ─────────────────────────────────────────────
     # SAVE METHODS
@@ -246,11 +259,36 @@ class TraderDB:
                 _safe(row, 'bb_lower'),  row.get('trend', ''),
             ))
         with self._connect() as conn:
+            # BUGFIX: market_agent.py re-fetches only the latest N candles
+            # (limit=300) every cycle and recomputes indicators fresh on
+            # that window. Indicators like RSI(14)/SMA(200) need warm-up,
+            # so the oldest rows *within each window* come out NaN. As the
+            # window slides forward, a timestamp's last appearance is near
+            # that warm-up edge right before it rolls out of the window —
+            # and the old "INSERT OR REPLACE" clobbered its previously
+            # correct value with NULL at that moment, permanently (it's
+            # never recomputed again once outside the window). Observed as
+            # scattered multi-row NULL blocks throughout indicators.rsi
+            # (not just an initial warm-up block). Fix: upsert with
+            # COALESCE so a NULL/NaN newly computed value never overwrites
+            # a previously stored real value.
             conn.executemany("""
-                INSERT OR REPLACE INTO indicators
+                INSERT INTO indicators
                 (symbol, timeframe, time, rsi, macd, macd_sig,
                  sma_20, sma_50, sma_200, atr, bb_upper, bb_lower, trend)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(symbol, timeframe, time) DO UPDATE SET
+                    rsi      = COALESCE(excluded.rsi, indicators.rsi),
+                    macd     = COALESCE(excluded.macd, indicators.macd),
+                    macd_sig = COALESCE(excluded.macd_sig, indicators.macd_sig),
+                    sma_20   = COALESCE(excluded.sma_20, indicators.sma_20),
+                    sma_50   = COALESCE(excluded.sma_50, indicators.sma_50),
+                    sma_200  = COALESCE(excluded.sma_200, indicators.sma_200),
+                    atr      = COALESCE(excluded.atr, indicators.atr),
+                    bb_upper = COALESCE(excluded.bb_upper, indicators.bb_upper),
+                    bb_lower = COALESCE(excluded.bb_lower, indicators.bb_lower),
+                    trend    = CASE WHEN excluded.trend IS NOT NULL AND excluded.trend != ''
+                                    THEN excluded.trend ELSE indicators.trend END
             """, rows)
         log.info(f"Indicators saved: {symbol} {timeframe}")
 
@@ -298,20 +336,31 @@ class TraderDB:
         নতুন trade open হলে save করো। Returns the new trade's row id.
         `trade` dict-টা PaperTrader._build_trade_record() থেকে আসে।
         """
+        context = trade.get("context", {}) or {}
+        # BUGFIX: the ticket was already present in context (as
+        # 'mt5_order_ticket' or 'ticket') but never surfaced to its own
+        # column — see mt5_ticket migration note above.
+        mt5_ticket = (
+            context.get("mt5_order_ticket")
+            or context.get("mt5_ticket")
+            or context.get("ticket")
+            or trade.get("mt5_ticket")
+        )
         with self._connect() as conn:
             cur = conn.execute("""
                 INSERT INTO trades
                 (pair, timeframe, type, entry, sl, tp, lot, confidence,
                  open_time, pattern, regime, trend, rsi, session,
-                 status, context_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?)
+                 status, context_json, mt5_ticket)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN', ?, ?)
             """, (
                 trade["pair"], trade.get("timeframe"), trade["type"],
                 trade["entry"], trade["sl"], trade["tp"], trade["lot"],
                 trade.get("confidence"), trade["open_time"],
                 trade.get("pattern"), trade.get("regime"),
                 trade.get("trend"), trade.get("rsi"), trade.get("session"),
-                _safe_json_dumps(trade.get("context", {})),
+                _safe_json_dumps(context),
+                int(mt5_ticket) if mt5_ticket is not None else None,
             ))
             trade_id = cur.lastrowid
         log.info(f"Trade OPEN saved: #{trade_id} {trade['pair']} {trade['type']} @ {trade['entry']}")
