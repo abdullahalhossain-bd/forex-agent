@@ -312,7 +312,7 @@ class NewsFilter:
                 f"({_ff_scrape_blocked_until - now_mono:.0f}s remaining) — "
                 f"skipping to hardcoded fallback"
             )
-            events = self._hardcoded_fallback()
+            events = self._build_hardcoded_events()
             return events, "hardcoded_fallback"
 
         # ── Layer 1: cloudscraper ──

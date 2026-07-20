@@ -352,6 +352,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             smc_ctx        = smc_ctx or {},
             session_ctx    = session_ctx or {},      # ← Day 63
             intermarket_ctx = intermarket_ctx or {},  # ← Day 65
+            sentiment_ctx  = sentiment_ctx or {},
         )
 
         result = {
@@ -1215,6 +1216,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         smc_ctx:        dict = None,
         session_ctx:    dict = None,       # ← Day 63
         intermarket_ctx: dict = None,       # ← Day 65
+        sentiment_ctx:  dict = None,
     ) -> int:
         """
         Weighted average:
@@ -1247,11 +1249,14 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         available["macro"]     = (0.10, intermarket_ctx.get("macro_score", 50)) if intermarket_ctx and intermarket_ctx.get("macro_score") is not None else None
 
         # Filter out None entries (missing data) and normalize weights
-        present = {k: (w, v) for k, (w, v) in available.items() if v is not None}
+        # (filter BEFORE unpacking — available[k] is None, not a (w, v) tuple,
+        # for any excluded factor, so unpacking in the `for` clause itself
+        # would crash before the `if` filter ever runs)
+        present = {k: val for k, val in available.items() if val is not None}
         total_w = sum(w for w, _ in present.values())
 
         if total_w > 0:
-            weighted = sum(v * w for _, (w, v) in present.values()) / total_w
+            weighted = sum(v * w for w, v in present.values()) / total_w
         else:
             # No context data at all — fall back to LLM + technical only
             weighted = (llm_conf * 0.60 + technical_conf * 0.40)

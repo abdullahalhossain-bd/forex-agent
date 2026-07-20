@@ -448,8 +448,8 @@ class OrderManager:
                     )
                 # Day 97+ Book Page 11: Execution quality monitoring
                 try:
-                    from monitoring.execution_quality import get_execution_monitor
-                    eqm = get_execution_monitor()
+                    from monitoring.execution_quality import get_execution_quality_monitor
+                    eqm = get_execution_quality_monitor()
                     eqm.record_order(
                         symbol=broker_symbol, direction=direction,
                         expected_entry=request.get("price", 0),

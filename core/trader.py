@@ -972,6 +972,7 @@ class AITrader:
                         "passed": False,
                         "detail": f"Signal flip-flopping (unstable)",
                     })
+                    perm_out["total"] = perm_out.get("total", 0) + 1
                 spf.record(self.symbol, final_sig, dec_out.get("confidence", 0))
             except Exception as e:
                 log.warning(f"Suppressed exception at line 798: {e}")
@@ -1003,6 +1004,7 @@ class AITrader:
                         "passed": False,
                         "detail": reason,
                     })
+                    perm_out["total"] = perm_out.get("total", 0) + 1
             except Exception as e:
                 log.warning(f"Suppressed exception at line 825: {e}")
                 pass
@@ -1020,6 +1022,7 @@ class AITrader:
                     "detail": f"{self.symbol} {dec_out.get('decision')} already open",
                 }
             )
+            perm_out["total"] = perm_out.get("total", 0) + 1
 
         # Correlation check — same underlying-risk group already has an open
         # position (e.g. EURUSD BUY blocks a fresh GBPUSD BUY). Lot size, SL
@@ -1045,6 +1048,7 @@ class AITrader:
                         "detail": "Correlated pair group already has an open position",
                     }
                 )
+                perm_out["total"] = perm_out.get("total", 0) + 1
 
         self._perm.print_summary(perm_out)
         if debugger:
