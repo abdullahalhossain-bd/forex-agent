@@ -46,4 +46,4 @@ def _parse_time(tv):
     if isinstance(tv, datetime): return tv if tv.tzinfo else tv.replace(tzinfo=timezone.utc)
     try:
         dt = datetime.fromisoformat(str(tv)); return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except: return None
+    except (ValueError, TypeError): return None

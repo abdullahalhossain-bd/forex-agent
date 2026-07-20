@@ -140,6 +140,10 @@ class ExecutionRouter:
         except Exception:
             self._mt5_fallback_to_sim = True
 
+        # CRITICAL BUG FIX: this call was missing entirely — see _init_mode()
+        # docstring below for what that broke.
+        self._init_mode(mt5_conn=mt5_conn)
+
     @property
     def last_failure_reason(self) -> str | None:
         """Reason for this calling thread's most recent execute() -> None.
@@ -156,6 +160,19 @@ class ExecutionRouter:
         self._failure_local.reason = reason
         return None
 
+    def _init_mode(self, mt5_conn=None) -> None:
+        """Initialize the router for self.mode (simulation / mt5_demo / mt5_live).
+
+        CRITICAL BUG FIX: this entire method used to live as unreachable
+        code *after* the `return None` in `_fail()` above (dead code
+        attached to the wrong method, referencing a `mt5_conn` name that
+        wasn't even in scope there) and was never called from __init__.
+        As a result NO execution mode was ever actually initialized:
+        self._mt5_conn / self._order_manager / self._account_manager were
+        never set, so any real execute() call would hit AttributeError
+        (or, in simulation mode, silently never route through MT5 at all).
+        This is now a proper method, called once from __init__.
+        """
         if self._simulation_mode:
             self._init_simulation_mode()
             return
@@ -209,8 +226,9 @@ class ExecutionRouter:
                         "or fallback credentials."
                     )
                 _login, _password, _server = MT5_REAL_LOGIN, MT5_REAL_PASSWORD, MT5_REAL_SERVER
-                _mt5_fallback_to_sim_effective = False  # a real-money order NEVER silently
-                                                          # becomes a simulated one on failure
+                # NOTE: the actual "never silently fall back to sim on a real-money
+                # order" guarantee is enforced below via self._mt5_fallback_to_sim = False
+                # in the `else` branch (mt5_live) of the mode check that follows.
             try:
                 from config import MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH
                 from broker.mt5_connection import get_mt5_connection
