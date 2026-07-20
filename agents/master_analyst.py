@@ -47,8 +47,16 @@ _groq_client = None
 _gemini_client = None
 _key_manager = None
 MODEL = ""
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+# Fix (2026-07-20): this default still pointed at llama-3.3-70b-versatile,
+# the model config.py already moved away from after it was found to exhaust
+# the 100k TPD Groq quota within ~13 cycles (see config.py comment). Switched
+# to match. Also switched from os.getenv(key, default) to `os.getenv(key) or
+# default` for both vars: os.getenv's default only applies when the key is
+# absent from the environment, not when it's present-but-empty (e.g.
+# "GEMINI_MODEL=" in .env) — that empty-string case was reaching the Gemini
+# API as model="" and crashing every fallback call with "model is required".
+GROQ_MODEL = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 # Day 90 — token economy for long-duration demo trading.
 # Was 1500 — that's ~1.5k tokens per call × ~5 calls/cycle × 6 pairs =
 # ~45k tokens/cycle. With 6 Groq keys × 100k TPD = 600k tokens/day,

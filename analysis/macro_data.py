@@ -91,7 +91,7 @@ class MacroDataProvider:
 
             log.info(
                 f"[MacroData] DXY={result['dxy']['trend']} "
-                f"Gold={result['gold']['trend']} "
+                f"OIL={result['oil']['trend']} "
                 f"VIX={result['vix']['trend']} "
                 f"SP500={result['sp500']['trend']}"
             )

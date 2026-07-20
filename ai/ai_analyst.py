@@ -29,8 +29,13 @@ class AIAnalyst:
         Technical data → Context builder → LLM → JSON report
     """
 
-    GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest")
+    # 2026-07-20 fix: match config.py's move to the cheaper Groq model
+    # (llama-3.3-70b-versatile was exhausting the 100k TPD quota), and use
+    # `os.getenv(key) or default` since os.getenv's default doesn't kick in
+    # for a present-but-empty env var (e.g. "GEMINI_MODEL=" in .env), which
+    # was sending model="" to Gemini and crashing every fallback call.
+    GROQ_MODEL   = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 
     # Rough per-1K-token USD prices used only for cost *estimation* /
     # observability, not billing. Overridable via env if pricing changes.

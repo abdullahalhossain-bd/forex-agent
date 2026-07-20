@@ -1,8 +1,17 @@
 {
   "date": "2026-07-20",
   "total_loss_usd": 0,
-  "total_win_usd": 0,
-  "open_trades": 0,
-  "open_pairs": [],
-  "trades": []
+  "total_win_usd": 6.07,
+  "open_trades": 1,
+  "open_pairs": [
+    "EURCHF",
+    "USDJPY"
+  ],
+  "trades": [
+    {
+      "symbol": "NZDUSD",
+      "pnl_usd": 6.07,
+      "time": "2026-07-20T08:41:32.085058+00:00"
+    }
+  ]
 }

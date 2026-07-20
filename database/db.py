@@ -439,27 +439,46 @@ class TraderDB:
             return pd.read_sql(query, conn, params=params)
 
     def get_account_stats(self, starting_balance: float = 10000.0) -> dict:
-        """Dashboard summary — Day 17 doc-এর 'AI PAPER ACCOUNT' output"""
+        """Dashboard summary — Day 17 doc-এর 'AI PAPER ACCOUNT' output
+
+        2026-07-20 fix: trades closed via core/orphan_cleanup.py (when a DB
+        'OPEN' trade has no matching live MT5/paper position) get
+        result='AUTO_CLOSED' with pnl left NULL — the real fill/close price
+        was never available, so no P&L could be computed. These were
+        previously counted in `total` (status='CLOSED') without being a WIN
+        or a LOSS, which silently understated win_rate (extra trade in the
+        denominator that never counts toward wins), while SUM(pnl) quietly
+        ignores their NULL pnl — meaning if that position actually gained or
+        lost real money at the broker, it's missing from total_pnl/balance
+        with no indication anything is off. Now excluded from win_rate's
+        denominator and reported separately as `unresolved_trades` so the
+        gap is visible instead of silently baked into the numbers.
+        """
         with self._connect() as conn:
             row = conn.execute("""
                 SELECT COUNT(*) as total,
                        SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) as wins,
                        SUM(CASE WHEN result='LOSS' THEN 1 ELSE 0 END) as losses,
+                       SUM(CASE WHEN result='AUTO_CLOSED' THEN 1 ELSE 0 END) as unresolved,
                        SUM(pnl) as total_pnl
                 FROM trades WHERE status = 'CLOSED'
             """).fetchone()
-        total, wins, losses, total_pnl = row
+        total, wins, losses, unresolved, total_pnl = row
         total      = total or 0
         wins       = wins or 0
+        losses     = losses or 0
+        unresolved = unresolved or 0
         total_pnl  = total_pnl or 0.0
-        win_rate   = round(wins / total * 100, 1) if total else 0.0
+        resolved   = total - unresolved
+        win_rate   = round(wins / resolved * 100, 1) if resolved else 0.0
         return {
-            "balance":      round(starting_balance + total_pnl, 2),
-            "total_trades": total,
-            "wins":         wins,
-            "losses":       losses,
-            "win_rate":     win_rate,
-            "total_pnl":    round(total_pnl, 2),
+            "balance":           round(starting_balance + total_pnl, 2),
+            "total_trades":      total,
+            "wins":              wins,
+            "losses":            losses,
+            "unresolved_trades": unresolved,
+            "win_rate":          win_rate,
+            "total_pnl":         round(total_pnl, 2),
         }
 
     def get_overall_stats(self, starting_balance: float = 10000.0) -> dict:

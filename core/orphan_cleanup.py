@@ -193,9 +193,16 @@ def reconcile_open_positions(
                          json.dumps(context), trade_id),
                     )
                     result["closed"] += 1
-                    log.info(
-                        f"[OrphanCleanup] ✅ Closed orphan trade #{trade_id} "
-                        f"{pair} {trade_type} lot={row['lot']}"
+                    log.warning(
+                        f"[OrphanCleanup] Closed orphan trade #{trade_id} "
+                        f"{pair} {trade_type} lot={row['lot']} — marked "
+                        f"AUTO_CLOSED, but the real exit price/pnl is "
+                        f"UNKNOWN (position vanished from MT5/paper trader "
+                        f"without a tracked close). If it actually won or "
+                        f"lost money at the broker, that P&L is NOT "
+                        f"reflected in total_pnl/balance. Reconcile against "
+                        f"the broker's deal history if accurate accounting "
+                        f"matters here."
                     )
                 except Exception as e:
                     result["errors"] += 1

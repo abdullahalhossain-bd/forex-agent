@@ -46,9 +46,19 @@ log = logging.getLogger(__name__)
 # engine's logic (S/R, S/D, MTF, checklist — all symbol-agnostic) already
 # supports via analysis/_engine_utils.py. Add/remove symbols here as
 # needed; nothing else in this file needs to change to support a new one.
+#
+# 2026-07-20 fix: the widened set above (11 majors) still didn't cover
+# every pair the bot actually scans — execution.log shows it also checks
+# permissions for EURCHF, EURAUD, EURCAD, EURNZD, GBPCHF, GBPAUD, GBPCAD,
+# GBPNZD, and forex_ai.log confirms all 8 were hitting "not supported" on
+# every single cycle, silently dropping the PA vote for all of them.
+# Added the missing GBP/EUR crosses so PA participates for every symbol
+# the bot trades.
 ALLOWED_PAIRS = {
     "EURUSD", "USDJPY", "USDCAD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCHF",
     "EURGBP", "EURJPY", "GBPJPY", "XAUUSD",
+    "EURCHF", "EURAUD", "EURCAD", "EURNZD",
+    "GBPCHF", "GBPAUD", "GBPCAD", "GBPNZD",
 }
 ALLOWED_TIMEFRAMES = {"1D", "4H", "1H", "H1", "H4", "D1"}
 

@@ -2681,7 +2681,16 @@ class AITrader:
             df = market_out["df"]
             db.save_candles(df, self.symbol, self.timeframe)
             db.save_indicators(df, self.symbol, self.timeframe)
-            db.save_patterns(df, self.symbol, self.timeframe)
+            # 2026-07-20 fix: market_out["df"] never has the 'pattern' /
+            # 'engulfing' / 'star_pattern' columns — PatternDetector.detect_all()
+            # (agents/analysis_agent.py) makes its own df.copy() before adding
+            # them, so those columns only exist on analysis_out["df"]. Calling
+            # save_patterns() with market_out["df"] meant every row's
+            # row.get('pattern','none') silently defaulted to 'none' and got
+            # skipped — patterns table stayed at 0 rows forever even though
+            # pattern detection was running correctly for live decisions.
+            pattern_df = analysis_out.get("df", df)
+            db.save_patterns(pattern_df, self.symbol, self.timeframe)
             db.save_analysis(
                 self.symbol,
                 self.timeframe,
