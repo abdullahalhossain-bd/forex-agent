@@ -494,6 +494,24 @@ class TelegramNotifier:
         )
         await self.send_message(msg)
 
+    # ── 5b. SYSTEM WARNING ──────────────────────────────────────
+    # BUG FIX: internal recovery pauses (e.g. after repeated cycle errors)
+    # used to be sent through notify_news_warning(), which is meant for
+    # real economic-calendar events. That produced nonsensical alerts like
+    # "📰 Event: System warning: trading paused for recovery" with
+    # "⏰ Time: Happening in 5 minutes" for something that was already
+    # happening. This is a separate template for non-news system pauses.
+    async def notify_system_warning(self, reason: str, pause_duration: str):
+        safe_reason = _escape_markdown(reason)
+        safe_duration = _escape_markdown(pause_duration)
+        msg = (
+            f"⚠️ *SYSTEM WARNING* ⚠️\n\n"
+            f"🔧 *Reason:* {safe_reason}\n"
+            f"⏸️ *Pause duration:* {safe_duration}\n"
+            f"🛑 *Action:* Trading paused automatically for recovery."
+        )
+        await self.send_message(msg)
+
     # ── 6. WEEKLY CALENDAR ─────────────────────────────────────
 
     async def notify_weekly_calendar(self, weekly_calendar: dict):

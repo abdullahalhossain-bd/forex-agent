@@ -820,3 +820,6 @@ timestamp,cycle,symbol,timeframe,session,decision,confidence,entry,sl,tp1,tp2,lo
 2026-07-20T13:13:45+00:00,40,GBPUSD,15m,London Ny Overlap/London/New York,NO TRADE,67.2,1.34554,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
 2026-07-20T13:14:19+00:00,41,USDJPY,15m,London Ny Overlap/London/New York,NO TRADE,60.0,162.416,,,,0.0,0.0,0.0,Correlation conflict with {'USDJPY'},,,,0.0,0.0,
 2026-07-20T13:14:35+00:00,42,AUDUSD,15m,London Ny Overlap/London/New York,NO TRADE,86.0,0.70043,0.69943,0.70243,,0.0,2.0,991.6,MT5 position sync unavailable this cycle — refusing new entry (fail-closed; existing positions unaffected),,,,0.0,0.0,
+2026-07-20T15:04:05+00:00,1,EURUSD,15m,London Ny Overlap/London/New York,NO TRADE,53.3,1.14074,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
+2026-07-20T15:04:56+00:00,2,GBPUSD,15m,London Ny Overlap/London/New York,NO TRADE,48.2,1.34251,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
+2026-07-20T15:06:38+00:00,3,USDJPY,15m,London Ny Overlap/London/New York,NO TRADE,71.0,162.545,162.445,162.745,,0.04,2.0,2.6,55% (min 60%),,,,0.0,0.0,

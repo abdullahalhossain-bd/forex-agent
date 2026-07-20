@@ -1571,5 +1571,44 @@
     "recommendation": "Final decision: NO TRADE",
     "has_conflict": false,
     "result": null
+  },
+  {
+    "time": "2026-07-20T21:04:05",
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "price": 1.14074,
+    "trend": "strong_bearish",
+    "rsi": 28.06624,
+    "bias": "NO TRADE",
+    "confidence": 53.3,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
+  },
+  {
+    "time": "2026-07-20T21:04:56",
+    "pair": "GBPUSD",
+    "timeframe": "15m",
+    "price": 1.34251,
+    "trend": "bearish",
+    "rsi": 24.69018,
+    "bias": "NO TRADE",
+    "confidence": 48.2,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
+  },
+  {
+    "time": "2026-07-20T21:06:38",
+    "pair": "USDJPY",
+    "timeframe": "15m",
+    "price": 162.545,
+    "trend": "bullish",
+    "rsi": 65.83044,
+    "bias": "NO TRADE",
+    "confidence": 71,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
   }
 ]

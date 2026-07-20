@@ -177,18 +177,10 @@ def boot_bootstrap(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_persistence(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 2 — TraderDB + memory stores + KnowledgeStore.
-
-    CRITICAL FIX: Previously always returned ok=True even if DB failed.
-    Now returns ok=False if critical services (db) fail to initialize.
-    Non-critical services (trade_memory, learning_engine) don't block boot
-    but are logged as warnings.
-    """
+    """Phase 2 — TraderDB + memory stores + KnowledgeStore."""
     services = []
     failed_critical = []
 
-    # ── CRITICAL: TraderDB — required for trade journaling, duplicate
-    # protection, and orphan cleanup. If this fails, DO NOT proceed.
     try:
         from database.db import TraderDB
         db = TraderDB()
@@ -199,7 +191,6 @@ def boot_persistence(registry: ServiceRegistry) -> PhaseResult:
         registry.mark("db", ServiceStatus.FAILED, str(e))
         failed_critical.append("db")
 
-    # ── NON-CRITICAL: memory/learning services — degraded mode OK
     try:
         from memory.trade_memory import TradeMemory
         tm = TradeMemory(seed_rules=True)
@@ -231,7 +222,6 @@ def boot_persistence(registry: ServiceRegistry) -> PhaseResult:
 
     get_bus().publish("system.startup", {"phase": "persistence", "services": services}, source="runtime")
 
-    # FIX: return ok=False if critical services failed
     if failed_critical:
         log.error("boot_persistence FAILED — critical services down: %s", failed_critical)
         return PhaseResult(phase=Phase.PERSISTENCE, ok=False, duration_sec=0.0,
@@ -291,18 +281,6 @@ def boot_market(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.error("Scanner init failed: %s", e)
 
-    # Day 131 fix: the previous fallback default here was the literal
-    # string "paper" — but config.py explicitly documents that
-    # ExecutionRouter (and therefore the rest of the system) only
-    # supports "mt5_demo"; "paper" is a removed legacy mode. If
-    # "execution_mode" was ever somehow missing from the registry (e.g. a
-    # future refactor reorders phases, or boot_bootstrap partially fails),
-    # this fallback would silently skip MT5Connection creation even though
-    # the real, intended mode is mt5_demo — which is exactly how a
-    # "No shared MT5Connection in registry" report could occur with no
-    # obvious error at boot. Falling back to config's own EXECUTION_MODE
-    # keeps this phase self-consistent with the rest of the app instead of
-    # guessing an unsupported value.
     try:
         from config import EXECUTION_MODE as _CONFIG_EXECUTION_MODE
     except Exception:
@@ -310,16 +288,6 @@ def boot_market(registry: ServiceRegistry) -> PhaseResult:
     mode = registry.get("execution_mode", _CONFIG_EXECUTION_MODE)
 
     if mode == "mt5_demo":
-        # Day 131 fix: MT5Connection creation used to be a single
-        # try/once — any transient failure at boot (terminal still
-        # starting up, brief network hiccup, etc.) permanently left the
-        # registry without "mt5_connection" for the rest of the process,
-        # with no retry and no distinguishable health signal beyond a log
-        # line. This is one of the root causes behind persistent
-        # "No shared MT5Connection in registry" symptoms even though MT5
-        # was reachable moments later. Now retries with backoff and
-        # records an explicit FAILED/DEGRADED status in the registry so
-        # health() and monitoring can see it, rather than only a log line.
         import time as _time
         from broker.mt5_connection import get_mt5_connection
         from config import MT5_LOGIN, MT5_PASSWORD, MT5_SERVER, MT5_PATH
@@ -328,13 +296,6 @@ def boot_market(registry: ServiceRegistry) -> PhaseResult:
         last_err: Optional[Exception] = None
         for attempt in range(1, max_attempts + 1):
             try:
-                # Bug fix: was `MT5Connection(...)` — a brand-new instance
-                # every boot/retry that independently re-ran mt5.initialize()
-                # + mt5.login(), even though data/fetcher.py,
-                # data/data_orchestrator.py, and execution_router.py may
-                # build their own MT5Connection too if not given this one.
-                # get_mt5_connection() ensures all of them converge on the
-                # SAME already-connected instance for this (login, server).
                 conn = get_mt5_connection(login=MT5_LOGIN, password=MT5_PASSWORD,
                                           server=MT5_SERVER, path=MT5_PATH or None,
                                           auto_connect=False)
@@ -344,10 +305,7 @@ def boot_market(registry: ServiceRegistry) -> PhaseResult:
                 break
             except Exception as e:
                 last_err = e
-                log.warning(
-                    "MT5 connection init attempt %d/%d failed: %s",
-                    attempt, max_attempts, e,
-                )
+                log.warning("MT5 connection init attempt %d/%d failed: %s", attempt, max_attempts, e)
                 if attempt < max_attempts:
                     _time.sleep(min(2 ** attempt, 10))
         if last_err is not None:
@@ -726,18 +684,8 @@ def boot_strategy(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_hybrid(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 11 — hybrid FlowController.
-
-    FIX: FlowController requires 5+ constructor args (market_agent_factory,
-    analysis_agent, risk_agent, decision_agent, execution_router). Calling
-    FlowController() with zero args always crashes. The entire hybrid/
-    folder is legacy/dead code — the system uses core/trader.py and
-    agents/* instead.
-
-    This phase is now a no-op. The hybrid/ folder should be moved to legacy/.
-    """
+    """Phase 11 — hybrid FlowController (Legacy/No-op)."""
     services = []
-    # Log that hybrid/ is intentionally skipped — it's dead code.
     log.info("boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)")
     get_bus().publish("system.startup", {"phase": "hybrid", "services": services,
                                           "note": "skipped — legacy module"}, source="runtime")
@@ -746,15 +694,7 @@ def boot_hybrid(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_risk(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 12 — RiskEngine + CircuitBreaker + TradePermission + DrawdownController.
-
-    Day 75+76 additions: Kill Switch (3-level emergency brake), Live Risk
-    Manager (central pre-trade gate), Exposure Manager (correlation groups),
-    Drawdown Monitor (capital preservation), Risk Reporter (event log),
-    plus the Day 76 Smart Capital Allocation Engine — Kelly Calculator,
-    Volatility Adjuster, Confidence Scaler, Correlation Manager, and the
-    master PositionSizer that fuses them all.
-    """
+    """Phase 12 — RiskEngine + CircuitBreaker + TradePermission + DrawdownController."""
     services = []
     core_risk_failed = False
     core_risk_error = None
@@ -764,34 +704,14 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
         from risk.trade_permission import TradePermission
         from risk.drawdown_controller import DrawdownController
 
-        symbols = registry.get("symbols", ["EURUSD", "GBPUSD", "USDJPY"])
-        # Audit fix: this was hardcoded to 10000 regardless of the account's
-        # real configured balance, while LiveRiskManager (registered later
-        # in this same phase) correctly reads INITIAL_BALANCE from config.
-        # That mismatch meant CircuitBreaker/DrawdownController/RiskEngine
-        # loss and drawdown thresholds were silently computed against a
-        # fictitious $10,000 balance on any account that isn't exactly
-        # that size. Prefer an explicit registry override (if the caller
-        # set one), then config.INITIAL_BALANCE, then fall back to the
-        # previous 10000 default only if config is unavailable.
         try:
             from config import INITIAL_BALANCE as _CONFIG_INITIAL_BALANCE
         except Exception as e:
-            log.warning("Risk phase: could not import INITIAL_BALANCE from config (%s) — "
-                        "using 10000 fallback", e)
+            log.warning("Risk phase: could not import INITIAL_BALANCE from config (%s) — using 10000 fallback", e)
             _CONFIG_INITIAL_BALANCE = 10000
         balance = registry.get("balance", _CONFIG_INITIAL_BALANCE)
+        
         cb = CircuitBreaker(balance=balance)
-        # Bug fix: this was still calling DrawdownController() with no
-        # argument, so it silently fell back to its own default
-        # (initial_balance=10000.0) regardless of the real account balance
-        # computed just above — while CircuitBreaker right next to it
-        # correctly received `balance`. On any account that isn't exactly
-        # $10,000 (e.g. a $99,170.98 live/demo balance), every drawdown %
-        # DrawdownController computed was measured against a fictitious
-        # $10,000 peak, so ordinary balance fluctuations could trigger
-        # false GREEN/YELLOW/ORANGE/RED transitions and false daily/weekly
-        # limit trips. Pass the same resolved `balance` here too.
         dd = DrawdownController(initial_balance=balance)
         registry.register_instance("circuit_breaker", cb)
         registry.register_instance("drawdown_controller", dd)
@@ -802,24 +722,12 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
         services.extend(["circuit_breaker", "drawdown_controller",
                          "trade_permission", "risk_engine_factory"])
     except Exception as e:
-        # CRITICAL: RiskEngine/CircuitBreaker/TradePermission/DrawdownController
-        # are the pre-trade risk gates. If they fail to load, the system must
-        # NOT report a successful boot and proceed to trade ungated — that
-        # would mean live orders can execute with no circuit breaker and no
-        # drawdown control. Same failure-reporting pattern as boot_persistence.
-        log.critical("CRITICAL: Risk core init failed — trading must not proceed "
-                     "ungated: %s", e, exc_info=True)
+        log.critical("CRITICAL: Risk core init failed — trading must not proceed ungated: %s", e, exc_info=True)
         core_risk_failed = True
         core_risk_error = str(e)
 
     try:
         from risk.autonomous_risk import AutonomousRiskManager
-        # Bug fix: same $10,000-fallback issue as DrawdownController above —
-        # AutonomousRiskManager() with no args defaults to balance=10000.0,
-        # which also seeds its own internal DrawdownController with the
-        # wrong initial balance. Reuse the resolved balance from the risk
-        # phase above; `balance` may not exist if that block raised before
-        # reaching its assignment, so resolve it again defensively here.
         try:
             _arm_balance = balance
         except NameError:
@@ -834,10 +742,6 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.warning("AutonomousRiskManager not available: %s", e)
 
-    # ── Day 75 — Live Risk Framework ──────────────────────────────────
-    # 3-level kill switch, exposure/correlation manager, drawdown monitor
-    # (capital preservation mode), risk event reporter (DB-backed), and
-    # the central LiveRiskManager that runs all 6 checks pre-trade.
     try:
         from risk.kill_switch import KillSwitch, get_kill_switch
         ks = get_kill_switch()
@@ -870,7 +774,6 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
     try:
         from risk.live_risk_manager import LiveRiskManager, get_live_risk_manager
         mgr = get_live_risk_manager()
-        # Pick up the live config balance if available, otherwise default.
         try:
             from config import INITIAL_BALANCE
             mgr.initial_balance = float(INITIAL_BALANCE)
@@ -884,9 +787,6 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.warning("LiveRiskManager init failed: %s", e)
 
-    # ── Day 76 — Smart Capital Allocation Engine ──────────────────────
-    # Kelly Criterion + Volatility adjustment + Confidence scaling +
-    # Correlation management, fused inside the master PositionSizer.
     try:
         from risk.kelly_calculator import KellyCalculator, get_kelly_calculator
         registry.register_instance("kelly_calculator", get_kelly_calculator())
@@ -942,11 +842,7 @@ def boot_safety(registry: ServiceRegistry) -> PhaseResult:
         registry.register("safety_guard", lambda r: SafetyGuard(paper_trader=r.try_resolve("paper_trader")))
         services.append("safety_guard")
     except Exception as e:
-        # CRITICAL: SafetyGuard is the primary pre-trade safety gate. Report
-        # ok=False rather than silently proceeding without it — same
-        # reasoning as the risk-core failure in boot_risk above.
-        log.critical("CRITICAL: SafetyGuard init failed — trading must not "
-                     "proceed without this gate: %s", e, exc_info=True)
+        log.critical("CRITICAL: SafetyGuard init failed — trading must not proceed without this gate: %s", e, exc_info=True)
         safety_guard_failed = True
         safety_guard_error = str(e)
 
@@ -967,16 +863,7 @@ def boot_safety(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_execution(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 14 — ExecutionRouter (MT5 demo only, paper trading removed).
-
-    Day 90+ hotfix: এখন registry থেকে shared "mt5_connection" instance
-    (Phase 4 / boot_market-এ register হওয়া) resolve করে ExecutionRouter-এ
-    inject করা হয়। আগে ExecutionRouter নিজেই আলাদা MT5Connection()
-    বানাতো — ফলে একই process-এ দুটো mt5.initialize() session চলতো,
-    যেটা একে অপরের connection ভেঙে দিয়ে বারবার "MT5 connection lost"
-    flapping তৈরি করছিল। এখন একটাই connection object পুরো system জুড়ে
-    শেয়ার হয়।
-    """
+    """Phase 14 — ExecutionRouter."""
     services = []
     router_failed = False
     router_error = None
@@ -996,11 +883,7 @@ def boot_execution(registry: ServiceRegistry) -> PhaseResult:
                 "found in registry, router created its own connection (check boot_market phase)"
             )
     except Exception as e:
-        # CRITICAL: ExecutionRouter is the only path orders reach the broker.
-        # If it fails to construct, nothing downstream can trade — report
-        # ok=False instead of letting boot appear to succeed.
-        log.critical("CRITICAL: ExecutionRouter init failed — no order path "
-                     "exists: %s", e, exc_info=True)
+        log.critical("CRITICAL: ExecutionRouter init failed — no order path exists: %s", e, exc_info=True)
         router_failed = True
         router_error = str(e)
 
@@ -1014,19 +897,8 @@ def boot_execution(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_broker(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 15 — broker subsystem (mt5_demo only).
-
-    Day 90+ note: account_manager/order_manager এখানেও registry-র shared
-    "mt5_connection" ব্যবহার করে — কোনো নতুন MT5Connection বানানো হয় না।
-    এটা আগে থেকেই ঠিক ছিল (registry.try_resolve ব্যবহার করতো), তাই এই
-    phase-এ কোনো পরিবর্তনের দরকার ছিল না।
-    """
+    """Phase 15 — broker subsystem (mt5_demo only)."""
     services = []
-    # Day 131 fix: same issue as boot_market() — "paper" is not a
-    # supported EXECUTION_MODE (see config.py), so falling back to it here
-    # would silently skip broker wiring if "execution_mode" were ever
-    # missing from the registry. Fall back to config's own EXECUTION_MODE
-    # instead, keeping this phase self-consistent with boot_market().
     try:
         from config import EXECUTION_MODE as _CONFIG_EXECUTION_MODE
     except Exception:
@@ -1041,11 +913,6 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
     account_broker_error = None
     om = None
 
-    # ── CRITICAL: AccountManager + OrderManager — the actual order path.
-    # Kept in its own try block, and each service is added to `services`
-    # immediately on success, so a later failure in a non-critical service
-    # (journal_bridge, economic_calendar, ...) can no longer erase these
-    # from the reported PhaseResult the way a single batched extend() did.
     try:
         from broker.account_manager import AccountManager
         from broker.order_manager import OrderManager
@@ -1059,13 +926,10 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
         registry.register_instance("order_manager", om)
         services.append("order_manager")
     except Exception as e:
-        log.critical("CRITICAL: AccountManager/OrderManager init failed — no "
-                     "order path exists: %s", e, exc_info=True)
+        log.critical("CRITICAL: AccountManager/OrderManager init failed — no order path exists: %s", e, exc_info=True)
         account_broker_failed = True
         account_broker_error = str(e)
 
-    # ── NON-CRITICAL: journal, broker health, economic calendar — each
-    # isolated so one failing import can't take out the others.
     db = registry.try_resolve("db")
     conn = registry.try_resolve("mt5_connection")
     try:
@@ -1089,17 +953,9 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.warning("EconomicCalendar init failed (non-critical): %s", e)
 
-    # ── Round-30: MT5 Trade State Recovery ────────────────────────────
-    # Runs whenever OrderManager is available, independent of whether the
-    # non-critical services above succeeded — recovery only needs `om`.
     if om is not None:
         try:
             from execution.trade_recovery import recover_mt5_state
-
-            # Reuse the trade_memory instance registered by boot_persistence
-            # instead of constructing a second, independent TradeMemory()
-            # (which would open a second DB handle and redo seed_rules work
-            # for no reason).
             learning_db = None
             try:
                 tm = registry.try_resolve("trade_memory")
@@ -1110,14 +966,10 @@ def boot_broker(registry: ServiceRegistry) -> PhaseResult:
             except Exception:
                 pass
 
-            # PositionManager may not exist yet (created per-AITrader later).
-            # We can still run recovery for DB reconciliation — PositionManager
-            # seeding will happen when each AITrader boots and calls
-            # recover_from_mt5() on its own PositionManager instance.
             recovery_result = recover_mt5_state(
                 order_manager=om,
                 learning_db=learning_db,
-                position_manager=None,  # Per-AITrader instances seed themselves
+                position_manager=None,
             )
             log.info(
                 f"[Runtime] MT5 recovery: {recovery_result['open_positions']} open | "
@@ -1231,10 +1083,6 @@ def boot_learning(registry: ServiceRegistry) -> PhaseResult:
 
     try:
         from learning.memory_integration import MemoryIntegration
-        # NOTE: MemoryIntegration is registered but never actively called
-        # in the live trading loop. It's a legacy module that was part of
-        # the hybrid/ pipeline which is now dead. Keeping registration for
-        # backward compat but it's effectively a no-op.
         registry.register("memory_integration", lambda r: MemoryIntegration())
         services.append("memory_integration")
     except Exception as e:
@@ -1291,7 +1139,7 @@ def boot_dashboard(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_alerts(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 20 — TelegramNotifier + bot polling (FIXED: no duplicate) + bus subscribers."""
+    """Phase 20 — TelegramNotifier + bot polling + bus subscribers."""
     services = []
     global _telegram_polling_started
 
@@ -1304,7 +1152,6 @@ def boot_alerts(registry: ServiceRegistry) -> PhaseResult:
             registry.register_instance("telegram_notifier", notifier)
             services.append("telegram_notifier")
 
-            # ✅ FIX: শুধু একবারই polling start হবে — 409 Conflict আর হবে না
             with _telegram_polling_lock:
                 if not _telegram_polling_started:
                     t = threading.Thread(
@@ -1324,7 +1171,6 @@ def boot_alerts(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.warning("Telegram init failed: %s", e)
 
-    # ── Bus → Telegram event routing ──────────────────────────────
     def _send(msg: str):
         notifier = registry.try_resolve("telegram_notifier")
         if not notifier:
@@ -1389,15 +1235,7 @@ def boot_automation(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_webhook(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 22 — Webhook server (DISABLED).
-
-    FIX: The entire webhook server has been moved to legacy/server/.
-    It was a security risk (auth bypass when WEBHOOK_SECRET unset) and
-    ran a parallel, weaker trading pipeline that didn't share risk
-    state with the main loop. Removed to eliminate both issues.
-
-    This phase is now a no-op.
-    """
+    """Phase 22 — Webhook server (DISABLED)."""
     services = []
     log.info("boot_webhook: skipped (webhook moved to legacy/ — security risk)")
     get_bus().publish("system.startup", {"phase": "webhook", "services": services,
@@ -1448,7 +1286,7 @@ def boot_orchestrator(registry: ServiceRegistry) -> PhaseResult:
                 state_manager=r.try_resolve("system_state_manager"),
                 bus=r.try_resolve("message_bus"),
             )
-            hos.start()  # FIX (bug 18): actually start the command-file poll thread
+            hos.start()
             return hos
 
         registry.register("human_override", _make_human_override)
@@ -1476,8 +1314,11 @@ def boot_orchestrator(registry: ServiceRegistry) -> PhaseResult:
 
 
 def boot_runtime_phase(registry: ServiceRegistry) -> PhaseResult:
-    """Phase 24 — TradingEngine (extends AutonomousTraderSystem, no double init)."""
+    """Phase 24 — TradingEngine (extends AutonomousTraderSystem)."""
     services = []
+    engine_failed = False
+    engine_error = None
+    
     try:
         from core.trading_engine import TradingEngine
         from config import (EXECUTION_MODE, USE_SCANNER, APPROVAL_MODE, SYMBOLS,
@@ -1488,7 +1329,6 @@ def boot_runtime_phase(registry: ServiceRegistry) -> PhaseResult:
         timeframe = registry.get("timeframe", DEFAULT_TIMEFRAME)
         execution_mode = registry.get("execution_mode", EXECUTION_MODE)
 
-        # TradingEngine IS-A AutonomousTraderSystem — single instance only
         engine = TradingEngine(
             symbols=symbols, timeframe=timeframe, balance=INITIAL_BALANCE,
             poll_seconds=LOOP_INTERVAL_SEC,
@@ -1498,16 +1338,25 @@ def boot_runtime_phase(registry: ServiceRegistry) -> PhaseResult:
             execution_mode=execution_mode, approval_mode=APPROVAL_MODE,
             registry=registry,
         )
-        registry.register_instance("trader", engine)          # backward compat
+        registry.register_instance("trader", engine)
         services.append("trader")
-        registry.register_instance("trading_engine", engine)  # also as engine
+        registry.register_instance("trading_engine", engine)
         services.append("trading_engine")
 
     except Exception as e:
-        log.error("Trader init failed: %s", e, exc_info=True)
+        log.error("CRITICAL: TradingEngine (trader) init failed: %s", e, exc_info=True)
         registry.mark("trader", ServiceStatus.FAILED, str(e))
+        engine_failed = True
+        engine_error = str(e)
 
     get_bus().publish("system.startup", {"phase": "runtime", "services": services}, source="runtime")
+    
+    # ✅ FIX: TradingEngine ক্র্যাশ করলে PhaseResult ফেইলিয়র (`ok=False`) থ্রো করবে
+    if engine_failed:
+        return PhaseResult(phase=Phase.RUNTIME, ok=False, duration_sec=0.0,
+                           services_registered=services,
+                           error=f"TradingEngine critical init failed: {engine_error}")
+                           
     return PhaseResult(phase=Phase.RUNTIME, ok=True, duration_sec=0.0,
                        services_registered=services)
 

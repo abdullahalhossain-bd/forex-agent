@@ -1748,5 +1748,61 @@
     "bond_yield": 0.456,
     "sp500_change": -1.01,
     "vix_value": 18.18
+  },
+  {
+    "timestamp": "2026-07-20T15:03:20.830675+00:00",
+    "pair": "EURUSD",
+    "regime": "RISK_ON",
+    "macro_score": 75,
+    "pair_bias": "SELL",
+    "dxy_value": 100.995,
+    "dxy_trend": "BULLISH",
+    "gold_change": null,
+    "oil_change": -0.727,
+    "bond_yield": 0.458,
+    "sp500_change": 0.215,
+    "vix_value": 18.2
+  },
+  {
+    "timestamp": "2026-07-20T15:04:30.426394+00:00",
+    "pair": "GBPUSD",
+    "regime": "RISK_ON",
+    "macro_score": 75,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": 100.995,
+    "dxy_trend": "BULLISH",
+    "gold_change": null,
+    "oil_change": -0.921,
+    "bond_yield": 0.458,
+    "sp500_change": 0.177,
+    "vix_value": 18.24
+  },
+  {
+    "timestamp": "2026-07-20T15:05:19.753835+00:00",
+    "pair": "USDJPY",
+    "regime": "RISK_ON",
+    "macro_score": 75,
+    "pair_bias": "BUY",
+    "dxy_value": 101.008,
+    "dxy_trend": "BULLISH",
+    "gold_change": null,
+    "oil_change": -0.788,
+    "bond_yield": 0.458,
+    "sp500_change": 0.162,
+    "vix_value": 18.27
+  },
+  {
+    "timestamp": "2026-07-20T15:06:50.809371+00:00",
+    "pair": "AUDUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 60,
+    "pair_bias": "SELL",
+    "dxy_value": 101.01,
+    "dxy_trend": "BULLISH",
+    "gold_change": null,
+    "oil_change": -0.703,
+    "bond_yield": 0.458,
+    "sp500_change": 0.135,
+    "vix_value": 18.2
   }
 ]

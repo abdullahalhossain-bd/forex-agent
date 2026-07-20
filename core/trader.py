@@ -3602,8 +3602,8 @@ class AutonomousTraderSystem:
         log.error(f"[Recovery] Pausing trading after errors: {reason}")
 
         if self.notifier:
-            self._notify_warning(
-                f"System warning: trading paused for recovery. {reason}",
+            self._notify_system_warning(
+                reason,
                 f"{self.cooldown_minutes} minutes",
             )
 
@@ -3633,6 +3633,11 @@ class AutonomousTraderSystem:
             return
         # Bug fix: use _run_async instead of asyncio.run (avoids event loop closure)
         self._run_async_safe(self.notifier.notify_news_warning(event_name, time_remaining))
+
+    def _notify_system_warning(self, reason: str, pause_duration: str) -> None:
+        if not self.notifier:
+            return
+        self._run_async_safe(self.notifier.notify_system_warning(reason, pause_duration))
 
     def _run_async_safe(self, coro) -> None:
         """Run an async coroutine safely.

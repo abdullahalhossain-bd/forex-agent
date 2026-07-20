@@ -6,12 +6,14 @@
 
 import json
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from utils.logger import get_logger
 
 log = get_logger("circuit_breaker")
 
-CB_STATE_PATH = "memory/circuit_breaker_state.json"
+CB_STATE_DIR  = "memory"
+CB_STATE_PATH = "memory/circuit_breaker_state.json"   # legacy/global path — kept only
+                                                        # for symbol=None backward-compat
 
 
 class CircuitBreaker:
@@ -31,10 +33,24 @@ class CircuitBreaker:
       - COOLDOWN  : Wait N hours before resume
 
     Usage:
-        cb = CircuitBreaker()
+        cb = CircuitBreaker(symbol="USDCAD")
         if cb.allow_trade():
             ... take trade ...
         cb.record_result("LOSS")
+
+    BUG FIX (per-symbol isolation): CircuitBreaker used to be backed by a
+    single shared state file (memory/circuit_breaker_state.json) no matter
+    which pair called it. With 60+ pairs all running through one instance,
+    a losing streak on ONE symbol (or even stale leftover data — see the
+    staleness fix below) tripped LEARNING/PAUSED mode for every symbol
+    simultaneously. Logs showed the exact same "Win rate dropped to 0.0%"
+    trigger firing back-to-back for EURUSD, USDCAD, GBPJPY, XAUUSD... all
+    in the same boot cycle. Callers should now construct one CircuitBreaker
+    per symbol (`CircuitBreaker(symbol=pair, balance=...)`), which writes
+    to its own state file under memory/circuit_breaker/<symbol>.json.
+    `symbol=None` (or omitted) falls back to the old shared/global file so
+    existing single-account-wide callers (e.g. a global daily-loss gate)
+    keep working unchanged.
     """
 
     # Thresholds
@@ -58,9 +74,45 @@ class CircuitBreaker:
     COOLDOWN_HOURS         = 4      # pause এর পরে কত ঘণ্টা wait
     LOOKBACK_TRADES        = 10     # win rate চেক করার জন্য কতটা পিছনে
 
-    def __init__(self, balance: float = 1000.0):
-        self.balance = balance
-        self._state  = self._load_state()
+    # BUG FIX: LEARNING mode used to be a permanent trap — allow_trade()
+    # just kept returning False forever with no expiry, because (unlike
+    # PAUSED/COOLDOWN, which carries a cooldown_until timestamp) nothing
+    # ever set the mode back to TRADING. Logs showed thousands of blocked
+    # cycles per hour, each one still paying for a full market-data fetch
+    # before being rejected. LEARNING_HOURS gives it the same kind of
+    # timed expiry COOLDOWN already had, so the bot re-evaluates itself
+    # instead of freezing until a human calls manual_resume().
+    LEARNING_HOURS         = 2      # learning mode এর পরে কত ঘণ্টা wait before re-check
+
+    # BUG FIX (stale recent_results never expired): recent_results was
+    # persisted to disk indefinitely (last 50 entries, no age limit) and
+    # only daily_loss_usd/date were reset on a new day. A losing streak
+    # from days ago — or from a previous demo/backtest session — stayed in
+    # recent_results forever and could immediately trip LEARNING mode on a
+    # completely fresh boot, before a single trade had been taken this
+    # session (logs showed "Win rate dropped to 0.0%" in the very first
+    # cycle while the AI's own trade journal reported "0 closed / 0 total"
+    # for the session). Entries older than RESULTS_MAX_AGE_HOURS are now
+    # pruned before every win-rate/consecutive-loss evaluation, so only
+    # recent, relevant trade outcomes can influence the breaker.
+    RESULTS_MAX_AGE_HOURS   = 24    # এর চেয়ে পুরনো result গোনা হবে না
+
+    def __init__(self, symbol: str = None, balance: float = 1000.0):
+        self.symbol     = symbol
+        self.balance    = balance
+        self.state_path = self._state_path_for(symbol)
+        self._state     = self._load_state()
+
+    # ── State path resolution ─────────────────────────────────
+
+    def _state_path_for(self, symbol: str) -> str:
+        """Per-symbol state file so one pair's losing streak can't trip
+        the breaker for every other pair. symbol=None keeps the legacy
+        single shared file for backward compatibility."""
+        if symbol is None:
+            return CB_STATE_PATH
+        safe = "".join(c for c in symbol.upper() if c.isalnum() or c in ("_", "-"))
+        return os.path.join(CB_STATE_DIR, "circuit_breaker", f"{safe}.json")
 
     # ── Main Gate ──────────────────────────────────────────────
 
@@ -95,9 +147,31 @@ class CircuitBreaker:
                     # Cooldown expired → resume
                     self._set_mode("TRADING", "Cooldown expired — resuming")
 
-        if mode in ("PAUSED", "LEARNING"):
+        if mode == "PAUSED":
             reason = self._state.get("pause_reason", "Circuit breaker active")
             return self._response(False, mode, reason)
+
+        # BUG FIX: LEARNING mode now expires after LEARNING_HOURS instead of
+        # blocking every cycle forever. Once expired we drop back to
+        # TRADING so the next allow_trade() call re-evaluates win rate on
+        # fresh data — if it's still bad, it will simply re-trigger.
+        if mode == "LEARNING":
+            learning_since = self._state.get("learning_since")
+            if learning_since:
+                since_dt = datetime.fromisoformat(learning_since)
+                elapsed_hours = (datetime.utcnow() - since_dt).total_seconds() / 3600
+                if elapsed_hours < self.LEARNING_HOURS:
+                    reason = self._state.get("pause_reason", "Circuit breaker active")
+                    return self._response(False, mode, reason)
+                else:
+                    self._set_mode("TRADING", "Learning mode expired — resuming for re-evaluation")
+            else:
+                # Legacy state file with no timestamp — stamp it now so it
+                # doesn't stay stuck forever either.
+                self._state["learning_since"] = datetime.utcnow().isoformat()
+                self._save_state()
+                reason = self._state.get("pause_reason", "Circuit breaker active")
+                return self._response(False, mode, reason)
 
         # Real-time checks
         consec = self._state.get("consecutive_losses", 0)
@@ -110,9 +184,27 @@ class CircuitBreaker:
                 f"{consec} consecutive losses hit threshold ({self.MAX_CONSECUTIVE_LOSSES})"
             )
 
-        recent  = self._state.get("recent_results", [])[-self.LOOKBACK_TRADES:]
-        if len(recent) >= 5:
-            wr = recent.count("WIN") / len(recent) * 100
+        # BUG FIX: win rate must be computed over trades with a directional
+        # outcome only. recent_results also contains "BREAKEVEN" entries
+        # (PositionManager moves SL to entry once a trade reaches 50% of
+        # TP distance — see broker/position_manager.py BREAKEVEN_TRIGGER_PC
+        # — a protective, capital-preserving action, not a loss). The old
+        # formula divided WIN count by len(recent), which *included*
+        # BREAKEVEN in the denominator without ever counting it in the
+        # numerator. A run of well-managed breakeven exits — exactly what
+        # happens right after a trend stalls — could crater the reported
+        # win rate toward 0% and trip LEARNING mode even though the
+        # account hadn't actually lost money. Now scratch/breakeven trades
+        # are excluded from the population, matching standard win-rate
+        # convention: WIN / (WIN + LOSS).
+        #
+        # BUG FIX (staleness): decisive results are now drawn from
+        # _recent_decisive(), which prunes entries older than
+        # RESULTS_MAX_AGE_HOURS before slicing to LOOKBACK_TRADES — see
+        # class docstring / RESULTS_MAX_AGE_HOURS comment above.
+        decisive = self._recent_decisive()
+        if len(decisive) >= 5:
+            wr = decisive.count("WIN") / len(decisive) * 100
             if wr < self.MIN_WIN_RATE_THRESHOLD:
                 self._trigger_learning(
                     f"Win rate dropped to {wr:.1f}% — entering learning mode"
@@ -129,7 +221,7 @@ class CircuitBreaker:
     def record_result(self, result: str, pnl_usd: float = 0.0):
         """
         Trade close হওয়ার পরে call করো।
-        result: 'WIN' | 'LOSS'
+        result: 'WIN' | 'LOSS' | 'BREAKEVEN'
 
         Day 81+ hotfix: sync daily_loss_usd with daily_risk.json so CB
         and RiskEngine always agree on the day's loss total.  Previously
@@ -147,9 +239,17 @@ class CircuitBreaker:
         letting an extra batch of losses slip through. Now we check the
         threshold immediately after incrementing, so the breaker trips
         the moment the limit is crossed — no extra cycle of damage.
+
+        BUG FIX (staleness): each result is now stored with a UTC
+        timestamp so _recent_decisive() can age it out after
+        RESULTS_MAX_AGE_HOURS instead of it living forever in the last-50
+        window. See class docstring for the bug this caused.
         """
         recent = self._state.get("recent_results", [])
-        recent.append(result)
+        recent.append({
+            "result": result,
+            "ts":     datetime.utcnow().isoformat(),
+        })
         self._state["recent_results"] = recent[-50:]  # শেষ ৫০টা রাখো
 
         if result == "LOSS":
@@ -161,12 +261,16 @@ class CircuitBreaker:
             # trade-close path and writes the authoritative total.
             self._sync_daily_loss_from_risk_engine()
             log.info(
-                f"[CB] LOSS recorded | consecutive={self._state['consecutive_losses']} "
+                f"[CB{self._log_tag()}] LOSS recorded | consecutive={self._state['consecutive_losses']} "
                 f"| daily_loss=${self._state['daily_loss_usd']:.2f}"
             )
         else:
             self._state["consecutive_losses"] = 0
-            log.info(f"[CB] WIN recorded | streak reset")
+            # Minor fix: this branch fires for BREAKEVEN too (anything
+            # != "LOSS"), but used to always log "WIN recorded" — logging
+            # the actual result avoids masking breakeven closes as wins
+            # in the logs, which made this exact bug harder to spot.
+            log.info(f"[CB{self._log_tag()}] {result} recorded | loss streak reset")
 
         # Daily loss check
         daily_loss_pct = self._state.get("daily_loss_usd", 0) / self.balance * 100
@@ -190,9 +294,13 @@ class CircuitBreaker:
         # Day 102+ REAL-TIME WIN-RATE CHECK
         # If recent win rate drops below threshold, enter learning mode
         # immediately instead of waiting for the next cycle.
-        recent_window = self._state.get("recent_results", [])[-self.LOOKBACK_TRADES:]
-        if len(recent_window) >= 5:
-            wr = recent_window.count("WIN") / len(recent_window) * 100
+        # BUG FIX: same BREAKEVEN-exclusion + staleness-pruning logic as
+        # allow_trade() — see the comments there. This real-time check has
+        # to match that logic exactly, or the two paths could disagree on
+        # whether the win rate has actually dropped below threshold.
+        decisive_window = self._recent_decisive()
+        if len(decisive_window) >= 5:
+            wr = decisive_window.count("WIN") / len(decisive_window) * 100
             if wr < self.MIN_WIN_RATE_THRESHOLD:
                 self._trigger_learning(
                     f"Win rate dropped to {wr:.1f}% — entering learning mode"
@@ -209,7 +317,7 @@ class CircuitBreaker:
         self._set_mode("TRADING", reason)
         self._state["consecutive_losses"] = 0
         self._save_state()
-        log.info(f"[CB] Manually resumed: {reason}")
+        log.info(f"[CB{self._log_tag()}] Manually resumed: {reason}")
         return {"mode": "TRADING", "reason": reason}
 
     def force_learning_mode(self) -> dict:
@@ -223,19 +331,26 @@ class CircuitBreaker:
         if self._state.get("date") != today:
             self._state["date"]           = today
             self._state["daily_loss_usd"] = 0.0
-            log.info("[CB] Daily reset — new trading day")
+            log.info(f"[CB{self._log_tag()}] Daily reset — new trading day")
             self._save_state()
 
     # ── Status ─────────────────────────────────────────────────
 
     def get_status(self) -> dict:
-        recent = self._state.get("recent_results", [])[-10:]
-        wr     = (
-            recent.count("WIN") / len(recent) * 100
-            if recent else 0
+        # BUG FIX: exclude BREAKEVEN so the dashboard's "recent_win_rate"
+        # actually reflects the same number allow_trade()/record_result()
+        # gate on — see the fix comment in allow_trade(). Also uses the
+        # same staleness-pruned window (_recent_decisive) so the dashboard
+        # can't show a stale/expired win rate that the gate itself has
+        # already stopped honoring.
+        decisive = self._recent_decisive()
+        wr       = (
+            decisive.count("WIN") / len(decisive) * 100
+            if decisive else 0
         )
         return {
             "mode":               self._state.get("mode", "TRADING"),
+            "symbol":             self.symbol,
             "consecutive_losses": self._state.get("consecutive_losses", 0),
             "daily_loss_sync_stale": self._state.get("daily_loss_sync_stale", False),
             "recent_win_rate":    round(wr, 1),
@@ -252,11 +367,13 @@ class CircuitBreaker:
         icon = {"TRADING": "🟢", "PAUSED": "🔴", "LEARNING": "🧠", "COOLDOWN": "⏳"}
         bar  = "═" * 46
         print(f"\n{bar}")
-        print(f"  {icon.get(s['mode'], '⚪')}  CIRCUIT BREAKER STATUS")
+        label = f" ({s['symbol']})" if s.get("symbol") else ""
+        print(f"  {icon.get(s['mode'], '⚪')}  CIRCUIT BREAKER STATUS{label}")
         print(bar)
         print(f"  Mode              : {s['mode']}")
         print(f"  Consecutive Loss  : {s['consecutive_losses']} / {self.MAX_CONSECUTIVE_LOSSES}")
-        print(f"  Recent Win Rate   : {s['recent_win_rate']}%  (last 10 trades)")
+        print(f"  Recent Win Rate   : {s['recent_win_rate']}%  (last {self.LOOKBACK_TRADES} trades, "
+              f"< {self.RESULTS_MAX_AGE_HOURS}h old)")
         print(f"  Daily Loss        : ${s['daily_loss_usd']:.2f}  ({s['daily_loss_pct']}%)")
         if s["pause_reason"]:
             print(f"  Pause Reason      : {s['pause_reason']}")
@@ -264,8 +381,43 @@ class CircuitBreaker:
 
     # ── Internal ───────────────────────────────────────────────
 
+    def _log_tag(self) -> str:
+        return f":{self.symbol}" if self.symbol else ""
+
+    def _recent_decisive(self) -> list:
+        """Return WIN/LOSS results (BREAKEVEN excluded, stale entries
+        excluded), most-recent-first-trimmed to LOOKBACK_TRADES.
+
+        Centralizes the exact filtering logic that allow_trade(),
+        record_result(), and get_status() must all agree on — previously
+        each site duplicated a slightly different version of this, which
+        is how the staleness bug went unnoticed for so long.
+        """
+        raw = self._state.get("recent_results", [])
+        now = datetime.utcnow()
+        fresh = []
+        for entry in raw:
+            # Backward compat: older state files stored plain strings
+            # ("WIN"/"LOSS"/"BREAKEVEN") with no timestamp. We can't know
+            # their age, so — matching the intent of this fix — treat
+            # untimestamped legacy entries as stale/expired rather than
+            # letting them silently keep influencing a fresh session.
+            if not isinstance(entry, dict):
+                continue
+            ts = entry.get("ts")
+            if not ts:
+                continue
+            try:
+                age_hours = (now - datetime.fromisoformat(ts)).total_seconds() / 3600
+            except ValueError:
+                continue
+            if age_hours <= self.RESULTS_MAX_AGE_HOURS:
+                fresh.append(entry)
+
+        windowed = fresh[-self.LOOKBACK_TRADES:]
+        return [e["result"] for e in windowed if e.get("result") != "BREAKEVEN"]
+
     def _trigger_pause(self, reason: str):
-        from datetime import timedelta
         cooldown_until = (
             datetime.utcnow() + timedelta(hours=self.COOLDOWN_HOURS)
         ).isoformat()
@@ -273,19 +425,21 @@ class CircuitBreaker:
         self._state["pause_reason"]   = reason
         self._state["cooldown_until"] = cooldown_until
         self._save_state()
-        log.warning(f"[CB] ⛔ TRADING PAUSED: {reason}")
-        log.warning(f"[CB] Cooldown until: {cooldown_until}")
+        log.warning(f"[CB{self._log_tag()}] ⛔ TRADING PAUSED: {reason}")
+        log.warning(f"[CB{self._log_tag()}] Cooldown until: {cooldown_until}")
 
     def _trigger_learning(self, reason: str):
-        self._state["mode"]         = "LEARNING"
-        self._state["pause_reason"] = reason
+        self._state["mode"]           = "LEARNING"
+        self._state["pause_reason"]   = reason
+        self._state["learning_since"] = datetime.utcnow().isoformat()
         self._save_state()
-        log.warning(f"[CB] 🧠 LEARNING MODE: {reason}")
+        log.warning(f"[CB{self._log_tag()}] 🧠 LEARNING MODE: {reason}")
 
     def _set_mode(self, mode: str, reason: str):
         self._state["mode"]         = mode
         self._state["pause_reason"] = reason
         self._state.pop("cooldown_until", None)
+        self._state.pop("learning_since", None)
         self._save_state()
 
     def _response(self, allowed: bool, mode: str, reason: str) -> dict:
@@ -305,10 +459,10 @@ class CircuitBreaker:
         A crash near the loss limit would reset the breaker, allowing more losses.
         Now: on corruption, return a PAUSED state that blocks new trades.
         """
-        os.makedirs("memory", exist_ok=True)
-        if os.path.exists(CB_STATE_PATH):
+        os.makedirs(os.path.dirname(self.state_path) or ".", exist_ok=True)
+        if os.path.exists(self.state_path):
             try:
-                with open(CB_STATE_PATH) as f:
+                with open(self.state_path) as f:
                     state = json.load(f)
                 # Daily reset check
                 if state.get("date") != date.today().isoformat():
@@ -318,7 +472,7 @@ class CircuitBreaker:
             except (json.JSONDecodeError, KeyError) as e:
                 # Corrupt JSON — fail CLOSED: PAUSE all trading
                 log.critical(
-                    f"circuit_breaker: state file CORRUPT ({e}) — "
+                    f"circuit_breaker{self._log_tag()}: state file CORRUPT ({e}) — "
                     f"FAILING CLOSED (PAUSED mode). Manual intervention required."
                 )
                 return {
@@ -332,7 +486,7 @@ class CircuitBreaker:
                 }
             except Exception as e:
                 log.critical(
-                    f"circuit_breaker: state file read error ({e}) — "
+                    f"circuit_breaker{self._log_tag()}: state file read error ({e}) — "
                     f"FAILING CLOSED. Manual intervention required."
                 )
                 return {
@@ -358,7 +512,8 @@ class CircuitBreaker:
         Prevents corruption from crash mid-write.
         """
         import tempfile
-        dir_name = os.path.dirname(CB_STATE_PATH) or "."
+        dir_name = os.path.dirname(self.state_path) or "."
+        tmp_path = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w", dir=dir_name, suffix=".tmp",
@@ -366,12 +521,13 @@ class CircuitBreaker:
             ) as tmp_f:
                 json.dump(self._state, tmp_f, indent=2)
                 tmp_path = tmp_f.name
-            os.replace(tmp_path, CB_STATE_PATH)
-        except Exception as e:
-            try:
-                os.unlink(tmp_path)
-            except (OSError, UnboundLocalError):
-                pass
+            os.replace(tmp_path, self.state_path)
+        except Exception:
+            if tmp_path:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
             raise
 
     def _sync_daily_loss_from_risk_engine(self):
@@ -406,6 +562,6 @@ class CircuitBreaker:
             # trusting a possibly-stale daily_loss_usd.
             self._state["daily_loss_sync_stale"] = True
             log.warning(
-                f"[CB] sync from daily_risk.json failed — daily_loss_usd may be "
+                f"[CB{self._log_tag()}] sync from daily_risk.json failed — daily_loss_usd may be "
                 f"STALE and out of sync with RiskEngine: {e}"
             )
