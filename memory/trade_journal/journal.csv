@@ -727,3 +727,7 @@ timestamp,cycle,symbol,timeframe,session,decision,confidence,entry,sl,tp1,tp2,lo
 2026-07-20T09:53:45+00:00,27,CADJPY,15m,London,NO TRADE,62.0,115.745,115.645,115.945,,0.0,2.0,991.6,MT5 position sync unavailable this cycle — refusing new entry (fail-closed; existing positions unaffected),,,,0.0,0.0,
 2026-07-20T09:54:09+00:00,28,USDCNH,15m,London,SELL,72.0,6.7694,6.77138,6.76544,,0.04,2.0,8.0,,,,,0.0,0.0,
 2026-07-20T09:54:26+00:00,29,USDHKD,15m,London,NO TRADE,92.0,7.8408,7.8398,7.8428,,0.0,2.0,991.6,MT5 position sync unavailable this cycle — refusing new entry (fail-closed; existing positions unaffected),,,,0.0,0.0,
+2026-07-20T10:40:33+00:00,1,EURUSD,15m,London,NO TRADE,61.0,1.14358,1.14458,1.14158,,0.03,2.0,3.0,confluence quality AVOID,,,,0.0,0.0,
+2026-07-20T10:41:12+00:00,2,GBPUSD,15m,London,NO TRADE,50.9,1.3474,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
+2026-07-20T11:46:58+00:00,1,EURUSD,15m,London,NO TRADE,54.0,1.1445,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
+2026-07-20T11:47:31+00:00,2,GBPUSD,15m,London,NO TRADE,25.7,1.34718,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,

@@ -559,7 +559,21 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     # Day 90 — token economy: 600→400 (saves ~33% per call).
                     # The classic AIAnalyst's response is much shorter than
                     # MasterAnalyst's (just signal + reasoning, no full plan).
-                    max_tokens=int(os.getenv("AI_ANALYST_MAX_TOKENS", "400")),
+                    #
+                    # Day 137 safety fix (real-money loss postmortem — GBPCAD
+                    # 2026-07-20): 400 tokens was too aggressive — production
+                    # logs showed repeated `[llm_json] could not decode JSON
+                    # object ... Unterminated string` errors because the
+                    # model's free-text "analysis" field routinely ran past
+                    # 400 tokens before the JSON could close. Every truncated
+                    # response silently degrades to "Signal: WAIT | Confidence:
+                    # 30%" (see _parse_response's parse-failure fallback) which
+                    # then gets excluded from voting — i.e. this budget being
+                    # too tight was quietly throwing away real analysis on a
+                    # meaningful fraction of cycles, not just wasting tokens.
+                    # 700 gives headroom for a full analysis string without
+                    # materially undoing the Day 90 cost savings.
+                    max_tokens=int(os.getenv("AI_ANALYST_MAX_TOKENS", "700")),
                 )
                 if deadline is not None:
                     # BUGFIX (audit follow-up): request-level timeout so a
@@ -651,7 +665,10 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         # all. Add the same bounded retry + exponential-backoff-with-
         # jitter pattern used for Groq/Gemini, specifically extending the
         # delay on detected rate limits.
-        max_tokens = int(os.getenv("AI_ANALYST_MAX_TOKENS", "400"))
+        # Day 137 safety fix: 400 truncated JSON responses mid-string on a
+        # regular basis (see matching comment at the Groq call site above) —
+        # raised to 700 for the fallback providers too, for consistency.
+        max_tokens = int(os.getenv("AI_ANALYST_MAX_TOKENS", "700"))
         max_retries = 2
         model = default_model
         if model_env:

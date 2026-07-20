@@ -2,7 +2,12 @@
   "date": "2026-07-20",
   "total_loss_usd": 0,
   "total_win_usd": 0,
-  "open_trades": 0,
-  "open_pairs": [],
+  "open_trades": 4,
+  "open_pairs": [
+    "EURCHF",
+    "GBPCAD",
+    "USDCNH",
+    "USDJPY"
+  ],
   "trades": []
 }

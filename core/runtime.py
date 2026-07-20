@@ -598,6 +598,13 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
         log.warning("RLPolicyStore init failed: %s", e)
 
     try:
+        from ml.cv_splitter import PurgedEmbargoedSplitter, get_cv_splitter
+        registry.register_instance("cv_splitter", get_cv_splitter())
+        services.append("cv_splitter")
+    except Exception as e:
+        log.warning("PurgedEmbargoedSplitter init failed: %s", e)
+
+    try:
         from ml.walk_forward import WalkForwardValidator, get_walk_forward_validator
         registry.register_instance("walk_forward_validator", get_walk_forward_validator())
         services.append("walk_forward_validator")
@@ -1366,10 +1373,9 @@ def boot_automation(registry: ServiceRegistry) -> PhaseResult:
         try:
             h = registry.try_resolve("error_handler")
             if h and hasattr(h, "log_error"):
-                category = evt.payload.get("channel", "runtime") if isinstance(evt.payload, dict) else "runtime"
                 h.log_error(
-                    error=f"[{category}] {evt.payload}",
-                    severity="ERROR",
+                    category=evt.payload.get("channel", "runtime") if isinstance(evt.payload, dict) else "runtime",
+                    message=str(evt.payload),
                 )
         except Exception as e:
             log.warning("Suppressed exception in _on_sys_error automation callback: %s", e)

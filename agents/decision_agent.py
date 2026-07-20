@@ -128,6 +128,18 @@ class DecisionAgent:
     # gate below.  Now an alias for the single consolidated floor.
     CONFIDENCE_OVERRIDE_THRESHOLD = CONFIDENCE_FLOOR
 
+    # Day 137 safety fix (real-money loss postmortem — GBPCAD 2026-07-20):
+    # the single-layer override below let one isolated layer (e.g.
+    # master_analyst) trade against a SignalFusion consensus of 0/3 — i.e.
+    # every other layer either disagreed or abstained — as long as that one
+    # layer cleared CONFIDENCE_FLOOR (60%). That's not "a strong signal
+    # nobody else had an opinion on", it's "the two other layers actively
+    # said WAIT/NO_TRADE". 0/3 agreement is materially weaker evidence than
+    # 1/3 or 2/3, so it must not share the same 60% bar. When agreement is
+    # genuinely zero, require a much higher single-layer confidence before
+    # trading on it alone; partial agreement (>=1/3) keeps the normal floor.
+    ZERO_CONSENSUS_OVERRIDE_FLOOR = 85.0
+
     def __init__(self):
         # Day 53 — pattern-aware dynamic confidence scorer (optional)
         self.confidence_engine = ConfidenceEngine() if ConfidenceEngine else None
@@ -672,13 +684,27 @@ class DecisionAgent:
                     ]
                     _directional = [c for c in _candidates if c[0] in ("BUY", "SELL")]
                     _best = max(_directional, key=lambda c: c[1], default=None)
-                    if _best is not None and _best[1] >= self.CONFIDENCE_FLOOR:
+                    # Day 137 safety fix: how many layers actually agreed
+                    # with the fusion verdict's own direction (e.g. "0/3",
+                    # "1/3") determines which floor applies — zero agreement
+                    # means every other layer disagreed/abstained, which is
+                    # much weaker evidence than partial agreement.
+                    try:
+                        _agreement_count = int(str(_fs_agreement).split("/")[0])
+                    except Exception:
+                        _agreement_count = 0
+                    _required_floor = (
+                        self.CONFIDENCE_FLOOR if _agreement_count > 0
+                        else self.ZERO_CONSENSUS_OVERRIDE_FLOOR
+                    )
+                    if _best is not None and _best[1] >= _required_floor:
                         _ov_signal, _ov_conf, _ov_layer = _best
                         log.info(
                             f"[DecisionAgent] SignalFusion gate abstained "
                             f"({_fs_signal}, consensus={_fs_agreement}) but "
                             f"{_ov_layer} alone is {_ov_signal} at {_ov_conf:.0f}% "
-                            f"(>= {self.CONFIDENCE_FLOOR:.0f}% floor) "
+                            f"(>= {_required_floor:.0f}% required floor for "
+                            f"{_fs_agreement} agreement) "
                             f"— overriding to trade on that signal"
                         )
                         return self._result(
@@ -686,7 +712,8 @@ class DecisionAgent:
                                 f"Confidence override: {_ov_layer} {_ov_signal} "
                                 f"{_ov_conf:.0f}% (SignalFusion consensus was "
                                 f"{_fs_signal}/{_fs_agreement}, but single-layer "
-                                f"confidence cleared the {self.CONFIDENCE_FLOOR:.0f}% floor)",
+                                f"confidence cleared the {_required_floor:.0f}% "
+                                f"required floor)",
                             ], pattern=pattern, pair=pair, timeframe=timeframe,
                             regime=regime_label, analysis_out=analysis_out,
                             excluded_layers=_excluded_layers)

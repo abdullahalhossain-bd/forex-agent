@@ -81,6 +81,7 @@ class ValidationReport:
     approved: bool = False
     reason: str = ""
     validated_at: str = ""
+    cv_method: str = "naive_walk_forward"  # NEW (Priority #1)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -139,6 +140,15 @@ class ValidationEngine:
                     validated_at TEXT NOT NULL
                 )
             """)
+            # NEW (Priority #1 — leakage audit): tag each validation run
+            # with which walk-forward CV method produced it, so historical
+            # (naive) runs stay distinguishable from purged runs — required
+            # by the migration plan's shadow-vs-champion comparison (never
+            # silently conflate scores computed under different rigor).
+            try:
+                c.execute("ALTER TABLE model_validation ADD COLUMN cv_method TEXT DEFAULT 'naive_walk_forward'")
+            except sqlite3.OperationalError:
+                pass  # column already exists — migration already applied
             c.execute("""
                 CREATE TABLE IF NOT EXISTS model_champion (
                     pair TEXT PRIMARY KEY,
@@ -161,6 +171,8 @@ class ValidationEngine:
         train_fn=None,
         predict_fn=None,
         trade_pnls: Optional[List[float]] = None,
+        purge_window: int = 0,
+        embargo_pct: float = 0.0,
     ) -> ValidationReport:
         """Run ALL validation tests on a model.
 
@@ -175,6 +187,10 @@ class ValidationEngine:
             predict_fn: Callable(model, X_test) → (y_pred, y_proba) (for walk-forward).
             trade_pnls: List of trade PnLs (for Monte Carlo). If None, uses
                         predictions to simulate 1:1 R:R trades.
+            purge_window: NEW (Priority #1). Forwarded to WalkForwardValidator.
+                Default 0 reproduces exact current (unpurged) scoring.
+            embargo_pct: NEW (Priority #1). Forwarded to WalkForwardValidator.
+                Default 0.0 is a no-op.
 
         Returns:
             ValidationReport with all test results + final APPROVED/REJECTED.
@@ -188,10 +204,15 @@ class ValidationEngine:
         log.info(f"[Validation] Starting validation for {model_name} {version}")
 
         # ── 1. Walk-Forward Test ────────────────────────────────────
+        cv_method = "naive_walk_forward"
         try:
             if train_fn and predict_fn:
-                wf_result = self.wf_validator.validate(X, y, train_fn, predict_fn)
+                wf_result = self.wf_validator.validate(
+                    X, y, train_fn, predict_fn,
+                    purge_window=purge_window, embargo_pct=embargo_pct,
+                )
                 report.walk_forward = wf_result.to_dict()
+                cv_method = wf_result.cv_method
             else:
                 # Simple out-of-sample: last 15% as test
                 n = len(X)
@@ -321,6 +342,8 @@ class ValidationEngine:
             report.approved = False
             report.reason = f"Score {report.final_score:.0f} < {APPROVAL_THRESHOLD} threshold"
 
+        report.cv_method = cv_method
+
         # ── Persist to DB ──────────────────────────────────────────
         self._save_report(report)
 
@@ -377,8 +400,9 @@ class ValidationEngine:
                 c.execute("""
                     INSERT INTO model_validation
                     (model_name, version, walk_forward_score, monte_carlo_score,
-                     regime_score, sensitivity_score, final_score, approved, reason, validated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     regime_score, sensitivity_score, final_score, approved, reason, validated_at,
+                     cv_method)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     report.model_name, report.version,
                     report.walk_forward.get("score", 0),
@@ -389,6 +413,7 @@ class ValidationEngine:
                     1 if report.approved else 0,
                     report.reason,
                     report.validated_at,
+                    report.cv_method,
                 ))
                 c.commit()
         except Exception as e:

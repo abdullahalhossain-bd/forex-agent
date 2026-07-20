@@ -1653,9 +1653,34 @@ def run_all_entry_quality_checks(
                 warning_reasons.append(r.reason)
 
     block_count = 1 if extreme_block_reason else 0
-    warning_count = len(warning_reasons)
     should_execute = extreme_block_reason is None
     block_reason = extreme_block_reason
+
+    # Day 137 safety fix (real-money loss postmortem — GBPCAD 2026-07-20):
+    # sl_swing_anchor and tp_structure_validation failed TOGETHER (a stop
+    # with no structural reference AND a target with no prior test) and
+    # only cost -3 -3 = -6 combined — nowhere near enough to matter against
+    # a 70% base confidence. Individually each is a legitimate WARNING (a
+    # fixed-pip stop or an untested target isn't necessarily wrong), but
+    # together they mean the entry has NO structural basis on either side
+    # — a materially different, higher-risk situation than one isolated
+    # warning. Add a compounding penalty (not a hard block, to preserve the
+    # existing soft-scoring design) so this specific combination reliably
+    # pushes confidence below the downstream 60% trade-permission floor.
+    _failed_flags = {r.flag_name for r in results if not r.passed}
+    if {"sl_swing_anchor", "tp_structure_validation"}.issubset(_failed_flags):
+        _compound_penalty = 10
+        confidence_penalty += _compound_penalty
+        per_check_report.append(
+            f"{'Structure Compound':<22} FAIL (-{_compound_penalty}, "
+            f"SL + TP both unanchored)"
+        )
+        warning_reasons.append(
+            "SL Swing Anchor and TP Structure both failed — entry has no "
+            "structural basis on either side"
+        )
+
+    warning_count = len(warning_reasons)
 
     # Quality score: 100 - total penalty, clamped [0, 100]
     quality_score = max(0, min(100, 100 - confidence_penalty))

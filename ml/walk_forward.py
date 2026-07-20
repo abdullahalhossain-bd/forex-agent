@@ -43,6 +43,10 @@ class WalkForwardFold:
     profit_factor: float = 0.0
     max_drawdown: float = 0.0
     sharpe: float = 0.0
+    # NEW (Priority #1): 0 for every fold unless purge_window/embargo_pct
+    # is passed to validate() — old callers/reports are unaffected.
+    rows_purged: int = 0
+    embargo_rows: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -60,6 +64,7 @@ class WalkForwardResult:
     consistency: float = 0.0    # std dev of profit factors (lower = more consistent)
     score: float = 0.0          # 0-100 final walk-forward score
     passed: bool = False
+    cv_method: str = "naive_walk_forward"  # NEW: "purged_walk_forward" if purge/embargo used
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -72,6 +77,7 @@ class WalkForwardResult:
             "consistency": round(self.consistency, 3),
             "score": round(self.score, 1),
             "passed": self.passed,
+            "cv_method": self.cv_method,
         }
 
 
@@ -89,6 +95,8 @@ class WalkForwardValidator:
         y: pd.Series,
         train_fn,
         predict_fn,
+        purge_window: int = 0,
+        embargo_pct: float = 0.0,
     ) -> WalkForwardResult:
         """Run walk-forward validation.
 
@@ -97,9 +105,25 @@ class WalkForwardValidator:
             y: Full label series (chronological order).
             train_fn: callable(X_train, y_train) → model
             predict_fn: callable(model, X_test) → (y_pred, y_proba)
+            purge_window: NEW (Priority #1). Bars a label's window looks
+                forward. When >0, the trailing `purge_window` rows are
+                trimmed off each fold's training set so no training label
+                was computed from data inside that fold's test window.
+                Default 0 reproduces the exact current (unpurged) fold
+                boundaries — every existing caller of validate() is
+                unaffected until it explicitly opts in.
+            embargo_pct: NEW (Priority #1). Fraction of `n` to skip at the
+                START of each fold's test window, guarding against serial
+                correlation (e.g. long-lookback indicators) leaking across
+                the boundary even without direct label-window overlap.
+                Default 0.0 is a no-op.
 
         Returns:
-            WalkForwardResult with per-fold + aggregated metrics.
+            WalkForwardResult with per-fold + aggregated metrics. When
+            purge_window/embargo_pct are used, each WalkForwardFold also
+            reports rows_purged/embargo_rows so a caller (e.g.
+            ValidationEngine) can see how much data purging actually
+            removed rather than have it happen silently.
         """
         result = WalkForwardResult()
         n = len(X)
@@ -107,6 +131,11 @@ class WalkForwardValidator:
         if n < self.min_train_size + self.step_size:
             log.warning(f"[WalkForward] not enough data: {n} < {self.min_train_size + self.step_size}")
             return result
+
+        splitter = None
+        if purge_window > 0 or embargo_pct > 0.0:
+            from ml.cv_splitter import PurgedEmbargoedSplitter
+            splitter = PurgedEmbargoedSplitter(label_horizon=purge_window, embargo_pct=embargo_pct)
 
         pfs: List[float] = []
         wrs: List[float] = []
@@ -117,10 +146,32 @@ class WalkForwardValidator:
         fold = 0
         start = self.min_train_size
         while start + self.step_size <= n:
-            X_train = X.iloc[:start]
-            y_train = y.iloc[:start]
-            X_test = X.iloc[start:start + self.step_size]
-            y_test = y.iloc[start:start + self.step_size]
+            train_end = start
+            test_start = start
+            test_end = start + self.step_size
+            rows_purged = 0
+            embargo_rows = 0
+
+            if splitter is not None:
+                train_end, test_start, purge_stats = splitter.purge_expanding_fold(
+                    train_end=start, test_start=start, test_end=test_end, n=n,
+                )
+                rows_purged = purge_stats.rows_purged
+                embargo_rows = purge_stats.embargo_rows
+                if train_end < self.min_train_size or test_start >= test_end:
+                    log.warning(
+                        f"[WalkForward] fold {fold}: purge/embargo left insufficient "
+                        f"data (train_end={train_end}, test_start={test_start}, "
+                        f"test_end={test_end}) — skipping fold rather than training "
+                        f"on a degenerate window."
+                    )
+                    start += self.step_size
+                    continue
+
+            X_train = X.iloc[:train_end]
+            y_train = y.iloc[:train_end]
+            X_test = X.iloc[test_start:test_end]
+            y_test = y.iloc[test_start:test_end]
 
             try:
                 model = train_fn(X_train, y_train)
@@ -158,6 +209,7 @@ class WalkForwardValidator:
                     fold=fold, train_size=len(X_train), test_size=len(X_test),
                     accuracy=acc, win_rate=wr, profit_factor=pf,
                     max_drawdown=max_dd, sharpe=sharpe,
+                    rows_purged=rows_purged, embargo_rows=embargo_rows,
                 )
                 result.folds.append(fold_result)
 
@@ -192,11 +244,12 @@ class WalkForwardValidator:
         consistency_score = max(0, 100 - result.consistency * 100)
         result.score = (pf_score * 0.4 + wr_score * 0.35 + consistency_score * 0.25)
         result.passed = result.score >= 60 and len(result.folds) >= self.min_folds
+        result.cv_method = "purged_walk_forward" if splitter is not None else "naive_walk_forward"
 
         log.info(
             f"[WalkForward] {len(result.folds)} folds | "
             f"avg PF={result.avg_profit_factor:.2f} WR={result.avg_win_rate:.1%} | "
-            f"score={result.score:.1f} passed={result.passed}"
+            f"score={result.score:.1f} passed={result.passed} cv_method={result.cv_method}"
         )
         return result
 

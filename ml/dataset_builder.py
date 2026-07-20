@@ -48,6 +48,20 @@ class Dataset:
     val_size: int
     test_size: int
     label_distribution: Dict[str, Any]
+    # NEW (Priority #1 — leakage audit): both fields default to values that
+    # reproduce current behavior for every existing caller.
+    #   sample_weight: None unless labeling_method="triple_barrier", in
+    #     which case it holds compute_label_uniqueness() weights aligned to
+    #     X_train.index. model_trainer.py passes this to fit() only when
+    #     it is not None — XGBoost/RandomForest with sample_weight=None is
+    #     identical to not passing the kwarg at all.
+    #   labeling_method / cv_method: tags persisted alongside the model so
+    #     ModelStore/ValidationEngine can tell which pipeline produced a
+    #     given model (see ml/feature_store.py, ml/validation.py changes).
+    sample_weight: Optional[pd.Series] = None
+    labeling_method: str = "fixed_horizon"
+    cv_method: str = "naive_chronological"
+    purge_stats: Optional[Dict[str, Any]] = None
 
     def summary(self) -> Dict[str, Any]:
         return {
@@ -58,6 +72,9 @@ class Dataset:
             "test_size": self.test_size,
             "n_features": len(self.feature_names),
             "label_distribution": self.label_distribution,
+            "labeling_method": self.labeling_method,
+            "cv_method": self.cv_method,
+            "purge_stats": self.purge_stats,
         }
 
 
@@ -74,8 +91,20 @@ class DatasetBuilder:
         pair: str,
         timeframe: str = "15m",
         min_samples: int = None,
+        labeling_method: str = "fixed_horizon",
+        use_purged_split: bool = False,
+        label_horizon: int = 0,
     ) -> Optional[Dataset]:
-        """Load features + labels from the FeatureStore and split."""
+        """Load features + labels from the FeatureStore and split.
+
+        New optional params (Priority #1, all default to current behavior):
+          labeling_method: "fixed_horizon" (current, default) | "triple_barrier"
+          use_purged_split: if True, purge boundary-overlapping rows using
+            `label_horizon`. Default False reproduces the exact current
+            iloc-slice output.
+          label_horizon: bars a label's window looks forward. Required
+            (non-zero) when use_purged_split=True; ignored otherwise.
+        """
         try:
             from ml.feature_store import get_feature_store
             store = get_feature_store()
@@ -90,7 +119,11 @@ class DatasetBuilder:
             log.warning(f"[DatasetBuilder] No data for {pair} {timeframe}")
             return None
 
-        return self.build_from_dataframe(df, pair=pair, timeframe=timeframe, min_samples=min_samples)
+        return self.build_from_dataframe(
+            df, pair=pair, timeframe=timeframe, min_samples=min_samples,
+            labeling_method=labeling_method, use_purged_split=use_purged_split,
+            label_horizon=label_horizon,
+        )
 
     def build_from_dataframe(
         self,
@@ -98,17 +131,57 @@ class DatasetBuilder:
         pair: str = "EURUSD",
         timeframe: str = "15m",
         min_samples: int = None,
+        labeling_method: str = "fixed_horizon",
+        use_purged_split: bool = False,
+        label_horizon: int = 0,
     ) -> Optional[Dataset]:
-        """Split a feature dataframe into train/val/test."""
+        """Split a feature dataframe into train/val/test.
+
+        labeling_method="fixed_horizon", use_purged_split=False (the
+        defaults) reproduce the exact current behavior — zero breaking
+        change for any existing caller. Set labeling_method="triple_barrier"
+        to relabel `df` via ml.triple_barrier_labels.TripleBarrierLabeler
+        first (df must have high/low/close columns in that case). Set
+        use_purged_split=True + label_horizon>0 to purge label-window-
+        overlap leakage at the train/val and val/test boundaries.
+        """
+        if labeling_method not in ("fixed_horizon", "triple_barrier"):
+            log.error(f"[DatasetBuilder] unknown labeling_method={labeling_method!r}")
+            return None
+
+        if labeling_method == "triple_barrier":
+            required_cols = {"high", "low", "close"}
+            if not required_cols.issubset(df.columns):
+                log.error(
+                    f"[DatasetBuilder] labeling_method='triple_barrier' requires "
+                    f"{required_cols} columns, missing: {required_cols - set(df.columns)}"
+                )
+                return None
+            from ml.triple_barrier_labels import get_triple_barrier_labeler
+            labeler = get_triple_barrier_labeler()
+            # Pass label_horizon as a per-call override (NOT a mutation of
+            # labeler.holding_period) — get_triple_barrier_labeler() is a
+            # shared singleton, and mutating shared state here would race
+            # under concurrent training of multiple pairs/timeframes.
+            df = labeler.label_dataframe(df, pair=pair, holding_period=label_horizon or None)
+            if label_horizon <= 0:
+                label_horizon = labeler.holding_period
+
         if "label" not in df.columns:
             log.error("[DatasetBuilder] no 'label' column in dataframe")
             return None
+
+        # sample_weight (present only when labeling_method="triple_barrier")
+        # must be captured before meta-column stripping and excluded from
+        # the feature matrix — it's a per-row weight, not a predictor.
+        sample_weight_full = df.get("sample_weight")
 
         # Drop meta columns + gather diagnostics before removing NaNs
         meta_cols = [c for c in df.columns if c.startswith("_") or c in
                      ("outcome", "pnl_usd", "forward_pips", "label_ternary",
                       "label_forward_return", "label_forward_pips",
-                      "label_mae_pips", "label_mfe_pips", "label_r_multiple")]
+                      "label_mae_pips", "label_mfe_pips", "label_r_multiple",
+                      "sample_weight")]
         feature_df_pre = df.drop(columns=meta_cols, errors="ignore").copy()
 
         total_rows = len(feature_df_pre)
@@ -181,12 +254,58 @@ class DatasetBuilder:
         train_end = int(n * self.train_pct)
         val_end = int(n * (self.train_pct + self.val_pct))
 
-        X_train = feature_df.iloc[:train_end]
-        X_val = feature_df.iloc[train_end:val_end]
-        X_test = feature_df.iloc[val_end:]
-        y_train = labels.iloc[:train_end]
-        y_val = labels.iloc[train_end:val_end]
-        y_test = labels.iloc[val_end:]
+        cv_method = "naive_chronological"
+        purge_stats_dict: Optional[Dict[str, Any]] = None
+
+        if use_purged_split:
+            if label_horizon <= 0:
+                log.warning(
+                    "[DatasetBuilder] use_purged_split=True but label_horizon<=0 — "
+                    "no forward-looking window is known, so purging is a no-op. "
+                    "Pass the label horizon (e.g. label_horizon=48) to purge correctly."
+                )
+            from ml.cv_splitter import PurgedEmbargoedSplitter
+            splitter = PurgedEmbargoedSplitter(label_horizon=label_horizon)
+            train_idx, val_idx, test_idx, purge_stats = splitter.purge_train_val_test(
+                n=n, train_end=train_end, val_end=val_end,
+            )
+            if len(train_idx) == 0:
+                log.error(
+                    f"[DatasetBuilder] purged split left an EMPTY training set for "
+                    f"{pair} {timeframe} (label_horizon={label_horizon}). Refusing to "
+                    f"return a dataset with zero training rows."
+                )
+                return None
+
+            X_train = feature_df.iloc[train_idx]
+            X_val = feature_df.iloc[val_idx]
+            X_test = feature_df.iloc[test_idx]
+            y_train = labels.iloc[train_idx]
+            y_val = labels.iloc[val_idx]
+            y_test = labels.iloc[test_idx]
+            cv_method = "purged_embargoed"
+            purge_stats_dict = {
+                "original_train_size": purge_stats.original_train_size,
+                "purged_train_size": purge_stats.purged_train_size,
+                "rows_purged": purge_stats.rows_purged,
+                "purge_ratio": round(purge_stats.purge_ratio, 4),
+                "label_horizon": label_horizon,
+            }
+            log.info(
+                f"[DatasetBuilder] purged split: dropped {purge_stats.rows_purged} "
+                f"boundary-overlapping rows ({purge_stats.purge_ratio:.1%} of naive train size)"
+            )
+        else:
+            X_train = feature_df.iloc[:train_end]
+            X_val = feature_df.iloc[train_end:val_end]
+            X_test = feature_df.iloc[val_end:]
+            y_train = labels.iloc[:train_end]
+            y_val = labels.iloc[train_end:val_end]
+            y_test = labels.iloc[val_end:]
+
+        sample_weight_train: Optional[pd.Series] = None
+        if sample_weight_full is not None:
+            sample_weight_train = sample_weight_full.reindex(X_train.index).fillna(1.0)
 
         # Label distribution
         def _dist(y):
@@ -212,6 +331,10 @@ class DatasetBuilder:
             pair=pair, timeframe=timeframe,
             train_size=len(X_train), val_size=len(X_val), test_size=len(X_test),
             label_distribution=label_dist,
+            sample_weight=sample_weight_train,
+            labeling_method=labeling_method,
+            cv_method=cv_method,
+            purge_stats=purge_stats_dict,
         )
 
 

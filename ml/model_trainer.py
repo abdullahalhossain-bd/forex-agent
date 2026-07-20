@@ -73,8 +73,21 @@ class ModelTrainer:
         pair: str,
         timeframe: str = "15m",
         min_samples: int = 100,
+        labeling_method: str = "fixed_horizon",
+        use_purged_split: bool = False,
+        label_horizon: int = 0,
     ) -> TrainingResult:
-        """Train all available models for a pair. Returns TrainingResult."""
+        """Train all available models for a pair. Returns TrainingResult.
+
+        New optional params (Priority #1 — leakage audit), all defaulting
+        to exact current behavior:
+          labeling_method: "fixed_horizon" (default) | "triple_barrier"
+          use_purged_split: purge boundary-overlap leakage at the
+            train/val/test cut points. Default False = unchanged.
+          label_horizon: forward-looking window size used by both the
+            labeler (if triple_barrier) and the purger. Ignored when both
+            labeling_method="fixed_horizon" and use_purged_split=False.
+        """
         t0 = time.time()
         result = TrainingResult(
             pair=pair.upper(),
@@ -86,8 +99,13 @@ class ModelTrainer:
         )
 
         # 1. Build dataset
-        log.info(f"[Trainer] Building dataset for {pair} {timeframe}...")
-        dataset = self.builder.build_from_store(pair=pair, timeframe=timeframe, min_samples=min_samples)
+        log.info(f"[Trainer] Building dataset for {pair} {timeframe} "
+                  f"(labeling_method={labeling_method}, use_purged_split={use_purged_split})...")
+        dataset = self.builder.build_from_store(
+            pair=pair, timeframe=timeframe, min_samples=min_samples,
+            labeling_method=labeling_method, use_purged_split=use_purged_split,
+            label_horizon=label_horizon,
+        )
         if dataset is None:
             result.errors.append(f"Insufficient data for {pair} {timeframe} (need ≥{min_samples} samples)")
             return result
@@ -100,11 +118,26 @@ class ModelTrainer:
         X_val = self.preprocessor.transform(dataset.X_val)
         X_test = self.preprocessor.transform(dataset.X_test)
 
+        # sample_weight from compute_label_uniqueness() (triple_barrier only).
+        # None for fixed_horizon — passing sample_weight=None to fit() below
+        # is identical to not passing the kwarg at all, so existing runs
+        # are numerically unaffected.
+        sample_weight = dataset.sample_weight
+        if sample_weight is not None:
+            sample_weight = sample_weight.reindex(X_train.index).fillna(1.0)
+
+        # Tags persisted into ModelStore metadata (meta.json + registry)
+        # so a saved model can always be traced back to which labeling/CV
+        # pipeline produced it — required for the shadow-vs-champion
+        # comparison in the migration plan (never conflate a
+        # purged-CV model's score with a naive-CV model's score).
+        cv_tags = {"labeling_method": dataset.labeling_method, "cv_method": dataset.cv_method}
+
         # 3. Train each model
         log.info("[Trainer] Training XGBoost...")
         xgb_metrics = self._train_xgboost(
             X_train, dataset.y_train, X_val, dataset.y_val, X_test, dataset.y_test,
-            pair, timeframe, list(X_train.columns),
+            pair, timeframe, list(X_train.columns), sample_weight=sample_weight, cv_tags=cv_tags,
         )
         if xgb_metrics:
             result.models_trained.append("xgboost")
@@ -113,7 +146,7 @@ class ModelTrainer:
         log.info("[Trainer] Training Random Forest...")
         rf_metrics = self._train_random_forest(
             X_train, dataset.y_train, X_val, dataset.y_val, X_test, dataset.y_test,
-            pair, timeframe, list(X_train.columns),
+            pair, timeframe, list(X_train.columns), sample_weight=sample_weight, cv_tags=cv_tags,
         )
         if rf_metrics:
             result.models_trained.append("random_forest")
@@ -122,7 +155,7 @@ class ModelTrainer:
         log.info("[Trainer] Training LSTM...")
         lstm_metrics = self._train_lstm(
             X_train, dataset.y_train, X_val, dataset.y_val, X_test, dataset.y_test,
-            pair, timeframe, dataset.feature_names,
+            pair, timeframe, dataset.feature_names, cv_tags=cv_tags,
         )
         if lstm_metrics:
             result.models_trained.append("lstm")
@@ -143,7 +176,9 @@ class ModelTrainer:
 
     # ── XGBoost ───────────────────────────────────────────────────
 
-    def _train_xgboost(self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names) -> Optional[ModelMetrics]:
+    def _train_xgboost(self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
+                        sample_weight: Optional[pd.Series] = None,
+                        cv_tags: Optional[Dict[str, Any]] = None) -> Optional[ModelMetrics]:
         try:
             from xgboost import XGBClassifier
         except ImportError:
@@ -162,8 +197,13 @@ class ModelTrainer:
                 eval_metric="logloss",
                 verbosity=0,
             )
+            # sample_weight is None for labeling_method="fixed_horizon" (the
+            # default) — XGBClassifier.fit(..., sample_weight=None) is
+            # identical to omitting the kwarg, so existing training runs
+            # are numerically unaffected.
             model.fit(
                 X_train, y_train,
+                sample_weight=sample_weight,
                 eval_set=[(X_val, y_val)],
                 verbose=False,
             )
@@ -172,9 +212,12 @@ class ModelTrainer:
                 X_train=X_train, y_train=y_train,
             )
             log.info(f"  XGBoost: {metrics.summary_line}")
+            saved_metrics = metrics.to_dict()
+            if cv_tags:
+                saved_metrics.update(cv_tags)
             self.store.save_model(
                 model=model, pair=pair, timeframe=tf, model_type="xgboost",
-                metrics=metrics.to_dict(), feature_names=feature_names,
+                metrics=saved_metrics, feature_names=feature_names,
             )
             return metrics
         except Exception as e:
@@ -183,7 +226,9 @@ class ModelTrainer:
 
     # ── Random Forest ─────────────────────────────────────────────
 
-    def _train_random_forest(self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names) -> Optional[ModelMetrics]:
+    def _train_random_forest(self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
+                              sample_weight: Optional[pd.Series] = None,
+                              cv_tags: Optional[Dict[str, Any]] = None) -> Optional[ModelMetrics]:
         try:
             from sklearn.ensemble import RandomForestClassifier
         except ImportError:
@@ -198,15 +243,19 @@ class ModelTrainer:
                 random_state=42,
                 n_jobs=-1,
             )
-            model.fit(X_train, y_train)
+            # sample_weight=None (fixed_horizon default) == omitting the kwarg.
+            model.fit(X_train, y_train, sample_weight=sample_weight)
             metrics = self.evaluator.evaluate(
                 model, X_test, y_test, model_name="random_forest",
                 X_train=X_train, y_train=y_train,
             )
             log.info(f"  RandomForest: {metrics.summary_line}")
+            saved_metrics = metrics.to_dict()
+            if cv_tags:
+                saved_metrics.update(cv_tags)
             self.store.save_model(
                 model=model, pair=pair, timeframe=tf, model_type="random_forest",
-                metrics=metrics.to_dict(), feature_names=feature_names,
+                metrics=saved_metrics, feature_names=feature_names,
             )
             return metrics
         except Exception as e:
@@ -217,6 +266,7 @@ class ModelTrainer:
 
     def _train_lstm(
         self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
+        cv_tags: Optional[Dict[str, Any]] = None,
     ) -> Optional[ModelMetrics]:
         try:
             import tensorflow as tf
@@ -287,9 +337,12 @@ class ModelTrainer:
             metrics.win_rate = metrics.tp / total if total > 0 else 0
             log.info(f"  LSTM: {metrics.summary_line}")
 
+            saved_metrics = metrics.to_dict()
+            if cv_tags:
+                saved_metrics.update(cv_tags)
             self.store.save_model(
                 model=model, pair=pair, timeframe=tf, model_type="lstm",
-                metrics=metrics.to_dict(), is_keras=True,
+                metrics=saved_metrics, is_keras=True,
             )
             return metrics
         except Exception as e:
@@ -368,6 +421,9 @@ def train_all(
     pair: Optional[str] = None,
     timeframe: str = "15m",
     min_samples: int = None,
+    labeling_method: str = "fixed_horizon",
+    use_purged_split: bool = False,
+    label_horizon: int = 0,
 ) -> Dict[str, "TrainingResult"]:
     """
     Module-level convenience wrapper.
@@ -378,6 +434,11 @@ def train_all(
     every configured pair/timeframe (mirroring scripts/train_models.py)
     so `from ml.model_trainer import train_all; train_all()` works
     directly from a REPL or one-off script.
+
+    labeling_method/use_purged_split/label_horizon (Priority #1) default
+    to exact current behavior and are forwarded to ModelTrainer.train_all()
+    for every pair — use these to run a shadow batch (see migration plan
+    in ml/LEAKAGE_AUDIT.md) without touching the champion pipeline.
 
     Returns a dict of {pair: TrainingResult}.
 
@@ -405,7 +466,11 @@ def train_all(
     results: Dict[str, "TrainingResult"] = {}
     for p in pairs:
         try:
-            results[p] = trainer.train_all(pair=p, timeframe=timeframe, min_samples=min_samples_use)
+            results[p] = trainer.train_all(
+                pair=p, timeframe=timeframe, min_samples=min_samples_use,
+                labeling_method=labeling_method, use_purged_split=use_purged_split,
+                label_horizon=label_horizon,
+            )
         except Exception as e:
             log.error(f"[train_all] {p} {timeframe} failed: {e}")
     return results

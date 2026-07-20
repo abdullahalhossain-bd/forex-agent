@@ -1229,19 +1229,26 @@ class AnalysisAgent:
         #   1. BLOCK the trade if pair is in a high-impact event window
         #   2. ADJUST confidence based on news bias alignment
         #
-        # Day 81+ hotfix: In TEST_MODE, skip the news block (but still
-        # log it as a warning). The news intelligence module fetches
+        # Day 81+ hotfix: previously TEST_MODE alone was enough to skip
+        # the news block. The news intelligence module fetches
         # central-bank events from a hardcoded schedule which can produce
         # false-positive "CPI in 0min" blocks even when the actual
         # ForexFactory calendar is empty. This was blocking every trade
         # during certain GMT hours.
+        #
+        # Day 137 safety fix (real-money loss postmortem — GBPCAD
+        # 2026-07-20): `_skip_news_block` was being OR'd together with
+        # `_is_false_block` below, so TEST_MODE bypassed CONFIRMED real
+        # news-window blocks too, not just false positives — this session
+        # bypassed a genuine "CPI 11min ago — post-event block window"
+        # block 11 times and one of those trades (GBPCAD) went on to lose
+        # money in exactly the post-CPI volatility spike the block existed
+        # to prevent. TEST_MODE is for MT5 connectivity/integration
+        # testing friction, not for overriding a real detected news event.
+        # It no longer participates in the block/bypass decision at all —
+        # only `_is_false_block` (the live-calendar-confirmed false
+        # positive check a few lines below) can bypass a news block now.
         news_intel_ctx = {}
-        _skip_news_block = False
-        try:
-            from config import TEST_MODE
-            _skip_news_block = bool(TEST_MODE)
-        except Exception:
-            pass
 
         try:
             from intelligence.news_ai import get_news_intelligence
@@ -1287,14 +1294,15 @@ class AnalysisAgent:
             # ──────────────────────────────────────────────────────────────────
 
             if block_check["blocked"] and final_signal in ("BUY", "SELL"):
-                if _skip_news_block or _is_false_block:
+                if _is_false_block:
                     log.warning(
                         f"[AnalysisAgent] News block detected ({block_check['reason']}) — "
-                        f"BYPASSED (TEST_MODE=true). Trade continues."
+                        f"BYPASSED (live calendar confirms no real event; hardcoded "
+                        f"schedule false positive). Trade continues."
                     )
                     news_intel_ctx = {
                         "blocked": False,
-                        "block_reason": f"{block_check['reason']} (TEST_MODE bypassed)",
+                        "block_reason": f"{block_check['reason']} (confirmed false positive, bypassed)",
                     }
                 else:
                     # ARCHITECTURAL FIX: Don't overwrite final_signal.
@@ -1401,18 +1409,36 @@ class AnalysisAgent:
 
             # Day 67 override: only block if confluence says AVOID (not B or higher)
             # Made more permissive: B quality trades are now allowed through.
-            # Day 81+ hotfix: In TEST_MODE, don't let Confluence AVOID block trades.
+            #
+            # Day 137 safety fix (real-money loss postmortem — GBPCAD
+            # 2026-07-20): quality=AVOID used to be treated as just another
+            # soft penalty (-12%), same tier as a routine quality demotion.
+            # That let a trade the Confluence engine had ITSELF explicitly
+            # flagged as "do not take" go on to execute, because a single
+            # downstream layer (MasterAnalyst) separately cleared the
+            # confidence floor and overrode the rest of the pipeline.
+            # AVOID is not a quality demotion — it's the engine's own verdict
+            # that this setup should not be traded. It must hard-block, and
+            # unlike softer quality tiers below, TEST_MODE must NOT bypass it:
+            # TEST_MODE exists to unblock false-positive/off-hours friction
+            # for MT5 connectivity testing, not to override an explicit
+            # do-not-trade verdict from the confluence engine itself.
             if not decision.should_trade and final_signal in ("BUY", "SELL"):
-                if _test_mode:
+                if decision.setup_quality == "AVOID":
+                    final_signal = "NO TRADE"
+                    execution_filters["confluence_avoid"] = {
+                        "blocked": True,
+                        "reason": decision.block_reason or "confluence quality AVOID",
+                    }
+                    log.warning(
+                        f"[AnalysisAgent] Day 67 Confluence: HARD BLOCK — quality=AVOID "
+                        f"({decision.block_reason or 'failed validation'}) — signal downgraded "
+                        f"to NO TRADE (not bypassed by TEST_MODE)"
+                    )
+                elif _test_mode:
                     log.info(
                         f"[AnalysisAgent] Day 67 Confluence: {final_signal} quality={decision.setup_quality} — "
                         f"BYPASSED (TEST_MODE=true)"
-                    )
-                elif decision.setup_quality == "AVOID":
-                    _apply_confidence_penalty(signal_result, 12, "confluence_avoid", "analysis")
-                    log.info(
-                        f"[AnalysisAgent] Day 67 Confluence: {final_signal} kept with -12% penalty "
-                        f"(quality=AVOID, {decision.block_reason or 'failed validation'})"
                     )
                 else:
                     _apply_confidence_penalty(signal_result, 6, "confluence_quality", "analysis")

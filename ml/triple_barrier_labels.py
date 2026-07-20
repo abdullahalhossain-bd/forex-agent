@@ -32,6 +32,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 from typing import Optional
@@ -236,6 +238,148 @@ def mfe_mae(
         mae[i] = 1 - (future_lows.min() / entry)
 
     return pd.DataFrame({"mfe": mfe, "mae": mae}, index=df.index)
+
+
+# ── Live wiring: class-based interface (Priority #1) ──────────────────────
+#
+# Everything above this point is the original, unmodified standalone
+# module (functions only, reachable so far only from its own __main__
+# smoke test below). This class is the ONLY new code in this file — a
+# thin wrapper with the same public shape as ml.label_generator.LabelGenerator
+# (a `label_dataframe(df, pair)` method returning label + weight columns)
+# so ml.dataset_builder.DatasetBuilder can select between
+# labeling_method="fixed_horizon" | "triple_barrier" without any branching
+# logic outside this module. No existing function's behavior changes.
+
+@dataclass
+class TripleBarrierResult:
+    """Summary of one label_dataframe() call, mirroring LabelResult's role
+    for LabelGenerator — used for logging/diagnostics, not required by
+    DatasetBuilder (which reads columns off the returned DataFrame)."""
+    total_labeled: int
+    tp_count: int
+    sl_count: int
+    timeout_count: int
+    holding_period: int
+    take_profit_width: float
+    stop_loss_width: float
+
+
+class TripleBarrierLabeler:
+    """
+    Class-based interface over triple_barrier_labels() / compute_label_uniqueness(),
+    matching LabelGenerator's public shape so DatasetBuilder can swap labeling
+    methods interchangeably.
+
+    label_dataframe() adds these columns (mirrors LabelGenerator's
+    "label_*" naming so downstream meta-column filtering in DatasetBuilder
+    needs only one additional entry, not a parallel code path):
+        label            — {-1, 0, 1} triple-barrier outcome, int
+                            (0 is remapped to the model's existing binary
+                            convention downstream by DatasetBuilder, same
+                            as fixed_horizon's label_binary)
+        label_ternary    — raw {-1, 0, 1}, unchanged
+        sample_weight    — from compute_label_uniqueness(), in (0, 1]
+        label_mfe_pips / label_mae_pips — reused from mfe_mae(), same
+                            column names LabelGenerator already produces,
+                            so ValidationEngine/regime tests that read
+                            these columns keep working unmodified.
+    """
+
+    def __init__(
+        self,
+        holding_period: int = 10,
+        take_profit_width: float = 2.0,
+        stop_loss_width: float = 2.0,
+        atr_period: int = 14,
+        use_atr: bool = True,
+    ):
+        self.holding_period = holding_period
+        self.take_profit_width = take_profit_width
+        self.stop_loss_width = stop_loss_width
+        self.atr_period = atr_period
+        self.use_atr = use_atr
+
+    def label_dataframe(self, df: pd.DataFrame, pair: str = "EURUSD",
+                         holding_period: Optional[int] = None) -> pd.DataFrame:
+        """Add triple-barrier label + sample_weight columns to a copy of df.
+
+        Rows where the barrier system found no valid outcome (insufficient
+        forward data, i.e. the last `holding_period` rows) get NaN labels,
+        matching LabelGenerator.label_dataframe()'s NaN-tail convention so
+        DatasetBuilder's existing `labels_full.notna()` filter drops them
+        the same way it already drops fixed-horizon's NaN tail.
+
+        `holding_period`, if given, overrides self.holding_period for this
+        call only — it does NOT mutate instance state. This matters because
+        `get_triple_barrier_labeler()` returns a shared singleton: mutating
+        `self.holding_period` from a caller would race under concurrent
+        training (e.g. two pairs trained on separate threads with different
+        horizons stepping on each other's setting mid-call).
+        """
+        h = holding_period if holding_period is not None else self.holding_period
+        result = df.copy()
+
+        ternary = triple_barrier_labels(
+            df,
+            holding_period=h,
+            take_profit_width=self.take_profit_width,
+            stop_loss_width=self.stop_loss_width,
+            atr_period=self.atr_period,
+            use_atr=self.use_atr,
+        )
+        result["label_ternary"] = ternary
+
+        # Binary convention matching LabelGenerator: 1 = profitable long
+        # setup (TP hit), 0 = everything else (SL hit or timeout). This
+        # keeps the champion-approval pipeline's binary-classification
+        # metrics (precision/recall/AUC on a 0/1 target) unchanged whether
+        # labeling_method is "fixed_horizon" or "triple_barrier".
+        result["label"] = np.where(ternary == 1, 1, np.where(ternary.isna(), np.nan, 0))
+
+        weights = compute_label_uniqueness(ternary, holding_period=h)
+        result["sample_weight"] = weights
+
+        excursions = mfe_mae(
+            df, holding_period=h,
+            high_col="high", low_col="low", close_col="close",
+        )
+        result["label_mfe_pips"] = excursions["mfe"]
+        result["label_mae_pips"] = excursions["mae"]
+
+        return result
+
+    def compute_sample_weights(self, labels_df: pd.DataFrame, holding_period: Optional[int] = None) -> pd.Series:
+        """Thin wrapper around compute_label_uniqueness(), for callers that
+        already have a labels_df (e.g. from a cached run) and just need
+        weights recomputed — avoids re-running the O(n·h) barrier scan."""
+        h = holding_period if holding_period is not None else self.holding_period
+        series = labels_df["label_ternary"] if "label_ternary" in labels_df.columns else labels_df["label"]
+        return compute_label_uniqueness(series, holding_period=h)
+
+    def summary(self, labeled_df: pd.DataFrame) -> TripleBarrierResult:
+        valid = labeled_df["label_ternary"].dropna()
+        return TripleBarrierResult(
+            total_labeled=int(len(valid)),
+            tp_count=int((valid == 1).sum()),
+            sl_count=int((valid == -1).sum()),
+            timeout_count=int((valid == 0).sum()),
+            holding_period=self.holding_period,
+            take_profit_width=self.take_profit_width,
+            stop_loss_width=self.stop_loss_width,
+        )
+
+
+# ── Singleton (mirrors LabelGenerator's get_label_generator()) ────────────
+
+_LABELER: Optional[TripleBarrierLabeler] = None
+
+
+def get_triple_barrier_labeler() -> TripleBarrierLabeler:
+    global _LABELER
+    if _LABELER is None:
+        _LABELER = TripleBarrierLabeler()
+    return _LABELER
 
 
 # ── Smoke test ───────────────────────────────────────────────────────────────
