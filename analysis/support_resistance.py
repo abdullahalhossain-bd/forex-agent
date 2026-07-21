@@ -660,6 +660,16 @@ class SupportResistance:
         all_resistance = self._merge_zone_sources(all_resistance, eqh_resistance, raw_resistance, df=df)
         all_support = self._merge_zone_sources(all_support, eql_support, raw_support, df=df)
 
+        # DIAGNOSTIC (temporary) - proves whether this analyze() call, and the
+        # tier-2/tier-3 fallback, actually ran. Remove once confirmed.
+        _src_counts_r = {}
+        _src_counts_s = {}
+        for z in all_resistance:
+            _src_counts_r[z.get("source", "?")] = _src_counts_r.get(z.get("source", "?"), 0) + 1
+        for z in all_support:
+            _src_counts_s[z.get("source", "?")] = _src_counts_s.get(z.get("source", "?"), 0) + 1
+        log.info(f"[SR-DIAG] {symbol}: resistance={len(all_resistance)} {_src_counts_r} | support={len(all_support)} {_src_counts_s}")
+
         # 3. Pivot
         try:
             pivot = self.calculate_pivot(df)

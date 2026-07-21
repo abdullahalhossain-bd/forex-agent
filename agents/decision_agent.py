@@ -281,6 +281,13 @@ class DecisionAgent:
         analysis_out: dict,
         risk_out:     dict,
     ) -> dict:
+        # Bugfix (2026-07-21): this instance attribute is the fix for the
+        # "_fusion_conf" dead-metric bug — see full explanation at the
+        # assignment site below (~line 645) and in _result(). Reset every
+        # cycle so a WAIT/NO_TRADE decision that skips the SignalFusion
+        # block entirely (e.g. an early return before line ~610) doesn't
+        # display a stale confidence value from a previous symbol's cycle.
+        self._last_fusion_conf = 0.0
 
         final_signal  = analysis_out.get("final_signal", "NO TRADE")
         rule_signal   = analysis_out.get("signal", {}).get("signal", "NO TRADE")
@@ -643,6 +650,17 @@ class DecisionAgent:
                 _fs_signal = getattr(fusion_verdict, "final_signal", "WAIT")
                 _fs_agreement = getattr(fusion_verdict, "agreement", "N/A")
                 _fs_conf = float(getattr(fusion_verdict, "master_confidence", 0.0) or 0.0)
+                # Bugfix (2026-07-21): utils/decision_logger.py's DECISION
+                # AUDIT block reads dec_out["_fusion_conf"] to print the
+                # "Fusion: X%" line — but this key was NEVER set anywhere
+                # in this file's _result() return dict, so that line
+                # silently printed "Fusion: 0%" on every single cycle,
+                # regardless of what SignalFusion actually computed (rule
+                # + llm + master, this class's `_fs_conf` above). Stashing
+                # it on `self` here and reading it back in _result() is the
+                # simplest fix without threading a new parameter through
+                # every one of _result()'s many call sites in this method.
+                self._last_fusion_conf = _fs_conf
                 # Log-driven fix (2026-07-17): this used to be an unconditional
                 # hard NO TRADE whenever fewer than 2 of the 3 layers
                 # (rule_engine / llm_analyst / master) agreed — REGARDLESS of
@@ -1205,6 +1223,10 @@ class DecisionAgent:
         return {
             "decision":         decision,
             "confidence":       confidence,
+            # Bugfix (2026-07-21): see comment at self._last_fusion_conf's
+            # assignment above — this key was missing entirely before,
+            # so DECISION AUDIT's "Fusion: X%" line always read 0%.
+            "_fusion_conf":     getattr(self, "_last_fusion_conf", 0.0),
             "entry":            entry or risk_out.get("entry"),
             "sl":               sl    or risk_out.get("sl_price"),
             "tp":               tp    or risk_out.get("tp_price"),

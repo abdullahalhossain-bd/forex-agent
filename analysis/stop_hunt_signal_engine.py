@@ -72,6 +72,19 @@ MIN_RR_RATIO            = 1.4   # lowered further to allow more setups
 ROUND_NUMBER_PIPS_FX    = 50    # round number = multiples of 50 pips (0.0050)
 MIN_CANDLES_REQUIRED    = 30    # spec: insufficient data threshold
 
+# Bugfix (2026-07-21): the outright-reject floor below used to be a
+# hardcoded 1.3, independent of MIN_RR_RATIO. When MIN_RR_RATIO was
+# lowered from 1.5 -> 1.4 (log-driven fix above), the reject floor
+# wasn't updated to match, so it silently drifted out of the
+# "0.8x floor" relationship its own docstring describes. Concretely:
+# 0.8 * 1.4 = 1.12, not 1.3 — so setups with rr in [1.12, 1.3), which
+# the design intends to widen and trade, were instead being rejected
+# outright. This is what produced log lines like "Stop hunt confirmed
+# but R:R too low (1.23 < 1.3)" for a signal that should have passed.
+# Deriving the reject floor from MIN_RR_RATIO keeps the two in sync if
+# MIN_RR_RATIO changes again.
+RR_REJECT_FLOOR         = 0.8 * MIN_RR_RATIO  # badly-short setups below this are rejected outright
+
 
 # ─── Helpers (imported from shared _engine_utils) ─────────────
 # Eliminates 5-way duplication of ATR / pip_value / is_round_number.
@@ -573,10 +586,10 @@ class StopHuntSignalEngine:
         # out to hit MIN_RR_RATIO would put a target where no actual level
         # exists. Only mildly-short setups (>= 0.8x floor) get widened to the
         # floor below; badly-short setups get rejected.
-        if rr < 1.3:
+        if rr < RR_REJECT_FLOOR:
             return self._no_trade_signal(
                 reason=(
-                    f"Stop hunt confirmed but R:R too low ({rr:.2f} < 1.3) — "
+                    f"Stop hunt confirmed but R:R too low ({rr:.2f} < {RR_REJECT_FLOOR:.2f}) — "
                     f"wait for a better setup"
                 )
             )

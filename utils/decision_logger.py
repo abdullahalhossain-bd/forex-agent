@@ -12,7 +12,7 @@ Format (one block per decision):
     ║ Trend: BULLISH(72%) | Pattern: bearish_engulfing
     ║ SMC: 78 (A) | Session: 85/100 (A)
     ║ Technical: 68% | ML: 74% | RL: 62% | LLM: 80%
-    ║ Master: 82% | Fusion: 71% | Confluence: 76% (B+)
+    ║ Master: 82% | RuleFusion: 71% | Confluence: 76% (B+)
     ║ Risk: approved
     ║ Raw Confidence: 73.2% | Bonuses: sentiment_agree(+3)
     ║ Penalties: session_gate(-6), confluence_avoid(-12)
@@ -261,7 +261,15 @@ def log_decision_block(
         )
         lines.append(
             f"{row} Master: {comp['master_conf']:.0f}% "
-            f"| Fusion: {comp['fusion_conf']:.0f}% "
+            # Renamed from bare "Fusion:" (2026-07-21): this codebase has
+            # multiple independent things called "fusion" —
+            # core/signal_fusion.py's SignalFusion (rule+llm+master, THIS
+            # value), analysis/unified_signal_engine.py's UnifiedSignalEngine
+            # (StopHunt/ICT-AMD/PA, logged separately as "[Unified] Vote
+            # trail"), core/fusion_engine_v3.py's FusionV3 validator, and
+            # ml/confidence_fusion.py's ConfidenceFusion. A bare "Fusion:"
+            # label was ambiguous between these when reading logs.
+            f"| RuleFusion: {comp['fusion_conf']:.0f}% "
             f"| Confluence: {comp['confluence_conf']:.0f}% ({comp['confluence_quality']}) {row}"
         )
         lines.append(f"{row} Risk: {comp['risk_status']} {row}")

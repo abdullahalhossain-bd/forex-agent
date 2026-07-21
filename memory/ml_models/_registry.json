@@ -21785,7 +21785,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDCNH_15m/xgboost_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCNH_15m\\xgboost_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDCNH_15m/xgboost_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -21967,7 +21967,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDCNH_15m/random_forest_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDCNH_15m\\random_forest_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDCNH_15m/random_forest_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -22149,7 +22149,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDHKD_15m/xgboost_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDHKD_15m\\xgboost_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDHKD_15m/xgboost_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -22331,7 +22331,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDHKD_15m/random_forest_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDHKD_15m\\random_forest_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDHKD_15m/random_forest_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -22513,7 +22513,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDSGD_15m/xgboost_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDSGD_15m\\xgboost_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDSGD_15m/xgboost_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -22695,7 +22695,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDSGD_15m/random_forest_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDSGD_15m\\random_forest_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDSGD_15m/random_forest_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -22877,7 +22877,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDMXN_15m/xgboost_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDMXN_15m\\xgboost_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDMXN_15m/xgboost_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -23059,7 +23059,7 @@
             "training_bars": 1950
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDMXN_15m/random_forest_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDMXN_15m\\random_forest_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDMXN_15m/random_forest_v1_meta.json",
           "feature_names": [
             "price_open",
@@ -23243,7 +23243,7 @@
             "feature_pipeline": "fast_13"
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDTHB_15m/xgboost_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDTHB_15m\\xgboost_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDTHB_15m/xgboost_v1_meta.json",
           "feature_names": [
             "ret_1",
@@ -23279,7 +23279,7 @@
             "feature_pipeline": "fast_13"
           },
           "is_keras": false,
-          "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDTHB_15m/random_forest_v1.pkl",
+          "model_path": "D:\\Projects\\forex\\memory\\ml_models\\USDTHB_15m\\random_forest_v1.pkl",
           "meta_path": "/home/z/my-project/forex-agent/memory/ml_models/USDTHB_15m/random_forest_v1_meta.json",
           "feature_names": [
             "ret_1",
