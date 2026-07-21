@@ -1,0 +1,38 @@
+{
+  "hash": "de608c855f3701c6bff928da7865077d061c13dd504f3a084fb575b3389bcacf",
+  "saved_at": "2026-07-21T06:38:06.586613+00:00",
+  "metadata": {
+    "pair": "AUDJPY",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v5",
+    "feature_names": [
+      "price_open",
+      "price_high",
+      "price_low",
+      "price_close",
+      "price_volume",
+      "candle_body",
+      "candle_range",
+      "candle_body_ratio",
+      "candle_lower_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_21",
+      "volume_ratio",
+      "hour_utc"
+    ]
+  }
+}

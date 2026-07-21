@@ -27,7 +27,7 @@
 from __future__ import annotations
 
 import pandas as pd
-
+import os
 
 def cross_above(series_1: pd.Series, series_2: pd.Series,
                 confirmation: bool = False) -> pd.Series:

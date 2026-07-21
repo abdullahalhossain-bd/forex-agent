@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """run_backtest.py — Event-Driven Backtest Runner"""
 import argparse, json, sys, os, warnings, logging
+import os
 from pathlib import Path
 from datetime import datetime, timezone
 warnings.filterwarnings("ignore")

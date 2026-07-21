@@ -57,7 +57,7 @@ Usage:
     )
     bias = curve.get_bias()  # → "BUY_ONLY"
 """
-
+import os
 from __future__ import annotations
 
 from dataclasses import dataclass, field

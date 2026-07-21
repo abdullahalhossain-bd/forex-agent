@@ -11,7 +11,7 @@
 #   ✅ Fibonacci Failure Detection
 #   ✅ Memory-ready output (fib_history table)
 # ============================================================
-
+import os
 import pandas as pd
 import numpy as np
 from utils.logger import get_logger
