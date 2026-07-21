@@ -38,7 +38,6 @@ into a single institutional-grade trading decision:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -331,8 +330,8 @@ class EnsembleEngine:
                     "has_conflict": False, "abstained": False,
                 })
                 decision.decision_id = decision_id
-            except Exception:
-                pass
+            except Exception as _e:
+                log.debug(f"[Ensemble] rules-only store save failed: {_e}")
 
             log.info(
                 f"[Ensemble] {pair} {timeframe} → {decision.decision} "
@@ -421,13 +420,14 @@ class EnsembleEngine:
             decision_id = self.store.save_decision({
                 "pair": decision.pair,
                 "timeframe": decision.timeframe,
-                "xgb_signal": models_display.get("xgboost", "").split()[0] if "xgboost" in models_display else None,
+                # Bug #30 fix: guard against empty string split() → IndexError
+                "xgb_signal": (models_display.get("xgboost", "") or "").split()[0] if "xgboost" in models_display and (models_display.get("xgboost", "") or "").split() else None,
                 "xgb_conf": next((v.confidence for v in votes if v.model_name == "xgboost"), None),
-                "rf_signal": models_display.get("random_forest", "").split()[0] if "random_forest" in models_display else None,
+                "rf_signal": (models_display.get("random_forest", "") or "").split()[0] if "random_forest" in models_display and (models_display.get("random_forest", "") or "").split() else None,
                 "rf_conf": next((v.confidence for v in votes if v.model_name == "random_forest"), None),
-                "lstm_signal": models_display.get("lstm", "").split()[0] if "lstm" in models_display else None,
+                "lstm_signal": (models_display.get("lstm", "") or "").split()[0] if "lstm" in models_display and (models_display.get("lstm", "") or "").split() else None,
                 "lstm_conf": next((v.confidence for v in votes if v.model_name == "lstm"), None),
-                "rule_signal": models_display.get("rules", "").split()[0] if "rules" in models_display else None,
+                "rule_signal": (models_display.get("rules", "") or "").split()[0] if "rules" in models_display and (models_display.get("rules", "") or "").split() else None,
                 "rule_conf": next((v.confidence for v in votes if v.model_name == "rules"), None),
                 "final_signal": decision.decision,
                 "agreement": decision.agreement,

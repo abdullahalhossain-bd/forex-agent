@@ -7,8 +7,6 @@ warnings.filterwarnings("ignore")
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.setdefault("TEST_MODE", "true")
-os.environ.setdefault("MT5_LOGIN", "108647429")
-os.environ.setdefault("MT5_PASSWORD", "O@L5PnXe")
 os.environ.setdefault("MT5_SERVER", "MetaQuotes-Demo")
 import numpy as np, pandas as pd
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s | %(levelname)-8s | %(message)s", datefmt="%H:%M:%S")

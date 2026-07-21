@@ -256,7 +256,7 @@ class TelegramNotifier:
         self.token = os.getenv("TELEGRAM_TOKEN")
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
         if not self.token or not self.chat_id:
-            log.warning("⚠️ Telegram credentials missing in .env!")
+            log.critical("[TelegramNotifier] TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set — all notifications disabled!")
             self.bot = None
         else:
             self.bot = Bot(token=self.token)

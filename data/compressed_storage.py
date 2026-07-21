@@ -150,12 +150,13 @@ class CompressedQuoteStorage:
             return zstd.compress(data)
         return data
 
-    def _decompress(self, data: bytes) -> bytes:
+    def _decompress(self, data: bytes) -> Optional[bytes]:
         if self.compression == USE_COMPRESSION and _HAS_ZSTD:
             try:
                 return zstd.decompress(data)
             except Exception:
-                return data  # might be uncompressed
+                log.warning("[CompressedQuoteStorage] Decompression failed — returning None (callers must handle)")
+                return None
         return data
 
     # ── Write ────────────────────────────────────────────────────────────────
@@ -255,6 +256,8 @@ class CompressedQuoteStorage:
             f.seek(offset)
             data = f.read(size)
             data = self._decompress(data)
+            if data is None:
+                return None
             block = np.frombuffer(data, dtype=np.uint32)
 
         minute = _timestamp_to_minute_of_day(timestamp)
@@ -295,6 +298,8 @@ class CompressedQuoteStorage:
             f.seek(offset)
             data = f.read(size)
             data = self._decompress(data)
+            if data is None:
+                return None
             block = np.frombuffer(data, dtype=np.uint32)
 
         day_start = _day_key_to_timestamp(day_key)

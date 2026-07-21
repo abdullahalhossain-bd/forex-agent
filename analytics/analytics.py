@@ -41,7 +41,7 @@ class PerformanceAnalyzer:
         total_loss = abs(float(losses["pnl"].sum())) if not losses.empty else 0.0
         avg_rr = float(trades_df["rr_ratio"].mean()) if "rr_ratio" in trades_df.columns else 0.0
         win_rate = round((len(wins) / total_trades) * 100, 1) if total_trades else 0.0
-        profit_factor = round(total_win / total_loss, 2) if total_loss else float("inf")
+        profit_factor = round(min(total_win / total_loss, 999.0), 2) if total_loss else 999.0
         sharpe = self._sharpe(trades_df["pnl"], equity_curve)
         max_drawdown = self._max_drawdown(equity_curve)
         expectancy = round(total_pnl / total_trades, 2) if total_trades else 0.0
@@ -50,8 +50,8 @@ class PerformanceAnalyzer:
         session_stats = self._win_rate_by(trades_df, "session")
         setup_stats = self._win_rate_by(trades_df, "pattern")
 
-        best_pair = next(iter(pair_stats.keys()), pair)
-        worst_pair = next(reversed(pair_stats.keys()), pair) if pair_stats else pair
+        best_pair = max(pair_stats, key=lambda k: pair_stats[k].get("win_rate", 0))
+        worst_pair = min(pair_stats, key=lambda k: pair_stats[k].get("win_rate", 100))
 
         summary = {
             "strategy": strategy_name,

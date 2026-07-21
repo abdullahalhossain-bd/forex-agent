@@ -33,7 +33,6 @@ Output:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
@@ -45,10 +44,31 @@ log = get_logger("voting_engine")
 # ── Position size mapping ───────────────────────────────────────────
 # Lowered requirements: 2/4 agreement now gets REDUCED position instead of WAIT.
 # Original was too strict — 2/4 = WAIT blocked too many good trades.
+def _agreement_position(agreement_count: int, total_models: int) -> tuple:
+    """Bug #9 fix: dynamic position sizing for any number of voters.
+
+    Previously AGREEMENT_TO_POSITION only had keys {0..4}, so 5/5
+    agreement (possible when LLM/RL voters are added) defaulted to
+    NO_TRADE. Now handles any voter count dynamically.
+    """
+    if total_models <= 0:
+        return ("NO_TRADE", 0.0)
+    ratio = agreement_count / total_models
+    if ratio >= 1.0:
+        return ("FULL", 1.0)
+    elif ratio >= 0.75:
+        return ("HALF", 0.5)
+    elif ratio >= 0.5:
+        return ("REDUCED", 0.25)
+    else:
+        return ("NO_TRADE", 0.0)
+
+
+# Legacy mapping kept for backward compat (4-voter systems)
 AGREEMENT_TO_POSITION = {
     4: ("FULL", 1.0),
     3: ("HALF", 0.5),
-    2: ("REDUCED", 0.25),  # Changed from ("WAIT", 0.0) — allow small position
+    2: ("REDUCED", 0.25),
     1: ("NO_TRADE", 0.0),
     0: ("NO_TRADE", 0.0),
 }
@@ -132,8 +152,8 @@ class VotingEngine:
         result.agreement = f"{agreement_count}/{len(model_votes)}"
         result.majority_confidence = round(majority_confidence, 1)  # Round-22: wire it in
 
-        # Position size from agreement
-        pos_label, pos_mult = AGREEMENT_TO_POSITION.get(agreement_count, ("NO_TRADE", 0.0))
+        # Position size from agreement (Bug #9: dynamic for any voter count)
+        pos_label, pos_mult = _agreement_position(agreement_count, len(model_votes))
         result.position_size = pos_label
         result.position_multiplier = pos_mult
 

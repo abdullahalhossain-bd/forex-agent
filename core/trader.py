@@ -58,6 +58,7 @@ from risk.circuit_breaker import CircuitBreaker
 from risk.risk_engine import RiskEngine
 from risk.trade_permission import TradePermission
 from scanner.correlation_filter import CorrelationFilter
+from core.constants import clean_symbol
 from utils.logger import get_logger
 from analysis.session_analyzer import SessionAnalyzer
 from visualization.chart import ChartEngine
@@ -87,6 +88,7 @@ except Exception as e:
     RuntimeMetrics = None
     get_metrics = None
     ServiceRegistry = None
+    print(f"[WARN] Runtime infrastructure unavailable: {e}")
 
 try:
     import alerts.telegram_bot as telegram_module
@@ -95,16 +97,19 @@ except Exception as e:
     telegram_module = None
     TelegramNotifier = None
     start_telegram_bot_polling = None
+    print(f"[WARN] Telegram bot unavailable: {e}")
 
 try:
     from learning.mistake_analyzer import AdvancedMistakeAnalyzer
 except Exception as e:
     AdvancedMistakeAnalyzer = None
+    print(f"[WARN] AdvancedMistakeAnalyzer unavailable: {e}")
 
 try:
     from scanner.market_scanner import MarketScanner
 except Exception as e:
     MarketScanner = None
+    print(f"[WARN] MarketScanner unavailable: {e}")
 
 log = get_logger("ai_trader")
 
@@ -115,11 +120,11 @@ class AITrader:
 
     def __init__(
         self,
-        balance: float = 10000.0,
+        balance: float = None,
         symbol: str = "EURUSD",
         timeframe: str = "15m",
         seed_rules: bool = True,
-        paper_balance: float = 10000.0,
+        paper_balance: float = None,
         notifier=None,
         execution_mode: str = None,
         approval_mode: int = 3,
@@ -129,8 +134,17 @@ class AITrader:
         paper_trader: "Optional[PaperTrader]" = None,
         db: "Optional[TraderDB]" = None,
     ):
+        # Bug #22 fix: default to config.INITIAL_BALANCE instead of 10000.0
+        if balance is None:
+            try:
+                from config import INITIAL_BALANCE as _INITIAL_BALANCE
+                balance = float(_INITIAL_BALANCE)
+            except Exception:
+                balance = 10000.0
+        if paper_balance is None:
+            paper_balance = balance
         self.balance = balance
-        self.symbol = self._clean_symbol(symbol)
+        self.symbol = clean_symbol(symbol)
         self.timeframe = timeframe
         self.notifier = notifier
         self.execution_mode = (execution_mode or EXECUTION_MODE).lower()
@@ -327,7 +341,7 @@ class AITrader:
             try:
                 self._bus.publish(channel, payload, source=f"aitrader:{self.symbol}")
             except Exception as e:
-                log.debug(f"event publish failed on {channel}: {e}")
+                log.warning(f"event publish failed on {channel}: {e}")
 
     def _stage(self, name: str):
         """Return a timer context manager from runtime metrics, or a no-op."""
@@ -503,7 +517,7 @@ class AITrader:
                         atr=atr,
                         atr_median=atr_median,
                         spread_pips=float(ind.get("spread_pips", 1.5) or 1.5),
-                        open_positions=self._paper.get_open_positions() if self._paper else [],
+                        open_positions=self._get_live_open_positions_detailed() if self._paper else [],
                         daily_pnl=float(getattr(self._risk, 'daily_pnl', 0.0) or 0.0),
                         weekly_pnl=float(getattr(self._risk, 'weekly_pnl', 0.0) or 0.0),
                     )
@@ -620,7 +634,13 @@ class AITrader:
                 )
                 risk_out["approved"] = True
                 risk_out["lot"] = 0.01
-                risk_out["risk_usd"] = round(self.balance * 0.01, 2)
+                try:
+                    from core.constants import get_pip_value_usd
+                    _pip_value = get_pip_value_usd(self.symbol)
+                except Exception:
+                    _pip_value = 10.0  # safe fallback ~EURUSD pip value
+                _sl_pips = float(risk_out.get("sl_pips", 30) or 30)
+                risk_out["risk_usd"] = round(0.01 * _sl_pips * _pip_value, 2)
                 risk_out["risk_pc"] = 1.0
                 risk_out["reject_reason"] = None
             elif not sizing.approved:
@@ -791,7 +811,9 @@ class AITrader:
         # SL=-0.00072, TP=0.00144) — a guaranteed instant stop-out.
         # Use latest_price (already extracted from market_out above)
         # as the second-tier fallback so entry is always a real price.
-        entry = signal_data.get("entry") or ind.get("close") or ind.get("price") or latest_price or 0
+        entry = signal_data.get("entry") or ind.get("close") or ind.get("price") or latest_price
+        if not entry or entry <= 0:
+            return self._error_result("No valid price available for entry")
         # Day 72 fix: normalize STRONG_BUY/STRONG_SELL to BUY/SELL for approved check
         _final_norm = analysis_out.get("final_signal", "WAIT")
         if "STRONG_BUY" in str(_final_norm):
@@ -1030,7 +1052,9 @@ class AITrader:
         # above; news/confidence/session/duplicate are TradePermission above;
         # this is the last piece of the Day 37 "Safety Guard" checklist.
         if perm_out["allowed"]:
-            open_pairs = [t.get("pair") for t in self._paper.get_open_positions()]
+            # Bugfix: in mt5_demo mode, PaperTrader is not authoritative —
+            # use _get_live_open_pairs() which reads real MT5 positions.
+            open_pairs = self._get_live_open_pairs()
             self._corr_filter.sync_open(open_pairs)
             still_allowed = self._corr_filter.allow(
                 [{"symbol": self.symbol, "signal": perm_out["final_action"]}]
@@ -1267,6 +1291,8 @@ class AITrader:
                     "trade_allowed": False,
                     "reject_reason": f"Invalid price: {latest_price}",
                 }
+        else:
+            return self._error_result("No price available from market data")
 
         candle_time = self._extract_candle_time(market_out)
         closed_now = []
@@ -3117,9 +3143,10 @@ class AutonomousTraderSystem:
                                      f"blocking new entries and attempting close-all")
                         self._pause_until = datetime.now(timezone.utc) + timedelta(hours=1)
                         for sym, t in self.traders.items():
-                            if hasattr(t, "_order_manager"):
+                            _om = t._registry.try_resolve("order_manager") if t._registry else None
+                            if _om is not None:
                                 try:
-                                    _results = t._order_manager.close_all_orders(
+                                    _results = _om.close_all_orders(
                                         reason=f"Weekend guard: {weekend_check.get('reason')}"
                                     )
                                     # P1 fix: was silently discarded; now check + alert.
@@ -3128,8 +3155,8 @@ class AutonomousTraderSystem:
                                         log.error(f"[Weekend] {sym}: {len(_failed)} positions failed to close")
                                         # Best-effort Telegram alert
                                         try:
-                                            if self._notifier is not None:
-                                                self._notifier.send(
+                                            if self.notifier is not None:
+                                                self.notifier.send(
                                                     f"⚠️ Weekend close failed for {sym}: "
                                                     f"{len(_failed)} positions still open"
                                                 )
@@ -3201,9 +3228,11 @@ class AutonomousTraderSystem:
                         fs = get_feature_selector()
                         # Use recent df from any trader as "current" window
                         for sym, t in self.traders.items():
-                            if hasattr(t, '_df') and t._df is not None and len(t._df) > 100:
-                                ref = t._df.iloc[-200:-50]  # reference window
-                                cur = t._df.iloc[-50:]        # current window
+                            _mkt = getattr(t, '_market', None)
+                            _df = getattr(_mkt, '_df', None) if _mkt is not None else None
+                            if _df is not None and len(_df) > 100:
+                                ref = _df.iloc[-200:-50]  # reference window
+                                cur = _df.iloc[-50:]        # current window
                                 if len(ref) > 10 and len(cur) > 10:
                                     drift_results = fs.detect_drift(ref, cur)
                                     sig = [d for d in drift_results if d.drift_level == "SIGNIFICANT"]
@@ -3219,7 +3248,31 @@ class AutonomousTraderSystem:
                         log.debug(f"[System] Drift check skipped: {e}")
 
                 if cycle_errors:
-                    self._handle_cycle_errors(cycle_errors)
+                    # FIX: Don't trigger recovery pause for fetch_failed errors
+                    # when the data source itself is down (systemic issue).
+                    # If MOST symbols fail with fetch_failed, it's a data
+                    # source problem, not a per-symbol problem — pausing
+                    # won't help. Only pause when errors are NON-fetch
+                    # (e.g., indicator crash, execution failure, DB error).
+                    fetch_errors = [e for e in cycle_errors if "fetch_failed" in e or "fetchfailed" in e]
+                    real_errors = [e for e in cycle_errors if e not in fetch_errors]
+                    if real_errors:
+                        self._handle_cycle_errors(real_errors)
+                    elif fetch_errors and len(fetch_errors) == len(cycle_errors):
+                        # ALL errors are fetch failures — log but don't pause.
+                        # The auto-unavailable marking in fetcher.py will
+                        # progressively reduce the error count each cycle.
+                        if self._consecutive_error_cycles == 0:
+                            log.warning(
+                                f"[Recovery] {len(fetch_errors)} symbol(s) failed data fetch "
+                                f"(source down). Not pausing — symbols will be auto-skipped. "
+                                f"Symbols: {', '.join(fetch_errors[:5])}"
+                                + (f" +{len(fetch_errors)-5} more" if len(fetch_errors) > 5 else "")
+                            )
+                        self._consecutive_error_cycles += 1
+                    else:
+                        # Mixed fetch + real errors — pause for the real ones
+                        self._handle_cycle_errors(real_errors)
                 else:
                     self._consecutive_error_cycles = 0
 
@@ -3252,9 +3305,10 @@ class AutonomousTraderSystem:
                     )
                     try:
                         for sym, t in self.traders.items():
-                            if hasattr(t, '_order_manager'):
+                            _om = t._registry.try_resolve("order_manager") if t._registry else None
+                            if _om is not None:
                                 try:
-                                    _results = t._order_manager.close_all_orders(
+                                    _results = _om.close_all_orders(
                                         reason="Emergency: 10 consecutive error cycles"
                                     )
                                     # P1 fix: check per-symbol results; was silently discarded.
@@ -3263,8 +3317,8 @@ class AutonomousTraderSystem:
                                         log.critical(f"[System] {sym}: {len(_failed)} positions "
                                                      f"failed to close during emergency")
                                         try:
-                                            if self._notifier is not None:
-                                                self._notifier.send(
+                                            if self.notifier is not None:
+                                                self.notifier.send(
                                                     f"🚨 EMERGENCY close failed for {sym}: "
                                                     f"{len(_failed)} positions still open"
                                                 )
@@ -3466,10 +3520,20 @@ class AutonomousTraderSystem:
             if close_deal is not None:
                 close_price = float(getattr(close_deal, "price", 0))
                 pnl = float(getattr(close_deal, "profit", 0))
-                close_reason = "SL HIT" if close_price <= sl and direction == "BUY" else \
-                               "SL HIT" if close_price >= sl and direction == "SELL" else \
-                               "TP HIT" if close_price >= tp and direction == "BUY" else \
-                               "TP HIT" if close_price <= tp and direction == "SELL" else \
+                # Tolerance-based SL/TP detection: slippage can cause the
+                # close price to miss the exact SL/TP by a few pips.
+                # Use 2× pip_size tolerance so positive slippage on a
+                # BUY SL (price gaps BELOW the SL) still gets detected.
+                try:
+                    from core.constants import get_pip_size
+                    _pip_size = get_pip_size(symbol)
+                except Exception:
+                    _pip_size = 0.0001  # safe fallback for most pairs
+                _tol = 2 * _pip_size
+                close_reason = "SL HIT" if close_price <= sl + _tol and direction == "BUY" else \
+                               "SL HIT" if close_price >= sl - _tol and direction == "SELL" else \
+                               "TP HIT" if close_price >= tp - _tol and direction == "BUY" else \
+                               "TP HIT" if close_price <= tp + _tol and direction == "SELL" else \
                                "MANUAL"
             else:
                 # Can't find the close deal — best-effort estimate
@@ -3756,10 +3820,15 @@ class AutonomousTraderSystem:
         open_positions = []
         for trader in self.traders.values():
             try:
-                open_positions.extend(trader._paper.get_open_positions())
+                # In mt5_demo mode, _paper is empty — use live MT5 positions
+                # via _get_live_open_pairs() which already handles the
+                # mode-aware lookup (MT5 vs paper).
+                if trader.execution_mode == "mt5_demo":
+                    open_positions.extend(trader._get_live_open_pairs())
+                else:
+                    open_positions.extend(trader._paper.get_open_positions())
             except Exception as e:
-                log.warning(f"Suppressed exception at line 2105: {e}")
-                pass
+                log.warning(f"health_status open-positions fetch failed for {trader.symbol}: {e}")
         return {
             "running": not self._stop_requested,
             "paused": self._is_paused(),

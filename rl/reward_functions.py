@@ -34,17 +34,21 @@ def softplus_reward(
 ) -> float:
     """Softplus reward (ported from T32_v5.py ForexCustomEnv.softplus_reward)."""
     loss = -min(profit, 0)
-    threshold = 0.75 * max_profit if profit > 0 else 0.8
+    effective_threshold = 0.75 * max_profit if profit > 0 else threshold
 
-    if time_step <= 3 and (0 <= profit <= 10 and position in ["sell", "buy"]):
-        time_step = 3
-        profit = 4
+    # Bug #13 fix: early trade bonus is now ADDITIVE, not overwriting.
+    # Previously time_step and profit were hard-coded to 3 and 4,
+    # destroying the actual values and making all early trades identical.
+    early_bonus = 0.0
+    if time_step <= 3 and 0 <= profit <= 10 and position in ("sell", "buy"):
+        early_bonus = 0.2  # small additive bonus for quick profitable trades
 
     reward = (
-        np.log(1 + np.exp((profit - loss - threshold) / 2))
+        np.log(1 + np.exp((profit - loss - effective_threshold) / 2))
         - np.log(2)
         + np.log(1 + np.exp(-time_step / 40))
     )
+    reward += early_bonus
     return reward / 10 if profit > 0 else reward * 10
 
 

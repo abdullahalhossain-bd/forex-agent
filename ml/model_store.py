@@ -23,7 +23,6 @@ Directory layout:
 from __future__ import annotations
 
 import json
-import logging
 import pickle
 import shutil
 from datetime import datetime, timezone
@@ -59,9 +58,26 @@ class ModelStore:
         return {"models": {}}
 
     def _save_registry(self) -> None:
+        """Bug #21 fix: atomic write using temp file + os.replace().
+
+        Previously wrote directly with write_text() — a crash mid-write
+        would corrupt _registry.json and prevent ALL model loading.
+        """
+        import tempfile
         try:
-            self.registry_path.write_text(json.dumps(self._registry, indent=2, default=str), encoding="utf-8")
+            dir_name = str(self.registry_path.parent)
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=dir_name, suffix=".tmp",
+                prefix="registry_", delete=False, encoding="utf-8"
+            ) as tmp_f:
+                tmp_f.write(json.dumps(self._registry, indent=2, default=str))
+                tmp_path = tmp_f.name
+            os.replace(tmp_path, str(self.registry_path))
         except Exception as e:
+            try:
+                os.unlink(tmp_path)
+            except (OSError, UnboundLocalError):
+                pass
             log.warning(f"[ModelStore] registry save failed: {e}")
 
     def _pair_dir(self, pair: str, timeframe: str) -> Path:

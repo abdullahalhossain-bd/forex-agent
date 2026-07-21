@@ -20,7 +20,6 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import threading
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -135,43 +134,42 @@ class RLAgent:
 
     def _heuristic_predict(self, ensemble_signal: str, ensemble_confidence: float) -> RLAction:
         """Heuristic action when no PPO model is available.
-        Lowered veto threshold from 55% to 45% — original was too aggressive,
-        blocking too many valid trades."""
-        if ensemble_signal == "BUY" and ensemble_confidence >= 45:  # Lowered from 50
+
+        IMPORTANT FIX: The heuristic RL agent's job is to filter out
+        genuinely dangerous trades (e.g. counter-trend during high
+        volatility), NOT to second-guess the ensemble's confidence
+        threshold. Previously, this method returned HOLD for ensemble
+        signals with confidence < 45%, which created a phantom "RL
+        says SELL/HOLD" conflict even when every other module agreed
+        on BUY. The DecisionAgent's weighted voting then saw reduced
+        participation, pushing consensus below minimum and blocking
+        valid trades.
+
+        New behavior:
+        - If ensemble says BUY/SELL at ANY confidence → agree (don't
+          veto). The ensemble's own confidence scoring already handles
+          the quality threshold.
+        - Only HOLD when ensemble itself says WAIT/HOLD.
+        - This eliminates the RL-vs-ensemble false conflict while
+          still allowing a trained PPO model (when available) to
+          provide genuine independent analysis.
+        """
+        if ensemble_signal == "BUY":
             return RLAction(
-                action=1, action_name="BUY", confidence=0.6,
-                reason="Heuristic: ensemble BUY with sufficient confidence",
+                action=1, action_name="BUY", confidence=0.55,
+                reason="Heuristic: agrees with ensemble BUY direction",
                 model_loaded=False, source="heuristic",
             )
-        elif ensemble_signal == "SELL" and ensemble_confidence >= 45:  # Lowered from 50
+        elif ensemble_signal == "SELL":
             return RLAction(
-                action=2, action_name="SELL", confidence=0.6,
-                reason="Heuristic: ensemble SELL with sufficient confidence",
-                model_loaded=False, source="heuristic",
-            )
-        elif ensemble_signal in ("BUY", "SELL") and ensemble_confidence < 45:
-            return RLAction(
-                action=0, action_name="HOLD", confidence=0.7,
-                reason="Heuristic: very low confidence — wait for better setup",
+                action=2, action_name="SELL", confidence=0.55,
+                reason="Heuristic: agrees with ensemble SELL direction",
                 model_loaded=False, source="heuristic",
             )
         else:
-            # 45-50% confidence: allow but with caution
-            if ensemble_signal == "BUY":
-                return RLAction(
-                    action=1, action_name="BUY", confidence=0.5,
-                    reason="Heuristic: marginal BUY — proceed with caution",
-                    model_loaded=False, source="heuristic",
-                )
-            elif ensemble_signal == "SELL":
-                return RLAction(
-                    action=2, action_name="SELL", confidence=0.5,
-                    reason="Heuristic: marginal SELL — proceed with caution",
-                    model_loaded=False, source="heuristic",
-                )
             return RLAction(
                 action=0, action_name="HOLD", confidence=0.5,
-                reason="Heuristic: no clear signal — hold",
+                reason="Heuristic: no clear ensemble signal — hold",
                 model_loaded=False, source="heuristic",
             )
 

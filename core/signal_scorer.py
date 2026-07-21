@@ -243,7 +243,13 @@ class SignalScorer:
                                 reason="No clear direction from agents")
 
         if score >= threshold:
-            # Record trade so adaptive threshold can react
+            # NOTE (known issue): record_trade() is called here at scoring
+            # time, BEFORE actual execution confirmation. If the trade later
+            # fails at the execution layer (rejection, slippage, etc.), the
+            # adaptive threshold has already recorded it as a real trade,
+            # slightly over-tightening the threshold. Ideally this call should
+            # be moved to after execution confirmation in the caller, but that
+            # requires changes outside this module.
             self._threshold.record_trade()
             return self._result(direction, score, threshold, max_p, coverage,
                                 trade=True,

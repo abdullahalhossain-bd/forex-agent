@@ -63,7 +63,13 @@ class ReversalStrategy:
 
     def _stop_pips(self, last) -> float:
         atr = float(last.get("atr", 0.001) or 0.001)
-        pip = 100 if float(last.get("close", 0)) > 20 else 10000
+        def _pip_size_for(pair):
+            if "JPY" in pair:
+                return 100
+            if pair.startswith(("XAU", "XAG")):
+                return 100
+            return 10000
+        pip = _pip_size_for(self.symbol) if hasattr(self, 'symbol') else 10000
         return max(round(atr * self.stop_atr_mult * pip, 1), 8.0)
 
     def _pattern(self, last) -> str:

@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 from datetime import datetime
 
-DB_PATH = "memory/trader.db"
+DB_PATH = str(Path(__file__).resolve().parent / "trader.db")
 
 
 class Database:
@@ -34,7 +34,7 @@ class Database:
     """
 
     def __init__(self, db_path: str = DB_PATH):
-        Path("memory").mkdir(exist_ok=True)
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self.db_path = db_path
         self._lock = threading.RLock()
         # check_same_thread=False allows the connection to be used from
@@ -211,19 +211,20 @@ class Database:
         none exists. We pick the LATEST by id (not date) to handle the
         edge case where multiple opens share the same timestamp.
         """
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute("""
-            SELECT * FROM trades
-            WHERE pair = ? AND (result = 'OPEN' OR result IS NULL OR result = '')
-            ORDER BY id DESC
-            LIMIT 1
-            """, (pair,))
-            row = cursor.fetchone()
-            return dict(row) if row else {}
-        except Exception as e:
-            print(f"⚠️ find_open_trade_by_pair failed: {e}")
-            return {}
+        with self._lock:
+            cursor = self.conn.cursor()
+            try:
+                cursor.execute("""
+                SELECT * FROM trades
+                WHERE pair = ? AND (result = 'OPEN' OR result IS NULL OR result = '')
+                ORDER BY id DESC
+                LIMIT 1
+                """, (pair,))
+                row = cursor.fetchone()
+                return dict(row) if row else {}
+            except Exception as e:
+                print(f"⚠️ find_open_trade_by_pair failed: {e}")
+                return {}
 
     def close_orphaned_open_trade(self, pair: str, result: str, pnl: float) -> int | None:
         """
@@ -245,32 +246,36 @@ class Database:
 
     def get_recent_trades(self, limit: int = 10) -> list:
         """সর্বশেষ trades দেখো।"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        SELECT * FROM trades
-        ORDER BY date DESC
-        LIMIT ?
-        """, (limit,))
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            SELECT * FROM trades
+            ORDER BY date DESC
+            LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
 
     def get_trade_by_id(self, trade_id: int) -> dict:
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
-        row = cursor.fetchone()
-        return dict(row) if row else {}
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else {}
 
     def get_trade_by_ticket(self, mt5_ticket: int) -> dict | None:
         """Look up a trade by MT5 ticket number. Returns None if not found."""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM trades WHERE mt5_ticket = ?", (mt5_ticket,))
-        row = cursor.fetchone()
-        return dict(row) if row else None
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM trades WHERE mt5_ticket = ?", (mt5_ticket,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
 
     def get_open_trades(self) -> list[dict]:
         """Get all trades with result='OPEN' — used by recovery at boot."""
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM trades WHERE result = 'OPEN' ORDER BY date DESC")
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM trades WHERE result = 'OPEN' ORDER BY date DESC")
+            return [dict(row) for row in cursor.fetchall()]
 
     # ── Analysis Log ───────────────────────────────────────────
 
@@ -293,34 +298,35 @@ class Database:
             "indicators": {...}   # full indicator dict
         }
         """
-        cursor = self.conn.cursor()
+        with self._lock:
+            cursor = self.conn.cursor()
 
-        indicators = analysis.get("indicators")
-        if isinstance(indicators, dict):
-            indicators = json.dumps(indicators)
+            indicators = analysis.get("indicators")
+            if isinstance(indicators, dict):
+                indicators = json.dumps(indicators)
 
-        cursor.execute("""
-        INSERT INTO analysis_log
-            (pair, timeframe, rsi, macd, trend, regime, pattern,
-             sr_location, mtf_bias, decision, confidence, indicators)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            analysis.get("pair"),
-            analysis.get("timeframe"),
-            analysis.get("rsi"),
-            analysis.get("macd"),
-            analysis.get("trend"),
-            analysis.get("regime"),
-            analysis.get("pattern"),
-            analysis.get("sr_location"),
-            analysis.get("mtf_bias"),
-            analysis.get("decision"),
-            analysis.get("confidence"),
-            indicators,
-        ))
+            cursor.execute("""
+            INSERT INTO analysis_log
+                (pair, timeframe, rsi, macd, trend, regime, pattern,
+                 sr_location, mtf_bias, decision, confidence, indicators)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                analysis.get("pair"),
+                analysis.get("timeframe"),
+                analysis.get("rsi"),
+                analysis.get("macd"),
+                analysis.get("trend"),
+                analysis.get("regime"),
+                analysis.get("pattern"),
+                analysis.get("sr_location"),
+                analysis.get("mtf_bias"),
+                analysis.get("decision"),
+                analysis.get("confidence"),
+                indicators,
+            ))
 
-        self.conn.commit()
-        return cursor.lastrowid
+            self.conn.commit()
+            return cursor.lastrowid
 
     def get_similar_setups(self, pattern: str, regime: str, limit: int = 5) -> list:
         """
@@ -329,16 +335,17 @@ class Database:
         AI এটা দিয়ে শিখবে:
         "এই pattern + এই regime = আগে 70% win"
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        SELECT a.*, t.result, t.pnl
-        FROM analysis_log a
-        LEFT JOIN trades t ON a.date = t.date
-        WHERE a.pattern = ? AND a.regime = ?
-        ORDER BY a.date DESC
-        LIMIT ?
-        """, (pattern, regime, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            SELECT a.*, t.result, t.pnl
+            FROM analysis_log a
+            LEFT JOIN trades t ON a.date = t.date
+            WHERE a.pattern = ? AND a.regime = ?
+            ORDER BY a.date DESC
+            LIMIT ?
+            """, (pattern, regime, limit))
+            return [dict(row) for row in cursor.fetchall()]
 
     # ── Performance ────────────────────────────────────────────
 
@@ -347,46 +354,47 @@ class Database:
         আজকের সব trade থেকে performance calculate করো।
         প্রতিদিন একবার call করো।
         """
-        cursor = self.conn.cursor()
-        today = datetime.now().strftime("%Y-%m-%d")
+        with self._lock:
+            cursor = self.conn.cursor()
+            today = datetime.now().strftime("%Y-%m-%d")
 
-        cursor.execute("""
-        SELECT
-            COUNT(*) as total,
-            SUM(CASE WHEN result = 'WIN' THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN result = 'LOSS' THEN 1 ELSE 0 END) as losses,
-            SUM(pnl) as total_pnl,
-            MAX(pnl) as best,
-            MIN(pnl) as worst
-        FROM trades
-        WHERE date LIKE ? AND result != 'OPEN'
-        """, (f"{today}%",))
+            cursor.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN result = 'WIN' THEN 1 ELSE 0 END) as wins,
+                SUM(CASE WHEN result = 'LOSS' THEN 1 ELSE 0 END) as losses,
+                SUM(pnl) as total_pnl,
+                MAX(pnl) as best,
+                MIN(pnl) as worst
+            FROM trades
+            WHERE date LIKE ? AND result != 'OPEN'
+            """, (f"{today}%",))
 
-        row = cursor.fetchone()
-        if not row or row["total"] == 0:
-            return
+            row = cursor.fetchone()
+            if not row or row["total"] == 0:
+                return
 
-        total  = row["total"]
-        wins   = row["wins"] or 0
-        losses = row["losses"] or 0
-        pnl    = row["total_pnl"] or 0
-        wr     = round((wins / total) * 100, 1) if total > 0 else 0
+            total  = row["total"]
+            wins   = row["wins"] or 0
+            losses = row["losses"] or 0
+            pnl    = row["total_pnl"] or 0
+            wr     = round((wins / total) * 100, 1) if total > 0 else 0
 
-        cursor.execute("""
-        INSERT INTO performance (date, total_trades, wins, losses, win_rate, pnl, best_trade, worst_trade)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(date) DO UPDATE SET
-            total_trades = excluded.total_trades,
-            wins         = excluded.wins,
-            losses       = excluded.losses,
-            win_rate     = excluded.win_rate,
-            pnl          = excluded.pnl,
-            best_trade   = excluded.best_trade,
-            worst_trade  = excluded.worst_trade
-        """, (today, total, wins, losses, wr, pnl, row["best"], row["worst"]))
+            cursor.execute("""
+            INSERT INTO performance (date, total_trades, wins, losses, win_rate, pnl, best_trade, worst_trade)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(date) DO UPDATE SET
+                total_trades = excluded.total_trades,
+                wins         = excluded.wins,
+                losses       = excluded.losses,
+                win_rate     = excluded.win_rate,
+                pnl          = excluded.pnl,
+                best_trade   = excluded.best_trade,
+                worst_trade  = excluded.worst_trade
+            """, (today, total, wins, losses, wr, pnl, row["best"], row["worst"]))
 
-        self.conn.commit()
-        print(f"📊 Performance updated: {today} | Trades: {total} | WR: {wr}% | PnL: {pnl}")
+            self.conn.commit()
+            print(f"📊 Performance updated: {today} | Trades: {total} | WR: {wr}% | PnL: {pnl}")
 
     def get_performance_summary(self, days: int = 7) -> dict:
         """শেষ N দিনের performance summary।"""
@@ -427,36 +435,38 @@ class Database:
             "lesson": "Wait for candle close above resistance"
         }
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        INSERT INTO mistakes (trade_id, pair, error_type, what_happened, lesson)
-        VALUES (?, ?, ?, ?, ?)
-        """, (
-            mistake.get("trade_id"),
-            mistake.get("pair"),
-            mistake.get("error_type"),
-            mistake.get("what_happened"),
-            mistake.get("lesson"),
-        ))
-        self.conn.commit()
-        lid = cursor.lastrowid
-        print(f"📝 Mistake logged: #{lid} | {mistake.get('error_type')}")
-        return lid
+        with self._lock:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            INSERT INTO mistakes (trade_id, pair, error_type, what_happened, lesson)
+            VALUES (?, ?, ?, ?, ?)
+            """, (
+                mistake.get("trade_id"),
+                mistake.get("pair"),
+                mistake.get("error_type"),
+                mistake.get("what_happened"),
+                mistake.get("lesson"),
+            ))
+            self.conn.commit()
+            lid = cursor.lastrowid
+            print(f"📝 Mistake logged: #{lid} | {mistake.get('error_type')}")
+            return lid
 
     def get_lessons(self, pair: str = None, limit: int = 10) -> list:
         """AI-এর শেখা lessons দেখো।"""
-        cursor = self.conn.cursor()
-        if pair:
-            cursor.execute("""
-            SELECT * FROM mistakes WHERE pair = ?
-            ORDER BY date DESC LIMIT ?
-            """, (pair, limit))
-        else:
-            cursor.execute("""
-            SELECT * FROM mistakes
-            ORDER BY date DESC LIMIT ?
-            """, (limit,))
-        return [dict(row) for row in cursor.fetchall()]
+        with self._lock:
+            cursor = self.conn.cursor()
+            if pair:
+                cursor.execute("""
+                SELECT * FROM mistakes WHERE pair = ?
+                ORDER BY date DESC LIMIT ?
+                """, (pair, limit))
+            else:
+                cursor.execute("""
+                SELECT * FROM mistakes
+                ORDER BY date DESC LIMIT ?
+                """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
 
     def auto_log_mistake(self, trade_id: int):
         """

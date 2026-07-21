@@ -1,6 +1,9 @@
 # data/indicators.py
+import logging
 import pandas as pd
 import ta
+
+log = logging.getLogger("indicators")
 
 class Indicators:
 
@@ -11,7 +14,7 @@ class Indicators:
         df = self.add_bollinger_bands(df)
         df = self.add_atr(df)
         df = self.add_trend_signals(df)
-        print(f"✅ All indicators added | Total columns: {len(df.columns)}")
+        log.info("All indicators added successfully | Total columns: %d", len(df.columns))
         return df
 
     def add_moving_averages(self, df):

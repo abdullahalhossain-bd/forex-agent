@@ -216,11 +216,13 @@ def safe_pickle_load(filepath: str, verify_hash: bool = True) -> Any:
                     )
                 log.debug(f"[SafePickle] Hash verified for {filepath}")
             except json.JSONDecodeError:
-                log.warning(f"[SafePickle] Corrupt metadata for {filepath} — "
-                           "loading without hash verification")
+                raise ValueError(
+                    f"Corrupt metadata for {filepath} — file may be tampered"
+                )
         else:
-            log.warning(f"[SafePickle] No metadata file for {filepath} — "
-                       "cannot verify integrity")
+            raise ValueError(
+                f"No metadata file for {filepath} — cannot verify integrity"
+            )
 
     # Load with restricted unpickler
     with open(filepath, "rb") as f:

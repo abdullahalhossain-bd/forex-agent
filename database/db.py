@@ -19,8 +19,9 @@ from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-DB_PATH = "database/trader.db"
-os.makedirs("database", exist_ok=True)
+from config import PROJECT_ROOT
+DB_PATH = str(PROJECT_ROOT / "database" / "trader.db")
+(PROJECT_ROOT / "database").mkdir(parents=True, exist_ok=True)
 
 
 # ── JSON encoder that handles numpy types ───────────────────────────
@@ -52,15 +53,12 @@ class _NumpySafeEncoder(json.JSONEncoder):
 
 
 def _safe_json_dumps(obj):
-    """json.dumps that never crashes — converts numpy types + falls back to str."""
+    """json.dumps that never crashes — converts numpy types + falls back to None."""
     try:
         return json.dumps(obj, cls=_NumpySafeEncoder, default=str)
     except Exception as e:
-        # Last resort: stringify everything we can't serialize
-        try:
-            return json.dumps(str(obj))
-        except Exception as e:
-            return "{}"
+        log.warning("_safe_json_dumps failed to serialize object: %s", e)
+        return None
 
 
 class TraderDB:

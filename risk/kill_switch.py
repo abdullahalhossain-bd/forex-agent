@@ -195,14 +195,26 @@ class KillSwitch:
 
             # Level 3 (highest priority)
             if self._state.get("level_3_active"):
+                # Bug #33 fix: save state before early return so drawdown
+                # tracking isn't lost if the process crashes.
+                self._save()
                 return self._block(3, "MAXIMUM DRAWDOWN — FULL STOP. Human reset required.")
 
-            # Calculate drawdown
-            if initial_balance > 0:
-                drawdown = (initial_balance - balance) / initial_balance
+            # Calculate drawdown from PEAK balance (not initial).
+            # Bug #8 fix: previously used initial_balance, so once the account
+            # became profitable, drawdown was negative (e.g. initial=$10k,
+            # peak=$20k, balance=$14k → old: (10k-14k)/10k = -0.4 → never
+            # triggered). Now uses peak_balance like DrawdownMonitor does.
+            peak = self._state.get("peak_balance", 0)
+            if peak <= 0:
+                peak = initial_balance
+            if balance > peak:
+                peak = balance
+            self._state["peak_balance"] = peak
+
+            if peak > 0:
+                drawdown = (peak - balance) / peak
                 self._state["current_drawdown_pct"] = drawdown
-                if balance > self._state.get("peak_balance", 0):
-                    self._state["peak_balance"] = balance
 
                 if drawdown >= self.MAX_DRAWDOWN_LIMIT:
                     self._trigger_level3()

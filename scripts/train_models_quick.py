@@ -489,7 +489,12 @@ def main():
                         help="Use synthetic data instead of MT5 (DEBUG ONLY - not for production)")
     args = parser.parse_args()
 
-    default_pairs = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD"]
+    default_pairs = None  # will be loaded from config.SYMBOLS below
+    try:
+        from config import SYMBOLS
+        default_pairs = [s.upper() for s in SYMBOLS]
+    except Exception:
+        default_pairs = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD", "AUDUSD", "USDCAD"]
     pairs = [args.pair.upper()] if args.pair else default_pairs
 
     if args.debug_synthetic:

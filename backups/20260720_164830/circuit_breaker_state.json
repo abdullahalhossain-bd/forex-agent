@@ -1,0 +1,198 @@
+{
+  "mode": "TRADING",
+  "consecutive_losses": 0,
+  "daily_loss_usd": 3.52,
+  "date": "2026-07-20",
+  "recent_results": [
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    {
+      "result": "LOSS",
+      "ts": "2026-07-20T15:30:32.810334"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:05:07.169277"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:05:43.589062"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:06:31.553467"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:07:19.802840"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:07:54.277592"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:14:20.561005"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:15:07.976580"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:15:35.724507"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:16:15.498364"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:16:51.006665"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:17:23.832577"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:17:49.276757"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:17:49.785733"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:18:17.571139"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:18:17.988225"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:18:44.704863"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:19:08.003016"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:19:32.070063"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:20:14.122125"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:27:04.156554"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:28:13.665558"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:28:47.572892"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:29:22.514140"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:29:55.365640"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:30:30.025870"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:30:57.031208"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:31:21.235655"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:31:57.346899"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:32:34.051408"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:33:17.998536"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:33:53.313586"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:34:36.050052"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:35:01.945717"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:35:36.295421"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:36:06.974020"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:36:36.888278"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:37:22.403518"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:43:46.430933"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:44:53.813060"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:45:29.243227"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:45:56.802612"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:46:29.128015"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:47:01.504683"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:47:28.439208"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:48:08.727683"
+    }
+  ],
+  "pause_reason": "Manually cleared \u2014 stale pre-fix LEARNING state",
+  "daily_loss_sync_stale": false
+}

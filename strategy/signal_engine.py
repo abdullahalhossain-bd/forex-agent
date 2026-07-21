@@ -278,7 +278,10 @@ class SignalEngine:
         if total == 0:
             signal, confidence = 'WAIT', 0
         else:
-            confidence = round(max(bull_score, bear_score) / total * 100)
+            if total == 0:
+                confidence = 0
+            else:
+                confidence = round(max(bull_score, bear_score) / total * 100)
             if warnings:
                 confidence = max(0, confidence - 10 * len(warnings))
 

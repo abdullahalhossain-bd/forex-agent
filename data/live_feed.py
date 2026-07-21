@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Deque, Dict, Optional
 
+from config import TEST_MODE
 from utils.logger import get_logger
 
 log = get_logger("live_feed")
@@ -320,7 +321,7 @@ class LiveFeed:
         if max_spread_multiple is None:
             max_spread_multiple = 10.0
 
-        _test_mode = os.getenv("TEST_MODE", "false").lower() == "true"
+        _test_mode = TEST_MODE
 
         # ── TEST_MODE: trade_mode チェックのみ ──────────────────
         if _test_mode:

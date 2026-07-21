@@ -1,0 +1,25 @@
+{
+  "hash": "5659c22ffccd05a10f6a4b02119b2edae2cb3580e87965c9bb08e52fed72ab55",
+  "saved_at": "2026-07-20T16:11:00.286324+00:00",
+  "metadata": {
+    "pair": "USDSAR",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v1",
+    "feature_names": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "vol_5",
+      "vol_10",
+      "rsi_14",
+      "sma_10",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "macd",
+      "macd_signal"
+    ]
+  }
+}

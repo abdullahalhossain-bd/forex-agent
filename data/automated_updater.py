@@ -203,31 +203,12 @@ class ForexDataUpdater:
             raise
     
     def _generate_synthetic_data(self, pair: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        """Generate synthetic data for testing purposes"""
-        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-        
-        # Generate realistic price movements
-        import numpy as np
-        np.random.seed(42)  # For reproducibility
-        
-        # Get initial price (random between 0.8 and 1.5 for different pairs)
-        initial_price = np.random.uniform(0.8, 1.5)
-        
-        # Generate random walk with drift
-        returns = np.random.normal(0.0001, 0.02, len(date_range))
-        prices = initial_price * (1 + returns).cumprod()
-        
-        # Create OHLC data
-        data = pd.DataFrame({
-            'Open': prices * (1 + np.random.uniform(-0.005, 0.005, len(date_range))),
-            'High': prices * (1 + np.random.uniform(0, 0.01, len(date_range))),
-            'Low': prices * (1 - np.random.uniform(0, 0.01, len(date_range))),
-            'Close': prices,
-            'Volume': np.random.randint(1000, 100000, len(date_range))
-        }, index=date_range)
-        
-        self.logger.warning(f"Generated synthetic data for {pair} - for testing only")
-        return data
+        """Return empty DataFrame — synthetic data must never enter the real pipeline."""
+        self.logger.warning(
+            f"All real data sources failed for {pair}. "
+            f"Refusing to generate synthetic data to avoid contamination. Returning empty DataFrame."
+        )
+        return pd.DataFrame()
     
     def validate_and_clean_data(self, data: pd.DataFrame, pair: str) -> pd.DataFrame:
         """Validate and clean forex data"""
@@ -289,7 +270,7 @@ class ForexDataUpdater:
             return data
         
         # Check for missing dates
-        all_dates = pd.date_range(start=data.index.min(), end=data.index.max(), freq='D')
+        all_dates = pd.bdate_range(start=data.index.min(), end=data.index.max())
         missing_dates = all_dates.difference(data.index)
         
         if len(missing_dates) > 0:

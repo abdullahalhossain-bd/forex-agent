@@ -20,7 +20,7 @@ class PullbackStrategy:
         bc = close > open_p and close > (high+low)/2; bear_c = close < open_p and close < (high+low)/2
         if bt and at_ema and rz and bc:
             return self._signal("BUY", last, f"Bullish pullback to EMA{self.ema_fast}")
-        if bear_t and at_ema and rz and bc:
+        if bear_t and at_ema and rz and bear_c:
             return self._signal("SELL", last, f"Bearish pullback to EMA{self.ema_fast}")
         return {"signal":"HOLD","confidence":0}
     def _signal(self, d, last, reason):

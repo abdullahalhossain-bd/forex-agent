@@ -38,7 +38,7 @@ def get_mt5_connection(
 
 
 class MT5Connection:
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5                  # Increased from 3 — more connect attempts before giving up
     RETRY_DELAY_SEC = 5
 
     # Day 90+ hotfix: health-check tuning.
@@ -50,38 +50,27 @@ class MT5Connection:
     # return None just from momentary contention/latency — not a real
     # disconnect. That caused the "MT5 connection lost" flapping seen
     # in logs every 5-10 minutes even though MT5 was actually fine.
-    # Day 90+ hotfix tuning (kept as-is):
-    HEALTH_CHECK_RETRIES = 2          # extra in-place retries before declaring dead
-    HEALTH_CHECK_RETRY_DELAY = 0.5    # seconds between in-place retries
+    HEALTH_CHECK_RETRIES = 3          # Increased from 2 — more in-place retries before declaring dead
+    HEALTH_CHECK_RETRY_DELAY = 1.0    # Increased from 0.5s — give MT5 more breathing room between retries
 
     # Round-5 audit fix: cache is_alive() result for a few seconds.
-    # The operator's log showed "[MT5Connection] Health check failed
-    # after 3 attempts" firing on EVERY cycle, followed immediately by
-    # auto-reconnect SUCCESS — meaning the connection was actually
-    # fine, the health check was just too aggressive (3 attempts × 0.5s
-    # = 1.5s of lock contention per cycle, ×6 pairs = 9s wasted per
-    # cycle on health checks alone).
-    #
-    # Caching the result for 5s means:
-    #   - First MT5 op in any 5s window: full health check runs
-    #   - Subsequent ops in the same 5s window: cached True (no lock,
-    #     no terminal_info() call)
-    #   - If the cached result is False, the cache is bypassed and a
-    #     fresh check runs (so reconnect logic still fires promptly)
-    HEALTH_CHECK_CACHE_SEC = 5.0
-    _last_health_check_ts: float = 0.0
-    _last_health_check_result: bool = True
+    # Increased cache window to 10s to reduce lock contention further
+    # across 6 pairs. False results are never cached, so reconnect
+    # logic still fires promptly on genuine disconnects.
+    HEALTH_CHECK_CACHE_SEC = 10.0
+
+    # Consecutive failure threshold before logging a WARNING.
+    # 1-2 failures are transient and expected (momentary latency).
+    # Only warn at 3+ to reduce log noise.
+    CONSECUTIVE_FAILURE_WARN_THRESHOLD = 3
 
     # P1 fix (audit §4.1): terminal_info() only proves the terminal app is
-    # running, not that the account session is still authenticated — a
-    # broker-side session invalidation can leave terminal_info() healthy
-    # while trading is actually blocked. Run a cheap account_info() check
-    # every Nth health check (not every call, to avoid reintroducing the
-    # Day 90 false-positive-flapping problem) so auth-level failures don't
-    # stay invisible for an entire session.
+    # running, not that the account session is still authenticated.
     AUTH_CHECK_EVERY_N_HEALTH_CHECKS = 20
 
     MT5_LOCK = Lock()
+
+    _instances: dict[tuple, "MT5Connection"] = {}
 
     def __init__(
         self,
@@ -99,9 +88,14 @@ class MT5Connection:
         self.connected_at = None
         self.last_ping = None
 
-        # Day 90+ hotfix: track consecutive health-check failures so we
-        # can distinguish "one flaky call" from "actually disconnected".
-        self._consecutive_failures = 0
+        # Bug #4 fix: per-instance health check cache (was class-level,
+        # causing false-positive health checks across instances).
+        self._last_health_check_ts: float = 0.0
+        self._last_health_check_result: bool = True
+        # Bug #4 fix: per-instance reconnect counter (was class-level,
+        # shadowing caused incorrect backoff).
+        self._reconnect_attempt_count: int = 0
+
         # P1 fix (audit §4.1): counts total is_alive() calls so we know
         # when to run the periodic account_info() auth check.
         self._health_check_count = 0
@@ -356,10 +350,21 @@ class MT5Connection:
         # positive results.
         self._last_health_check_ts = _time.time()
         self._last_health_check_result = False
-        log.warning(
-            f"[MT5Connection] Health check failed after {attempts} "
-            f"attempts (consecutive_failures={self._consecutive_failures})"
-        )
+
+        # Adaptive logging: only warn after sustained failures to reduce noise.
+        # A single failed health check followed by immediate reconnect success
+        # is normal transient behavior, not a real instability event.
+        if self._consecutive_failures >= self.CONSECUTIVE_FAILURE_WARN_THRESHOLD:
+            log.warning(
+                f"[MT5Connection] Health check failed after {attempts} "
+                f"attempts (consecutive_failures={self._consecutive_failures})"
+            )
+        else:
+            log.debug(
+                f"[MT5Connection] Health check failed after {attempts} "
+                f"attempts (consecutive_failures={self._consecutive_failures}, "
+                f"below warn threshold {self.CONSECUTIVE_FAILURE_WARN_THRESHOLD})"
+            )
         return False
 
     # ==========================================================
@@ -420,15 +425,33 @@ class MT5Connection:
         return True
 
     def reconnect(self) -> bool:
-        """Reconnect to MT5 after disconnection (Bug fix: auto-reconnect)."""
+        """Reconnect to MT5 after disconnection with exponential backoff.
+
+        Previously used a fixed 2s pause, which was too aggressive for
+        repeated reconnects during broker maintenance windows. Now uses
+        exponential backoff: 2s, 4s, 8s, 16s (capped at 30s) so we
+        don't hammer the broker during extended outages.
+        """
         try:
+            self._reconnect_attempt_count += 1
+            # Exponential backoff: 2 * 2^(attempt-1), capped at 30s
+            backoff = min(2 * (2 ** (self._reconnect_attempt_count - 1)), 30)
+
+            log.info(
+                f"[MT5Connection] Auto-reconnect attempt "
+                f"#{self._reconnect_attempt_count} (backoff={backoff}s)"
+            )
             self.disconnect()
-            time.sleep(2)  # brief pause before retry
+            time.sleep(backoff)
             success = self.connect()
             if success:
+                self._reconnect_attempt_count = 0  # reset on success
                 log.info("[MT5Connection] Auto-reconnect SUCCESS")
             else:
-                log.error("[MT5Connection] Auto-reconnect FAILED")
+                log.error(
+                    f"[MT5Connection] Auto-reconnect FAILED "
+                    f"(attempt #{self._reconnect_attempt_count})"
+                )
             return success
         except Exception as e:
             log.error(f"[MT5Connection] Reconnect exception: {e}")

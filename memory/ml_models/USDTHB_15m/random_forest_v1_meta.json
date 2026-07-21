@@ -1,0 +1,30 @@
+{
+  "pair": "USDTHB",
+  "timeframe": "15m",
+  "model_type": "random_forest",
+  "version": "v1",
+  "saved_at": "2026-07-20T16:10:56+00:00",
+  "metrics": {
+    "accuracy": 0.4398976982097187,
+    "training_bars": 1951,
+    "baseline": true,
+    "feature_pipeline": "fast_13"
+  },
+  "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDTHB_15m/random_forest_v1.pkl",
+  "is_keras": false,
+  "feature_names": [
+    "ret_1",
+    "ret_3",
+    "ret_5",
+    "ret_10",
+    "vol_5",
+    "vol_10",
+    "rsi_14",
+    "sma_10",
+    "sma_20",
+    "sma_50",
+    "atr_14",
+    "macd",
+    "macd_signal"
+  ]
+}

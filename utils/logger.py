@@ -161,8 +161,22 @@ def get_logger(name: str) -> logging.Logger:
     # which logger or library emits the record.
     secret_filter = SecretRedactionFilter()
 
-    # ── File handler (DEBUG+) ──
-    fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    # ── File handler (DEBUG+) with rotation ──
+    # FIX: Previously used bare FileHandler with no rotation —
+    # logs/trader.log grew unbounded and would eventually fill the disk
+    # on long-running bots. Now uses RotatingFileHandler: 10MB per file,
+    # 5 backups kept (50MB total max). Configurable via env vars.
+    _log_max_bytes = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+    _log_max_backups = int(os.getenv("LOG_MAX_BACKUPS", "5"))
+    try:
+        from logging.handlers import RotatingFileHandler
+        fh = RotatingFileHandler(
+            LOG_FILE, maxBytes=_log_max_bytes, backupCount=_log_max_backups,
+            encoding="utf-8",
+        )
+    except Exception:
+        # Fallback to unbounded handler if RotatingFileHandler fails
+        fh = logging.FileHandler(LOG_FILE, encoding="utf-8")
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)
     fh.addFilter(secret_filter)

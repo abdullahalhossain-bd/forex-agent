@@ -182,14 +182,14 @@ class DivergenceEngine:
             window_high = highs[i - w: i + w + 1]
             window_low  = lows[i - w: i + w + 1]
 
-            if highs[i] == window_high.max() and not np.isnan(ind_series.iloc[i]):
+            if highs[i] >= window_high.max() - 1e-12 and not np.isnan(ind_series.iloc[i]):
                 pivots.append({
                     "index":     i,
                     "price":     float(highs[i]),
                     "ind_value": float(ind_series.iloc[i]),
                     "kind":      "high",
                 })
-            elif lows[i] == window_low.min() and not np.isnan(ind_series.iloc[i]):
+            elif lows[i] <= window_low.min() + 1e-12 and not np.isnan(ind_series.iloc[i]):
                 pivots.append({
                     "index":     i,
                     "price":     float(lows[i]),

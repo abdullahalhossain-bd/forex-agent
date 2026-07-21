@@ -8,7 +8,13 @@
 from pathlib import Path
 
 # ── Project Root ────────────────────────────────────────────
-PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
+# Bug #19 fix: import from config.py (the single source of truth)
+# instead of re-deriving, to prevent divergence if constants.py
+# is imported from a different context.
+try:
+    from config import PROJECT_ROOT
+except Exception:
+    PROJECT_ROOT: Path = Path(__file__).resolve().parent.parent
 
 # ── Pip Sizes by Symbol ────────────────────────────────────
 PIP_SIZE: dict[str, float] = {
@@ -143,13 +149,13 @@ MT5_MAGIC_NUMBER = 424242
 
 def get_pip_size(symbol: str) -> float:
     """Get pip size for a symbol, with safe fallback."""
-    clean = symbol.upper().replace("/", "").replace("=X", "").strip()[:6]
+    clean = symbol.upper().replace("/", "").replace("=X", "").strip()
     return PIP_SIZE.get(clean, PIP_SIZE["DEFAULT"])
 
 
 def get_pip_value_usd(symbol: str) -> float:
     """Get per-standard-lot pip value in USD for a symbol."""
-    clean = symbol.upper().replace("/", "").replace("=X", "").strip()[:6]
+    clean = symbol.upper().replace("/", "").replace("=X", "").strip()
     return PIP_VALUE_USD.get(clean, PIP_VALUE_USD["DEFAULT"])
 
 

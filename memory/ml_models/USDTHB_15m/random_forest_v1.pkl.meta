@@ -1,0 +1,25 @@
+{
+  "hash": "893b8fee60fcb85d2054db07729d31d6bff038304ada28404dad8b8211f611bb",
+  "saved_at": "2026-07-20T16:10:56.660170+00:00",
+  "metadata": {
+    "pair": "USDTHB",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v1",
+    "feature_names": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "vol_5",
+      "vol_10",
+      "rsi_14",
+      "sma_10",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "macd",
+      "macd_signal"
+    ]
+  }
+}

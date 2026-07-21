@@ -97,6 +97,7 @@ def get_live_signals() -> list:
             "sl": round(entry * 0.997, 4),
             "tp": round(entry * 1.006, 4),
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "source": "demo",
         })
     return demo
 
@@ -105,9 +106,7 @@ def get_open_positions() -> list:
     data = load_json("memory/open_positions.json", None)
     if data:
         return data
-    return [
-        {"pair": "EURUSD", "direction": "BUY", "entry": 1.0850, "current": 1.0870, "pnl": 20.0, "lots": 0.10},
-    ]
+    return []
 
 
 def get_todays_pnl() -> dict:

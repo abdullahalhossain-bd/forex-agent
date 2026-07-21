@@ -35,7 +35,15 @@ class RiskEngine:
     from config import MAX_OPEN_TRADES as _CFG_MOT
     MAX_OPEN_TRADES = int(_CFG_MOT)
 
-    def __init__(self, balance: float = 1000.0, symbol: str = "EURUSD"):
+    def __init__(self, balance: float = None, symbol: str = "EURUSD"):
+        # Bug #22 fix: use config.INITIAL_BALANCE as default instead of
+        # hardcoded 1000.0 that drifts from the actual configured balance.
+        if balance is None:
+            try:
+                from config import INITIAL_BALANCE
+                balance = float(INITIAL_BALANCE)
+            except Exception:
+                balance = 1000.0
         self.balance = balance
         self.symbol  = clean_symbol(symbol)
         self.pip     = get_pip_size(self.symbol)
@@ -433,21 +441,21 @@ class RiskEngine:
 
     def print_summary(self, result: dict) -> None:
         bar  = "═" * 44
-        icon = "✅" if result["approved"] else "⛔"
+        icon = "✅" if result.get("approved") else "⛔"
         log.info(bar)
         log.info(f"  {icon}  RISK ENGINE")
         log.info(bar)
-        if not result["approved"]:
-            log.info(f"  Rejected    : {result['reject_reason']}")
+        if not result.get("approved"):
+            log.info(f"  Rejected    : {result.get('reject_reason', 'unknown')}")
         else:
-            log.info(f"  Signal      : {result['signal']} {result['symbol']}")
-            log.info(f"  Entry       : {result['entry']}")
-            log.info(f"  SL          : {result['sl_price']}  ({result['sl_pips']} pips)")
-            log.info(f"  TP          : {result['tp_price']}  ({result['tp_pips']} pips)")
-            log.info(f"  Lot         : {result['lot']}")
-            log.info(f"  Risk        : {result['risk_pc']}%  (${result['risk_usd']})")
-            log.info(f"  R:R         : 1:{result['rr_ratio']}")
-            log.info(f"  Daily loss  : {result['daily_loss_pc']}%  (limit {self.DAILY_LOSS_LIMIT}%)")
+            log.info(f"  Signal      : {result.get('signal', '?')} {result.get('symbol', '?')}")
+            log.info(f"  Entry       : {result.get('entry', 0)}")
+            log.info(f"  SL          : {result.get('sl_price', 0)}  ({result.get('sl_pips', 0)} pips)")
+            log.info(f"  TP          : {result.get('tp_price', 0)}  ({result.get('tp_pips', 0)} pips)")
+            log.info(f"  Lot         : {result.get('lot', 0)}")
+            log.info(f"  Risk        : {result.get('risk_pc', 0)}%  (${result.get('risk_usd', 0)})")
+            log.info(f"  R:R         : 1:{result.get('rr_ratio', 0)}")
+            log.info(f"  Daily loss  : {result.get('daily_loss_pc', 0)}%  (limit {self.DAILY_LOSS_LIMIT}%)")
         log.info(bar)
 
     def get_ai_context(self, result: dict) -> dict:

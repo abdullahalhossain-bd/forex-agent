@@ -67,12 +67,29 @@ except ImportError:
 # ── Constants ───────────────────────────────────────────────────────
 
 SUPPORTED_SYMBOLS = [
-    # Forex Majors
-    "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
-    # Metals
-    "XAUUSD", "XAGUSD",
-    # Crypto
-    "BTCUSD", "ETHUSD",
+    # ── MAJORS (7) ──
+    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "USDCAD", "AUDUSD", "NZDUSD",
+    # ── MINORS / CROSSES (21) ──
+    "EURGBP", "EURJPY", "EURCHF", "EURAUD", "EURCAD", "EURNZD",
+    "GBPJPY", "GBPCHF", "GBPAUD", "GBPCAD", "GBPNZD",
+    "AUDJPY", "AUDCHF", "AUDCAD", "AUDNZD",
+    "NZDJPY", "NZDCHF", "NZDCAD",
+    "CADJPY", "CADCHF", "CHFJPY",
+    # ── METALS / COMMODITIES (4) ──
+    "XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD",
+    # ── ENERGY (2) ──
+    "USOUSD", "UKOUSD",
+    # ── CRYPTO (4) ──
+    "BTCUSD", "ETHUSD", "LTCUSD", "XRPUSD",
+    # ── INDEX CFDs (4) ──
+    "US30USD", "NAS100USD", "SPX500USD", "GER40USD",
+    # ── EXOTIC (2) ──
+    "USDTRY", "USDZAR",
+    # ── ADDITIONAL CROSSES (10) ──
+    "EURNOK", "EURSEK", "GBPSEK", "GBPNOK", "AUDSGD", "NZDSGD",
+    "CADHKD", "SGDJPY", "HKDJPY", "MXNJPY",
+    # ── ASIA PACIFIC (8) ──
+    "USDCNH", "USDHKD", "USDSGD", "USDMXN", "USDTHB", "USDSAR", "USDAED",
 ]
 
 SUPPORTED_TIMEFRAMES = ["M1", "M5", "M15", "M30", "H1", "H4", "D1"]

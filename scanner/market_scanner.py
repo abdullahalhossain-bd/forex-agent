@@ -18,6 +18,8 @@
 # ============================================================
 
 from datetime import datetime, timezone
+
+import pandas as pd
 from utils.logger import get_logger
 from scanner.config import DEFAULT_SCAN_PAIRS, SESSIONS, SESSION_PAIRS, TOP_N
 from scanner.correlation_filter import CorrelationFilter
@@ -65,7 +67,13 @@ class MarketScanner:
 
         # Sync open positions to correlation filter
         if self.risk_engine:
-            open_pairs = self.risk_engine._daily.get("open_pairs", [])
+            # Bug #25 fix: use public sync health instead of private _daily dict.
+            # If get_sync_health() is unavailable (older code), fall back gracefully.
+            try:
+                health = self.risk_engine.get_sync_health()
+                open_pairs = health.get("live_open_pairs", [])
+            except Exception:
+                open_pairs = []
             self.corr.sync_open(open_pairs)
 
         log.info(f"[MarketScanner] 🔍 Scanning {len(pairs)} pairs: {pairs}")
@@ -175,9 +183,10 @@ class MarketScanner:
         highs  = [c["high"] for c in candles]
         lows   = [c["low"] for c in candles]
 
-        # EMA9 vs EMA21 (simple approximation)
-        ema9  = sum(closes[-9:]) / 9
-        ema21 = sum(closes[-21:]) / 21
+        # EMA9 vs EMA21 (proper exponential moving average)
+        s = pd.Series(closes)
+        ema9  = float(s.ewm(span=9,  adjust=False).mean().iloc[-1])
+        ema21 = float(s.ewm(span=21, adjust=False).mean().iloc[-1])
 
         # RSI14
         rsi = self._rsi(closes, 14)
@@ -221,8 +230,9 @@ class MarketScanner:
             if len(tf_candles) < 21:
                 continue
             closes = [c["close"] for c in tf_candles]
-            ema9   = sum(closes[-9:]) / 9
-            ema21  = sum(closes[-21:]) / 21
+            s = pd.Series(closes)
+            ema9   = float(s.ewm(span=9,  adjust=False).mean().iloc[-1])
+            ema21  = float(s.ewm(span=21, adjust=False).mean().iloc[-1])
             tf_dir = "BUY" if ema9 > ema21 else "SELL"
             scores.append(1 if tf_dir == primary_signal else -1)
 
@@ -333,12 +343,14 @@ class MarketScanner:
     def _rsi(self, closes: list[float], period: int = 14) -> float:
         if len(closes) < period + 1:
             return 50.0
-        deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
-        gains  = [d for d in deltas[-period:] if d > 0]
-        losses = [-d for d in deltas[-period:] if d < 0]
-        avg_gain = sum(gains) / period if gains else 0
-        avg_loss = sum(losses) / period if losses else 0
-        if avg_loss == 0:
+        s = pd.Series(closes)
+        delta = s.diff()
+        gain = delta.where(delta > 0, 0.0)
+        loss = (-delta).where(delta < 0, 0.0)
+        # Wilder's smoothing (equivalent to EWM alpha=1/period)
+        avg_gain = gain.ewm(alpha=1/period, adjust=False, min_periods=period).mean().iloc[-1]
+        avg_loss = loss.ewm(alpha=1/period, adjust=False, min_periods=period).mean().iloc[-1]
+        if avg_loss == 0 or pd.isna(avg_loss):
             return 100.0
         rs = avg_gain / avg_loss
         return round(100 - 100 / (1 + rs), 1)
@@ -352,7 +364,10 @@ class MarketScanner:
             l = candles[i]["low"]
             pc = candles[i - 1]["close"]
             trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-        return round(sum(trs[-period:]) / period, 5)
+        # Wilder's smoothing (equivalent to EWM alpha=1/period)
+        s = pd.Series(trs, dtype=float)
+        atr = s.ewm(alpha=1/period, adjust=False, min_periods=period).mean().iloc[-1]
+        return round(float(atr), 5)
 
     def _estimate_rr(self, candles: list[dict]) -> float:
         """ATR-based 1.5× SL, 3× TP → RR = 2.0."""

@@ -1,0 +1,25 @@
+{
+  "hash": "90be00a6c7a2c3ec42df782ea31366d1df8c61718acc51fa43bc812225c133b2",
+  "saved_at": "2026-07-20T16:11:00.604096+00:00",
+  "metadata": {
+    "pair": "USDSAR",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v1",
+    "feature_names": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "vol_5",
+      "vol_10",
+      "rsi_14",
+      "sma_10",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "macd",
+      "macd_signal"
+    ]
+  }
+}

@@ -50,6 +50,7 @@ st.set_page_config(
 
 import os as _os
 import socket as _socket
+import hmac as _hmac
 
 _DASHBOARD_PASSWORD = _os.getenv("DASHBOARD_PASSWORD", "")
 # Day 102+ CRITICAL hotfix: detect non-localhost deployment.
@@ -79,7 +80,7 @@ if _DASHBOARD_PASSWORD:
         st.markdown("## 🔒 Dashboard Login")
         pwd = st.text_input("Password", type="password")
         if st.button("Login"):
-            if pwd == _DASHBOARD_PASSWORD:
+            if _hmac.compare_digest(pwd or "", _DASHBOARD_PASSWORD):
                 st.session_state["authenticated"] = True
                 st.rerun()
             else:

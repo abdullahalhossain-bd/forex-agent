@@ -156,8 +156,8 @@ def add_indicators(
         dow = pd.Series(ts).dt.dayofweek if not isinstance(ts, pd.DatetimeIndex) else pd.Series(ts.dayofweek, index=out.index)
         out["hour_sin"] = np.sin(2 * np.pi * hour / 24)
         out["hour_cos"] = np.cos(2 * np.pi * hour / 24)
-        out["dow_sin"] = np.sin(2 * np.pi * dow / 5)
-        out["dow_cos"] = np.cos(2 * np.pi * dow / 5)
+        out["dow_sin"] = np.sin(2 * np.pi * dow / 7)
+        out["dow_cos"] = np.cos(2 * np.pi * dow / 7)
     else:
         for col_name in ["hour_sin", "hour_cos", "dow_sin", "dow_cos"]:
             out[col_name] = 0.0

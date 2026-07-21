@@ -40,7 +40,8 @@ from config import MODEL_BUY_THRESHOLD, MODEL_SELL_THRESHOLD
 
 log = get_logger("model_predictor")
 
-PREDICTIONS_DB = Path("memory/ml_predictions.db")
+from config import PROJECT_ROOT as _PROJECT_ROOT
+PREDICTIONS_DB = _PROJECT_ROOT / "memory" / "ml_predictions.db"
 
 # Threshold for BUY/SELL decision
 BUY_THRESHOLD = MODEL_BUY_THRESHOLD
@@ -98,7 +99,13 @@ class ModelPredictor:
             c.commit()
 
     def _load_models(self, pair: str, timeframe: str) -> Dict[str, Any]:
-        """Load all available models for a pair (cached)."""
+        """Load all available models for a pair (cached).
+
+        Enhancement: when a legacy model (no feature_names in registry)
+        is detected as the "latest" version, automatically try to find a
+        newer compatible version instead of loading a model that will
+        fail at prediction time.
+        """
         cache_key_prefix = f"{pair.upper()}_{timeframe}_"
         models: Dict[str, Any] = {}
         for model_type in ("xgboost", "random_forest", "lstm"):
@@ -106,21 +113,110 @@ class ModelPredictor:
             if cache_key in self._model_cache:
                 models[model_type] = self._model_cache[cache_key]
                 continue
+
             model = self.store.load_model(pair, timeframe, model_type)
+
+            # Auto-promote: if the loaded model is legacy (no feature_names)
+            # and has a different feature count than what FeatureEngineer
+            # produces (~161), try to load a newer version instead.
+            if model is not None:
+                feature_names = self.store.get_feature_names(pair, timeframe, model_type)
+                expected_count = getattr(model, "n_features_in_", None)
+                if not feature_names and expected_count is not None and expected_count < 50:
+                    # This is almost certainly a legacy 13-feature model.
+                    # Try to find and load a newer version.
+                    newer = self._try_load_newer_version(pair, timeframe, model_type, expected_count)
+                    if newer is not None:
+                        model = newer
+                        log.info(
+                            f"[Predictor] Auto-promoted {pair}_{timeframe}_{model_type} "
+                            f"from legacy v{expected_count}-feature model to newer version "
+                            f"({getattr(newer, 'n_features_in_', '?')} features)"
+                        )
+
             if model is not None:
                 self._model_cache[cache_key] = model
                 models[model_type] = model
         return models
 
+    def _try_load_newer_version(self, pair: str, timeframe: str,
+                                 model_type: str, legacy_count: int) -> Any:
+        """Try to load a newer, compatible model version from the registry.
+
+        Scans all versions for this pair/tf/model_type and picks the latest
+        one that has feature_names AND a compatible feature count.
+        Returns None if no suitable version is found.
+        """
+        try:
+            import json as _json
+            from ml.model_store import REGISTRY_PATH
+            if not REGISTRY_PATH.exists():
+                return None
+
+            registry = _json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+            models_dict = registry.get("models", {})
+            key_prefix = f"{pair.upper()}_{timeframe}_{model_type}"
+
+            # Collect all versions with their feature info
+            candidates = []
+            for key, versions in models_dict.items():
+                if not key.startswith(key_prefix):
+                    continue
+                if not isinstance(versions, dict):
+                    continue
+                for ver_str, ver_info in versions.items():
+                    if not isinstance(ver_info, dict):
+                        continue
+                    fnames = ver_info.get("feature_names", [])
+                    if fnames:  # has saved schema
+                        candidates.append((ver_str, ver_info))
+
+            if not candidates:
+                return None
+
+            # Pick the latest version with a schema (highest version number)
+            candidates.sort(key=lambda x: int(x[0].replace("v", "")) if x[0].replace("v", "").isdigit() else 0, reverse=True)
+            best_ver, best_info = candidates[0]
+
+            model_path = best_info.get("model_path")
+            if not model_path:
+                return None
+
+            from pathlib import Path
+            path = Path(model_path)
+            if not path.is_absolute():
+                from ml.model_store import MODELS_DIR
+                path = MODELS_DIR / model_path
+
+            if not path.exists():
+                return None
+
+            # Load the newer model
+            from ml.model_store import safe_pickle_load
+            model = safe_pickle_load(path)
+            return model
+
+        except Exception as e:
+            log.debug(f"[Predictor] _try_load_newer_version failed: {e}")
+            return None
+
     def _load_scaler(self, pair: str, timeframe: str) -> bool:
-        """Try to load the scaler saved during training."""
-        if self._scaler_loaded:
+        """Try to load the scaler saved during training.
+
+        Bug #7 fix: scaler is now per-pair/timeframe, keyed like the model cache.
+        Previously a single shared scaler was loaded once and applied to all pairs.
+        """
+        cache_key = f"{pair.upper()}_{timeframe}_scaler"
+        if cache_key in self._model_cache:
             return True
-        scaler_path = Path("memory/ml_processed/scaler.pkl")
+        scaler_path = _PROJECT_ROOT / "memory" / "ml_processed" / f"{pair.upper()}_{timeframe}_scaler.pkl"
+        if not scaler_path.exists():
+            # Fallback to legacy single scaler for backward compat
+            scaler_path = _PROJECT_ROOT / "memory" / "ml_processed" / "scaler.pkl"
         if scaler_path.exists():
             try:
                 self.preprocessor.load_scaler(scaler_path)
-                self._scaler_loaded = True
+                self._model_cache[cache_key] = True
                 return True
             except Exception:
                 pass
@@ -272,9 +368,10 @@ class ModelPredictor:
             log.warning(f"[Predictor] feature vector build failed: {e}")
             return result
 
-        # Transform with scaler (if loaded)
+        # Transform with scaler (if loaded for this pair/timeframe)
         try:
-            if self._scaler_loaded:
+            scaler_key = f"{pair.upper()}_{timeframe}_scaler"
+            if scaler_key in self._model_cache:
                 X = self.preprocessor.transform(X)
         except Exception:
             pass  # scaler may not have all columns — use raw
@@ -300,9 +397,27 @@ class ModelPredictor:
                         # A legacy artifact with no saved schema cannot be
                         # aligned safely.  Never truncate arbitrary columns:
                         # that produces plausible but invalid live signals.
-                        raise ValueError(
-                            f"legacy model schema missing (expects {expected_count}, got {X.shape[1]}); retrain required"
+                        #
+                        # FIX: Instead of raising (which killed the entire
+                        # ensemble prediction for this pair), skip this
+                        # specific model gracefully. Log a one-time warning
+                        # and let other compatible models (e.g. a newer
+                        # version) contribute to the ensemble.
+                        log.warning(
+                            f"[Predictor] {model_type} SKIPPED — legacy model "
+                            f"schema mismatch (expects {expected_count} features, "
+                            f"got {X.shape[1]}). Retrain with: "
+                            f"python scripts/train_models.py --pair {pair} --tf {timeframe}"
                         )
+                        # Record as WAIT with explanation, but don't break the loop
+                        model_result = {
+                            "prediction": "WAIT",
+                            "probability": 0.5,
+                            "error": f"legacy schema mismatch (expects {expected_count}, got {X.shape[1]})",
+                            "skipped": True,
+                        }
+                        result["per_model"][model_type] = model_result
+                        continue
                     else:
                         model_X = X
                 else:
@@ -357,7 +472,13 @@ class ModelPredictor:
         try:
             if "xgboost" in models:
                 importances = models["xgboost"].feature_importances_
-                feat_names = list(X.columns)
+                # Bug #26: use expected_features (model's training schema) instead of
+                # X.columns (raw input order) for correct feature name mapping.
+                expected_feat_names = self.store.get_feature_names(pair, timeframe, "xgboost")
+                if expected_feat_names and len(expected_feat_names) == len(importances):
+                    feat_names = expected_feat_names
+                else:
+                    feat_names = list(X.columns)
                 top_idx = np.argsort(importances)[::-1][:5]
                 result["important_features"] = [
                     {"feature": feat_names[i], "importance": round(float(importances[i]), 4)}
@@ -414,12 +535,12 @@ class ModelPredictor:
             with sqlite3.connect(str(PREDICTIONS_DB)) as c:
                 if pair:
                     rows = c.execute(
-                        "SELECT model, COUNT(*), SUM(CASE WHEN prediction = actual_result THEN 1 ELSE 0 END) FROM ml_predictions WHERE pair = ? AND actual_result IS NOT NULL GROUP BY model",
+                        "SELECT model, COUNT(*), COALESCE(SUM(CASE WHEN prediction = actual_result THEN 1 ELSE 0 END), 0) FROM ml_predictions WHERE pair = ? AND actual_result IS NOT NULL GROUP BY model",
                         (pair.upper(),),
                     ).fetchall()
                 else:
                     rows = c.execute(
-                        "SELECT model, COUNT(*), SUM(CASE WHEN prediction = actual_result THEN 1 ELSE 0 END) FROM ml_predictions WHERE actual_result IS NOT NULL GROUP BY model",
+                        "SELECT model, COUNT(*), COALESCE(SUM(CASE WHEN prediction = actual_result THEN 1 ELSE 0 END), 0) FROM ml_predictions WHERE actual_result IS NOT NULL GROUP BY model",
                     ).fetchall()
             stats = {}
             for model, total, correct in rows:

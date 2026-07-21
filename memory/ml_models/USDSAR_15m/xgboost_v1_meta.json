@@ -1,0 +1,30 @@
+{
+  "pair": "USDSAR",
+  "timeframe": "15m",
+  "model_type": "xgboost",
+  "version": "v1",
+  "saved_at": "2026-07-20T16:11:00+00:00",
+  "metrics": {
+    "accuracy": 0.49872122762148335,
+    "training_bars": 1951,
+    "baseline": true,
+    "feature_pipeline": "fast_13"
+  },
+  "model_path": "/home/z/my-project/forex-agent/memory/ml_models/USDSAR_15m/xgboost_v1.pkl",
+  "is_keras": false,
+  "feature_names": [
+    "ret_1",
+    "ret_3",
+    "ret_5",
+    "ret_10",
+    "vol_5",
+    "vol_10",
+    "rsi_14",
+    "sma_10",
+    "sma_20",
+    "sma_50",
+    "atr_14",
+    "macd",
+    "macd_signal"
+  ]
+}

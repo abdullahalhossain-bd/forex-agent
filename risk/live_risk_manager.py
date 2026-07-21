@@ -67,19 +67,47 @@ def _max_trades() -> int:
         return 20
 
 
-TIERS = {
-    # Log-driven fix (2026-07-17): tier-based min_confidence used to be
-    # 80/70/55, which meant a fresh/demo account (Tier 1, the default)
-    # needed 80% confidence to trade — far stricter than the 60% floor
-    # the operator actually wants, and it silently overrode
-    # trade_permission.MIN_CONFIDENCE (35%) since the effective gate is
-    # max(tier.min_confidence, trade_permission.MIN_CONFIDENCE).
-    # Unified to a flat 60% across all tiers so "confidence >= 60% →
-    # trade" is true regardless of which tier the account is on.
-    1: CapitalTier(1, "Initial Live", 0.005, 0.015, _max_trades(), 60.0, "manual", 0.5),
-    2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, _max_trades(), 60.0, "semi_auto", 0.8),
-    3: CapitalTier(3, "Mature System", 0.01, 0.03, _max_trades(), 60.0, "fully_auto", 1.0),
-}
+def _build_tiers() -> dict:
+    """Bug #14 fix: lazy TIERS construction.
+
+    Previously TIERS was built at MODULE LOAD TIME, calling
+    _max_trades() which imports core.constants. If that import
+    failed (circular dependency, missing module), the entire
+    live_risk_manager module would fail to import — killing the
+    entire trading pipeline.
+    Now TIERS is a lazy-initialized dict, built on first access.
+    """
+    mt = _max_trades()
+    return {
+        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 60.0, "manual", 0.5),
+        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 60.0, "semi_auto", 0.8),
+        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 60.0, "fully_auto", 1.0),
+    }
+
+
+class _LazyTiers:
+    """Dict-like proxy that builds TIERS on first access."""
+    def __init__(self):
+        self._data = None
+
+    def _ensure(self):
+        if self._data is None:
+            self._data = _build_tiers()
+
+    def get(self, key, default=None):
+        self._ensure()
+        return self._data.get(key, default)
+
+    def __getitem__(self, key):
+        self._ensure()
+        return self._data[key]
+
+    def __contains__(self, key):
+        self._ensure()
+        return key in self._data
+
+
+TIERS = _LazyTiers()
 
 
 @dataclass

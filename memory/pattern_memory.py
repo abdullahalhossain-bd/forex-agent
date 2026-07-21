@@ -11,8 +11,12 @@ Vector search similarity খুঁজবে,
 """
 
 import json
+import logging
 from pathlib import Path
 from datetime import datetime
+
+
+log = logging.getLogger("pattern_memory")
 
 
 MEMORY_DIR = Path("memory")
@@ -59,7 +63,7 @@ class PatternMemory:
         pattern["date"] = datetime.now().isoformat()
         self._winning.append(pattern)
         self._save("winning_patterns.json", self._winning)
-        print(f"✅ Winning pattern saved: {pattern.get('setup', '')[:50]}")
+        log.info("Winning pattern saved: %s", pattern.get('setup', '')[:50])
 
     def add_losing_pattern(self, pattern: dict, lesson: str):
         """Losing trade-এর pattern + lesson save করো।"""
@@ -67,7 +71,7 @@ class PatternMemory:
         pattern["lesson"] = lesson
         self._losing.append(pattern)
         self._save("losing_patterns.json", self._losing)
-        print(f"📝 Losing pattern saved: {lesson[:50]}")
+        log.info("Losing pattern saved: %s", lesson[:50])
 
     def add_lesson(self, lesson: str, category: str = "general", pair: str = ""):
         """AI-এর শেখা lesson save করো।"""
@@ -156,16 +160,9 @@ class PatternMemory:
         }
 
     def print_stats(self):
-        bar = "─" * 48
-        print(f"\n{bar}")
-        print(f"  📂  PATTERN MEMORY STATS")
-        print(bar)
-        print(f"  Winning Patterns : {len(self._winning)}")
-        print(f"  Losing Patterns  : {len(self._losing)}")
-        print(f"  Lessons Learned  : {len(self._lessons)}")
+        log.info("Pattern Memory Stats: %d winning, %d losing, %d lessons",
+                 len(self._winning), len(self._losing), len(self._lessons))
         wr_map = self.get_win_rate_by_pattern()
         if wr_map:
-            print(f"\n  Pattern Win Rates:")
             for pat, data in wr_map.items():
-                print(f"  {pat:25s}: {data['win_rate']}% ({data['wins']}/{data['total']})")
-        print(bar)
+                log.info("  %s: %s%% (%d/%d)", pat, data['win_rate'], data['wins'], data['total'])

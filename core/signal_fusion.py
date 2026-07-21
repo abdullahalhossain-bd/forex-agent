@@ -117,21 +117,6 @@ class SignalFusion:
         sell_votes = [s for s in signals if s.signal == "SELL"]
         wait_votes = [s for s in signals if s.signal in ("WAIT", "HOLD")]
 
-        # ARCHITECTURAL FIX: preserve the strongest single-layer signal
-        # for the audit trail. Even if the fused decision is WAIT/NO_TRADE
-        # (insufficient consensus), the analysis verdict must be visible.
-        _strongest = max(
-            (s for s in signals if s.signal in ("BUY", "SELL")),
-            key=lambda s: s.confidence,
-            default=None,
-        )
-        if _strongest is not None:
-            result.analysis_signal = _strongest.signal
-            result.analysis_confidence = _strongest.confidence
-        else:
-            result.analysis_signal = "WAIT"
-            result.analysis_confidence = 0.0
-
         # Determine majority
         if len(buy_votes) > len(sell_votes) and len(buy_votes) > len(wait_votes):
             majority = "BUY"
@@ -145,6 +130,21 @@ class SignalFusion:
             majority = "WAIT"
             agreeing = []
             opposing = []
+
+        # ARCHITECTURAL FIX: analysis_confidence computed from AGREEING
+        # signals only, not all signals. A strong opposing signal should
+        # not inflate the analysis confidence passed downstream.
+        _strongest_agreeing = max(
+            (s for s in agreeing if s.signal in ("BUY", "SELL")),
+            key=lambda s: s.confidence,
+            default=None,
+        )
+        if _strongest_agreeing is not None:
+            result.analysis_signal = _strongest_agreeing.signal
+            result.analysis_confidence = _strongest_agreeing.confidence
+        else:
+            result.analysis_signal = "WAIT"
+            result.analysis_confidence = 0.0
 
         result.agreement_count = len(agreeing)
         result.agreement = f"{len(agreeing)}/{len(signals)}"

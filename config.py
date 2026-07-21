@@ -65,8 +65,14 @@ DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "5.0"))
 # (7 providers × 16 keys = 112 keys total) to handle more concurrent
 # analysis. 10 is still conservative — increase to 15-20 if your
 # account size supports it.
-MAX_OPEN_TRADES = int(os.getenv("MAX_OPEN_TRADES", "10"))
-MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", "8"))    # portfolio-wide headroom
+try:
+    MAX_OPEN_TRADES = int(os.getenv("MAX_OPEN_TRADES", "10") or 10)
+except (ValueError, TypeError):
+    MAX_OPEN_TRADES = 10
+try:
+    MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", "8") or 8)
+except (ValueError, TypeError):
+    MAX_POSITIONS = 8    # portfolio-wide headroom
 MAX_RISK_PER_PAIR = 0.005          # max 0.5% risk on a single pair (was 2%)
 
 # ── Market & Data Settings ─────────────────────────────────────
@@ -176,7 +182,10 @@ LOG_FILE = str(LOG_DIR / "trader.log")
 # ── System / Operational Loops ─────────────────────────────────
 # Day 90 — env-overridable for token economy.  Default 180s (3 min)
 # to stretch free-tier LLM keys across the full trading day.
-LOOP_INTERVAL_SEC = int(os.getenv("LOOP_INTERVAL_SEC", "180"))
+try:
+    LOOP_INTERVAL_SEC = int(os.getenv("LOOP_INTERVAL_SEC", "180") or 180)
+except (ValueError, TypeError):
+    LOOP_INTERVAL_SEC = 180
 BACKUP_INTERVAL_MIN = 30
 RECOVERY_COOLDOWN_MIN = 5
 
@@ -272,7 +281,10 @@ MAX_LOT = float(os.getenv("MAX_LOT", "0.20"))
 # Each pair needs ~3 LLM calls (SentimentModel + MasterAnalyst + retries).
 # 62 pairs × 3 calls = 186 calls/cycle theoretical max, but caching +
 # skip-AIAnalyst-if-MasterAnalyst-runs keeps real usage ~20-40 calls.
-MAX_LLM_CALLS_PER_CYCLE = int(os.getenv("MAX_LLM_CALLS_PER_CYCLE", "8"))
+try:
+    MAX_LLM_CALLS_PER_CYCLE = int(os.getenv("MAX_LLM_CALLS_PER_CYCLE", "8") or 8)
+except (ValueError, TypeError):
+    MAX_LLM_CALLS_PER_CYCLE = 8
 
 # Minimum delay (seconds) between LLM calls to the same provider.
 # Groq free tier rate-limits aggressively; this prevents the 429 storm.
@@ -290,12 +302,18 @@ LLM_CALL_INTERVAL_SEC = float(os.getenv("LLM_CALL_INTERVAL_SEC", "1.0"))
 # 7 providers with TPD budget tracking. 60 calls/min gives enough
 # headroom for the expanded universe while staying under free-tier
 # RPM limits on any single provider.
-MAX_LLM_CALLS_PER_MIN = int(os.getenv("MAX_LLM_CALLS_PER_MIN", "60"))
+try:
+    MAX_LLM_CALLS_PER_MIN = int(os.getenv("MAX_LLM_CALLS_PER_MIN", "60") or 60)
+except (ValueError, TypeError):
+    MAX_LLM_CALLS_PER_MIN = 60
 
 # Telegram rate limit — max messages per minute.  Telegram's API
 # limit is 30 msg/sec globally but per-channel practical limit is ~20
 # msg/min before users mute the bot.  Default 10.
-TELEGRAM_MAX_MSG_PER_MIN = int(os.getenv("TELEGRAM_MAX_MSG_PER_MIN", "10"))
+try:
+    TELEGRAM_MAX_MSG_PER_MIN = int(os.getenv("TELEGRAM_MAX_MSG_PER_MIN", "10") or 10)
+except (ValueError, TypeError):
+    TELEGRAM_MAX_MSG_PER_MIN = 10
 
 # ── TEST MODE ─────────────────────────────────────────────────
 # When true (default for first-time MT5 demo verification): all safety
@@ -337,7 +355,10 @@ USE_SCANNER = os.getenv("USE_SCANNER", "false").lower() == "true"
 # 1 = analysis only (AI watches, never trades)
 # 2 = supervised (AI suggests, human must approve each trade)
 # 3 = autonomous (default — no human gate)
-APPROVAL_MODE = int(os.getenv("APPROVAL_MODE", "3"))
+try:
+    APPROVAL_MODE = int(os.getenv("APPROVAL_MODE", "3") or 3)
+except (ValueError, TypeError):
+    APPROVAL_MODE = 3
 
 # ── MT5 Broker Credentials (DEMO — default account) ─────────────
 MT5_LOGIN_ENV = os.getenv("MT5_LOGIN", "0")
@@ -387,13 +408,25 @@ TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "")
 FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 
 # ── Retraining Settings ───────────────────────────────────────
-RETRAINING_INTERVAL = int(os.getenv("RETRAINING_INTERVAL", "24"))  # hours
+try:
+    RETRAINING_INTERVAL = int(os.getenv("RETRAINING_INTERVAL", "24") or 24)
+except (ValueError, TypeError):
+    RETRAINING_INTERVAL = 24  # hours
 PERFORMANCE_THRESHOLD = float(os.getenv("PERFORMANCE_THRESHOLD", "0.55"))
-MIN_TRAINING_SAMPLES = int(os.getenv("MIN_TRAINING_SAMPLES", "100"))
+try:
+    MIN_TRAINING_SAMPLES = int(os.getenv("MIN_TRAINING_SAMPLES", "100") or 100)
+except (ValueError, TypeError):
+    MIN_TRAINING_SAMPLES = 100
 
 # Walk-forward / evaluation defaults
-WALK_FORWARD_MIN_TRAIN_SIZE = int(os.getenv("WALK_FORWARD_MIN_TRAIN_SIZE", str(MIN_TRAINING_SAMPLES)))
-WALK_FORWARD_STEP_SIZE = int(os.getenv("WALK_FORWARD_STEP_SIZE", "50"))
+try:
+    WALK_FORWARD_MIN_TRAIN_SIZE = int(os.getenv("WALK_FORWARD_MIN_TRAIN_SIZE", str(MIN_TRAINING_SAMPLES)) or MIN_TRAINING_SAMPLES)
+except (ValueError, TypeError):
+    WALK_FORWARD_MIN_TRAIN_SIZE = MIN_TRAINING_SAMPLES
+try:
+    WALK_FORWARD_STEP_SIZE = int(os.getenv("WALK_FORWARD_STEP_SIZE", "50") or 50)
+except (ValueError, TypeError):
+    WALK_FORWARD_STEP_SIZE = 50
 
 # Model prediction thresholds
 MODEL_BUY_THRESHOLD = float(os.getenv("MODEL_BUY_THRESHOLD", "0.58"))
@@ -401,7 +434,10 @@ MODEL_SELL_THRESHOLD = float(os.getenv("MODEL_SELL_THRESHOLD", "0.42"))
 
 # ── SMTP / Email Alerts ────────────────────────────────────────
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+try:
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587") or 587)
+except (ValueError, TypeError):
+    SMTP_PORT = 587
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 ALERT_RECIPIENTS = os.getenv("ALERT_RECIPIENTS", "")
@@ -409,7 +445,10 @@ ALERT_WEBHOOK_URL = os.getenv("ALERT_WEBHOOK_URL", "")
 
 # ── Webhook ────────────────────────────────────────────────────
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
-WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "5000"))
+try:
+    WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "5000") or 5000)
+except (ValueError, TypeError):
+    WEBHOOK_PORT = 5000
 
 # ── Logging ────────────────────────────────────────────────────
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
@@ -608,6 +647,6 @@ class Config:
     WEBHOOK_PORT = WEBHOOK_PORT
 
 
-# Auto-validate on import
-validate_mt5_config()
-validate_telegram_config()
+# Validation is called explicitly from main.py via validate_all_config(),
+# NOT on import — to avoid side-effects when config is imported as a
+# dependency (e.g. from tests, docs generation, or IDE tooling).

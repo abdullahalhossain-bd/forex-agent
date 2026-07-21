@@ -46,14 +46,24 @@ class BrokerSimulator:
         slip_p = max(0, np.random.normal(self.slippage_pips * 0.5, self.slippage_stdev * 0.5)); slip = _pip_to_price(slip_p, trade.symbol)
         if trade.direction == "BUY":
             sl_hit = bar_low <= trade.stop_loss; tp_hit = bar_high >= trade.take_profit
-            if sl_hit and tp_hit: ep, er = trade.stop_loss - slip, "SL"
+            if sl_hit and tp_hit:
+                # Heuristic: assume the level closer to entry was hit first
+                if abs(trade.entry_price - trade.take_profit) < abs(trade.entry_price - trade.stop_loss):
+                    ep, er = trade.take_profit - slip, "TP"
+                else:
+                    ep, er = trade.stop_loss - slip, "SL"
             elif sl_hit: ep, er = trade.stop_loss - slip, "SL"
             elif tp_hit: ep, er = trade.take_profit - slip, "TP"
             else: return None
             pnl_p = (ep - trade.entry_price) / pip
         else:
             sl_hit = bar_high >= trade.stop_loss; tp_hit = bar_low <= trade.take_profit
-            if sl_hit and tp_hit: ep, er = trade.stop_loss + slip, "SL"
+            if sl_hit and tp_hit:
+                # Heuristic: assume the level closer to entry was hit first
+                if abs(trade.entry_price - trade.take_profit) < abs(trade.entry_price - trade.stop_loss):
+                    ep, er = trade.take_profit + slip, "TP"
+                else:
+                    ep, er = trade.stop_loss + slip, "SL"
             elif sl_hit: ep, er = trade.stop_loss + slip, "SL"
             elif tp_hit: ep, er = trade.take_profit + slip, "TP"
             else: return None

@@ -185,6 +185,8 @@ class ServiceRegistry:
                 return rec.instance
             if rec.factory is None:
                 raise ServiceRegistrationError(f"Service '{name}' has no factory and no instance")
+            if rec.status == ServiceStatus.INITIALIZING:
+                raise RuntimeError(f"Circular dependency detected: service '{name}' is already being initialized")
             rec.status = ServiceStatus.INITIALIZING
         # Build outside the lock to allow deps to resolve back into us.
         try:
@@ -213,14 +215,15 @@ class ServiceRegistry:
 
     def resolve_type(self, cls: Type[T]) -> Optional[T]:
         """Resolve a service by its class (or any base class)."""
-        name = self._by_type.get(cls)
-        if name is None:
-            for klass, svc_name in self._by_type.items():
-                if issubclass(klass, cls):
-                    name = svc_name
-                    break
-        if name is None:
-            return None
+        with self._lock:
+            name = self._by_type.get(cls)
+            if name is None:
+                for klass, svc_name in self._by_type.items():
+                    if issubclass(klass, cls):
+                        name = svc_name
+                        break
+            if name is None:
+                return None
         return self.resolve(name)
 
     def has(self, name: str) -> bool:

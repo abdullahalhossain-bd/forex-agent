@@ -201,10 +201,10 @@ class MeanReversionStrategy:
 
         if direction == "BUY":
             stop_price = close - stop_distance
-            target_price = max(bb_m, close)  # never target below current price on a BUY
+            target_price = bb_m  # never target below current price on a BUY
         else:
             stop_price = close + stop_distance
-            target_price = min(bb_m, close)  # never target above current price on a SELL
+            target_price = bb_m  # never target above current price on a SELL
 
         realized_rr = reward_distance / stop_distance if stop_distance > 0 else 0.0
         if realized_rr < self.config.min_rr:

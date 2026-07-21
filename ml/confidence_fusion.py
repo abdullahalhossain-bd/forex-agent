@@ -28,7 +28,6 @@ the final trade decision.
 from __future__ import annotations
 
 import json
-import logging
 import threading
 from dataclasses import dataclass, asdict, field
 from pathlib import Path

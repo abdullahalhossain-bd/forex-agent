@@ -18,6 +18,7 @@
 #   rule engine + LLM → DecisionAgent → CircuitBreaker → ExecutionRouter
 # ============================================================
 
+import hmac
 import os
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -67,7 +68,7 @@ def tradingview_webhook():
             "status": "rejected",
             "reason": "webhook auth not configured (WEBHOOK_SECRET unset)",
         }), 503  # Service Unavailable — config error, not client error
-    if secret != WEBHOOK_SECRET:
+    if not hmac.compare_digest(secret, WEBHOOK_SECRET):
         log.warning(f"[Webhook] Rejected — invalid secret from {request.remote_addr}")
         return jsonify({"status": "rejected", "reason": "invalid secret"}), 403
 
@@ -78,7 +79,7 @@ def tradingview_webhook():
         log.error(f"[Webhook] JSON parse failed. Raw body: {raw[:300]}")
         return jsonify({"status": "error", "reason": "invalid json"}), 400
 
-    log.info(f"[Webhook] Received: {payload}")
+    log.info(f"[Webhook] Received signal for {payload.get('symbol', '?')}, event={payload.get('event', '?')}")
 
     try:
         from server.signal_pipeline import SignalPipeline
@@ -87,8 +88,8 @@ def tradingview_webhook():
         return jsonify({"status": "ok", "result": result}), 200
 
     except Exception as e:
-        log.error(f"[Webhook] Pipeline error: {e}", exc_info=True)
-        return jsonify({"status": "error", "reason": str(e)}), 500
+        log.error(f"[Webhook] Error: {e}")
+        return jsonify({"status": "error", "reason": "internal error"}), 500
 
 
 @app.route("/webhook/health", methods=["GET"])

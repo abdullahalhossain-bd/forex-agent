@@ -41,6 +41,12 @@ except ImportError:
 # triggering recovery pauses every cycle.
 _UNAVAILABLE_SYMBOLS: set = set()
 
+# Per-symbol consecutive fetch failure counter.
+# After FETCH_FAIL_THRESHOLD consecutive failures, the symbol
+# is auto-marked as unavailable to stop triggering recovery pauses.
+_FETCH_FAILURE_COUNTS: dict = {}
+FETCH_FAIL_THRESHOLD = 3
+
 
 def mark_symbol_unavailable(symbol: str) -> None:
     """Record that a symbol is not available on the current broker."""
@@ -55,6 +61,30 @@ def is_symbol_unavailable(symbol: str) -> bool:
 def get_unavailable_symbols() -> set:
     """Return the full set of unavailable symbols (for diagnostics)."""
     return set(_UNAVAILABLE_SYMBOLS)
+
+
+def record_fetch_failure(symbol: str) -> bool:
+    """Record a fetch failure for a symbol.
+
+    Returns True if the symbol has now exceeded the failure threshold
+    and should be marked as unavailable (caller should call
+    mark_symbol_unavailable after this returns True).
+    """
+    key = symbol.upper()
+    count = _FETCH_FAILURE_COUNTS.get(key, 0) + 1
+    _FETCH_FAILURE_COUNTS[key] = count
+    if count >= FETCH_FAIL_THRESHOLD:
+        return True
+    return False
+
+
+def record_fetch_success(symbol: str) -> None:
+    """Reset the failure counter for a symbol after a successful fetch."""
+    key = symbol.upper()
+    _FETCH_FAILURE_COUNTS.pop(key, None)
+    # If a previously-unavailable symbol starts working again, unmark it
+    # so it gets re-tried. This handles broker symbol list changes.
+    _UNAVAILABLE_SYMBOLS.discard(key)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -373,23 +403,36 @@ class DataFetcher:
 
         log.info(f"Fetching {symbol} | {timeframe} | {limit} candles...")
 
+        result = None
         if self.source == "mt5":
-            return self._fetch_mt5(symbol, timeframe, limit)
+            result = self._fetch_mt5(symbol, timeframe, limit)
         elif self.source == "tvdatafeed":
-            return self._fetch_tvdatafeed(symbol, timeframe, limit)
+            result = self._fetch_tvdatafeed(symbol, timeframe, limit)
         elif self.source == "yfinance":
-            return self._fetch_yfinance(symbol, timeframe, limit)
+            result = self._fetch_yfinance(symbol, timeframe, limit)
         elif self.source == "alpha_vantage":
-            return self._fetch_alpha_vantage(symbol, timeframe, limit)
+            result = self._fetch_alpha_vantage(symbol, timeframe, limit)
         elif self.source == "polygon":
-            return self._fetch_polygon(symbol, timeframe, limit)
+            result = self._fetch_polygon(symbol, timeframe, limit)
         elif self.source == "finnhub":
-            return self._fetch_finnhub(symbol, timeframe, limit)
+            result = self._fetch_finnhub(symbol, timeframe, limit)
         elif self.source == "twelve_data":
-            return self._fetch_twelve_data(symbol, timeframe, limit)
+            result = self._fetch_twelve_data(symbol, timeframe, limit)
         else:
             log.error("No data source available (MT5 not connected, tvdatafeed not installed)")
-            return None
+
+        # Track fetch success/failure for auto-unavailable marking
+        if result is not None and len(result) > 0:
+            record_fetch_success(symbol)
+        else:
+            if record_fetch_failure(symbol):
+                mark_symbol_unavailable(symbol)
+                log.warning(
+                    f"[DataFetcher] {symbol} failed {FETCH_FAIL_THRESHOLD}x consecutively — "
+                    f"auto-marked unavailable. It will be skipped on future cycles."
+                )
+
+        return result
 
     # ─────────────────────────────────────────────
     # SOURCE 1: MetaTrader5 (PRIMARY)

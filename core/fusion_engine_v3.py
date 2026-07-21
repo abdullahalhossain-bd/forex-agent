@@ -51,8 +51,17 @@ DEFAULT_NEWS_WEIGHT   = float(os.getenv("FUSION_NEWS_WEIGHT",   "0.20"))
 DEFAULT_SIGNAL_TTL_SEC = float(os.getenv("FUSION_SIGNAL_TTL_SEC", "60"))  # Extended TTL
 
 # ── Minimum RRR (Master List Issue #5c) ────────────────────────
-# Reject trades where risk:reward < 1:1.5. Default 1.5, override via env.
-DEFAULT_MIN_RRR = float(os.getenv("FUSION_MIN_RRR", "1.3"))  # Lowered for adaptive threshold
+# Hard floor: trades below this RRR are always downgraded to WAIT.
+# Set to 1.0 — anything below 1:1 is mathematically losing on average.
+# For 1.0–1.3 range: pass but apply a confidence penalty (see below).
+# Override via env: FUSION_MIN_RRR
+DEFAULT_MIN_RRR = float(os.getenv("FUSION_MIN_RRR", "1.0"))
+
+# Soft RRR threshold: trades with RRR between hard floor and this value
+# get a confidence penalty proportional to how far below they are.
+# This replaces the old all-or-nothing downgrade that killed valid trades
+# at RRR 1:1.17 (only 10% below the old 1.30 minimum).
+DEFAULT_SOFT_RRR = float(os.getenv("FUSION_SOFT_RRR", "1.3"))
 
 
 @dataclass
@@ -151,6 +160,15 @@ def resolve_conflict(
 
     Returns: (final_signal, weighted_confidence, explanation)
     """
+    # Bug #15 fix: normalize weights to sum to 1.0 so misconfigured
+    # env vars (e.g. TECH=0.7, LLM=0.7, sum=1.6) don't produce
+    # confidence > 100%.
+    total_w = tech_weight + llm_weight + news_weight
+    if total_w > 0 and abs(total_w - 1.0) > 1e-6:
+        tech_weight /= total_w
+        llm_weight  /= total_w
+        news_weight /= total_w
+
     # Normalize signals
     def _norm(s):
         s = (s or "").upper().strip()
@@ -258,16 +276,27 @@ def validate_fusion(
             f"Downgrading to WAIT."
         )
 
-    # ── Master List Issue #5c: RRR validator ───────────────────────
+    # ── Master List Issue #5c: RRR validator (adaptive) ─────────────
+    # Two-tier RRR check:
+    #   1. HARD floor (min_rrr, default 1.0): below this → always WAIT
+    #   2. SOFT threshold (soft_rrr, default 1.3): between hard and soft
+    #      → pass with proportional confidence penalty instead of outright
+    #      downgrade. This fixes the issue where RRR 1:1.17 (just below
+    #      old 1.30 minimum) killed valid BUY signals from multiple modules.
     if decision in ("BUY", "SELL") and entry and sl and tp:
         result.rrr = compute_rrr(entry, sl, tp, decision)
         if result.rrr < min_rrr:
+            # Hard fail — RRR is genuinely bad
             result.rrr_valid = False
             result.failure_reasons.append(
-                f"RRR is 1:{result.rrr:.2f} — below minimum 1:{min_rrr:.2f}. "
+                f"RRR is 1:{result.rrr:.2f} — below hard minimum 1:{min_rrr:.2f}. "
                 f"Downgrading to WAIT (entry={entry}, sl={sl}, tp={tp}, "
                 f"dir={decision})."
             )
+        elif result.rrr < DEFAULT_SOFT_RRR:
+            # Soft penalty placeholder — applied AFTER resolve_conflict() below
+            # so it operates on the real weighted confidence, not 0.0.
+            pass
     elif decision in ("BUY", "SELL"):
         # BUY/SELL with missing SL/TP/entry — can't validate RRR.
         # Don't fail validation outright (the risk engine may have a
@@ -292,10 +321,23 @@ def validate_fusion(
     result.weighted_confidence = weighted_conf
     result.conflict_resolution = conflict_expl
 
+    # ── Soft RRR penalty (applied AFTER resolve_conflict so it operates
+    #    on the real weighted confidence, not the default 0.0) ─────────
+    if decision in ("BUY", "SELL") and entry and sl and tp:
+        if 0 < result.rrr < DEFAULT_SOFT_RRR:
+            rrr_gap = (DEFAULT_SOFT_RRR - result.rrr) / DEFAULT_SOFT_RRR
+            penalty_pct = rrr_gap * 15  # max ~4.5pp penalty at RRR=1.0
+            result.weighted_confidence = max(0, result.weighted_confidence - penalty_pct)
+            log.info(
+                f"[FusionV3] SOFT RRR penalty: 1:{result.rrr:.2f} is below "
+                f"soft threshold 1:{DEFAULT_SOFT_RRR:.2f}. Confidence reduced by "
+                f"{penalty_pct:.1f}pp (new weighted_conf={result.weighted_confidence:.1f}%)"
+            )
+
     # If the weighted fusion disagrees with the decision, flag it.
     # (DecisionAgent may have produced BUY via its own voting, but the
     # 40/40/20 weighted fusion says WAIT or SELL — that's a real conflict.)
-    if decision in ("BUY", "SELL") and final_signal != decision and final_signal != "WAIT":
+    if decision in ("BUY", "SELL") and final_signal != decision:
         result.failure_reasons.append(
             f"Weighted fusion disagrees: decision={decision} but "
             f"fusion={final_signal}. Conflict resolution: {conflict_expl}"

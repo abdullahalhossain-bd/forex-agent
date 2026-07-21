@@ -50,11 +50,11 @@ class CostTracker:
     survives after costs.
     """
 
-    DB_PATH = "database/cost_analysis.db"
+    DB_PATH = str(Path(__file__).resolve().parent.parent / "database" / "cost_analysis.db")
     ROLLING_WINDOW = 100
 
     def __init__(self):
-        Path("database").mkdir(exist_ok=True)
+        Path(self.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
         self._recent: deque = deque(maxlen=self.ROLLING_WINDOW)
         self._load_recent()

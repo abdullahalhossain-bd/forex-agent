@@ -16,12 +16,13 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Optional
 from utils.logger import get_logger
 
 log = get_logger("strategy_tracker")
 
-DB_PATH = "memory/strategy_tracker.db"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "memory" / "strategy_tracker.db")
 STRATEGY_VERSION = "v1.0"   # Day 54 শুরু
 
 

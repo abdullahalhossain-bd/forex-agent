@@ -121,11 +121,22 @@ class EmergencyExitManager:
                        f"Failed: {result.positions_failed}\n"
                        f"PnL: ${result.total_pnl:.2f}")
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.ensure_future(notifier.send_message(msg, priority=True))
-                    else:
-                        loop.run_until_complete(notifier.send_message(msg, priority=True))
+                    # Bug #5 fix: deprecated asyncio.get_event_loop() replaced.
+                    # Use a dedicated thread to avoid conflicts with any running event loop.
+                    import concurrent.futures
+                    import threading as _threading
+
+                    def _send_in_new_loop():
+                        _loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(_loop)
+                        try:
+                            _loop.run_until_complete(notifier.send_message(msg, priority=True))
+                        finally:
+                            _loop.close()
+
+                    t = _threading.Thread(target=_send_in_new_loop, daemon=True)
+                    t.start()
+                    t.join(timeout=10)
                 except Exception as e:
                     log.warning(f"[EmergencyExit] Telegram send failed: {e}")
             except Exception as e:

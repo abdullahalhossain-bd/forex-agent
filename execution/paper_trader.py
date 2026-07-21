@@ -47,7 +47,17 @@ class PaperTrader:
     TIMEOUT_HOURS = 48
 
     def __init__(self, starting_balance: float = None, db: TraderDB = None):
-        self.starting_balance = starting_balance or self.STARTING_BALANCE
+        # Unify balance default: use config.INITIAL_BALANCE if no explicit
+        # value is passed, falling back to the class constant. This prevents
+        # the three disconnected $10,000 defaults (class constant, config.py,
+        # main.py CLI arg) from drifting out of sync.
+        try:
+            from config import INITIAL_BALANCE
+            _config_default = INITIAL_BALANCE
+        except Exception:
+            _config_default = self.STARTING_BALANCE
+
+        self.starting_balance = starting_balance if starting_balance is not None else _config_default
         self.db = db or TraderDB()
         self.open_positions: list[dict] = []
         self._restore_open_positions()
@@ -328,11 +338,15 @@ class PaperTrader:
             # Only use DB balance if there are closed trades (otherwise it's just the starting value)
             if stats.get("total_trades", 0) > 0:
                 self.balance = round(db_balance, 2)
-                log.info(f"[PaperTrader] Balance restored from DB: ${self.balance:.2f}")
+                log.info(f"[PaperTrader] Balance restored from DB: ${self.balance:.2f} "
+                         f"(based on {stats.get('total_trades', 0)} closed trades)")
             else:
                 self.balance = self.starting_balance
+                log.info(f"[PaperTrader] No closed trades in DB — using starting balance: "
+                         f"${self.starting_balance:.2f} (set INITIAL_BALANCE_USD env to override)")
         except Exception as e:
-            log.warning(f"[PaperTrader] Could not restore balance from DB: {e}. Using starting balance.")
+            log.warning(f"[PaperTrader] Could not restore balance from DB: {e}. "
+                        f"Using starting balance ${self.starting_balance:.2f}")
             self.balance = self.starting_balance
 
     def has_open_position(self, pair: str, trade_type: str | None = None) -> bool:

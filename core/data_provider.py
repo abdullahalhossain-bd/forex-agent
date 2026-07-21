@@ -61,6 +61,10 @@ class LiveMT5Provider(DataProvider):
         self._market_agent = market_agent
 
     def get_market_out(self, symbol: str, timeframe: str) -> dict:
+        # Pass symbol/timeframe through so the agent analyses the
+        # requested pair instead of whatever it was constructed with.
+        self._market_agent.symbol = symbol
+        self._market_agent.timeframe = timeframe
         return self._market_agent.run()
 
     def current_time(self):

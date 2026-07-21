@@ -42,7 +42,19 @@ def _lock_file(fd):
     if _HAS_FCNTL:
         fcntl.flock(fd, fcntl.LOCK_EX)
     elif _HAS_MSVCRT:
-        msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+        # Windows: lock the entire file, not just 1 byte.
+        # Seek to end to get file size, then lock from current pos.
+        try:
+            import msvcrt as _m
+            pos = os.lseek(fd, 0, 2)  # SEEK_END
+            if pos > 0:
+                os.lseek(fd, 0, 0)  # SEEK_SET
+                _m.locking(fd, _m.LK_LOCK, pos)
+            else:
+                # Empty file — lock a reasonable region (1MB max)
+                _m.locking(fd, _m.LK_LOCK, 1)
+        except (OSError, IOError):
+            pass  # lock failed — proceed anyway (best-effort)
 
 
 def _unlock_file(fd):
@@ -51,7 +63,8 @@ def _unlock_file(fd):
         fcntl.flock(fd, fcntl.LOCK_UN)
     elif _HAS_MSVCRT:
         try:
-            msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            import msvcrt as _m
+            _m.locking(fd, _m.LK_UNLCK, 1)
         except OSError:
             pass  # already unlocked
 

@@ -1,0 +1,25 @@
+{
+  "hash": "123e382a8fa08689a228f7c2d1497085122bf3fc46db177f8f135f04e3c3f556",
+  "saved_at": "2026-07-20T16:10:56.167423+00:00",
+  "metadata": {
+    "pair": "USDTHB",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v1",
+    "feature_names": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "vol_5",
+      "vol_10",
+      "rsi_14",
+      "sma_10",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "macd",
+      "macd_signal"
+    ]
+  }
+}

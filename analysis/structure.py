@@ -99,9 +99,9 @@ class MarketStructureEngine:
             window_high = highs[i - w: i + w + 1]
             window_low  = lows[i - w: i + w + 1]
 
-            if highs[i] == window_high.max():
+            if highs[i] >= window_high.max() - 1e-12:
                 raw_points.append({"index": i, "price": float(highs[i]), "kind": "high"})
-            elif lows[i] == window_low.min():
+            elif lows[i] <= window_low.min() + 1e-12:
                 raw_points.append({"index": i, "price": float(lows[i]), "kind": "low"})
 
         # Consecutive same-kind points -> keep most extreme one only

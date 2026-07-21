@@ -1,0 +1,71 @@
+{
+  "mode": "TRADING",
+  "consecutive_losses": 0,
+  "daily_loss_usd": 3.52,
+  "date": "2026-07-20",
+  "recent_results": [
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "LOSS",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "LOSS",
+    "WIN",
+    "WIN",
+    "WIN",
+    "WIN",
+    "LOSS",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    "BREAKEVEN",
+    {
+      "result": "LOSS",
+      "ts": "2026-07-20T15:30:32.810334"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:05:07.169277"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:05:43.589062"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:06:31.553467"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:07:19.802840"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-07-20T16:07:54.277592"
+    }
+  ],
+  "pause_reason": "Manually cleared \u2014 stale pre-fix LEARNING state",
+  "daily_loss_sync_stale": false
+}

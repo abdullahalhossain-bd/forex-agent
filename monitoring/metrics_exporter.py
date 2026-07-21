@@ -130,13 +130,19 @@ class MetricsExporter:
         """Simple HTTP server that returns metrics in Prometheus format."""
         from http.server import HTTPServer, BaseHTTPRequestHandler
 
+        # Capture in closure to avoid broken class-attribute binding
+        # (self.update_system_stats would receive handler instance as first arg)
+        _update_stats = self.update_system_stats
+        _lock = self._lock
+        _metrics = self._metrics
+
         class MetricsHandler(BaseHTTPRequestHandler):
             def do_GET(self):
                 if self.path == "/metrics":
-                    self.update_system_stats()
-                    with self._lock:
+                    _update_stats()
+                    with _lock:
                         lines = []
-                        for key, val in self._metrics.items():
+                        for key, val in _metrics.items():
                             lines.append(f"{key} {val}")
                     body = "\n".join(lines) + "\n"
                     self.send_response(200)
@@ -154,13 +160,8 @@ class MetricsExporter:
             def log_message(self, *args):
                 pass  # suppress access logs
 
-        # Bind handler to self
-        MetricsHandler._lock = self._lock  # type: ignore
-        MetricsHandler._metrics = self._metrics  # type: ignore
-        MetricsHandler.update_system_stats = self.update_system_stats  # type: ignore
-
         try:
-            server = HTTPServer(("0.0.0.0", self.port), MetricsHandler)
+            server = HTTPServer(("127.0.0.1", self.port), MetricsHandler)
             while self._running:
                 server.handle_request()
         except Exception as e:

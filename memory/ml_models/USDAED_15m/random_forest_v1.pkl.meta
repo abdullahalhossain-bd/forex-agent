@@ -1,0 +1,25 @@
+{
+  "hash": "2bb42793733d57bc05befbc55cd2d9b54af35b7f60848d97b7616360bf4d0108",
+  "saved_at": "2026-07-20T16:11:05.273003+00:00",
+  "metadata": {
+    "pair": "USDAED",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v1",
+    "feature_names": [
+      "ret_1",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "vol_5",
+      "vol_10",
+      "rsi_14",
+      "sma_10",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "macd",
+      "macd_signal"
+    ]
+  }
+}

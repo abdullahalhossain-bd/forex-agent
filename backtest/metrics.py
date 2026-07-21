@@ -53,12 +53,12 @@ class BacktestMetrics:
                 lines.append(f"  {m} : {'🟢' if r>=0 else '🔴'} {r:+.2f}%")
         lines.append("="*50); return "\n".join(lines)
 
-def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, risk_free_rate=0.02):
+def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, risk_free_rate=0.02, timeframe=None):
     if not trades: return BacktestMetrics(starting_balance=starting_balance, ending_balance=starting_balance)
     m = BacktestMetrics(); m.total_trades = len(trades); m.starting_balance = starting_balance
     if ending_balance is None: ending_balance = starting_balance + sum(t.pnl_usd for t in trades)
     m.ending_balance = ending_balance
-    wins = [t for t in trades if t.pnl_usd > 0]; losses = [t for t in trades if t.pnl_usd <= 0]
+    wins = [t for t in trades if t.pnl_usd > 0]; losses = [t for t in trades if t.pnl_usd < 0]
     m.winning_trades = len(wins); m.losing_trades = len(losses)
     m.win_rate = len(wins) / len(trades) * 100 if trades else 0
     m.total_pnl_usd = round(sum(t.pnl_usd for t in trades), 2)
@@ -75,16 +75,19 @@ def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, ris
         m.avg_rr = round(abs(m.avg_win_pips / m.avg_loss_pips), 1) if m.avg_loss_pips != 0 else 0
     eq = [starting_balance]
     for t in trades: eq.append(eq[-1] + t.pnl_usd)
-    eq = np.array(eq); rm = np.maximum.accumulate(eq); dd = (rm - eq) / rm * 100
+    eq = np.array(eq); rm = np.maximum.accumulate(eq); rm_safe = rm.copy(); rm_safe[rm_safe == 0] = np.nan; dd = (rm_safe - eq) / rm_safe * 100
     m.max_drawdown_pct = round(float(np.max(dd)), 2); m.max_drawdown_usd = round(float(np.max(rm - eq)), 2)
     if len(trades) > 1:
-        rets = np.array([t.pnl_usd / starting_balance for t in trades]); tpy = 252 * 5
+        BARS_PER_DAY = {"M1": 960, "M5": 288, "M15": 96, "H1": 24, "H4": 6, "D1": 1}
+        bars_per_day = BARS_PER_DAY.get(timeframe or "M15", 96)
+        tpy = 252 * bars_per_day
+        rets = np.array([t.pnl_usd / starting_balance for t in trades])
         ar = np.mean(rets); sr = np.std(rets, ddof=1)
-        if sr > 0: m.sharpe_ratio = round((ar - risk_free_rate / tpy) / sr * np.sqrt(tpy), 2)
+        if sr > 0: m.sharpe_ratio = round((ar * tpy - risk_free_rate) / sr * np.sqrt(tpy), 2)
         ds = rets[rets < 0]
         if len(ds) > 0:
             dstd = np.std(ds, ddof=1)
-            if dstd > 0: m.sortino_ratio = round((ar - risk_free_rate / tpy) / dstd * np.sqrt(tpy), 2)
+            if dstd > 0: m.sortino_ratio = round((ar * tpy - risk_free_rate) / dstd * np.sqrt(tpy), 2)
     if m.max_drawdown_pct > 0:
         tr = (ending_balance - starting_balance) / starting_balance * 100
         m.calmar_ratio = round(tr / m.max_drawdown_pct, 2)
@@ -102,7 +105,7 @@ def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, ris
     for t in trades:
         try:
             et = datetime.fromisoformat(t.entry_time); h = et.hour
-            s = "London" if 7 <= h < 16 else "NewYork" if 13 <= h < 22 else "Asian"
+            s = "London_NY_Overlap" if 13 <= h < 16 else "London" if 7 <= h < 16 else "NewYork" if 13 <= h < 22 else "Asian"
             sd[s].append(t)
         except Exception as e: sd["Unknown"].append(t)
     m.session_breakdown = {}

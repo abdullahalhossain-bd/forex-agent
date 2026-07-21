@@ -40,10 +40,18 @@ class LearningEngine:
         """
         cursor = self.db.conn.cursor()
         cursor.execute("""
-        SELECT a.pattern, t.result
-        FROM analysis_log a
-        JOIN trades t ON date(a.date) = date(t.date) AND a.pair = t.pair
-        WHERE t.result IN ('WIN', 'LOSS') AND a.pattern != 'none'
+        SELECT (SELECT a.pattern FROM analysis_log a
+                WHERE date(a.date) = date(t.date) AND a.pair = t.pair
+                      AND a.pattern != 'none'
+                LIMIT 1) as pattern, t.result
+        FROM trades t
+        WHERE t.result IN ('WIN', 'LOSS')
+              AND EXISTS (
+                  SELECT 1 FROM analysis_log a
+                  WHERE date(a.date) = date(t.date) AND a.pair = t.pair
+                        AND a.pattern != 'none'
+                  LIMIT 1
+              )
         """)
         rows = cursor.fetchall()
 
@@ -74,10 +82,16 @@ class LearningEngine:
         """
         cursor = self.db.conn.cursor()
         cursor.execute("""
-        SELECT a.regime, t.result
-        FROM analysis_log a
-        JOIN trades t ON date(a.date) = date(t.date) AND a.pair = t.pair
+        SELECT (SELECT a.regime FROM analysis_log a
+                WHERE date(a.date) = date(t.date) AND a.pair = t.pair
+                LIMIT 1) as regime, t.result
+        FROM trades t
         WHERE t.result IN ('WIN', 'LOSS')
+              AND EXISTS (
+                  SELECT 1 FROM analysis_log a
+                  WHERE date(a.date) = date(t.date) AND a.pair = t.pair
+                  LIMIT 1
+              )
         """)
         rows = cursor.fetchall()
 

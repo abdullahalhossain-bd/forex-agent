@@ -16,7 +16,9 @@
 # ============================================================
 
 import json
+import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -24,7 +26,8 @@ from utils.logger import get_logger
 
 log = get_logger("error_handler")
 
-SYSTEM_LOG_PATH = "logs/system.log"
+from config import PROJECT_ROOT
+SYSTEM_LOG_PATH = str(PROJECT_ROOT / "logs" / "system.log")
 
 # Error category অনুযায়ী default retry policy — doc Section 7
 # (Automatic Recovery System)-এর "Retry 3 times" pattern generalize করা
@@ -59,6 +62,18 @@ class ErrorHandler:
         self.log_path = log_path
         os.makedirs(os.path.dirname(log_path) or ".", exist_ok=True)
         self._error_counts: dict = {}   # category -> count, repeated-failure detection-এর জন্য
+        self._counts_lock = threading.Lock()  # Bug #3: thread-safe access to _error_counts
+
+        # FIX: Use a rotating file handler for system.log to prevent
+        # unbounded growth. 5MB per file, 3 backups (20MB total max).
+        try:
+            from logging.handlers import RotatingFileHandler
+            self._file_handler = RotatingFileHandler(
+                log_path, maxBytes=5 * 1024 * 1024, backupCount=3,
+                encoding="utf-8",
+            )
+        except Exception:
+            self._file_handler = None  # will fall back to plain open()
 
     # ═══════════════════════════════════════════════════════
     # DIRECT LOGGING  (doc-এর exact format)
@@ -80,7 +95,8 @@ class ErrorHandler:
             "severity": severity,
         }
 
-        self._error_counts[error] = self._error_counts.get(error, 0) + 1
+        with self._counts_lock:
+            self._error_counts[error] = self._error_counts.get(error, 0) + 1
 
         line = (
             f"[{ts.strftime('%H:%M')}] {error}"
@@ -88,8 +104,19 @@ class ErrorHandler:
             f"{' | Result: ' + result if result else ''}"
         )
         try:
-            with open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            if self._file_handler:
+                # RotatingFileHandler handles size limits and rotation
+                # automatically. We just need to write the formatted line.
+                self._file_handler.handle(
+                    logging.LogRecord(
+                        name="error_handler", level=logging.ERROR,
+                        pathname=__file__, lineno=0, msg=line,
+                        args=(), exc_info=None,
+                    )
+                )
+            else:
+                with open(self.log_path, "a", encoding="utf-8") as f:
+                    f.write(line + "\n")
         except Exception as e:
             log.warning(f"[ErrorHandler] Could not write system.log: {e}")
 
