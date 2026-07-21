@@ -231,8 +231,73 @@ def add_features(df: pd.DataFrame, pair: str = "EURUSD", use_feature_engineer: b
 
 
 def build_labels(df: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
-    """Build binary classification labels: 1 if price goes up in next N bars."""
+    """Build binary classification labels: 1 if price goes up in next N bars.
+
+    ⚠️ AUDIT FINDING (kept only for --label-method=fixed_horizon comparison):
+    "next candle direction" has near-zero predictive edge in forex (ROC-AUC
+    ~0.52 in practice — barely above random). This is a fixed-horizon,
+    path-INDEPENDENT label: it only looks at where price ends up, not what
+    happens to it (drawdown/profit) along the way. Default training now
+    uses build_labels_triple_barrier() instead — see that function's
+    docstring for why it's the better target.
+    """
     df["target"] = (df["close"].shift(-horizon) > df["close"]).astype(int)
+    return df
+
+
+def build_labels_triple_barrier(
+    df: pd.DataFrame,
+    holding_period: int = 20,
+    take_profit_atr: float = 1.5,
+    stop_loss_atr: float = 1.5,
+    atr_period: int = 14,
+    drop_timeouts: bool = False,
+) -> pd.DataFrame:
+    """Build labels using the triple-barrier method (López de Prado) instead
+    of naive next-N-candle direction.
+
+    AUDIT FIX: the previous label ("will price be higher in N candles?")
+    is path-independent and, in practice, close to unpredictable for forex
+    (ROC-AUC ~0.52). Institutional labeling instead asks a TRADEABLE
+    question: "if I open a position now with a TP and SL, which one gets
+    hit first?" That is exactly what TripleBarrierLabeler computes:
+        +1 -> take-profit barrier hit first (ATR-scaled, adaptive to vol)
+        -1 -> stop-loss barrier hit first
+         0 -> neither hit within `holding_period` bars (timeout)
+
+    We collapse this to a binary target for compatibility with the rest of
+    this script's XGBoost/RandomForest binary-classification pipeline:
+        target = 1  -> TP hit first (label_ternary == 1)
+        target = 0  -> SL hit or timeout (label_ternary in {-1, 0})
+
+    If drop_timeouts=True, timeout rows are removed entirely instead of
+    being folded into class 0 — this gives a cleaner "TP vs SL" signal at
+    the cost of fewer usable rows (only use this if you have plenty of
+    data; with ~100k bars it's usually fine to try both and compare CV
+    ROC-AUC).
+
+    A `sample_weight` column (from compute_label_uniqueness — down-weights
+    rows whose holding windows overlap) is also attached; train_one_pair()
+    picks it up automatically if present.
+    """
+    from ml.triple_barrier_labels import get_triple_barrier_labeler
+
+    labeler = get_triple_barrier_labeler()
+    labeler.holding_period = holding_period
+    labeler.take_profit_width = take_profit_atr
+    labeler.stop_loss_width = stop_loss_atr
+    labeler.atr_period = atr_period
+    labeler.use_atr = True
+
+    labeled = labeler.label_dataframe(df, holding_period=holding_period)
+
+    if drop_timeouts:
+        labeled = labeled[labeled["label_ternary"] != 0].copy()
+
+    df = df.copy()
+    df["target"] = labeled["label"].reindex(df.index)
+    df["_sample_weight"] = labeled["sample_weight"].reindex(df.index)
+    df["_label_ternary"] = labeled["label_ternary"].reindex(df.index)
     return df
 
 
@@ -572,6 +637,8 @@ def train_one_pair(
     use_synthetic: bool = False,
     cv_splits: int = DEFAULT_CV_SPLITS,
     feature_top_k: int = None,
+    label_method: str = "triple_barrier",
+    label_horizon: int = 20,
 ) -> bool:
     """
     Train XGBoost + RandomForest models for one pair, with walk-forward CV,
@@ -586,6 +653,13 @@ def train_one_pair(
         cv_splits: Number of walk-forward TimeSeriesSplit folds
         feature_top_k: If set, keep exactly this many top features instead
                        of the default cumulative-importance selection
+        label_method: "triple_barrier" (default, recommended) or
+                       "fixed_horizon" (legacy — kept only so you can
+                       A/B the CV ROC-AUC against the old label and see
+                       the difference for yourself)
+        label_horizon: bars ahead the label looks. For triple_barrier this
+                       is the holding_period (vertical barrier). For
+                       fixed_horizon this is the candle-direction window.
     """
     log.info(f"=== Training {symbol} {timeframe} ===")
     
@@ -628,26 +702,93 @@ def train_one_pair(
     # raised KeyError: 'close'. Fix: compute the label on the raw OHLCV df
     # first (while "close" still exists), then run feature engineering, then
     # align the label back onto the feature rows by index.
-    df = build_labels(df, horizon=5)
-    labels = df["target"]
+    if label_method == "triple_barrier":
+        log.info(
+            f"  Labeling method: triple_barrier (holding_period={label_horizon} bars, "
+            f"TP/SL=1.5x ATR) — AUDIT FIX: replaces the old next-candle-direction "
+            f"label, which had ~0.52 ROC-AUC (near-random) in practice."
+        )
+        df = build_labels_triple_barrier(df, holding_period=label_horizon)
+        labels = df["target"]
+        sample_weight_full = df["_sample_weight"]
+    else:
+        log.warning(
+            "  Labeling method: fixed_horizon (legacy, next-candle-direction). "
+            "This label has weak predictive edge for forex — recommended only "
+            "for A/B comparison against triple_barrier, not production training."
+        )
+        df = build_labels(df, horizon=label_horizon)
+        labels = df["target"]
+        sample_weight_full = None
 
     df = add_features(df, pair=symbol, use_feature_engineer=True)
     df["target"] = labels.reindex(df.index)
-    df = df.dropna()
+    if sample_weight_full is not None:
+        df["_sample_weight"] = sample_weight_full.reindex(df.index)
+    df = df.dropna(subset=[c for c in df.columns if c != "_sample_weight"])
     log.info(f"  After feature/label computation: {len(df)} usable rows")
 
     if len(df) < 50:
         log.error(f"  Not enough data ({len(df)} rows) — need at least 50")
         return False
 
-    # 3. Prepare feature matrix - use ALL available features from FeatureEngineer
-    # Exclude non-feature columns (OHLCV and target)
-    exclude_cols = {'open', 'high', 'low', 'close', 'volume', 'target', 'time'}
-    feature_cols = [col for col in df.columns if col not in exclude_cols]
-    
+    # 3. Prepare feature matrix - use ALL available features from FeatureEngineer,
+    # MINUS columns that are known to hurt rather than help (AUDIT FIX):
+    #
+    #   (a) Non-stationary raw price-level columns (price_open/high/low/close/
+    #       volume). Absolute price level is not a stationary signal — a tree
+    #       model happily splits on "close > 1.09" and gets great in-sample
+    #       fit, but that threshold means nothing once price moves to a new
+    #       range. This is *exactly* why the previous run's top features were
+    #       price_high/price_low/price_close/price_volume: the model was
+    #       partly just memorizing the price range of the training period.
+    #
+    #   (b) Context/session/news/sentiment/SMC/confluence/multi-timeframe
+    #       features. FeatureEngineer computes these ONLY from `analysis_out`
+    #       (live AnalysisAgent output: news bias, sentiment score, LLM/master
+    #       signal, SMC/liquidity context, MTF trend, etc.). This script calls
+    #       build_feature_vector(..., analysis_out={}) for every historical
+    #       row because that live context doesn't exist for 2022-2026
+    #       history — so every single one of these ~70 columns is a CONSTANT
+    #       0.0 for the entire dataset. They can't leak information (they're
+    #       correctly zero, not fabricated), but they are dead weight that
+    #       feature selection has to prune out, and worse, if by luck all-zero
+    #       columns aren't perfectly constant after merges/dtypes they can
+    #       introduce spurious near-zero-variance splits. Drop them outright
+    #       here to be explicit rather than relying on downstream selection.
+    exclude_cols = {'open', 'high', 'low', 'close', 'volume', 'target', 'time',
+                     '_sample_weight', '_label_ternary'}
+    non_stationary_price_cols = {'price_open', 'price_high', 'price_low', 'price_close', 'price_volume'}
+    context_only_prefixes = ('adv_', 'pat_', 'fib_', 'mtf_', 'ctx_')
+    context_only_exact_substrings = (
+        'news_', 'sentiment_', 'master_', 'llm_', 'macro_', 'dxy', 'vix',
+        'sp500', 'us10y', 'currency_strength', 'confluence', 'session_',
+        'days_to_news', 'hours_to_news', 'smc_', 'liquidity_', 'in_fib_zone',
+        'fib_zone',
+    )
+
+    candidate_cols = [col for col in df.columns if col not in exclude_cols]
+
+    dead_context_cols = [
+        c for c in candidate_cols
+        if c.startswith(context_only_prefixes) or any(s in c for s in context_only_exact_substrings)
+    ]
+    # Safety net: also drop anything with zero variance in this dev sample
+    # (catches any other constant column we didn't name explicitly above —
+    # e.g. a candlestick-pattern column that never fires in this window).
+    zero_variance_cols = [c for c in candidate_cols if c not in non_stationary_price_cols
+                           and c not in dead_context_cols and df[c].std(ddof=0) == 0]
+
+    dropped_cols = sorted(set(non_stationary_price_cols) | set(dead_context_cols) | set(zero_variance_cols))
+    feature_cols = [c for c in candidate_cols if c not in dropped_cols]
+
     log.info(f"\n{'='*60}")
     log.info("FEATURE ANALYSIS")
     log.info(f"{'='*60}")
+    log.info(f"  Dropped {len(dropped_cols)} columns before training:")
+    log.info(f"    - non-stationary raw price levels: {sorted(non_stationary_price_cols & set(dropped_cols))}")
+    log.info(f"    - constant/context-only (analysis_out={{}}) features: {len(dead_context_cols)}")
+    log.info(f"    - other zero-variance columns: {zero_variance_cols}")
     log.info(f"Total features used: {len(feature_cols)}")
     log.info(f"\nFeature names:")
     for i, f in enumerate(sorted(feature_cols), 1):
@@ -656,6 +797,7 @@ def train_one_pair(
     
     X = df[feature_cols].values
     y = df["target"].values
+    label_weight = df["_sample_weight"].values if "_sample_weight" in df.columns else None
 
     log.info(f"  Feature matrix: {X.shape}, labels: {y.shape}")
     log.info(f"  Positive class ratio: {y.mean():.2%}")
@@ -674,6 +816,7 @@ def train_one_pair(
     holdout_start = int(n * (1 - HOLDOUT_FRACTION))
     X_dev, X_holdout = X[:holdout_start], X[holdout_start:]
     y_dev, y_holdout = y[:holdout_start], y[holdout_start:]
+    lw_dev = label_weight[:holdout_start] if label_weight is not None else None
     log.info(
         f"  Dev set: {len(X_dev)} rows | Final holdout (untouched until final scoring): {len(X_holdout)} rows"
     )
@@ -716,12 +859,21 @@ def train_one_pair(
     calib_start = int(len(X_dev_sel) * (1 - CALIB_FRACTION))
     X_fit, X_calib = X_dev_sel[:calib_start], X_dev_sel[calib_start:]
     y_fit, y_calib = y_dev[:calib_start], y_dev[calib_start:]
+    lw_fit = lw_dev[:calib_start] if lw_dev is not None else None
 
     if len(np.unique(y_fit)) < 2 or len(np.unique(y_calib)) < 2:
         log.error("  Final fit/calibration split has only one class present — cannot proceed")
         return False
 
     sw_fit = compute_sample_weight("balanced", y_fit)
+    if lw_fit is not None:
+        # Combine class-balance weight with triple-barrier label-uniqueness
+        # weight: rows whose holding windows overlap other labeled rows get
+        # down-weighted so the same market move isn't counted many times
+        # over (overlapping horizons are correlated, not independent
+        # samples — training as if they were independent overstates
+        # confidence).
+        sw_fit = sw_fit * np.nan_to_num(lw_fit, nan=1.0)
     log.info(f"\n  Final fit: {len(X_fit)} rows | calibration: {len(X_calib)} rows | holdout: {len(X_holdout_sel)} rows")
 
     # 7a. XGBoost
@@ -901,6 +1053,13 @@ def main():
                         help=f"Number of walk-forward TimeSeriesSplit folds (default: {DEFAULT_CV_SPLITS})")
     parser.add_argument("--feature-top-k", type=int, default=None,
                         help="Keep exactly this many top features (default: cumulative-importance selection)")
+    parser.add_argument("--label-method", type=str, default="triple_barrier",
+                        choices=["triple_barrier", "fixed_horizon"],
+                        help="triple_barrier (default, recommended): TP-vs-SL-hit-first label. "
+                             "fixed_horizon (legacy): next-N-candle direction, kept only for A/B comparison.")
+    parser.add_argument("--label-horizon", type=int, default=20,
+                        help="triple_barrier: holding_period in bars (vertical barrier). "
+                             "fixed_horizon: candle-direction lookahead window. Default: 20")
     args = parser.parse_args()
 
     default_pairs = None  # will be loaded from config.SYMBOLS below
@@ -926,6 +1085,7 @@ def main():
             if train_one_pair(
                 pair, args.tf, bars=args.bars, use_synthetic=args.debug_synthetic,
                 cv_splits=args.cv_splits, feature_top_k=args.feature_top_k,
+                label_method=args.label_method, label_horizon=args.label_horizon,
             ):
                 success_count += 1
         except Exception as e:
