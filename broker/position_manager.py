@@ -562,13 +562,29 @@ class PositionManager:
     # TRADE HEALTH SCORE  (Bonus 3)
     # ─────────────────────────────────────────────
 
+    # A position open longer than this on an intraday (M15) system is a
+    # smell — it should have hit TP/SL/trailing/Friday-close by now.
+    # Credit decays linearly over the following window instead of
+    # cutting off sharply, so a slightly-overdue trade isn't penalized
+    # as hard as one that's been stuck for days.
+    _HEALTHY_AGE_HOURS = 24.0
+    _AGE_DECAY_WINDOW_HOURS = 24.0
+
     def _compute_health(self, pos: dict, profit_pips: float, current_price: float) -> int:
         """
         0-100 health score:
         - profit zone: +40
         - SL buffer remaining: +30
-        - breakeven/partial done: +20
+        - breakeven/partial done: +20 (+15 breakeven, +5 partial)
         - trade age (not too old): +10
+
+        BUGFIX (was capped at 90): the trade-age component was documented
+        but never implemented, so even a perfectly healthy position could
+        never score above 90 — and a flat position (profit=0, thin SL
+        buffer, no breakeven yet) had no way to earn credit just for
+        surviving without incident. Age now contributes up to +10,
+        decaying to 0 only once the position has clearly overstayed its
+        welcome (see _HEALTHY_AGE_HOURS / _AGE_DECAY_WINDOW_HOURS).
         """
         score = 0
         ticket    = pos["ticket"]
@@ -594,6 +610,25 @@ class PositionManager:
             score += 15
         if ticket in self._partial_done:
             score += 5
+
+        # Trade age: full credit while the trade is within a normal
+        # holding window; decays to 0 as it becomes clearly overdue.
+        # Missing/unparseable open_time fails safe to 0 credit rather
+        # than raising or silently granting full credit.
+        open_time = pos.get("open_time")
+        if open_time:
+            try:
+                opened_at = datetime.fromisoformat(open_time)
+                if opened_at.tzinfo is None:
+                    opened_at = opened_at.replace(tzinfo=timezone.utc)
+                age_hours = (datetime.now(timezone.utc) - opened_at).total_seconds() / 3600.0
+                if age_hours <= self._HEALTHY_AGE_HOURS:
+                    score += 10
+                else:
+                    overage = age_hours - self._HEALTHY_AGE_HOURS
+                    score += max(0, int(10 * (1 - overage / self._AGE_DECAY_WINDOW_HOURS)))
+            except (ValueError, TypeError):
+                pass  # malformed timestamp — no age credit, don't crash health scoring
 
         return min(100, max(0, score))
 

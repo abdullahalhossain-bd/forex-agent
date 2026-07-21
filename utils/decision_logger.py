@@ -229,8 +229,16 @@ def log_decision_block(
 
     try:
         # Build the formatted block
-        top = "\u2554\u2550\u2550 DECISION AUDIT \u2550" * 3 + "\u2557"
-        bot = "\u255a\u2550" * 29 + "\u255d"
+        # BUGFIX: previously multiplied a string that included the corner
+        # char itself (e.g. "\u2554\u2550\u2550 DECISION AUDIT \u2550" * 3),
+        # which repeated the "DECISION AUDIT" label and corner three times
+        # instead of drawing a single header with a plain fill border.
+        # Build the corner + label once, then pad with the fill char only.
+        BOX_WIDTH = 59  # total width incl. both corners, matches bottom border
+        header = "\u2554\u2550\u2550 DECISION AUDIT \u2550"
+        fill = max(0, BOX_WIDTH - len(header) - 1)
+        top = header + "\u2550" * fill + "\u2557"
+        bot = "\u255a" + "\u2550" * (BOX_WIDTH - 2) + "\u255d"
         row = "\u2551"
 
         lines = [top]
