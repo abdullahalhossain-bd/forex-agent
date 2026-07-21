@@ -1508,7 +1508,129 @@ def check_exhaustion_filter(
 
 
 # ═════════════════════════════════════════════════════════════
-# AGGREGATE: Run All 12 Entry Quality Checks
+# FLAG 13: Rejection Psychology (zone-anchored rejection confirmation)
+# ═════════════════════════════════════════════════════════════
+
+DEFAULT_PSYCHOLOGY_WICK_BODY_RATIO = 1.5   # rejection wick must be >= this x body
+DEFAULT_PSYCHOLOGY_ZONE_LOOKBACK   = 50    # bars to scan for swing high/low zones
+DEFAULT_PSYCHOLOGY_ZONE_ATR_TOL    = 0.5   # zone proximity tolerance, x ATR
+
+
+def check_rejection_psychology(
+    df: pd.DataFrame,
+    symbol: str,
+    direction: str,
+    wick_body_ratio: float = DEFAULT_PSYCHOLOGY_WICK_BODY_RATIO,
+    zone_lookback: int = DEFAULT_PSYCHOLOGY_ZONE_LOOKBACK,
+    zone_atr_tol: float = DEFAULT_PSYCHOLOGY_ZONE_ATR_TOL,
+) -> EntryQualityResult:
+    """
+    Red Flag 13 — "Candlestick psychology": the SAME rejection wick means
+    something different depending on WHERE it forms. A shooting star in
+    open space is noise; a shooting star wicking into a real swing-high
+    resistance zone is evidence institutional sellers actually defended
+    that level — genuine supply/demand rejection, not random noise.
+
+    This is a WARNING (soft-scoring) check, not a hard block: it REWARDS
+    entries with real psychological confirmation (a rejection wick near a
+    structural zone, working FOR the trade direction) and penalizes
+    entries that lack any such evidence.
+
+    Distinct from check_rejection_wick_at_entry (Flag 7): Flag 7 BLOCKS a
+    trade when the rejection wick is AGAINST the trader's direction
+    (buying right into a shooting star). This check instead asks whether
+    a rejection wick, if present, is CONFIRMING the trader's own direction
+    at a real zone — the confirmation case, not the collision case.
+
+    Args:
+        df: OHLC DataFrame
+        symbol: e.g. "AUDUSD"
+        direction: "BUY" or "SELL"
+        wick_body_ratio: minimum wick:body ratio to count as a genuine
+            rejection wick (default 1.5 — looser than Flag 7's 2.0
+            because a modest wick at a real zone still counts here; this
+            isn't trying to catch a full shooting star, just confirm one)
+        zone_lookback: bars to scan for swing high/low structural zones
+        zone_atr_tol: how close (in ATR) the rejection candle needs to be
+            to a swing high/low to count as "at a real zone"
+
+    Returns:
+        EntryQualityResult with passed=True if a same-direction rejection
+        wick was found near a real structural zone (genuine psychology
+        confirmation present); passed=False (WARNING) otherwise.
+    """
+    if df is None or len(df) < max(zone_lookback, 5):
+        return EntryQualityResult(
+            flag_name="rejection_psychology",
+            passed=True,
+            reason="Insufficient data — skipping rejection-psychology check",
+        )
+
+    last = df.iloc[-1]
+    o, h, l, c = float(last["open"]), float(last["high"]), float(last["low"]), float(last["close"])
+    body = abs(c - o)
+    upper_wick = h - max(o, c)
+    lower_wick = min(o, c) - l
+    atr = _atr(df)
+
+    direction = direction.upper()
+    if direction == "SELL":
+        # Bearish confirmation: long UPPER wick rejecting a resistance zone
+        wick = upper_wick
+        zones = _find_swing_highs(df, lookback=zone_lookback)
+        anchor_price = h
+    else:
+        # Bullish confirmation: long LOWER wick rejecting a support zone
+        wick = lower_wick
+        zones = _find_swing_lows(df, lookback=zone_lookback)
+        anchor_price = l
+
+    has_rejection_wick = body > 1e-9 and wick >= body * wick_body_ratio
+    near_zone = False
+    nearest_zone_price = None
+    if zones:
+        nearest_zone_price = min(zones, key=lambda z: abs(z - anchor_price))
+        near_zone = abs(nearest_zone_price - anchor_price) <= atr * zone_atr_tol
+
+    details = {
+        "direction":          direction,
+        "wick":               round(wick, 5),
+        "body":               round(body, 5),
+        "wick_body_ratio":    round(wick / body, 2) if body > 1e-9 else None,
+        "has_rejection_wick": has_rejection_wick,
+        "near_zone":          near_zone,
+        "nearest_zone_price": round(nearest_zone_price, 5) if nearest_zone_price is not None else None,
+    }
+
+    if has_rejection_wick and near_zone:
+        return EntryQualityResult(
+            flag_name="rejection_psychology",
+            passed=True,
+            reason=(
+                f"Genuine rejection psychology confirmed — {direction} entry backed by a "
+                f"{details['wick_body_ratio']}x wick rejecting a real structural zone at "
+                f"{details['nearest_zone_price']}. This reads as institutional-style "
+                f"confirmation, not a random wick."
+            ),
+            details=details,
+        )
+
+    return EntryQualityResult(
+        flag_name="rejection_psychology",
+        passed=False,
+        reason=(
+            "No zone-anchored rejection wick found supporting this entry — "
+            + ("a wick was present but not near any real swing zone. "
+               if has_rejection_wick else "no meaningful rejection wick at all. ")
+            + "Entry lacks the psychological confirmation of buyers/sellers actually "
+              "defending a level."
+        ),
+        details=details,
+    )
+
+
+# ═════════════════════════════════════════════════════════════
+# AGGREGATE: Run All 13 Entry Quality Checks
 # ═════════════════════════════════════════════════════════════
 
 def run_all_entry_quality_checks(
@@ -1522,7 +1644,7 @@ def run_all_entry_quality_checks(
     open_positions: Optional[List[dict]] = None,
 ) -> dict:
     """
-    Run all 10 entry-quality guardrails + return aggregate result.
+    Run all 13 entry-quality guardrails + return aggregate result.
 
     BLOCK severity = hard block (trade must NOT execute)
     WARNING severity = soft warning (trade can proceed but quality is questionable)
@@ -1582,6 +1704,9 @@ def run_all_entry_quality_checks(
     # 12. Exhaustion filter (NEW — USDJPY post-mortem)
     results.append(check_exhaustion_filter(df, direction))
 
+    # 13. Rejection psychology — zone-anchored rejection confirmation
+    results.append(check_rejection_psychology(df, symbol, direction))
+
     # ── SOFT SCORING: penalties instead of hard blocks ────────────
     # Each failed entry-quality check contributes a confidence penalty
     # rather than a hard block.  Only extreme / safety cases (SL or TP
@@ -1607,6 +1732,7 @@ def run_all_entry_quality_checks(
         "fresh_high_rejection":       5,   # weak breakout
         "tp_above_unconfirmed_spike": 3,   # minor
         "exhaustion_filter":          8,   # momentum exhaustion (mid -5 to -10)
+        "rejection_psychology":       5,   # no zone-anchored rejection confirmation
     }
 
     _DISPLAY_NAMES = {
@@ -1622,6 +1748,7 @@ def run_all_entry_quality_checks(
         "tp_above_unconfirmed_spike":  "Spike TP",
         "opposite_direction_stacking": "Opposite Stack",
         "exhaustion_filter":           "Exhaustion",
+        "rejection_psychology":        "Psychology",
     }
 
     # Extreme hard-blocks: only these keep should_execute=False
