@@ -111,11 +111,14 @@ def _extract_confidence_components(
     aligned_factors = int(confluence_ctx.get("aligned_factors", 0) or 0)
 
     # Signal Fusion
-    fusion_conf = 0.0
-    # Fusion confidence is harder to extract — it's only in decision_agent's
-    # internal variable. Check if dec_out included it.
-    dec_out = result.get("_dec_out", {}) or {}
-    fusion_conf = _safe_float(dec_out.get("_fusion_conf"), 0)
+    # Bug (found via forex_ai.log/trader.log audit): this used to read
+    # result["_dec_out"]["_fusion_conf"] — but "_dec_out" is never set
+    # anywhere in the codebase (core/trader.py's _build_result() flattens
+    # dec_out's fields directly into `result` instead of nesting it), so
+    # dec_out.get(...) always resolved against an empty dict and this was
+    # silently 0.0 on every single cycle. _build_result() actually exposes
+    # the value as the top-level "fusion_confidence" key — read that.
+    fusion_conf = _safe_float(result.get("fusion_confidence"), 0)
 
     # Risk status
     risk_approved = result.get("trade_allowed", False)
