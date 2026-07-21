@@ -174,6 +174,46 @@ class ModelTrainer:
         )
         return result
 
+    # ── Threshold calibration ────────────────────────────────────────
+
+    def _find_optimal_threshold(
+        self, model, X_val: pd.DataFrame, y_val: pd.Series,
+        candidates: Optional[List[float]] = None,
+    ) -> float:
+        """Search X_val/y_val (never the test set, to avoid leakage) for the
+        probability threshold that maximizes F1. Falls back to 0.5 if
+        predict_proba isn't available, X_val is empty, or only one class is
+        present in y_val.
+        """
+        default_threshold = 0.5
+        if X_val is None or y_val is None or len(X_val) == 0:
+            return default_threshold
+        try:
+            y_val_arr = np.array(y_val).astype(int)
+            if len(np.unique(y_val_arr)) < 2:
+                return default_threshold
+            y_proba = model.predict_proba(X_val)[:, 1]
+        except Exception:
+            return default_threshold
+
+        if candidates is None:
+            candidates = [round(t, 2) for t in np.arange(0.30, 0.71, 0.02)]
+
+        best_threshold = default_threshold
+        best_f1 = -1.0
+        for t in candidates:
+            y_pred = (y_proba >= t).astype(int)
+            tp = int(np.sum((y_pred == 1) & (y_val_arr == 1)))
+            fp = int(np.sum((y_pred == 1) & (y_val_arr == 0)))
+            fn = int(np.sum((y_pred == 0) & (y_val_arr == 1)))
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = t
+        return best_threshold
+
     # ── XGBoost ───────────────────────────────────────────────────
 
     def _train_xgboost(self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
@@ -186,32 +226,58 @@ class ModelTrainer:
             return None
 
         try:
+            # AUDIT FIX (class imbalance + hyperparameters): the label split
+            # here is typically ~44/56, not 50/50. XGBoost has no
+            # class_weight param — the correct lever is scale_pos_weight =
+            # (# negative) / (# positive), which reweights the loss so the
+            # minority class isn't ignored. Also lowered learning_rate
+            # (0.1 -> 0.03) and raised n_estimators with early stopping so
+            # the model has room to find genuine structure without
+            # overshooting in a few large steps — the previous run's
+            # ROC-AUC of ~0.51 (coin-flip) is consistent with both the
+            # broken features (see feature_engineer.py fixes) AND an
+            # under-tuned learning rate compounding a weak signal.
+            n_pos = int(np.sum(y_train == 1))
+            n_neg = int(np.sum(y_train == 0))
+            scale_pos_weight = (n_neg / n_pos) if n_pos > 0 else 1.0
+
             model = XGBClassifier(
-                n_estimators=200,
-                max_depth=5,
-                learning_rate=0.1,
+                n_estimators=600,
+                max_depth=4,
+                learning_rate=0.03,
                 subsample=0.8,
                 colsample_bytree=0.8,
+                min_child_weight=5,
+                reg_lambda=1.0,
+                scale_pos_weight=scale_pos_weight,
                 random_state=42,
-                use_label_encoder=False,
                 eval_metric="logloss",
+                early_stopping_rounds=30,
                 verbosity=0,
             )
-            # sample_weight is None for labeling_method="fixed_horizon" (the
-            # default) — XGBClassifier.fit(..., sample_weight=None) is
-            # identical to omitting the kwarg, so existing training runs
-            # are numerically unaffected.
+            # sample_weight (triple_barrier only) is combined multiplicatively
+            # with the implicit class-balance handled by scale_pos_weight
+            # above; sample_weight=None (fixed_horizon default) leaves
+            # scale_pos_weight as the sole class-balance mechanism.
             model.fit(
                 X_train, y_train,
                 sample_weight=sample_weight,
                 eval_set=[(X_val, y_val)],
                 verbose=False,
             )
+
+            # AUDIT FIX (decision threshold): classification metrics were
+            # previously computed at the default 0.5 probability cutoff,
+            # which for an imbalanced/weak-signal target tends to collapse
+            # to "always predict majority". Search X_val/y_val (never the
+            # test set — that would leak) for the threshold that maximizes
+            # F1, and evaluate the test set at that threshold instead.
+            optimal_threshold = self._find_optimal_threshold(model, X_val, y_val)
             metrics = self.evaluator.evaluate(
                 model, X_test, y_test, model_name="xgboost",
-                X_train=X_train, y_train=y_train,
+                X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
-            log.info(f"  XGBoost: {metrics.summary_line}")
+            log.info(f"  XGBoost: {metrics.summary_line} | threshold={optimal_threshold:.2f} | scale_pos_weight={scale_pos_weight:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
                 saved_metrics.update(cv_tags)
@@ -236,20 +302,37 @@ class ModelTrainer:
             return None
 
         try:
+            # AUDIT FIX (class bias): this model previously showed 58.27%
+            # accuracy but precision/recall/F1 = 0.0000 (TP=0, FP=0) — it
+            # never predicted the minority ("Up") class at all. RF has no
+            # separate sample_weight-based class balancing convention the
+            # way XGBoost does; its native mechanism is class_weight, which
+            # was missing here. 'balanced_subsample' reweights per bootstrap
+            # sample (recomputed per tree), which handles imbalance more
+            # robustly across the forest than a single global 'balanced'
+            # weighting.
             model = RandomForestClassifier(
-                n_estimators=300,
+                n_estimators=400,
                 max_depth=8,
                 min_samples_leaf=5,
+                class_weight="balanced_subsample",
                 random_state=42,
                 n_jobs=-1,
             )
             # sample_weight=None (fixed_horizon default) == omitting the kwarg.
+            # class_weight above and sample_weight (triple_barrier only)
+            # are independent, multiplicative mechanisms — sklearn combines
+            # them automatically when both are supplied to fit().
             model.fit(X_train, y_train, sample_weight=sample_weight)
+
+            # AUDIT FIX (decision threshold): same F1-maximizing threshold
+            # search as XGBoost above, computed on X_val/y_val only.
+            optimal_threshold = self._find_optimal_threshold(model, X_val, y_val)
             metrics = self.evaluator.evaluate(
                 model, X_test, y_test, model_name="random_forest",
-                X_train=X_train, y_train=y_train,
+                X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
-            log.info(f"  RandomForest: {metrics.summary_line}")
+            log.info(f"  RandomForest: {metrics.summary_line} | threshold={optimal_threshold:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
                 saved_metrics.update(cv_tags)

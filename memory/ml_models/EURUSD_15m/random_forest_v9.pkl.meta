@@ -1,0 +1,38 @@
+{
+  "hash": "576b45ad37dd5fce52b3c55aeeaabe73f1a992fc0a01b09bcc281282eea3fb5e",
+  "saved_at": "2026-07-21T10:23:30.850088+00:00",
+  "metadata": {
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v9",
+    "feature_names": [
+      "candle_range",
+      "candle_body_ratio",
+      "candle_lower_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_50_distance"
+    ]
+  }
+}

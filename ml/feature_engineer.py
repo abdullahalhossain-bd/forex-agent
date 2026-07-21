@@ -113,7 +113,7 @@ class FeatureEngineer:
         features.update(self._mtf_features(analysis_out))
 
         # ── 6. SMC + Liquidity features ────────────────────────────
-        features.update(self._smc_liquidity_features(analysis_out))
+        features.update(self._smc_liquidity_features(analysis_out, df))
 
         # ── 7. Confluence + sentiment (Day 66/67) ──────────────────
         features.update(self._confluence_features(analysis_out))
@@ -188,8 +188,20 @@ class FeatureEngineer:
         f: Dict[str, float] = {}
 
         # RSI at multiple windows
+        # AUDIT FIX: for n==14 the old fallback set col="rsi" unconditionally
+        # (a truthy string) without checking whether a "rsi" column actually
+        # existed on df — so on raw historical OHLCV (no precomputed "rsi"
+        # column) it read a nonexistent column via last.get("rsi") -> None
+        # -> _safe_float default 0.0, SKIPPING the on-the-fly computation
+        # below entirely. rsi_14 was therefore also constant 0.0 for the
+        # whole training set, exactly like macd/atr/ema were.
         for n in (7, 14, 21):
-            col = f"rsi_{n}" if f"rsi_{n}" in df.columns else ("rsi" if n == 14 else None)
+            if f"rsi_{n}" in df.columns:
+                col = f"rsi_{n}"
+            elif n == 14 and "rsi" in df.columns:
+                col = "rsi"
+            else:
+                col = None
             if col:
                 f[f"rsi_{n}"] = _safe_float(last.get(col))
             else:
@@ -209,17 +221,38 @@ class FeatureEngineer:
         f["rsi_oversold"] = 1.0 if f.get("rsi_14", 50) < 30 else 0.0
 
         # MACD
-        for col in ("macd", "macd_signal", "macd_diff", "macd_hist"):
-            if col in df.columns:
-                f[col] = _safe_float(last.get(col))
-            else:
-                f[col] = 0.0
+        # AUDIT FIX: previously this block only *read* macd/macd_signal/
+        # macd_diff/macd_hist columns if a caller had already precomputed
+        # them onto `df`. During historical training (add_features() in
+        # scripts/train_models_quick.py calls build_feature_vector() on raw
+        # OHLCV with no precomputed indicator columns), none of these
+        # columns exist, so every row silently got macd=0.0 — a constant
+        # column that then gets dropped as "zero-variance" and the model
+        # never sees MACD at all. Compute it directly from close price (the
+        # same fallback pattern already used for RSI above) whenever the
+        # precomputed columns aren't present, so MACD always carries real
+        # signal regardless of the caller.
+        if all(c in df.columns for c in ("macd", "macd_signal")):
+            macd_line = df["macd"]
+            macd_signal_line = df["macd_signal"]
+        else:
+            ema_12 = df["close"].ewm(span=12, adjust=False).mean()
+            ema_26 = df["close"].ewm(span=26, adjust=False).mean()
+            macd_line = ema_12 - ema_26
+            macd_signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        macd_hist_line = macd_line - macd_signal_line
+
+        f["macd"] = _safe_float(macd_line.iloc[-1])
+        f["macd_signal"] = _safe_float(macd_signal_line.iloc[-1])
+        f["macd_diff"] = _safe_float(macd_hist_line.iloc[-1])
+        f["macd_hist"] = _safe_float(macd_hist_line.iloc[-1])
+
         f["macd_cross_up"] = 1.0 if (len(df) >= 2 and
-                                      _safe_float(df.iloc[-1].get("macd", 0)) > _safe_float(df.iloc[-1].get("macd_signal", 0)) and
-                                      _safe_float(df.iloc[-2].get("macd", 0)) <= _safe_float(df.iloc[-2].get("macd_signal", 0))) else 0.0
+                                      _safe_float(macd_line.iloc[-1]) > _safe_float(macd_signal_line.iloc[-1]) and
+                                      _safe_float(macd_line.iloc[-2]) <= _safe_float(macd_signal_line.iloc[-2])) else 0.0
         f["macd_cross_down"] = 1.0 if (len(df) >= 2 and
-                                        _safe_float(df.iloc[-1].get("macd", 0)) < _safe_float(df.iloc[-1].get("macd_signal", 0)) and
-                                        _safe_float(df.iloc[-2].get("macd", 0)) >= _safe_float(df.iloc[-2].get("macd_signal", 0))) else 0.0
+                                        _safe_float(macd_line.iloc[-1]) < _safe_float(macd_signal_line.iloc[-1]) and
+                                        _safe_float(macd_line.iloc[-2]) >= _safe_float(macd_signal_line.iloc[-2])) else 0.0
 
         # Bollinger Bands position (0 = lower, 0.5 = middle, 1 = upper)
         if "bb_high" in df.columns and "bb_low" in df.columns:
@@ -231,8 +264,20 @@ class FeatureEngineer:
             f["bb_position"] = 0.5
 
         # ATR + ATR as % of price
-        atr_col = "atr" if "atr" in df.columns else "atr_14"
-        atr = _safe_float(last.get(atr_col))
+        # AUDIT FIX: same class of bug as MACD above — `atr`/`atr_14` are
+        # only present if a caller precomputed them. Compute a 14-period
+        # ATR on the fly from high/low/close whenever neither column exists,
+        # instead of silently defaulting to a constant 0.0.
+        atr_col = "atr" if "atr" in df.columns else ("atr_14" if "atr_14" in df.columns else None)
+        if atr_col is not None:
+            atr = _safe_float(last.get(atr_col))
+        else:
+            tr = pd.concat([
+                df["high"] - df["low"],
+                (df["high"] - df["close"].shift()).abs(),
+                (df["low"] - df["close"].shift()).abs(),
+            ], axis=1).max(axis=1)
+            atr = _safe_float(tr.rolling(14).mean().iloc[-1])
         f["atr"] = atr
         close = _safe_float(last.get("close"))
         f["atr_percentage"] = (atr / close) if close > 0 else 0.0
@@ -245,28 +290,27 @@ class FeatureEngineer:
         else:
             f["volume_ratio"] = 1.0
 
-        # EMA distances
+        # EMA distances + EMA alignment (trend strength)
+        # AUDIT FIX: same class of bug as MACD/ATR above — ema_9/ema_20/
+        # ema_50 are only present if a caller precomputed them, so on raw
+        # historical OHLCV every ema_*_distance and both alignment flags
+        # silently collapsed to a constant 0.0 (dropped as zero-variance,
+        # even though EMA alignment is one of the highest-value trend
+        # features for a tree model). Compute EMAs on the fly from close
+        # whenever the precomputed columns aren't present.
+        ema_vals = {}
         for n in (9, 20, 50):
             col = f"ema_{n}"
             if col in df.columns:
-                ema_val = _safe_float(last.get(col))
-                if ema_val > 0:
-                    f[f"ema_{n}_distance"] = (close - ema_val) / ema_val
-                else:
-                    f[f"ema_{n}_distance"] = 0.0
+                ema_vals[n] = _safe_float(last.get(col))
             else:
-                f[f"ema_{n}_distance"] = 0.0
+                ema_vals[n] = _safe_float(df["close"].ewm(span=n, adjust=False).mean().iloc[-1])
+            ema_val = ema_vals[n]
+            f[f"ema_{n}_distance"] = ((close - ema_val) / ema_val) if ema_val > 0 else 0.0
 
-        # EMA alignment (trend strength)
-        if all(c in df.columns for c in ("ema_9", "ema_20", "ema_50")):
-            e9 = _safe_float(last.get("ema_9"))
-            e20 = _safe_float(last.get("ema_20"))
-            e50 = _safe_float(last.get("ema_50"))
-            f["ema_bullish_alignment"] = 1.0 if (e9 > e20 > e50) else 0.0
-            f["ema_bearish_alignment"] = 1.0 if (e9 < e20 < e50) else 0.0
-        else:
-            f["ema_bullish_alignment"] = 0.0
-            f["ema_bearish_alignment"] = 0.0
+        e9, e20, e50 = ema_vals[9], ema_vals[20], ema_vals[50]
+        f["ema_bullish_alignment"] = 1.0 if (e9 > e20 > e50) else 0.0
+        f["ema_bearish_alignment"] = 1.0 if (e9 < e20 < e50) else 0.0
 
         return f
 
@@ -486,10 +530,10 @@ class FeatureEngineer:
 
     # ── 6. SMC + Liquidity features ───────────────────────────────
 
-    def _smc_liquidity_features(self, a: Dict) -> Dict[str, float]:
+    def _smc_liquidity_features(self, a: Dict, df: Optional[pd.DataFrame] = None) -> Dict[str, float]:
         f: Dict[str, float] = {}
         smc = a.get("smc_ctx") or {}
-        if isinstance(smc, dict):
+        if isinstance(smc, dict) and smc:
             signal = (smc.get("signal") or "NEUTRAL").upper()
             f["smc_buy"] = 1.0 if signal in ("BUY", "BULLISH") else 0.0
             f["smc_sell"] = 1.0 if signal in ("SELL", "BEARISH") else 0.0
@@ -510,11 +554,104 @@ class FeatureEngineer:
                 f["liquidity_sweep"] = 0.0
                 f["liquidity_sweep_bullish"] = 0.0
                 f["liquidity_sweep_bearish"] = 0.0
-        else:
-            for k in ("smc_buy", "smc_sell", "smc_neutral", "smc_confluence_score",
-                      "bos_detected", "choch_detected", "order_block_tap", "fvg_detected",
-                      "liquidity_sweep", "liquidity_sweep_bullish", "liquidity_sweep_bearish"):
-                f[k] = 0.0
+            return f
+
+        # AUDIT FIX: the live smc_ctx dict only exists when AnalysisAgent
+        # runs in real time. During historical/offline training,
+        # add_features() calls build_feature_vector(analysis_out={}) for
+        # every bar, so bos_detected/order_block_tap/fvg_detected/etc were
+        # ALL constant 0.0 for the entire dataset — dropped as
+        # zero-variance and invisible to the model. Fall back to a
+        # lightweight price-action derivation of the same concepts
+        # straight from OHLC, using only data available at/ before the
+        # current bar (no look-ahead), so these remain real, varying
+        # signals during training even without a live analysis_out.
+        return self._smc_from_price_action(df) if df is not None else self._smc_zero()
+
+    def _smc_zero(self) -> Dict[str, float]:
+        f: Dict[str, float] = {}
+        for k in ("smc_buy", "smc_sell", "smc_neutral", "smc_confluence_score",
+                  "bos_detected", "choch_detected", "order_block_tap", "fvg_detected",
+                  "liquidity_sweep", "liquidity_sweep_bullish", "liquidity_sweep_bearish"):
+            f[k] = 0.0
+        f["smc_neutral"] = 1.0
+        return f
+
+    def _smc_from_price_action(self, df: pd.DataFrame, swing_lookback: int = 20) -> Dict[str, float]:
+        """Lightweight, look-ahead-safe Smart Money Concepts approximation
+        computed directly from OHLC — used as the training-time fallback
+        for _smc_liquidity_features() when no live analysis_out is
+        available.
+
+        - BOS (Break of Structure): close breaks beyond the highest high /
+          lowest low of the prior `swing_lookback` candles (excluding the
+          current one) -> bullish/bearish structure break.
+        - FVG (Fair Value Gap): classic 3-candle imbalance — candle[-3]'s
+          high/low doesn't overlap candle[-1]'s low/high, leaving a price
+          gap the market tends to revisit.
+        - Order block: the last opposite-colored candle before an
+          impulsive move (a same-direction candle with range >= 1.5x the
+          recent average true range).
+        All lookups use only bars up to and including the current index —
+        no future data.
+        """
+        f = self._smc_zero()
+        if df is None or len(df) < max(swing_lookback + 2, 5):
+            return f
+        if not all(c in df.columns for c in ("open", "high", "low", "close")):
+            return f
+
+        window = df.tail(swing_lookback + 1)
+        prior = window.iloc[:-1]  # excludes current bar -> no look-ahead
+        cur = window.iloc[-1]
+
+        prior_high = _safe_float(prior["high"].max())
+        prior_low = _safe_float(prior["low"].min())
+        close = _safe_float(cur["close"])
+
+        bullish_bos = close > prior_high > 0
+        bearish_bos = close < prior_low and prior_low > 0
+        f["bos_detected"] = 1.0 if (bullish_bos or bearish_bos) else 0.0
+        f["smc_buy"] = 1.0 if bullish_bos else 0.0
+        f["smc_sell"] = 1.0 if bearish_bos else 0.0
+        f["smc_neutral"] = 0.0 if (bullish_bos or bearish_bos) else 1.0
+
+        # Fair Value Gap: compare candle 3 bars back to the current candle
+        if len(df) >= 3:
+            c0, c2 = df.iloc[-3], df.iloc[-1]
+            bull_gap = _safe_float(c2["low"]) > _safe_float(c0["high"]) > 0
+            bear_gap = _safe_float(c2["high"]) < _safe_float(c0["low"]) and _safe_float(c0["low"]) > 0
+            f["fvg_detected"] = 1.0 if (bull_gap or bear_gap) else 0.0
+
+        # Order block: last opposite-colored candle before an impulsive
+        # (range >= 1.5x recent average range) same-direction move.
+        if len(df) >= swing_lookback:
+            ranges = (df["high"] - df["low"]).tail(swing_lookback)
+            avg_range = _safe_float(ranges.mean())
+            cur_range = _safe_float(cur["high"] - cur["low"])
+            impulsive = avg_range > 0 and cur_range >= 1.5 * avg_range
+            if impulsive and len(df) >= 2:
+                cur_bullish = _safe_float(cur["close"]) > _safe_float(cur["open"])
+                prev = df.iloc[-2]
+                prev_bearish = _safe_float(prev["close"]) < _safe_float(prev["open"])
+                prev_bullish = _safe_float(prev["close"]) > _safe_float(prev["open"])
+                f["order_block_tap"] = 1.0 if ((cur_bullish and prev_bearish) or
+                                                (not cur_bullish and prev_bullish)) else 0.0
+
+        # Liquidity sweep: current bar wicks beyond the prior swing extreme
+        # but closes back inside it (stop-hunt pattern).
+        cur_high = _safe_float(cur["high"])
+        cur_low = _safe_float(cur["low"])
+        sweep_high = cur_high > prior_high > 0 and close < prior_high
+        sweep_low = cur_low < prior_low and prior_low > 0 and close > prior_low
+        f["liquidity_sweep"] = 1.0 if (sweep_high or sweep_low) else 0.0
+        f["liquidity_sweep_bearish"] = 1.0 if sweep_high else 0.0
+        f["liquidity_sweep_bullish"] = 1.0 if sweep_low else 0.0
+
+        f["smc_confluence_score"] = float(
+            f["bos_detected"] + f["fvg_detected"] + f["order_block_tap"] + f["liquidity_sweep"]
+        ) / 4.0
+
         return f
 
     # ── 7. Confluence + sentiment (Day 66/67) ─────────────────────

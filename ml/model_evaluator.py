@@ -60,6 +60,8 @@ class ModelMetrics:
     test_accuracy: float = 0.0
     overfitting_score: float = 0.0  # train - test
     is_overfit: bool = False
+    # Decision threshold this evaluation was scored at (0.5 = default)
+    threshold: float = 0.5
     # Confusion matrix
     tp: int = 0
     fp: int = 0
@@ -71,10 +73,12 @@ class ModelMetrics:
 
     @property
     def summary_line(self) -> str:
+        thr_suffix = f" | thr={self.threshold:.2f}" if abs(self.threshold - 0.5) > 1e-9 else ""
         return (
-            f"{self.model_name}: acc={self.accuracy:.1%} | AUC={self.auc_roc:.3f} | "
+            f"{self.model_name}: acc={self.accuracy:.1%} | prec={self.precision:.1%} | "
+            f"rec={self.recall:.1%} | AUC={self.auc_roc:.3f} | "
             f"WR={self.win_rate:.1%} | PF={self.profit_factor:.2f} | "
-            f"overfit={self.overfitting_score:.1%}{' ⚠️' if self.is_overfit else ''}"
+            f"overfit={self.overfitting_score:.1%}{' ⚠️' if self.is_overfit else ''}{thr_suffix}"
         )
 
 
@@ -89,18 +93,24 @@ class ModelEvaluator:
         model_name: str = "model",
         X_train: Optional[pd.DataFrame] = None,
         y_train: Optional[pd.Series] = None,
+        threshold: float = 0.5,
     ) -> ModelMetrics:
-        """Full evaluation of a trained model."""
-        metrics = ModelMetrics(model_name=model_name)
+        """Full evaluation of a trained model.
 
-        # Predictions
-        try:
-            y_pred = model.predict(X_test)
-        except Exception as e:
-            log.error(f"[Evaluator] predict failed: {e}")
-            return metrics
+        threshold: probability cutoff used to convert predict_proba into a
+          class label. Defaults to 0.5 (identical to model.predict()) for
+          backward compatibility. Callers doing threshold calibration
+          (see ModelTrainer._find_optimal_threshold) should pass the
+          F1-optimal threshold found on a validation split — evaluating at
+          a fixed 0.5 cutoff under class imbalance is what previously
+          produced TP=0/FP=0 (precision/recall = 0.0) despite non-trivial
+          accuracy.
+        """
+        metrics = ModelMetrics(model_name=model_name, threshold=threshold)
 
-        # Probabilities (if available)
+        # Probabilities (if available) — compute first so we can derive
+        # y_pred from `threshold` rather than always trusting model.predict()'s
+        # baked-in 0.5 cutoff.
         y_proba = None
         try:
             y_proba = model.predict_proba(X_test)[:, 1]
@@ -109,6 +119,15 @@ class ModelEvaluator:
                 y_proba = model.predict(X_test).ravel()
             except Exception:
                 pass
+
+        try:
+            if y_proba is not None:
+                y_pred = (y_proba >= threshold).astype(int)
+            else:
+                y_pred = model.predict(X_test)
+        except Exception as e:
+            log.error(f"[Evaluator] predict failed: {e}")
+            return metrics
 
         y_test_arr = np.array(y_test).astype(int)
         y_pred_arr = np.array(y_pred).astype(int)

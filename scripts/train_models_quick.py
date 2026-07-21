@@ -574,6 +574,33 @@ def _select_features(
     return selected
 
 
+# ── Decision threshold calibration ────────────────────────────────────
+
+def _find_optimal_threshold(model, X_calib: np.ndarray, y_calib: np.ndarray) -> float:
+    """Search a calibration slice (never the final holdout — that would
+    leak) for the probability threshold that maximizes F1 on the minority
+    ("Up") class. The default 0.50 cutoff assumes a roughly balanced,
+    well-calibrated model; under class imbalance and/or a weak base signal
+    it's exactly what causes a model to always predict the majority class
+    (precision/recall = 0.0 despite non-trivial accuracy — the RandomForest
+    symptom from the audit). Returns 0.5 if predict_proba is unavailable or
+    only one class is present.
+    """
+    from sklearn.metrics import f1_score
+
+    if X_calib is None or len(X_calib) == 0 or len(np.unique(y_calib)) < 2:
+        return 0.5
+    try:
+        proba = model.predict_proba(X_calib)[:, 1]
+    except Exception:
+        return 0.5
+
+    candidates = np.arange(0.30, 0.71, 0.02)
+    scores = [f1_score(y_calib, (proba >= t).astype(int), zero_division=0) for t in candidates]
+    best_idx = int(np.argmax(scores))
+    return float(round(candidates[best_idx], 2))
+
+
 # ── Probability calibration ──────────────────────────────────────────
 
 def _calibrate(model, X_calib: np.ndarray, y_calib: np.ndarray, method: str = CALIBRATION_METHOD):
@@ -886,8 +913,9 @@ def train_one_pair(
             precision_score, recall_score, f1_score, roc_auc_score,
             confusion_matrix, classification_report, accuracy_score,
         )
-        y_pred = xgb_model.predict(X_holdout_sel)
+        xgb_threshold = _find_optimal_threshold(xgb_model, X_calib, y_calib)
         y_proba = xgb_model.predict_proba(X_holdout_sel)[:, 1]
+        y_pred = (y_proba >= xgb_threshold).astype(int)
 
         xgb_metrics = {
             "accuracy": accuracy_score(y_holdout, y_pred),
@@ -895,10 +923,11 @@ def train_one_pair(
             "recall": recall_score(y_holdout, y_pred, zero_division=0),
             "f1": f1_score(y_holdout, y_pred, zero_division=0),
             "roc_auc": roc_auc_score(y_holdout, y_proba) if len(np.unique(y_holdout)) > 1 else 0.0,
+            "threshold": xgb_threshold,
         }
 
         log.info(f"\n{'='*60}")
-        log.info("XGBOOST — FINAL HOLDOUT EVALUATION (calibrated)")
+        log.info(f"XGBOOST — FINAL HOLDOUT EVALUATION (calibrated, threshold={xgb_threshold:.2f})")
         log.info(f"{'='*60}")
         for k, v in xgb_metrics.items():
             log.info(f"  {k.capitalize():10s}: {v:.4f}")
@@ -925,8 +954,9 @@ def train_one_pair(
         raw_rf, rf_n_est = _fit_random_forest_with_early_stopping(X_fit, y_fit, X_calib, y_calib)
         rf_model = _calibrate(raw_rf, X_calib, y_calib)
 
-        y_pred_rf = rf_model.predict(X_holdout_sel)
+        rf_threshold = _find_optimal_threshold(rf_model, X_calib, y_calib)
         y_proba_rf = rf_model.predict_proba(X_holdout_sel)[:, 1]
+        y_pred_rf = (y_proba_rf >= rf_threshold).astype(int)
 
         rf_metrics = {
             "accuracy": accuracy_score(y_holdout, y_pred_rf),
@@ -934,10 +964,14 @@ def train_one_pair(
             "recall": recall_score(y_holdout, y_pred_rf, zero_division=0),
             "f1": f1_score(y_holdout, y_pred_rf, zero_division=0),
             "roc_auc": roc_auc_score(y_holdout, y_proba_rf) if len(np.unique(y_holdout)) > 1 else 0.0,
+            "threshold": rf_threshold,
         }
 
         log.info(f"\n{'='*60}")
-        log.info(f"RANDOMFOREST — FINAL HOLDOUT EVALUATION (calibrated, n_estimators={rf_n_est})")
+        log.info(
+            f"RANDOMFOREST — FINAL HOLDOUT EVALUATION "
+            f"(calibrated, n_estimators={rf_n_est}, threshold={rf_threshold:.2f})"
+        )
         log.info(f"{'='*60}")
         for k, v in rf_metrics.items():
             log.info(f"  {k.capitalize():10s}: {v:.4f}")
@@ -988,6 +1022,7 @@ def train_one_pair(
             "recall": float(xgb_metrics.get("recall", 0.0)),
             "f1": float(xgb_metrics.get("f1", 0.0)),
             "roc_auc": float(xgb_metrics.get("roc_auc", 0.0)),
+            "threshold": float(xgb_metrics.get("threshold", 0.5)),
             "training_bars": len(df),
             "n_features_selected": len(selected_features),
             **xgb_cv_summary,
@@ -1017,6 +1052,7 @@ def train_one_pair(
             "recall": float(rf_metrics.get("recall", 0.0)),
             "f1": float(rf_metrics.get("f1", 0.0)),
             "roc_auc": float(rf_metrics.get("roc_auc", 0.0)),
+            "threshold": float(rf_metrics.get("threshold", 0.5)),
             "training_bars": len(df),
             "n_features_selected": len(selected_features),
             **rf_cv_summary,

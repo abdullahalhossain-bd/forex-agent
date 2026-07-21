@@ -91,6 +91,13 @@ class SupportResistance:
         wick_body_ratio: float = 1.5,
         timeframe: str = "H1",
         max_zones_per_side: int = 3,
+        # v3 params — trending-regime liquidity fallback (see
+        # cluster_into_zones()/analyze() docstrings for the full
+        # rationale). Multi-touch clustering is a ranging-market
+        # assumption; these control the supplementary liquidity sources
+        # used when it produces too few/no zones.
+        trending_eqh_loose_multiplier: float = 2.0,
+        max_raw_swing_levels: int = 3,
     ):
         # Backward compat
         self.window = window
@@ -106,6 +113,8 @@ class SupportResistance:
         self.min_touches = max(2, min_touches)
         self.wick_body_ratio = wick_body_ratio
         self.max_zones_per_side = max_zones_per_side
+        self.trending_eqh_loose_multiplier = trending_eqh_loose_multiplier
+        self.max_raw_swing_levels = max_raw_swing_levels
 
     # ─────────────────────────────────────────────
     # STEP 1: Swing High & Low detection
@@ -243,6 +252,9 @@ class SupportResistance:
         swing_points: list,
         df: pd.DataFrame,
         direction: str,
+        threshold_pct_override: Optional[float] = None,
+        min_touches_override: Optional[int] = None,
+        source: str = "cluster",
     ) -> list:
         """
         Cluster nearby swing prices into ZONES (range/box).
@@ -254,11 +266,27 @@ class SupportResistance:
           - zone_top = max swing price in cluster
           - zone_bottom = min swing price in cluster
           - strength: 2=Weak, 3=Medium, 4+=Strong
+
+        threshold_pct_override / min_touches_override: let callers reuse
+        this same clustering logic with looser parameters (e.g. the
+        EQH/EQL trending-regime fallback in analyze()) without touching
+        self.cluster_threshold_pct / self.min_touches, which stay the
+        instance defaults used for the primary, ranging-market-tuned pass.
+        source: tagged onto each built zone's "source" key so callers can
+        tell a confirmed multi-touch cluster apart from a looser/fallback
+        one (e.g. "cluster" vs "eqh_eql" vs "raw_swing").
         """
         if not swing_points:
             return []
 
-        threshold_pct = self._get_cluster_threshold(df)
+        threshold_pct = (
+            threshold_pct_override if threshold_pct_override is not None
+            else self._get_cluster_threshold(df)
+        )
+        min_touches = (
+            min_touches_override if min_touches_override is not None
+            else self.min_touches
+        )
         # Sort by price ascending
         sorted_pts = sorted(swing_points, key=lambda p: p["price"])
         current_cluster = [sorted_pts[0]]
@@ -281,17 +309,104 @@ class SupportResistance:
             if dist_to_center <= threshold_pct and dist_to_nearest <= threshold_pct:
                 current_cluster.append(p)
             else:
-                if len(current_cluster) >= self.min_touches:
-                    zones.append(self._build_zone(current_cluster, df, direction))
+                if len(current_cluster) >= min_touches:
+                    zones.append(self._build_zone(current_cluster, df, direction, source=source))
                 current_cluster = [p]
 
         # last cluster
-        if len(current_cluster) >= self.min_touches:
-            zones.append(self._build_zone(current_cluster, df, direction))
+        if len(current_cluster) >= min_touches:
+            zones.append(self._build_zone(current_cluster, df, direction, source=source))
 
         return zones
 
-    def _build_zone(self, cluster: list, df: pd.DataFrame, direction: str) -> dict:
+    def _raw_swing_levels(
+        self,
+        swing_points: list,
+        df: pd.DataFrame,
+        direction: str,
+        max_levels: Optional[int] = None,
+        buffer_multiplier: float = 0.5,
+    ) -> list:
+        """
+        TRENDING-regime fallback liquidity source: turns the most recent
+        INDIVIDUAL swing highs/lows into thin single-touch levels, without
+        requiring a second point to cluster against.
+
+        Why this exists: cluster_into_zones() needs >= 2 swing points to
+        land within a tight price band before it will emit a zone. That's
+        a ranging-market assumption — in a genuinely trending market,
+        swing highs/lows structurally make higher-highs / lower-lows (or
+        lower-lows / lower-highs) and rarely revisit the same price, so
+        clustering produces few or no zones at all. StopHunt/ICT-AMD then
+        have nothing to check a sweep against and both abstain, which is
+        exactly the "0/3 consensus -> single-layer override becomes the
+        default path" failure chain this fixes.
+
+        A single untested swing high/low is still a legitimate liquidity
+        target on its own in SMC/ICT terms — retail stops cluster just
+        beyond it whether or not price has re-tested it. It's simply
+        *unconfirmed* by a re-touch, so touches=1 -> _classify_strength()
+        already buckets it as "Weak" -> no downstream change needed
+        (StopHunt/ICT-AMD already accept "Weak" zones per the 07-17 fix).
+        """
+        if not swing_points:
+            return []
+        max_levels = max_levels if max_levels is not None else self.max_raw_swing_levels
+
+        atr_pct = _atr_pct(df, period=14)
+        buffer_pct = max(atr_pct * buffer_multiplier, 0.0003)  # thin band, floor ~3 pips-equivalent
+
+        # Most RECENT swing points first (by bar index/time, not by price) —
+        # a trending market's oldest swing points are the least relevant
+        # liquidity targets; the last few untested extremes are what
+        # price is actually likely to sweep next.
+        recent = sorted(swing_points, key=lambda p: p["index"], reverse=True)[:max_levels]
+
+        levels = []
+        for p in recent:
+            price = float(p["price"])
+            idx = p["index"]
+            if price <= 0:
+                continue
+            band = price * buffer_pct
+            zone_top = round(price + band, 5)
+            zone_bottom = round(price - band, 5)
+            valid_rej = self._count_valid_rejections(df, zone_top, zone_bottom, direction=direction)
+            levels.append({
+                "zone_top": zone_top,
+                "zone_bottom": zone_bottom,
+                "center": round(price, 5),
+                "touches": 1,
+                "valid_rejections": valid_rej,
+                "strength": _classify_strength(1),
+                "role": direction,
+                "last_touch_time": str(df.index[idx]) if idx < len(df) else None,
+                "last_touch_index": idx,
+                "source": "raw_swing",
+                "is_equal_level": False,
+            })
+        return levels
+
+    def _merge_zone_sources(self, *tiers: list, df: pd.DataFrame) -> list:
+        """
+        Merge zone lists from different confidence tiers, highest-priority
+        tier first (e.g. confirmed multi-touch cluster, then EQH/EQL loose
+        cluster, then raw single-touch swing points). A candidate from a
+        lower tier is dropped if it overlaps (within the standard cluster
+        threshold) a zone already accepted from a higher tier — no need to
+        report the same price level twice at different confidence tiers.
+        """
+        threshold_pct = self._get_cluster_threshold(df)
+        merged: list = []
+        for tier in tiers:
+            for z in tier:
+                ref = z["center"] if z["center"] > 0 else 1.0
+                if any(abs(z["center"] - m["center"]) / ref <= threshold_pct for m in merged):
+                    continue
+                merged.append(z)
+        return merged
+
+    def _build_zone(self, cluster: list, df: pd.DataFrame, direction: str, source: str = "cluster") -> dict:
         """Build a zone dict from a cluster of swing points."""
         prices = [p["price"] for p in cluster]
         zone_top = max(prices)
@@ -321,6 +436,8 @@ class SupportResistance:
             "role": direction,
             "last_touch_time": str(last_time) if last_time is not None else None,
             "last_touch_index": last_idx,
+            "source": source,
+            "is_equal_level": source == "eqh_eql",
         }
 
     # ─── Backward-compat: old API ─────────────────
@@ -516,9 +633,32 @@ class SupportResistance:
         swing_highs = self.find_swing_highs(df)
         swing_lows = self.find_swing_lows(df)
 
-        # 2. Cluster into zones
+        # 2. Cluster into zones (tier 1: confirmed multi-touch, tight threshold)
         all_resistance = self.cluster_into_zones(swing_highs, df, direction="resistance")
         all_support = self.cluster_into_zones(swing_lows, df, direction="support")
+
+        # 2a. Trending-regime fallback tier 2: EQH/EQL loose cluster — same
+        # clustering logic, threshold widened by trending_eqh_loose_multiplier,
+        # tagged source="eqh_eql" (this is what _build_zone reads to set
+        # is_equal_level=True).
+        loose_threshold = self._get_cluster_threshold(df) * self.trending_eqh_loose_multiplier
+        eqh_resistance = self.cluster_into_zones(
+            swing_highs, df, direction="resistance",
+            threshold_pct_override=loose_threshold, source="eqh_eql",
+        )
+        eql_support = self.cluster_into_zones(
+            swing_lows, df, direction="support",
+            threshold_pct_override=loose_threshold, source="eqh_eql",
+        )
+
+        # 2b. Trending-regime fallback tier 3: single-touch raw swing levels
+        # for any price real estate the two cluster passes didn't cover.
+        raw_resistance = self._raw_swing_levels(swing_highs, df, direction="resistance")
+        raw_support = self._raw_swing_levels(swing_lows, df, direction="support")
+
+        # 2c. Merge, highest-confidence tier first
+        all_resistance = self._merge_zone_sources(all_resistance, eqh_resistance, raw_resistance, df=df)
+        all_support = self._merge_zone_sources(all_support, eql_support, raw_support, df=df)
 
         # 3. Pivot
         try:
