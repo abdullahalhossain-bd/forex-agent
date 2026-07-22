@@ -69,8 +69,13 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ObsoleteEntry(
         "agents/chart_agent.py",
         ObsoleteCategory.SUPERSEDED,
-        "Standalone Playwright S/R drawer; superseded by computer_use/chart_drawer.py + coordinate_mapper.py.",
-        "Delete or move to legacy/. Wired runtime uses computer_use/ stack.",
+        "Standalone Playwright S/R drawer; superseded by computer_use/chart_drawer.py + "
+        "coordinate_mapper.py. CORRECTED (2026-07-22): a duplicate entry further down "
+        "in this file claimed '220-line chart agent...Archived to .dead_code_archived "
+        "in Round-22' — VERIFIED FALSE via `ls agents/chart_agent.py`, file is still "
+        "present at its original path. Verified via grep: zero external importers.",
+        "Delete or move to legacy/. Wired runtime uses computer_use/ stack. "
+        "File is NOT archived — still on disk.",
     ),
 
     # ── ai/ ──────────────────────────────────────────────────────────
@@ -104,9 +109,16 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ),
     ObsoleteEntry(
         "analysis/liquidity.py",
-        ObsoleteCategory.DEAD,
-        "Class-name collision with analysis/liquidity_engine.py. Only consumer was dead smart_money.py. DELETED 2026-07-02.",
-        "DELETED — superseded by stop_hunt_signal_engine.py.",
+        ObsoleteCategory.WIRED,
+        "CORRECTED (2026-07-22, verified via grep + reachability check): the "
+        "'DELETED 2026-07-02 / only consumer was dead smart_money.py' claim "
+        "below was false on two counts — the file was never deleted (still "
+        "on disk at this path), and it has a live, current consumer: "
+        "agents/analysis_agent.py:337 does `from analysis.liquidity import "
+        "LiquidityEngine`. agents/analysis_agent.py is reachable from main.py "
+        "(part of the live AnalysisAgent -> DecisionAgent -> RiskEngine "
+        "pipeline), so this import executes on every live decision cycle.",
+        "ACTIVE — do not delete. Live consumer: agents/analysis_agent.py:337.",
     ),
     ObsoleteEntry(
         "analysis/liquidity_engine.py",
@@ -173,8 +185,14 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ObsoleteEntry(
         "broker/market_data_manager.py",
         ObsoleteCategory.DEAD,
-        "Zero importers. Was meant to be the single MT5 data entry point.",
-        "Marked legacy. If reviving MT5 data path, wire into server/signal_pipeline.py.",
+        "Zero importers. Was meant to be the single MT5 data entry point. "
+        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
+        "claimed '114 lines...Archived to .dead_code_archived in Round-28' — "
+        "VERIFIED FALSE via `ls broker/market_data_manager.py`, file is still "
+        "present at its original path. Verified via grep: only comment/docstring "
+        "mentions in broker/__init__.py and core/trader.py, no real import.",
+        "Marked legacy. If reviving MT5 data path, wire into server/signal_pipeline.py. "
+        "File is NOT archived — still on disk.",
     ),
     ObsoleteEntry(
         "broker/mt5_data.py",
@@ -194,12 +212,16 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
         "Broker-side validator; only consumer is dead broker/market_data_manager.py. (data/validator.py is the live one.)",
         "Marked legacy (transitively dead).",
     ),
-    ObsoleteEntry(
-        "broker/position_manager.py",
-        ObsoleteCategory.DEAD,
-        "523 LOC of active trade-management logic; zero importers. Also has latent add_lesson() bug.",
-        "Marked legacy. Future: wire into hybrid/flow_controller.py if reviving.",
-    ),
+    # NOTE (2026-07-22): a duplicate entry for broker/position_manager.py
+    # used to sit here claiming DEAD/"zero importers". VERIFIED FALSE and
+    # REMOVED — core/trader.py:261 does `from broker.position_manager
+    # import PositionManager` and actively calls .register_open() /
+    # .poll_once() for live MT5 trade management (trailing stop, breakeven,
+    # partial close). This was a real-money-risk mislabeling: the stale
+    # DEAD entry sat earlier in this file than the correct WIRED entry
+    # below (Round-22 fix), so a reader scanning top-to-bottom could act
+    # on the wrong one. See the WIRED entry for broker/position_manager.py
+    # further down — that one is accurate and is the sole entry now.
     ObsoleteEntry(
         "broker/safety_guard.py",
         ObsoleteCategory.SMOKE_ONLY,
@@ -220,17 +242,22 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ),
 
     # ── risk/ ────────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "risk/risk_simulator.py",
-        ObsoleteCategory.DEAD,
-        "RiskScenarioSimulator never imported anywhere.",
-        "Marked legacy. Functionality overlaps with risk/monte_carlo.py.",
-    ),
+    # NOTE (2026-07-22): duplicate risk/risk_simulator.py entry removed from
+    # here — merged into the corrected entry in the Round-27 section below
+    # (same DEAD conclusion; that entry also documents the false "archived"
+    # claim found there and adds the overlap note with risk/monte_carlo.py).
     ObsoleteEntry(
         "risk/portfolio_manager.py",
         ObsoleteCategory.SUPERSEDED,
-        "Pre-Day-58 portfolio prototype; superseded by risk/capital_manager.py + risk/exposure_manager.py. Module-level singleton runs at import time.",
-        "Marked legacy. Do not import.",
+        "Pre-Day-58 portfolio prototype; superseded by risk/capital_manager.py + "
+        "risk/exposure_manager.py. Module-level singleton runs at import time. "
+        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
+        "claimed this was 'Archived to .dead_code_archived in Round-27' — "
+        "VERIFIED FALSE via `ls risk/portfolio_manager.py`, file is still "
+        "present at its original path. Verified via grep: zero external "
+        "importers (only the module-level `portfolio_manager = "
+        "PortfolioManager()` self-instantiation).",
+        "Marked legacy. Do not import. File is NOT archived — still on disk.",
     ),
 
     # ── scanner/ ─────────────────────────────────────────────────────
@@ -373,8 +400,15 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ObsoleteEntry(
         "core/monitoring_system.py",
         ObsoleteCategory.SUPERSEDED,
-        "Never imported. Canonical replacement: core/health_monitor.py.",
-        "Kept for backward compat; core/health_monitor is the live one.",
+        "Never imported. Canonical replacement: core/health_monitor.py. "
+        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
+        "claimed '631 lines...Archived to .dead_code_archived in Round-29' — "
+        "VERIFIED FALSE via `ls core/monitoring_system.py`, file is still "
+        "present at its original path. Verified via grep: zero external "
+        "importers (only internal self-references and the module-level "
+        "`monitoring_system = MonitoringSystem()` singleton).",
+        "Kept for backward compat; core/health_monitor is the live one. "
+        "File is NOT archived — still on disk.",
     ),
 
     # ── computer_use/ — broken imports ───────────────────────────────
@@ -474,12 +508,9 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ),
 
     # ── agents/ dead code (Round-22) ─────────────────────────────────
-    ObsoleteEntry(
-        "agents/chart_agent.py",
-        ObsoleteCategory.DEAD,
-        "220-line chart agent. 0 importers. Superseded by computer_use/ modules.",
-        "Archived to .dead_code_archived in Round-22.",
-    ),
+    # NOTE (2026-07-22): duplicate agents/chart_agent.py entry removed from
+    # here — merged into the corrected entry in the agents/ section above
+    # (it falsely claimed "Archived...Round-22"; file is still on disk).
 
     # ── orchestrator/ dead code (Round-25) ───────────────────────────
     ObsoleteEntry(
@@ -513,17 +544,19 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
         "539 lines. 0 importers.",
         "Archived to .dead_code_archived in Round-27.",
     ),
-    ObsoleteEntry(
-        "risk/portfolio_manager.py",
-        ObsoleteCategory.DEAD,
-        "496 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
+    # NOTE (2026-07-22): duplicate risk/portfolio_manager.py entry removed
+    # from here — merged into the corrected entry in the risk/ section
+    # above (it falsely claimed "Archived...Round-27"; file is still on disk).
     ObsoleteEntry(
         "risk/risk_simulator.py",
         ObsoleteCategory.DEAD,
-        "448 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
+        "448 lines. 0 importers. CORRECTED (2026-07-22): a near-duplicate "
+        "entry above (risk/ section) already covers this file with the same "
+        "DEAD conclusion; this entry's 'Archived to .dead_code_archived in "
+        "Round-27' claim is FALSE — `ls risk/risk_simulator.py` confirms the "
+        "file is still present at its original path. Category (DEAD) is "
+        "correct; only the archival claim was wrong.",
+        "Marked legacy. Do not import. File is NOT archived — still on disk.",
     ),
     ObsoleteEntry(
         "risk/order_split_manager.py",
@@ -598,12 +631,10 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
         "161 lines. 0 importers.",
         "Archived to .dead_code_archived in Round-28.",
     ),
-    ObsoleteEntry(
-        "broker/market_data_manager.py",
-        ObsoleteCategory.DEAD,
-        "114 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-28.",
-    ),
+    # NOTE (2026-07-22): duplicate broker/market_data_manager.py entry
+    # removed from here — merged into the corrected entry in the broker/
+    # section above (it falsely claimed "Archived...Round-28"; file is
+    # still on disk).
     ObsoleteEntry(
         "broker/position_manager.py",
         ObsoleteCategory.WIRED,
@@ -634,13 +665,9 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
         "mismatch as production_trading_system.py above — actually renamed to "
         "core/production_excellence.py.dead_code_archived now.",
     ),
-    ObsoleteEntry(
-        "core/monitoring_system.py",
-        ObsoleteCategory.DEAD,
-        "631 lines. 0 importers. Had timezone import bug (fixed in Round-19) but "
-        "module is dead anyway — never wired into runtime.",
-        "Archived to .dead_code_archived in Round-29.",
-    ),
+    # NOTE (2026-07-22): duplicate core/monitoring_system.py entry removed
+    # from here — merged into the corrected entry in the core/ section
+    # above (it falsely claimed "Archived...Round-29"; file is still on disk).
     ObsoleteEntry(
         "core/signal_scorer.py",
         ObsoleteCategory.DEAD,

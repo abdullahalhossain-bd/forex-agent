@@ -2266,5 +2266,19 @@
     "bond_yield": 0.463,
     "sp500_change": 0.896,
     "vix_value": 17.0
+  },
+  {
+    "timestamp": "2026-07-22T08:31:33.280568+00:00",
+    "pair": "EURUSD",
+    "regime": "NEUTRAL",
+    "macro_score": 55,
+    "pair_bias": "NEUTRAL",
+    "dxy_value": 101.142,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": 2.721,
+    "bond_yield": 0.463,
+    "sp500_change": 0.886,
+    "vix_value": 17.54
   }
 ]

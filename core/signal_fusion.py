@@ -153,11 +153,26 @@ class SignalFusion:
         else:
             weighted_conf = 0.0
 
-        # ARCHITECTURAL FIX: preserve the strongest analysis-layer confidence
-        # even when the fused decision is WAIT/NO_TRADE due to insufficient
-        # consensus or strong disagreement. Downstream consumers rely on this
-        # to see that the analysis was meaningful, even if execution is blocked.
-        if result.analysis_confidence > 0:
+        # ARCHITECTURAL FIX (2026-07-22 — corrected): preserve the strongest
+        # analysis-layer confidence ONLY when agreement is too thin (<2) for
+        # any trade to happen regardless of confidence — i.e. the decision
+        # below is guaranteed to force WAIT anyway (see "else: final_signal
+        # = WAIT" further down). In that case weighted_conf has no trade
+        # consequence, so surfacing the strongest raw confidence for audit
+        # visibility is safe.
+        #
+        # BUG FIXED: this override used to apply unconditionally, including
+        # on the len(agreeing) == 2 or >= 3 paths where weighted_conf is
+        # what actually decides BUY/SELL vs WAIT and FULL/HALF/REDUCED
+        # position sizing. Because analysis_confidence (a single layer's
+        # raw, unweighted confidence) is almost always >= the weighted
+        # average of multiple agreeing layers, the max() was silently
+        # discarding the weighted computation on nearly every trade-signal
+        # path — per-layer `weight` had no effect on the final decision.
+        # Verified live: changing an agreeing layer's weight from 0.10 to
+        # 0.60 produced byte-identical master_confidence (69.7 both times)
+        # before this fix.
+        if result.analysis_confidence > 0 and len(agreeing) < 2:
             weighted_conf = max(weighted_conf, result.analysis_confidence)
 
         # Penalty for disagreement
