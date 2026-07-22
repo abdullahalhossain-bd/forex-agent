@@ -148,6 +148,7 @@ class SignalEngine:
         mtf_bias:         dict = None,
         advanced_pat_ctx: dict = None,
         fib_ctx:          dict = None,    # ⭐ Day 40
+        extended_ctx:     dict = None,    # 17-module integration pass
     ) -> dict:
         """
         Rule-based signal generation।
@@ -247,6 +248,18 @@ class SignalEngine:
         bull_score, bear_score = self._apply_fib_scoring(
             fib_ctx, bull_score, bear_score, signals, warnings
         )
+
+        # ── Extended modules (17-module integration pass) ──────
+        # Votes from previously imported-only modules: andean_oscillator,
+        # supertrend, utbot_alerts, nadaraya_watson_envelope,
+        # daily_high_low, auction_market_theory, candlestick_patterns_ml,
+        # breaker_block, flip_zones, curve_mtf. See
+        # analysis/extended_modules_adapter.py for what's wired and why.
+        if extended_ctx and extended_ctx.get('votes'):
+            from analysis.extended_modules_adapter import apply_extended_votes
+            bull_score, bear_score = apply_extended_votes(
+                extended_ctx['votes'], bull_score, bear_score, signals
+            )
 
         # ── Conflict Warnings ─────────────────────────────────
         if 'bearish' in trend and location == 'near_support':

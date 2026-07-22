@@ -405,6 +405,21 @@ class AnalysisAgent:
         bias_ctx    = bias_engine.get_ai_context(bias_result)
 
         # ── 6. Rule-based Signal ──────────────────────────────
+        # 17-module integration pass: pull in votes from the
+        # previously imported-only modules that only need `df`
+        # (andean_oscillator, supertrend, utbot_alerts,
+        # nadaraya_watson_envelope, daily_high_low,
+        # auction_market_theory, candlestick_patterns_ml).
+        # breaker_block/flip_zones/curve_mtf need order-block and
+        # zone data that isn't ready until step 8 (SMC Engine) —
+        # see the merge_zone_votes_into_signal() call below.
+        extended_ctx = {}
+        try:
+            from analysis.extended_modules_adapter import get_extended_votes
+            extended_ctx = get_extended_votes(df)
+        except Exception as e:
+            log.debug(f"[AnalysisAgent] Extended modules adapter error: {e}")
+
         signal_engine = SignalEngine()
         signal_result = signal_engine.generate(
             ind_ctx          = ind_ctx,
@@ -414,6 +429,7 @@ class AnalysisAgent:
             mtf_bias         = mtf_bias,
             advanced_pat_ctx = advanced_pat_ctx,
             fib_ctx          = fib_ctx,
+            extended_ctx     = extended_ctx,
         )
         signal_engine.print_summary(signal_result)
         signal_ctx = signal_engine.get_ai_context(signal_result)
@@ -517,6 +533,31 @@ class AnalysisAgent:
             smc_ctx    = smc.get_ai_context(smc_result)
         except Exception as e:
             log.warning(f"[AnalysisAgent] SMC Engine error: {e}")
+
+        # ── 8.05 Zone-dependent extended modules (17-module pass, cont'd) ──
+        # breaker_block / flip_zones / curve_mtf need order blocks and
+        # nearest demand/supply zones, which only exist now (SMC +
+        # Supply/Demand step above). Fold their votes into the
+        # already-computed signal_result/signal_ctx rather than
+        # re-running the whole SignalEngine.
+        try:
+            from analysis.extended_modules_adapter import (
+                get_zone_dependent_votes, merge_zone_votes_into_signal,
+            )
+            zone_order_blocks = smc_result.get("h4", {}).get("order_blocks", [])
+            zone_votes_ctx = get_zone_dependent_votes(
+                df,
+                order_blocks   = zone_order_blocks,
+                nearest_demand = supply_demand_ctx.get("nearest_demand"),
+                nearest_supply = supply_demand_ctx.get("nearest_supply"),
+            )
+            if zone_votes_ctx.get("votes"):
+                signal_result = merge_zone_votes_into_signal(
+                    signal_result, zone_votes_ctx["votes"]
+                )
+                signal_ctx = signal_engine.get_ai_context(signal_result)
+        except Exception as e:
+            log.debug(f"[AnalysisAgent] Zone-dependent extended modules error: {e}")
 
         # ── 8.1 Market Structure (Day 61 engine) ─────────────
         # Provides BOS/CHoCH/displacement context for downstream

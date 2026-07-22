@@ -438,22 +438,39 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     # ── analysis/ dead code (Round-22) ───────────────────────────────
     ObsoleteEntry(
         "analysis/candlestick_patterns_mw.py",
-        ObsoleteCategory.DEAD,
-        "685-line MotiveWave 33-pattern scanner. 0 importers. Superseded by "
-        "candlestick_patterns_ml.py (used by strategies/pattern_strategies_ml.py).",
-        "Archived to .dead_code_archived in Round-22.",
+        ObsoleteCategory.WIRED,
+        "CORRECTED (post-Round-22 audit): the 'superseded by candlestick_"
+        "patterns_ml.py' claim below was wrong — a direct read of both files "
+        "shows _mw.py is an independent 33-pattern scanner (1/2/3-bar, own "
+        "trend filter) while _ml.py is a separate 8-pattern boolean detector. "
+        "Neither duplicates the other, and the file was never actually moved "
+        "to .dead_code_archived as this entry previously claimed. Now wired "
+        "into analysis/extended_modules_adapter.py as a directional vote.",
+        "WIRED — see analysis/extended_modules_adapter.py:_vote_candlestick_patterns_mw.",
     ),
     ObsoleteEntry(
         "analysis/candlestick_patterns_br.py",
-        ObsoleteCategory.DEAD,
-        "584-line Brazilian book candlestick patterns. 0 importers.",
-        "Archived to .dead_code_archived in Round-22.",
+        ObsoleteCategory.WIRED,
+        "CORRECTED (post-Round-22 audit): 584-line Brazilian-book scanner "
+        "(11 patterns) with its own trend/volume/next-bar confirmation "
+        "filtering that candlestick_patterns_ml.py doesn't have — not a "
+        "duplicate. File was never actually archived as this entry "
+        "previously claimed. Now wired into analysis/extended_modules_"
+        "adapter.py as a bullish-only directional vote (module has no "
+        "bearish pattern set).",
+        "WIRED — see analysis/extended_modules_adapter.py:_vote_candlestick_patterns_br.",
     ),
     ObsoleteEntry(
         "analysis/supermao_ichimoku.py",
-        ObsoleteCategory.DEAD,
-        "200-line alternate Ichimoku implementation. 0 importers. Main ichimoku.py is live (4 importers).",
-        "Archived to .dead_code_archived in Round-22.",
+        ObsoleteCategory.WIRED,
+        "CORRECTED (post-Round-22 audit): 200-line alternate Ichimoku "
+        "implementation, distinct from the live analysis/ichimoku.py (own "
+        "TK-cross + cloud-position entry rule, ported from a different MQL4 "
+        "source). File was never actually archived as this entry previously "
+        "claimed. Now wired into analysis/extended_modules_adapter.py as a "
+        "directional vote (requires >=90 bars of history for the 52-period "
+        "Senkou Span B + 26-bar displacement).",
+        "WIRED — see analysis/extended_modules_adapter.py:_vote_supermao_ichimoku.",
     ),
 
     # ── agents/ dead code (Round-22) ─────────────────────────────────
