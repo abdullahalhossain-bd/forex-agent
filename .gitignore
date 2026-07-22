@@ -1,120 +1,64 @@
-<<<<<<< HEAD
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual Environment
-.venv/
-venv/
-env/
-
-# Environment Variables
-.env
-.env.*
-!.env.example
-
-# Logs
-logs/
-*.log
-*.tmp
-
-# IDE
-.vscode/
-.idea/
+```
+# Executable/binary files
+forex-agent
 
 # Dependencies
 node_modules/
-
-# Build / Cache
-build/
-dist/
-*.egg-info/
-
-# Machine Learning Models
-models/
-*.pkl
-*.pickle
-*.joblib
-*.h5
-*.pt
-*.onnx
-
-# Trading Bot Data
-data/
-cache/
-backtest_results/
-reports/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# OS files
-.DS_Store
-Thumbs.db
-=======
-```gitignore
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# Logs
-*.log
-
-# Environment files
-.env
-.env.local
-*.env.*
-
-# Dependencies
-venv/
 .venv/
-pip-wheel-metadata/
-*.egg-info/
+venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+dist/
+build/
+target/
+.gradle/
 
-# Coverage reports
-.coverage
-coverage/
-htmlcov/
-
-# IDE specific
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS specific
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# System files
 .DS_Store
 Thumbs.db
 
-# Build artifacts
-dist/
-build/
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-*.a
-*.o
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
-# Testing
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
-
-# Distribution / packaging
-*.tar.gz
-*.whl
+# Compressed files
 *.zip
-*.egg
-
-# Temporary files
-*.tmp
-*~
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```
->>>>>>> 6f0cc4f949ff1040bdbfa1fff0b1c749b75de2fc
