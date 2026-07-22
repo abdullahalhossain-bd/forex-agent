@@ -233,6 +233,10 @@ class OrderManager:
         # RED TEAM FIX: Spread check before placing any order.
         # If spread is abnormally wide (e.g., during news), reject the order.
         # This prevents entering at terrible prices during volatility spikes.
+        # entry_spread_pips is captured here (pre-trade) and reused later when
+        # reporting this fill to the ExecutionQualityMonitor — initialized
+        # up front so it's always defined even if the try block below fails.
+        entry_spread_pips = 0.0
         try:
             tick = mt5.symbol_info_tick(broker_symbol)
             if tick:
@@ -250,6 +254,7 @@ class OrderManager:
                 else:
                     pip_size = 0.0001  # fallback for 5-digit pairs
                 spread_pips = (tick.ask - tick.bid) / pip_size
+                entry_spread_pips = spread_pips
                 spread_limit_pips = _get_spread_limit_pips(symbol)
                 if spread_pips > spread_limit_pips:
                     log.warning(
@@ -396,7 +401,9 @@ class OrderManager:
                 "type_filling": filling_mode,
             }
 
+            _attempt_sent_at = time.monotonic()
             result = mt5.order_send(request)
+            fill_latency_ms = int((time.monotonic() - _attempt_sent_at) * 1000)
             # BLACK SWAN FIX: Validate API response before accessing attributes
             if result is None or not hasattr(result, 'retcode'):
                 log.warning(f"[OrderManager] order_send returned invalid response — MT5 API issue")
@@ -465,15 +472,27 @@ class OrderManager:
                         first_outcome=outcome,
                     )
                 # Day 97+ Book Page 11: Execution quality monitoring
+                #
+                # BUG FIX: this used to call `eqm.record_order(...)`, a method
+                # that doesn't exist on ExecutionQualityMonitor (only
+                # `record_trade` is defined there — likely a rename during a
+                # refactor that this call site never picked up). The
+                # AttributeError fired on every single fill and was silently
+                # swallowed by this except block, so slippage/latency
+                # monitoring never recorded a single trade in production.
+                # Now calling the real method with correctly-mapped params.
                 try:
                     from monitoring.execution_quality import get_execution_quality_monitor
                     eqm = get_execution_quality_monitor()
-                    eqm.record_order(
-                        symbol=broker_symbol, direction=direction,
-                        expected_entry=request.get("price", 0),
-                        actual_entry=getattr(result, "price", 0),
-                        lot=lot, success=True,
-                        ticket=outcome.get("ticket"),
+                    _fill_ticket = outcome.get("ticket")
+                    eqm.record_trade(
+                        ticket=int(_fill_ticket) if _fill_ticket else 0,
+                        pair=broker_symbol,
+                        requested=float(request.get("price", 0) or 0),
+                        executed=float(getattr(result, "price", 0) or request.get("price", 0) or 0),
+                        spread_pips=round(entry_spread_pips, 2),
+                        latency_ms=fill_latency_ms,
+                        direction=direction,
                     )
                 except Exception as e:
                     log.warning("Suppressed exception logging order confirmation event: %s", e)
@@ -668,22 +687,49 @@ class OrderManager:
     # ─────────────────────────────────────────────
 
     def modify_order(self, ticket: int, new_sl: float = None, new_tp: float = None) -> dict:
+        """Modify SL and/or TP on an open position (trailing stops, break-even, etc.).
+
+        Either `new_sl` or `new_tp` (or both) may be omitted — whichever is
+        omitted is preserved at its current broker-side value rather than
+        being cleared. This was already correct in the broker request below,
+        but the OLD log line printed the raw `new_tp`/`new_sl` *parameters*
+        (which are `None` whenever the caller didn't change that field) —
+        so every trailing-stop-only update (new_sl passed, new_tp omitted)
+        logged "TP None", making it look like the take-profit was being
+        wiped from the position when it was actually being preserved
+        correctly. Fixed to log the ACTUAL values sent to the broker.
+        """
         position = self._get_position(ticket)
         if position is None:
             return {"success": False, "reason": f"Position not found: {ticket}"}
+
+        effective_sl = new_sl if new_sl is not None else position.sl
+        effective_tp = new_tp if new_tp is not None else position.tp
 
         request = {
             "action":   mt5.TRADE_ACTION_SLTP,
             "position": ticket,
             "symbol":   position.symbol,
-            "sl":       new_sl if new_sl is not None else position.sl,
-            "tp":       new_tp if new_tp is not None else position.tp,
+            "sl":       effective_sl,
+            "tp":       effective_tp,
         }
 
         result = mt5.order_send(request)
-        outcome = self._check_confirmation(result, attempt=1)
+        # BUG FIX (garbage audit-log entries): pass symbol + a "modify"
+        # context so this doesn't get logged through the market-order path,
+        # which fabricated symbol="?" price=0.0 volume=0.0 ticket=0 for
+        # every SLTP modify (the broker doesn't populate those fields for
+        # position-modify requests — there's no new deal/order).
+        outcome = self._check_confirmation(
+            result, attempt=1, symbol=position.symbol,
+            context="modify", position_ticket=ticket,
+            modify_sl=effective_sl, modify_tp=effective_tp,
+        )
         if outcome["success"]:
-            log.info(f"[OrderManager] SL/TP updated — ticket {ticket} → SL {new_sl} TP {new_tp}")
+            log.info(
+                f"[OrderManager] SL/TP updated — ticket {ticket} → "
+                f"SL {effective_sl} TP {effective_tp}"
+            )
         return outcome
 
     # ─────────────────────────────────────────────
@@ -1016,7 +1062,17 @@ class OrderManager:
     # BONUS 2 + 3 — RETRY + CONFIRMATION
     # ─────────────────────────────────────────────
 
-    def _check_confirmation(self, result, attempt: int, requested_volume: float = None, symbol: str = "?") -> dict:
+    def _check_confirmation(
+        self,
+        result,
+        attempt: int,
+        requested_volume: float = None,
+        symbol: str = "?",
+        context: str = "order",
+        position_ticket: int = None,
+        modify_sl: float = None,
+        modify_tp: float = None,
+    ) -> dict:
         """mt5.order_send()-এর result.retcode চেক করে success/failure ঠিক করে।
 
         Audit fix (EX-1 / X-3): a "successful" retcode (10008/10009) only
@@ -1114,8 +1170,34 @@ class OrderManager:
             # logged as "broker.order_send" — identical event name — making it
             # impossible to tell from execution.log alone which orders actually
             # filled vs. were just accepted but never executed (ghost fills).
+            #
+            # BUG FIX (audit-log garbage data): a TRADE_ACTION_SLTP request
+            # (position modify — used for trailing stops, break-even moves,
+            # etc.) is NOT a deal. The broker legitimately returns
+            # result.price=0.0, result.volume=0.0, result.order=0,
+            # result.deal=0 for these — there's no new order/deal to report.
+            # This code used to funnel modify results through the same
+            # log_broker_order_send() call as market-order fills, which
+            # logged symbol="?" price=0.0 volume=0.0 ticket=0 — technically
+            # accurate to what the broker returned, but useless for an audit
+            # trail since it discards the one thing that actually matters
+            # for a modify: which position, and what SL/TP were requested.
+            # `context="modify"` now logs a dedicated event with the real
+            # position ticket, symbol, and SL/TP values instead.
             try:
-                if is_pending:
+                if context == "modify":
+                    from core.execution_logger import log_event
+                    log_event(
+                        "order.modify",
+                        symbol=symbol,
+                        ticket=position_ticket,
+                        sl=modify_sl,
+                        tp=modify_tp,
+                        retcode=result.retcode,
+                        comment=getattr(result, "comment", None),
+                        attempt=attempt,
+                    )
+                elif is_pending:
                     from core.execution_logger import log_broker_order_placed
                     log_broker_order_placed(
                         symbol=symbol,
@@ -1143,7 +1225,7 @@ class OrderManager:
                 pass
             return {
                 "success": True,
-                "ticket": result.order or result.deal,
+                "ticket": position_ticket if context == "modify" else (result.order or result.deal),
                 "retcode": result.retcode,
                 "price": result.price,
                 "volume": filled_volume,

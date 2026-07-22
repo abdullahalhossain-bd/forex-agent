@@ -17,7 +17,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
@@ -150,6 +150,17 @@ _TPD_BUDGET_BY_PROVIDER = {
 @dataclass
 class KeyHealth:
     """Tracks health of one API key."""
+
+    # Consecutive 401/403 failures allowed before permanent disable.
+    # 2 = one "benefit of the doubt" cooldown cycle (30min), then dead
+    # keys stop being retried. Configurable via env for ops flexibility.
+    # NOTE: must be typing.ClassVar, not a plain annotated field — a
+    # dataclass field with a default cannot precede `key`/`provider`/
+    # `index` (which have no defaults); ClassVar opts it out of the
+    # dataclass's generated __init__ entirely, which is what we want
+    # for a shared constant anyway.
+    AUTH_FAIL_PERMANENT_THRESHOLD: ClassVar[int] = int(os.getenv("LLM_KEY_AUTH_FAIL_THRESHOLD", "2"))
+
     key: str
     provider: str             
     index: int                
@@ -161,6 +172,18 @@ class KeyHealth:
     is_active: bool = True
     tpd_tokens_used: int = 0
     tpd_date: str = ""
+    # Day 140+ FIX (Bug#4 — infinite 401 retry loop): tracks how many
+    # *consecutive* auth failures (401/403) this key has produced since
+    # its last success. A single 401 could be a transient auth-service
+    # blip, so it still only gets a 30min cooldown. But a key that keeps
+    # failing 401 after every cooldown expires is provably dead (invalid/
+    # revoked credential — cooldown time never fixes that), and retrying
+    # it forever every 30min wastes a call + full round-trip per key per
+    # cycle for no possible benefit. After AUTH_FAIL_PERMANENT_THRESHOLD
+    # consecutive 401s we permanently disable it (is_active=False) so it
+    # stops being selected at all. Reset on any success, or manually via
+    # reset_keys(provider, force=True) once the credential is fixed.
+    consecutive_auth_failures: int = 0
 
     @property
     def is_available(self) -> bool:
@@ -199,6 +222,7 @@ class KeyHealth:
         self.success_count += 1
         self.last_success = time.time()
         self.rate_limited_until = 0.0  
+        self.consecutive_auth_failures = 0  
 
     def mark_failure(self, error: str = "", rate_limited: bool = False) -> None:
         self.fail_count += 1
@@ -224,16 +248,38 @@ class KeyHealth:
         # classified as auth_failed but never acted upon, so the key kept
         # getting selected and wasting API calls every cycle.
         elif "401" in error or "403" in error or "unauthorized" in err_lower:
-            # P4b FIX (Bug#5): use a long cooldown instead of permanent disable.
-            # A transient auth service outage or brief misconfiguration should
-            # not permanently kill the key for the process lifetime.
-            # 30 minutes is long enough to surface the issue without requiring
-            # a restart. reset_keys(force=True) can also restore it.
-            self.rate_limited_until = time.time() + 1800
-            log.error(
-                f"[LLM Keys] {self.provider} key #{self.index + 1} auth failure "
-                f"({'401' if '401' in error else '403'}) — 30min cooldown (was permanent disable)"
-            )
+            self.consecutive_auth_failures += 1
+            # Day 140+ FIX (Bug#4): P4b's move away from permanent-disable
+            # (30min cooldown "in case it's transient") had no upper bound —
+            # confirmed in production logs: 7/7 Groq keys invalid, every one
+            # retried every 30min forever, burning a call + round-trip per
+            # key per cycle with zero chance of success (an invalid/revoked
+            # API key does not become valid by waiting). We keep the
+            # transient-friendly behavior for the FIRST failure (could be a
+            # momentary auth-service blip), but a key that is STILL failing
+            # 401/403 after its cooldown has already expired and it was
+            # retried is provably dead — permanently disable it so it stops
+            # being selected. `mark_success()` resets this counter, and
+            # `reset_keys(provider, force=True)` remains available to
+            # manually revive a key once the operator fixes the credential.
+            if self.consecutive_auth_failures >= self.AUTH_FAIL_PERMANENT_THRESHOLD:
+                self.is_active = False
+                self.rate_limited_until = 0.0
+                log.error(
+                    f"[LLM Keys] {self.provider} key #{self.index + 1} PERMANENTLY "
+                    f"DISABLED — {self.consecutive_auth_failures} consecutive auth "
+                    f"failures ({'401' if '401' in error else '403'}). Key is invalid/"
+                    f"revoked; retrying will not help. Fix the credential and call "
+                    f"reset_keys(provider='{self.provider}', force=True) to re-enable."
+                )
+            else:
+                self.rate_limited_until = time.time() + 1800
+                log.error(
+                    f"[LLM Keys] {self.provider} key #{self.index + 1} auth failure "
+                    f"({'401' if '401' in error else '403'}) — 30min cooldown "
+                    f"({self.consecutive_auth_failures}/{self.AUTH_FAIL_PERMANENT_THRESHOLD} "
+                    f"before permanent disable)"
+                )
         elif is_network_error:
             log.debug(
                 f"[LLM Keys] {self.provider} key #{self.index + 1} network error "
