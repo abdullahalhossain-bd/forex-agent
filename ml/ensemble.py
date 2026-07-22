@@ -230,10 +230,31 @@ class EnsembleEngine:
                        (1 - effective_rule_conf / 100) if rule_signal == "SELL" else 0.5,
         ))
 
-        # MasterAnalyst LLM (optional 5th vote — high weight but we treat it
-        # as part of "rules" since the confluence engine already incorporates it)
-        # For now, we use it as a confirmation signal but don't add a separate vote.
-        # This keeps the agreement math clean (4 models).
+        # MasterAnalyst LLM — now a genuine independent vote.
+        #
+        # BUGFIX (2026-07-23): previously the LLM was NEVER added as its
+        # own ModelVote here — the comment said "keeps agreement math
+        # clean (4 models)" but that meant the ensemble's agreement count
+        # could never reflect LLM confirmation at all, capping consensus
+        # (e.g. rules+LLM both BUY still only ever showed as "1/1 rules"
+        # or diluted the agreement ratio in the general case). Both
+        # VotingEngine._agreement_position() and ConfidenceFusion.fuse()
+        # already compute agreement/weights dynamically for any voter
+        # count (see their docstrings), so adding a 5th voter here is
+        # safe — no hardcoded "N/4" assumption downstream in this file.
+        # ConfidenceFusion's weight lookup for a new model_name defaults
+        # to 0 unless the name is registered in model_weights.json, so
+        # "master_analyst" was added there alongside this change.
+        if master_signal in ("BUY", "SELL") and master_confidence > 0:
+            votes.append(ModelVote(
+                model_name="master_analyst",
+                signal=master_signal,
+                confidence=master_confidence,
+                probability=(master_confidence / 100) if master_signal == "BUY"
+                            else (1 - master_confidence / 100),
+            ))
+        else:
+            excluded_voters["master_analyst"] = "no_signal_or_zero_confidence"
 
         # ── Step 2: Vote ────────────────────────────────────────────
         vote_result = self.voting.vote(votes)
@@ -258,8 +279,9 @@ class EnsembleEngine:
             # cross-validation, no agreement check, nothing to detect
             # dissent against) was the only path capable of full sizing at
             # the bare minimum threshold. Every other path requires
-            # multi-model agreement (per model_weights.json's
-            # `_agreement_rules`, FULL size needs "4/4") before granting
+            # multi-model agreement (position sizing is ratio-based, see
+            # ml/voting_engine.py:_agreement_position — FULL needs 100%
+            # of available voters agreeing) before granting
             # FULL. Capital protection comes first: rules-only mode is now
             # capped at HALF size regardless of confidence. If ML models
             # come back online, agreement-based sizing resumes normally.

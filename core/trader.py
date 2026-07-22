@@ -1100,7 +1100,16 @@ class AITrader:
                 failed_checks=[c.get("check", "?") for c in perm_out.get("checks", [])
                                if not c.get("passed", True)],
                 decision=dec_out.get("decision"),
-                confidence=dec_out.get("confidence", 0),
+                # Day 81+ fix (log discrepancy): previously logged only
+                # dec_out["confidence"] (pre-penalty), which could show e.g.
+                # "Confidence: 73%" right next to a failed "Min confidence"
+                # check whose actual gating value (post entry-quality-penalty,
+                # e.g. 52%) lived only in trader.log. Log both explicitly so
+                # execution.log alone is enough to audit/backtest against.
+                confidence_pre_penalty=perm_out.get(
+                    "confidence_pre_penalty", dec_out.get("confidence", 0)),
+                confidence_post_penalty=perm_out.get(
+                    "confidence_post_penalty", dec_out.get("confidence", 0)),
             )
         except Exception as e:
             log.warning(f"Suppressed exception at line 881: {e}")

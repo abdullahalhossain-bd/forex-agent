@@ -161,11 +161,29 @@ class RiskEngine:
 
         # Day 81+ hotfix: cap at self.MAX_LOT (0.20 default), not 100.0.
         lot      = round(max(0.01, min(lot_raw, self.MAX_LOT)), 2)
+
+        # Risk-sizing mismatch fix: when MAX_LOT caps the lot below what
+        # the intended risk % would need, risk_usd/risk_pc computed from
+        # the PRE-cap lot become fictional — e.g. "Risk: 1.0%" logged and
+        # reported downstream (exposure_manager, correlation_manager,
+        # trader.py confidence scaling) while the account is actually only
+        # exposed to a tiny fraction of that. Recompute both from the
+        # FINAL, post-cap lot so every consumer of risk_usd/risk_pc sees
+        # the real number. The pre-cap intended values are kept alongside
+        # under *_intended for audit/backtest transparency.
+        risk_usd_intended = risk_usd
+        risk_pc_intended  = self.MAX_RISK_PC
         if lot_raw > self.MAX_LOT:
+            risk_usd = round(lot * sl_pips * pip_val, 2)
+            risk_pc  = round((risk_usd / self.balance) * 100, 4) if self.balance > 0 else 0.0
             log.warning(
-                f"[RiskEngine] lot_raw={lot_raw:.2f} capped to MAX_LOT={self.MAX_LOT} "
-                f"(risk_usd=${risk_usd} sl_pips={sl_pips} pip_val=${pip_val})"
+                f"[RiskEngine] Intended lot {lot_raw:.2f} capped to {self.MAX_LOT} — "
+                f"Effective risk reduced from {risk_pc_intended:.2f}% (${risk_usd_intended}) "
+                f"to {risk_pc:.4f}% (${risk_usd}) "
+                f"(sl_pips={sl_pips} pip_val=${pip_val})"
             )
+        else:
+            risk_pc = risk_pc_intended
 
         margin_needed = lot * 1000
         if margin_needed > self.balance * 0.5:
@@ -182,7 +200,13 @@ class RiskEngine:
             "tp_pips":       tp_pips,
             "lot":           lot,
             "risk_usd":      risk_usd,
-            "risk_pc":       self.MAX_RISK_PC,
+            "risk_pc":       risk_pc,
+            # Audit/backtest transparency: what the sizing model WANTED
+            # before MAX_LOT capping. Equal to risk_usd/risk_pc when no
+            # capping occurred.
+            "risk_usd_intended": risk_usd_intended,
+            "risk_pc_intended":  risk_pc_intended,
+            "lot_capped":        lot_raw > self.MAX_LOT,
             "rr_ratio":      rr_ratio,
             "daily_loss_pc": round(daily_loss_pc, 2),
             "open_trades":   open_trades,

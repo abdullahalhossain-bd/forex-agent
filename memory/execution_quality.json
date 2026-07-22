@@ -1,0 +1,14 @@
+[
+  {
+    "ticket": 9680545010,
+    "pair": "AUDUSD",
+    "direction": "SELL",
+    "requested": 0.69948,
+    "executed": 0.69948,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.0,
+    "latency_ms": 254,
+    "timestamp": "2026-07-22T19:00:48+00:00"
+  }
+]

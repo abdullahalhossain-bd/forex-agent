@@ -429,7 +429,7 @@ class AnalysisAgent:
         extended_ctx = {}
         try:
             from analysis.extended_modules_adapter import get_extended_votes
-            extended_ctx = get_extended_votes(df)
+            extended_ctx = get_extended_votes(df, symbol=symbol)
         except Exception as e:
             log.debug(f"[AnalysisAgent] Extended modules adapter error: {e}")
 

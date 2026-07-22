@@ -1,8 +1,8 @@
 {
   "mode": "TRADING",
   "consecutive_losses": 1,
-  "daily_loss_usd": 5.42,
-  "date": "2026-07-22",
+  "daily_loss_usd": 0.0,
+  "date": "2026-07-23",
   "recent_results": [
     {
       "result": "WIN",

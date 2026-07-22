@@ -1,9 +1,10 @@
 {
-  "_comment": "Day 70+ — Default ensemble model weights with relaxed thresholds for more trade activity.",
+  "_comment": "Day 70+ — Default ensemble model weights with relaxed thresholds for more trade activity. master_analyst (LLM) added 2026-07-23 as a genuine 5th voter (see ml/ensemble.py) — weights don't need to sum to 1.0, ConfidenceFusion.fuse() renormalizes dynamically.",
   "xgboost": 0.35,
   "random_forest": 0.20,
   "lstm": 0.25,
   "rules": 0.20,
+  "master_analyst": 0.20,
   "_regime_adjustments": {
     "TRENDING": {
       "xgboost": 0.05,
@@ -30,6 +31,7 @@
       "lstm": -0.10
     }
   },
+  "_agreement_rules_note": "Informational only — NOT read by code. Actual position sizing is ratio-based (see ml/voting_engine.py:_agreement_position): >=100% agreement=FULL, >=75%=HALF, >=50%=REDUCED, else NO_TRADE. Works for any voter count, e.g. now 5 with master_analyst included.",
   "_agreement_rules": {
     "4/4": "FULL",
     "3/4": "HALF",

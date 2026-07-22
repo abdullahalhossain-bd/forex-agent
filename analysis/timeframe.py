@@ -38,6 +38,24 @@ class MultiTimeframeAnalyzer:
         timeframes = timeframes or MTF_CHAIN
         results    = {}
 
+        # Stale-data fix: this fetch path is independent of the primary
+        # pipeline's df (core/trader.py), which already gates on
+        # check_data_staleness()/compute_staleness_threshold(). This one
+        # never did — each MTF leg (1d/4h/1h/15m) was used for bias
+        # calculation no matter how old its last candle was. In practice
+        # a stale H1 fetch (e.g. ~6583s / ~1h50m old — nearly 2 closed H1
+        # bars behind) would silently feed a wrong trend into get_bias(),
+        # which MarketBiasEngine/SignalEngine then treat as current.
+        try:
+            from core.production_hardening import (
+                check_data_staleness,
+                compute_staleness_threshold,
+            )
+            _staleness_available = True
+        except Exception as e:
+            log.debug(f"MTF: staleness check unavailable ({e}) — skipping freshness gate")
+            _staleness_available = False
+
         for tf in timeframes:
             log.info(f"MTF: Fetching {self.symbol} {tf}")
             df = self.fetcher.fetch_ohlcv(
@@ -48,6 +66,20 @@ class MultiTimeframeAnalyzer:
             if df is None:
                 log.warning(f"MTF: Could not fetch {tf}")
                 continue
+
+            if _staleness_available:
+                try:
+                    max_age = compute_staleness_threshold(tf)
+                    staleness = check_data_staleness(df, max_age_sec=max_age)
+                    if staleness.get("is_stale"):
+                        log.warning(
+                            f"MTF: {tf} data is STALE — {staleness.get('reason')} "
+                            f"(threshold={max_age}s) — excluding {tf} from bias "
+                            f"calculation instead of trading on a stale candle"
+                        )
+                        continue
+                except Exception as e:
+                    log.debug(f"MTF: staleness check failed for {tf} (non-fatal): {e}")
 
             df  = self.ind.add_all(df)
             ctx = self.ind.get_ai_context(df)

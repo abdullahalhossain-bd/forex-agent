@@ -246,6 +246,10 @@ class TradePermission:
                             "tp":            risk_out.get("tp_price"),
                             "lot":           risk_out.get("lot", 0),
                             "rr":            risk_out.get("rr_ratio", 0),
+                            # Hard block happens before any confidence penalty
+                            # is applied, so pre/post are identical here.
+                            "confidence_pre_penalty":  conf,
+                            "confidence_post_penalty": conf,
                         }
                         log.info(
                             f"[TradePermission] EXTREME BLOCK by entry quality: "
@@ -296,6 +300,15 @@ class TradePermission:
             "detail": f"{conf}% (min {self.MIN_CONFIDENCE}%)",
         })
         if ok: passed += 1
+
+        # Log-transparency fix: capture the EXACT value compared against
+        # MIN_CONFIDENCE above (post entry-quality-penalty), separately from
+        # the raw analysis confidence (pre-penalty). Downstream logging
+        # (execution.log) must report both so "Confidence: 73%" next to a
+        # failed "Min confidence" check never looks like a phantom bug when
+        # the real effective value (e.g. 52%) is what actually got compared.
+        _confidence_pre_penalty  = decision_out.get("confidence", 0)
+        _confidence_post_penalty = conf
 
         # 5. Session quality (optional)
         # In TEST_MODE: session quality is just a logged warning, NOT a
@@ -499,6 +512,12 @@ class TradePermission:
             "tp":                 risk_out.get("tp_price"),
             "lot":                risk_out.get("lot", 0),
             "rr":                 risk_out.get("rr_ratio", 0),
+            # Log-transparency fix: expose both confidence values explicitly
+            # so execution.log never shows the pre-penalty number next to a
+            # "Min confidence" failure that was actually decided on the
+            # post-penalty number (see risk/trade_permission.py check()).
+            "confidence_pre_penalty":  _confidence_pre_penalty,
+            "confidence_post_penalty": _confidence_post_penalty,
         }
 
         # ── INSTITUTIONAL LOG FORMAT ────────────────────────────────
