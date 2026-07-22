@@ -1109,17 +1109,35 @@ class OrderManager:
                     log.warning(f"Suppressed exception logging partial_fill event: {e}")
 
             # Day 81+ hotfix: log every successful order_send to logs/execution.log
+            # P3 FIX: use SEPARATE event types for PLACED vs FILLED so phantom
+            # entries are distinguishable.  Previously both 10008 and 10009
+            # logged as "broker.order_send" — identical event name — making it
+            # impossible to tell from execution.log alone which orders actually
+            # filled vs. were just accepted but never executed (ghost fills).
             try:
-                from core.execution_logger import log_broker_order_send
-                log_broker_order_send(
-                    symbol=symbol,
-                    retcode=result.retcode,
-                    comment=getattr(result, "comment", None),
-                    price=result.price,
-                    volume=result.volume,
-                    ticket=result.order or result.deal,
-                    attempt=attempt,
-                )
+                if is_pending:
+                    from core.execution_logger import log_broker_order_placed
+                    log_broker_order_placed(
+                        symbol=symbol,
+                        retcode=result.retcode,
+                        comment=getattr(result, "comment", None),
+                        price=result.price,
+                        volume=result.volume,
+                        ticket=result.order or result.deal,
+                        attempt=attempt,
+                    )
+                else:
+                    from core.execution_logger import log_broker_order_send
+                    log_broker_order_send(
+                        symbol=symbol,
+                        retcode=result.retcode,
+                        comment=getattr(result, "comment", None),
+                        price=result.price,
+                        volume=result.volume,
+                        ticket=result.order or result.deal,
+                        attempt=attempt,
+                        pending=False,
+                    )
             except Exception as e:
                 log.warning("Suppressed exception while logging broker order_send: %s", e)
                 pass

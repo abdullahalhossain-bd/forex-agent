@@ -105,6 +105,14 @@ class HistoricalMT5Provider(DataProvider):
         return self._df.index[self._cursor]
 
     def get_market_out(self, symbol: str, timeframe: str) -> dict:
+        # P4c FIX: guard against empty DataFrame or out-of-bounds cursor
+        if self._df is None or len(self._df) == 0:
+            log.warning("[HistoricalMT5Provider] Empty DataFrame — returning error dict")
+            return {"error": "empty_data", "df": None, "symbol": symbol, "timeframe": timeframe}
+        if self._cursor < 0 or self._cursor >= len(self._df):
+            log.warning(f"[HistoricalMT5Provider] cursor {self._cursor} out of bounds (len={len(self._df)})")
+            self._cursor = max(0, min(self._cursor, len(self._df) - 1))
+
         df_slice = self._df.iloc[: self._cursor + 1].copy()
         ind_ctx = {}
         try:

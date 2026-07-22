@@ -524,13 +524,35 @@ class PositionManager:
         if self.on_closed:
             self.on_closed(symbol, result, pnl)
 
+        # P1 FIX: wrap in try/except so a trade_memory failure
+        # (e.g. missing add_lesson method, DB write error) does NOT
+        # prevent risk_engine + cost_analysis + cleanup from running.
+        # Previously the missing add_lesson() raised AttributeError
+        # and silently killed the rest of _handle_close().
         if self.trade_memory:
-            self.trade_memory.add_lesson({
-                "pair": symbol, "type": last_known.get("type"),
-                "result": result, "pnl": round(pnl, 2),
-                "close_reason": "MT5_CLOSE",
-                "context": {"source": "mt5_demo"},
-            })
+            try:
+                # Compute pips for richer lesson context
+                _entry = last_known.get("price_open", 0)
+                _exit  = deal["price"] if deal else _entry
+                _pips_val = _pips(symbol, _exit - _entry) if _entry else 0.0
+
+                self.trade_memory.add_lesson({
+                    "pair": symbol,
+                    "type": last_known.get("type"),
+                    "result": result,
+                    "pnl": round(pnl, 2),
+                    "pnl_pips": round(_pips_val, 1),
+                    "close_reason": "MT5_CLOSE",
+                    "context": {
+                        "source": "mt5_demo",
+                        "regime": last_known.get("regime", "unknown"),
+                        "trend":  last_known.get("trend", "unknown"),
+                        "mtf_bias": last_known.get("mtf_bias", "unknown"),
+                        "rsi":    last_known.get("rsi"),
+                    },
+                })
+            except Exception as e:
+                log.warning(f"[PositionManager] trade_memory.add_lesson failed (non-critical): {e}")
 
         if self.risk_engine:
             self.risk_engine.record_trade_close(symbol, pnl)

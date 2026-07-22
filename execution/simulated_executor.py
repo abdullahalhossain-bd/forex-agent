@@ -20,7 +20,7 @@ import random
 from typing import Any
 
 from utils.logger import get_logger
-from core.execution_logger import log_broker_order_send, log_router_success
+from core.execution_logger import log_broker_order_send, log_broker_order_placed, log_router_success
 
 log = get_logger("simulated_executor")
 
@@ -84,6 +84,8 @@ class SimulatedExecutor:
             volume=lot,
             ticket=ticket,
             simulated=True,
+            action="open",
+            pending=False,
         )
 
         log.info(
@@ -105,10 +107,15 @@ class SimulatedExecutor:
         """Return empty list — simulator doesn't track positions."""
         return []
 
-    def close_order(self, ticket: int) -> dict[str, Any]:
-        """Simulate closing a position."""
+    def close_order(self, ticket: int, symbol: str = "unknown") -> dict[str, Any]:
+        """Simulate closing a position.
+
+        P3 FIX: accepts ``symbol`` so the close event is traceable.
+        Previously hardcoded symbol="unknown" — every simulated close
+        looked like a ghost from an unidentifiable pair.
+        """
         log_broker_order_send(
-            symbol="unknown",
+            symbol=symbol,
             retcode=self.RETCODE_DONE,
             comment="SIMULATED CLOSE",
             price=None,
@@ -116,5 +123,6 @@ class SimulatedExecutor:
             ticket=ticket,
             simulated=True,
             action="close",
+            pending=False,
         )
         return {"success": True, "ticket": ticket, "retcode": self.RETCODE_DONE}

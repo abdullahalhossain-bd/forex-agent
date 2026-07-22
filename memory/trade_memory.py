@@ -446,5 +446,86 @@ class TradeMemory:
         with open(METADATA_PATH, "w") as f:
             json.dump(self._metadata, f, indent=2)
 
+    # ── Bridge method for PositionManager._handle_close() ─────────────────
+
+    def add_lesson(self, lesson_data: dict) -> None:
+        """PositionManager calls this on every MT5 close event.
+
+        The original code at broker/position_manager.py:528 called
+        ``self.trade_memory.add_lesson(...)`` but TradeMemory never had
+        this method — every close threw ``AttributeError``, which meant:
+          * risk_engine.record_trade_close() never ran (line after the crash)
+          * cost-analysis tracking never ran
+          * cleanup sets (_breakeven_done etc.) were never cleared
+          * the bot learned NOTHING from any closed trade
+
+        This bridge method accepts the simplified payload that
+        PositionManager can easily provide and routes it to the
+        correct internal methods:
+          1. Pattern memory (winning / losing pattern recording)
+          2. Vector memory (if embedding model is available)
+        """
+        try:
+            pair     = lesson_data.get("pair", "unknown")
+            sig_type = lesson_data.get("type", "unknown")
+            result   = lesson_data.get("result", "UNKNOWN")
+            pnl      = lesson_data.get("pnl", 0.0)
+            reason   = lesson_data.get("close_reason", "UNKNOWN")
+            ctx      = lesson_data.get("context", {}) or {}
+
+            # 1. Record in pattern memory
+            if result == "LOSS":
+                self.pattern.add_losing_pattern({
+                    "pair":    pair,
+                    "signal":  sig_type,
+                    "pattern": ctx.get("pattern", "unknown"),
+                    "regime":  ctx.get("regime", "unknown"),
+                    "rsi":     ctx.get("rsi"),
+                    "pnl":     pnl,
+                }, lesson=self._generate_lesson_from_add_lesson(lesson_data))
+            else:
+                self.pattern.add_winning_pattern({
+                    "pair":    pair,
+                    "signal":  sig_type,
+                    "pattern": ctx.get("pattern", "unknown"),
+                    "regime":  ctx.get("regime", "unknown"),
+                    "rsi":     ctx.get("rsi"),
+                    "pnl":     pnl,
+                    "rr":      ctx.get("rr", 0),
+                })
+
+            # 2. Vector memory lesson (if embedding model available)
+            if self._has_model():
+                self.add_vector_lesson({
+                    "pair":         pair,
+                    "type":         sig_type,
+                    "result":       result,
+                    "pnl":          pnl,
+                    "pnl_pips":     lesson_data.get("pnl_pips", 0.0),
+                    "close_reason": reason,
+                    "context":      ctx,
+                })
+
+            log.info(f"[TradeMemory] add_lesson: {pair} {sig_type} → {result} (${pnl}) via {reason}")
+
+        except Exception as e:
+            log.error(f"[TradeMemory] add_lesson failed: {e}", exc_info=True)
+
+    def _generate_lesson_from_add_lesson(self, lesson_data: dict) -> str:
+        """Generate a lesson string from the simplified add_lesson payload."""
+        ctx = lesson_data.get("context", {}) or {}
+        regime = ctx.get("regime", "")
+        sig_type = lesson_data.get("type", "")
+        result = lesson_data.get("result", "")
+
+        if "BEAR" in str(regime) and sig_type == "BUY":
+            return "Bought against bearish regime (MT5 close). Do not fight the higher timeframe trend."
+        elif "BULL" in str(regime) and sig_type == "SELL":
+            return "Sold against bullish regime (MT5 close). Do not fight the higher timeframe trend."
+        elif result == "LOSS":
+            return f"MT5 close LOSS on {lesson_data.get('pair')} {sig_type}. Review entry timing and regime alignment."
+        else:
+            return f"MT5 close {result} on {lesson_data.get('pair')} {sig_type}."
+
     def close(self):
         self.db.close()

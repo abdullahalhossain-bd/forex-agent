@@ -219,9 +219,21 @@ class KeyHealth:
                 f"[LLM Keys] {self.provider} key #{self.index + 1} "
                 f"rate-limited, disabled for {cooldown}s"
             )
-        elif "401" in error or "unauthorized" in err_lower:
-            self.is_active = False
-            log.error(f"[LLM Keys] {self.provider} key #{self.index + 1} unauthorized — permanently disabled")
+        # P4b FIX (Bug#2): also handle 403 Forbidden — previously only
+        # 401 triggered action. 403 (common from Cerebras/Cloudflare) was
+        # classified as auth_failed but never acted upon, so the key kept
+        # getting selected and wasting API calls every cycle.
+        elif "401" in error or "403" in error or "unauthorized" in err_lower:
+            # P4b FIX (Bug#5): use a long cooldown instead of permanent disable.
+            # A transient auth service outage or brief misconfiguration should
+            # not permanently kill the key for the process lifetime.
+            # 30 minutes is long enough to surface the issue without requiring
+            # a restart. reset_keys(force=True) can also restore it.
+            self.rate_limited_until = time.time() + 1800
+            log.error(
+                f"[LLM Keys] {self.provider} key #{self.index + 1} auth failure "
+                f"({'401' if '401' in error else '403'}) — 30min cooldown (was permanent disable)"
+            )
         elif is_network_error:
             log.debug(
                 f"[LLM Keys] {self.provider} key #{self.index + 1} network error "
@@ -679,6 +691,13 @@ class LLMKeyManager:
 
     # ── OpenAI Compatible Custom Shims (Cerebras / SambaNova / OpenRouter / Last resorts) ──
 
+    # P4b FIX (Bug#1): All 8 non-Groq/Gemini providers now use the same
+    # _remember_client_key / _consume_client_key pattern that Groq and
+    # Gemini use.  Previously, mark_xxx_success/failure used broken
+    # (self._xxx_index - 1) % len(available) arithmetic which marked the
+    # WRONG key under concurrent access or when key availability changed
+    # between get and mark calls.
+
     def get_cerebras_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._cerebras_keys if k.is_available]
@@ -686,17 +705,19 @@ class LLMKeyManager:
             key = available[self._cerebras_index % len(available)]
             self._cerebras_index += 1
         base_url = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
-        return _OpenAICompatClient(key.key, base_url, "cerebras")
+        client = _OpenAICompatClient(key.key, base_url, "cerebras")
+        self._remember_client_key("cerebras", client, key)
+        return client
 
-    def mark_cerebras_success(self) -> None:
+    def mark_cerebras_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._cerebras_keys if k.is_available]
-            if available: available[(self._cerebras_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("cerebras", client)
+            if key is not None: key.mark_success()
 
-    def mark_cerebras_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_cerebras_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._cerebras_keys if k.is_available]
-            if available: available[(self._cerebras_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("cerebras", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_sambanova_client(self) -> Optional[Any]:
         with self._lock:
@@ -705,17 +726,19 @@ class LLMKeyManager:
             key = available[self._sambanova_index % len(available)]
             self._sambanova_index += 1
         base_url = os.getenv("SAMBANOVA_BASE_URL", "https://api.sambanova.ai/v1")
-        return _OpenAICompatClient(key.key, base_url, "sambanova")
+        client = _OpenAICompatClient(key.key, base_url, "sambanova")
+        self._remember_client_key("sambanova", client, key)
+        return client
 
-    def mark_sambanova_success(self) -> None:
+    def mark_sambanova_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._sambanova_keys if k.is_available]
-            if available: available[(self._sambanova_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("sambanova", client)
+            if key is not None: key.mark_success()
 
-    def mark_sambanova_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_sambanova_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._sambanova_keys if k.is_available]
-            if available: available[(self._sambanova_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("sambanova", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_openrouter_client(self) -> Optional[Any]:
         with self._lock:
@@ -724,17 +747,19 @@ class LLMKeyManager:
             key = available[self._openrouter_index % len(available)]
             self._openrouter_index += 1
         base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        return _OpenAICompatClient(key.key, base_url, "openrouter")
+        client = _OpenAICompatClient(key.key, base_url, "openrouter")
+        self._remember_client_key("openrouter", client, key)
+        return client
 
-    def mark_openrouter_success(self) -> None:
+    def mark_openrouter_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._openrouter_keys if k.is_available]
-            if available: available[(self._openrouter_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("openrouter", client)
+            if key is not None: key.mark_success()
 
-    def mark_openrouter_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_openrouter_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._openrouter_keys if k.is_available]
-            if available: available[(self._openrouter_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("openrouter", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_github_client(self) -> Optional[Any]:
         with self._lock:
@@ -743,17 +768,19 @@ class LLMKeyManager:
             key = available[self._github_index % len(available)]
             self._github_index += 1
         base_url = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.inference.ai.azure.com")
-        return _OpenAICompatClient(key.key, base_url, "github")
+        client = _OpenAICompatClient(key.key, base_url, "github")
+        self._remember_client_key("github", client, key)
+        return client
 
-    def mark_github_success(self) -> None:
+    def mark_github_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._github_keys if k.is_available]
-            if available: available[(self._github_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("github", client)
+            if key is not None: key.mark_success()
 
-    def mark_github_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_github_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._github_keys if k.is_available]
-            if available: available[(self._github_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("github", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_huggingface_client(self) -> Optional[Any]:
         with self._lock:
@@ -762,17 +789,19 @@ class LLMKeyManager:
             key = available[self._huggingface_index % len(available)]
             self._huggingface_index += 1
         base_url = os.getenv("HUGGINGFACE_BASE_URL", "https://api-inference.huggingface.co/v1")
-        return _OpenAICompatClient(key.key, base_url, "huggingface")
+        client = _OpenAICompatClient(key.key, base_url, "huggingface")
+        self._remember_client_key("huggingface", client, key)
+        return client
 
-    def mark_huggingface_success(self) -> None:
+    def mark_huggingface_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._huggingface_keys if k.is_available]
-            if available: available[(self._huggingface_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("huggingface", client)
+            if key is not None: key.mark_success()
 
-    def mark_huggingface_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_huggingface_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._huggingface_keys if k.is_available]
-            if available: available[(self._huggingface_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("huggingface", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_claude_client(self) -> Optional[Any]:
         with self._lock:
@@ -781,17 +810,19 @@ class LLMKeyManager:
             key = available[self._claude_index % len(available)]
             self._claude_index += 1
         base_url = os.getenv("CLAUDE_BASE_URL", "https://api.anthropic.com/v1")
-        return _OpenAICompatClient(key.key, base_url, "claude")
+        client = _OpenAICompatClient(key.key, base_url, "claude")
+        self._remember_client_key("claude", client, key)
+        return client
 
-    def mark_claude_success(self) -> None:
+    def mark_claude_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._claude_keys if k.is_available]
-            if available: available[(self._claude_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("claude", client)
+            if key is not None: key.mark_success()
 
-    def mark_claude_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_claude_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._claude_keys if k.is_available]
-            if available: available[(self._claude_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("claude", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_glm_client(self) -> Optional[Any]:
         with self._lock:
@@ -800,17 +831,19 @@ class LLMKeyManager:
             key = available[self._glm_index % len(available)]
             self._glm_index += 1
         base_url = os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
-        return _OpenAICompatClient(key.key, base_url, "glm")
+        client = _OpenAICompatClient(key.key, base_url, "glm")
+        self._remember_client_key("glm", client, key)
+        return client
 
-    def mark_glm_success(self) -> None:
+    def mark_glm_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._glm_keys if k.is_available]
-            if available: available[(self._glm_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("glm", client)
+            if key is not None: key.mark_success()
 
-    def mark_glm_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_glm_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._glm_keys if k.is_available]
-            if available: available[(self._glm_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("glm", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     def get_deepseek_client(self) -> Optional[Any]:
         with self._lock:
@@ -819,17 +852,19 @@ class LLMKeyManager:
             key = available[self._deepseek_index % len(available)]
             self._deepseek_index += 1
         base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        return _OpenAICompatClient(key.key, base_url, "deepseek")
+        client = _OpenAICompatClient(key.key, base_url, "deepseek")
+        self._remember_client_key("deepseek", client, key)
+        return client
 
-    def mark_deepseek_success(self) -> None:
+    def mark_deepseek_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._deepseek_keys if k.is_available]
-            if available: available[(self._deepseek_index - 1) % len(available)].mark_success()
+            key = self._consume_client_key("deepseek", client)
+            if key is not None: key.mark_success()
 
-    def mark_deepseek_failure(self, error: str = "", rate_limited: bool = False) -> None:
+    def mark_deepseek_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
-            available = [k for k in self._deepseek_keys if k.is_available]
-            if available: available[(self._deepseek_index - 1) % len(available)].mark_failure(error, rate_limited)
+            key = self._consume_client_key("deepseek", client)
+            if key is not None: key.mark_failure(error, rate_limited)
 
     # ── Property Checkers ──
 
@@ -965,25 +1000,55 @@ class LLMKeyManager:
             return result
 
     def status(self) -> Dict[str, Any]:
+        # P4b FIX (Bug#7): report all 10 providers, not just Groq/Gemini
         with self._lock:
+            def _pstat(keys, name):
+                return {"total": len(keys), "available": sum(1 for k in keys if k.is_available)}
             return {
-                "groq": {"total": len(self._groq_keys), "available": sum(1 for k in self._groq_keys if k.is_available)},
-                "gemini": {"total": len(self._gemini_keys), "available": sum(1 for k in self._gemini_keys if k.is_available)},
+                "groq": _pstat(self._groq_keys, "groq"),
+                "gemini": _pstat(self._gemini_keys, "gemini"),
+                "cerebras": _pstat(self._cerebras_keys, "cerebras"),
+                "sambanova": _pstat(self._sambanova_keys, "sambanova"),
+                "openrouter": _pstat(self._openrouter_keys, "openrouter"),
+                "github": _pstat(self._github_keys, "github"),
+                "huggingface": _pstat(self._huggingface_keys, "huggingface"),
+                "claude": _pstat(self._claude_keys, "claude"),
+                "glm": _pstat(self._glm_keys, "glm"),
+                "deepseek": _pstat(self._deepseek_keys, "deepseek"),
             }
 
-    def reset_keys(self, provider: str = "all") -> None:
+    def reset_keys(self, provider: str = "all", force: bool = False) -> None:
+        """Reset cooldowns and failure counts for the specified provider(s).
+
+        P4b FIX (Bug#4): now resets ALL 10 providers when provider="all",
+        not just Groq and Gemini.
+
+        P4b FIX (Bug#5): with force=True, also re-enables keys that were
+        permanently disabled (is_active=False) due to 401/403 auth failures.
+        Without force, those keys remain disabled (they were in cooldown).
+        """
+        _ALL_PROVIDERS = {
+            "groq": self._groq_keys, "gemini": self._gemini_keys,
+            "cerebras": self._cerebras_keys, "sambanova": self._sambanova_keys,
+            "openrouter": self._openrouter_keys, "github": self._github_keys,
+            "huggingface": self._huggingface_keys, "claude": self._claude_keys,
+            "glm": self._glm_keys, "deepseek": self._deepseek_keys,
+        }
         with self._lock:
-            targets = []
-            if provider in ("all", "groq"): targets.extend(self._groq_keys)
-            if provider in ("all", "gemini"): targets.extend(self._gemini_keys)
             cleared = 0
-            for k in targets:
-                if not k.is_active: continue
-                k.fail_count = 0
-                k.rate_limited_until = 0.0
-                k.last_error = ""
-                cleared += 1
-            log.info(f"[LLM Keys] Reset {cleared} keys — all cooldowns cleared")
+            for prov_name, key_list in _ALL_PROVIDERS.items():
+                if provider not in ("all", prov_name):
+                    continue
+                for k in key_list:
+                    if not k.is_active and not force:
+                        continue  # skip permanently disabled keys unless force
+                    if force:
+                        k.is_active = True
+                    k.fail_count = 0
+                    k.rate_limited_until = 0.0
+                    k.last_error = ""
+                    cleared += 1
+            log.info(f"[LLM Keys] Reset {cleared} keys (provider={provider}, force={force})")
 
 
 _MANAGER: Optional[LLMKeyManager] = None

@@ -21,16 +21,13 @@ Emergency disagreement:
   If one layer strongly opposes (confidence >80%) while others agree,
   confidence is penalized and position is reduced.
 
-⚠️  STATUS (institutional review, see audit report): NOT CURRENTLY WIRED
-    IN. get_signal_fusion()/SignalFusion.fuse() are not called from
-    trader.py's run_cycle() or anywhere else in the uploaded codebase.
-    The live decision path currently goes through core/agents/
-    decision_agent.py (not part of this review) instead. If you intend
-    to use 4-layer weighted fusion instead of (or alongside) the current
-    decision logic, this module is ready to call — it just isn't called
-    yet. See also core/signal_scorer.py, a second unwired alternative
-    decision-aggregation approach; decide which one (if either) should
-    be activated rather than wiring both.
+⚠️  STATUS UPDATE (2026-07-21): WIRED IN via MasterDecisionEngine.
+    SignalFusion.fuse() IS called from core/master_decision.py's
+    MasterDecisionEngine.decide() → self.fusion.fuse(signals) at Step 2
+    of the decision pipeline. The earlier "NOT CURRENTLY WIRED IN" comment
+    was stale — the fusion has been active since Day 73. Verified: the
+    AnalysisAgent passes rule/ML/RL/LLM signals to engine.decide(), which
+    calls fuse(), producing the final BUY/SELL/WAIT + confidence + agreement.
 """
 
 from __future__ import annotations

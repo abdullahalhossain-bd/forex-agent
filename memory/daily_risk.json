@@ -1,14 +1,14 @@
 {
-  "date": "2026-07-21",
+  "date": "2026-07-22",
   "total_loss_usd": 0,
-  "total_win_usd": 0.16,
-  "open_trades": 0,
-  "open_pairs": [],
-  "trades": [
-    {
-      "symbol": "EURUSD",
-      "pnl_usd": 0.16,
-      "time": "2026-07-21T14:15:56.129130+00:00"
-    }
-  ]
+  "total_win_usd": 0,
+  "open_trades": 5,
+  "open_pairs": [
+    "AUDCHF",
+    "EURJPY",
+    "GBPAUD",
+    "NZDUSD",
+    "USDCHF"
+  ],
+  "trades": []
 }

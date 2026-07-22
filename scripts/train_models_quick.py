@@ -822,7 +822,15 @@ def train_one_pair(
         log.info(f"  {i:3d}. {f}")
     log.info(f"{'='*60}\n")
     
-    X = df[feature_cols].values
+    # P4a FIX: keep X as a DataFrame (not .values numpy array).
+    # Previously X = df[feature_cols].values stripped column names, so
+    # XGBoost ≥ 2.0 stored internal feature names as f0, f1, ... while the
+    # meta.json recorded real names (change_1, rsi_14, ...). At prediction
+    # time, model_predictor.py passes a named DataFrame →
+    # ValueError: feature_names mismatch. Now X stays as DataFrame,
+    # so XGBoost internal names match the saved feature_names exactly.
+    # All downstream slicing uses .iloc[] to stay DataFrame-compatible.
+    X = df[feature_cols]
     y = df["target"].values
     label_weight = df["_sample_weight"].values if "_sample_weight" in df.columns else None
 
@@ -841,7 +849,8 @@ def train_one_pair(
     # past). All splitting here is strictly chronological.
     n = len(df)
     holdout_start = int(n * (1 - HOLDOUT_FRACTION))
-    X_dev, X_holdout = X[:holdout_start], X[holdout_start:]
+    # P4a FIX: use .iloc[] for DataFrame-compatible slicing
+    X_dev, X_holdout = X.iloc[:holdout_start], X.iloc[holdout_start:]
     y_dev, y_holdout = y[:holdout_start], y[holdout_start:]
     lw_dev = label_weight[:holdout_start] if label_weight is not None else None
     log.info(
@@ -857,7 +866,7 @@ def train_one_pair(
     log.info(f"\n{'='*60}")
     log.info("WALK-FORWARD CROSS-VALIDATION (TimeSeriesSplit)")
     log.info(f"{'='*60}")
-    xgb_fold_metrics, rf_fold_metrics = _walk_forward_cv(X_dev, y_dev, n_splits=cv_splits)
+    xgb_fold_metrics, rf_fold_metrics = _walk_forward_cv(X_dev.values if hasattr(X_dev, 'columns') else X_dev, y_dev, n_splits=cv_splits)
     xgb_cv_summary = _aggregate_cv_metrics(xgb_fold_metrics, "XGBoost")
     rf_cv_summary = _aggregate_cv_metrics(rf_fold_metrics, "RandomForest")
 
@@ -876,15 +885,16 @@ def train_one_pair(
         log.warning(f"  xgboost unavailable for feature ranking ({e}) — keeping all features")
         selected_features = feature_cols
 
-    selected_idx = [feature_cols.index(f) for f in selected_features]
-    X_dev_sel = X_dev[:, selected_idx]
-    X_holdout_sel = X_holdout[:, selected_idx]
+    # P4a FIX: reindex by feature names (DataFrame), not integer indices (numpy)
+    X_dev_sel = X_dev[selected_features]
+    X_holdout_sel = X_holdout[selected_features]
 
     # 7. Final fit: fit on dev-fit, early-stop AND calibrate on dev-calib (a
     # slice the base model never trains on), then score exactly once on the
     # untouched final holdout.
     calib_start = int(len(X_dev_sel) * (1 - CALIB_FRACTION))
-    X_fit, X_calib = X_dev_sel[:calib_start], X_dev_sel[calib_start:]
+    # P4a FIX: use .iloc[] for DataFrame-compatible slicing
+    X_fit, X_calib = X_dev_sel.iloc[:calib_start], X_dev_sel.iloc[calib_start:]
     y_fit, y_calib = y_dev[:calib_start], y_dev[calib_start:]
     lw_fit = lw_dev[:calib_start] if lw_dev is not None else None
 

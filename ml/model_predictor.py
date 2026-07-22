@@ -428,7 +428,18 @@ class ModelPredictor:
                     X_3d = model_X.values.reshape(1, 1, n_features)
                     proba = float(model.predict(X_3d, verbose=0).ravel()[0])
                 else:
-                    proba_arr = model.predict_proba(model_X)
+                    # P4a FIX: use .values to avoid XGBoost ≥ 2.0
+                    # feature_names mismatch when the model was trained on
+                    # numpy arrays (scripts/train_models_quick.py used
+                    # df[cols].values which strips column names, causing
+                    # XGBoost to store internal names as f0, f1, ...).
+                    # Tree models are position-dependent, not name-dependent,
+                    # and the reindex above (line 395) already guarantees the
+                    # correct column ordering. Converting to .values ensures
+                    # compatibility with both DataFrame-trained and
+                    # numpy-array-trained models.
+                    _raw = model_X.values if hasattr(model_X, 'columns') else model_X
+                    proba_arr = model.predict_proba(_raw)
                     proba = float(proba_arr[0][1]) if proba_arr.shape[1] > 1 else float(proba_arr[0][0])
 
                 model_result["probability"] = round(proba, 4)

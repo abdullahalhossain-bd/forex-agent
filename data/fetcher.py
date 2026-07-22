@@ -403,23 +403,51 @@ class DataFetcher:
 
         log.info(f"Fetching {symbol} | {timeframe} | {limit} candles...")
 
+        # P4c FIX: per-fetch fallback chain instead of single-source dispatch.
+        # Previously, self.source was chosen once at init and never changed.
+        # If MT5 was selected (package importable) but the terminal was
+        # down, every fetch returned None with no fallback — the entire
+        # trading cycle was skipped for all symbols.
+        #
+        # Now: try the primary source first; if it fails, try the next
+        # available source in priority order.  Log a WARNING on fallback
+        # so the operator knows data quality has degraded.
+        _FALLBACK_ORDER = [
+            ("mt5",          self._fetch_mt5),
+            ("alpha_vantage", self._fetch_alpha_vantage),
+            ("polygon",      self._fetch_polygon),
+            ("finnhub",      self._fetch_finnhub),
+            ("twelve_data",  self._fetch_twelve_data),
+            ("yfinance",     self._fetch_yfinance),
+        ]
+
+        # Determine start index: try the configured primary source first,
+        # but also allow starting from further down if the primary is known
+        # to be unavailable.
+        start_idx = 0
+        for i, (src_name, _) in enumerate(_FALLBACK_ORDER):
+            if src_name == self.source:
+                start_idx = i
+                break
+
         result = None
-        if self.source == "mt5":
-            result = self._fetch_mt5(symbol, timeframe, limit)
-        elif self.source == "tvdatafeed":
-            result = self._fetch_tvdatafeed(symbol, timeframe, limit)
-        elif self.source == "yfinance":
-            result = self._fetch_yfinance(symbol, timeframe, limit)
-        elif self.source == "alpha_vantage":
-            result = self._fetch_alpha_vantage(symbol, timeframe, limit)
-        elif self.source == "polygon":
-            result = self._fetch_polygon(symbol, timeframe, limit)
-        elif self.source == "finnhub":
-            result = self._fetch_finnhub(symbol, timeframe, limit)
-        elif self.source == "twelve_data":
-            result = self._fetch_twelve_data(symbol, timeframe, limit)
-        else:
-            log.error("No data source available (MT5 not connected, tvdatafeed not installed)")
+        tried_sources = []
+        for src_name, fetch_fn in _FALLBACK_ORDER[start_idx:]:
+            tried_sources.append(src_name)
+            try:
+                result = fetch_fn(symbol, timeframe, limit)
+                if result is not None and len(result) > 0:
+                    if src_name != self.source:
+                        log.warning(
+                            f"[DataFetcher] {symbol}: primary source '{self.source}' failed, "
+                            f"fell back to '{src_name}' ({len(result)} candles). "
+                            f"Data quality may differ from production MT5."
+                        )
+                        self.source = src_name  # remember for next fetch
+                    break
+            except Exception as e:
+                log.debug(f"[DataFetcher] {symbol} {src_name} fetch error: {e}")
+                result = None
 
         # Track fetch success/failure for auto-unavailable marking
         if result is not None and len(result) > 0:

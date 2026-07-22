@@ -16,7 +16,8 @@ Events emitted:
   - router.execute.start   — ExecutionRouter.execute() entered
   - router.execute.success — order filled
   - router.execute.fail    — order rejected / failed
-  - broker.order_send      — mt5.order_send() result (with retcode)
+  - broker.order_send      — mt5.order_send() FILLED (retcode=10009)
+  - broker.order_placed    — mt5.order_send() PLACED, NOT filled (retcode=10008, phantom risk)
   - broker.last_error      — mt5.last_error() snapshot on failure
   - orphan.position        — DB journal failed after broker fill
 
@@ -183,10 +184,37 @@ def log_router_fail(symbol: str, reason: str, stage: str = "unknown",
 def log_broker_order_send(symbol: str, retcode: int | None,
                           comment: str | None, price: float | None,
                           volume: float | None, ticket: int | None = None,
+                          pending: bool = False,
                           **extra) -> None:
+    """Log a broker.order_send event.
+
+    P3 FIX: added ``pending`` parameter.  When retcode=10008 (PLACED
+    but not yet filled) callers MUST pass pending=True so downstream
+    log consumers can distinguish ghost entries (placed but never
+    filled) from actual fills (retcode=10009, pending=False).
+    """
     log_event("broker.order_send", symbol=symbol, retcode=retcode,
               comment=comment, price=price, volume=volume, ticket=ticket,
-              **extra)
+              pending=pending, **extra)
+
+
+def log_broker_order_placed(symbol: str, retcode: int | None,
+                            comment: str | None, price: float | None,
+                            volume: float | None, ticket: int | None = None,
+                            **extra) -> None:
+    """Log a broker.order_placed event (retcode 10008 — accepted, NOT filled).
+
+    P3 FIX: Separate event type for PLACED-but-not-filled orders.
+    Previously 10008 and 10009 both logged as "broker.order_send",
+    making it impossible to distinguish ghost entries from real fills
+    in execution.log without cross-referencing retcodes.
+
+    Usage: call this ONLY for retcode=10008.  For retcode=10009 use
+    log_broker_order_send(pending=False) instead.
+    """
+    log_event("broker.order_placed", symbol=symbol, retcode=retcode,
+              comment=comment, price=price, volume=volume, ticket=ticket,
+              pending=True, **extra)
 
 
 def log_broker_last_error(symbol: str, error: Any, **extra) -> None:
@@ -200,3 +228,10 @@ def log_orphan_position(symbol: str, ticket: int | None, reason: str,
     bot has no record.  Operator must reconcile manually."""
     log_event("orphan.position", symbol=symbol, ticket=ticket,
               reason=reason, **extra)
+
+
+# P3 FIX: Event type registry for phantom-order audit queries.
+# Consumers can grep execution.log for these exact event names.
+BROKER_FILL_EVENTS = {"broker.order_send", "broker.order_placed"}
+FILLED_RETURNCODES = {10009}  # TRADE_RETCODE_DONE — actually executed
+PLACED_RETURNCODES = {10008}  # TRADE_RETCODE_PLACED — accepted, may never fill

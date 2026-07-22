@@ -1858,6 +1858,27 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] Day 73 MasterDecisionEngine failed: {e}")
             master_decision_ctx = {"error": str(e)}
 
+        # P2 FIX: "Master:" used to show master_ctx['master_signal'] which is
+        # the LLM MasterAnalyst signal ONLY — NOT the MasterDecisionEngine's
+        # fused 4-layer decision.  Downstream operators reading this log assumed
+        # "Master" meant the authoritative fused decision, leading to confusion
+        # when the log said "Master: BUY" but the actual final_signal was WAIT
+        # (because the 4-layer fusion overrode the LLM).  Now we show both:
+        #   LLM:   = the LLM MasterAnalyst's raw signal (for LLM-layer audit)
+        #   Fused: = MasterDecisionEngine's 4-layer fused signal + agreement
+        #   Final: = the signal that actually gets returned (may differ from
+        #            Fused if TEST_MODE override or later engine applies)
+        try:
+            _llm_raw = master_ctx.get('master_signal', 'N/A') if isinstance(master_ctx, dict) else 'N/A'
+            _fused_sig = master_decision.final_signal
+            _fused_agr = master_decision.agreement
+            _fused_conf = master_decision.master_confidence
+        except Exception:
+            _llm_raw = master_ctx.get('master_signal', 'N/A') if isinstance(master_ctx, dict) else 'N/A'
+            _fused_sig = 'N/A'
+            _fused_agr = 'N/A'
+            _fused_conf = 0.0
+
         log.info(
             f"[AnalysisAgent] Complete — "
             f"Session: {session_ctx['current_session']} ({session_ctx['gmt_time']}) | "
@@ -1865,7 +1886,8 @@ class AnalysisAgent:
             f"Macro Regime: {intermarket_ctx.get('macro_regime', 'N/A')} | "
             f"Macro Score: {intermarket_ctx.get('macro_score', 'N/A')} | "
             f"Rule: {signal_result['signal']} | "
-            f"Master: {master_ctx.get('master_signal', 'N/A')} | "
+            f"LLM: {_llm_raw} | "
+            f"Fused: {_fused_sig} ({_fused_agr}, conf {_fused_conf:.0f}%) | "
             f"Final: {final_signal}"
         )
 
