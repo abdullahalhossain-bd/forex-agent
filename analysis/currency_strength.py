@@ -530,6 +530,50 @@ class CurrencyStrengthEngine:
 # QUICK RUN — Direct test
 # ═══════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════
+# SHARED SINGLETON — single source of truth
+# ------------------------------------------------------------
+# 2026-07-22 fix: sentiment_data.py used to run its own private
+# yfinance-based recalculation of currency strength (12 sample pairs,
+# 1-day % change, no indicators) alongside this engine's real
+# calculation (28 pairs, RSI/momentum via StrengthCalculator, 1h
+# candles). Same currency, two different numbers, neither aware of
+# the other's cache — architecture-level duplication, not a bug you
+# could patch locally. Any caller that wants currency strength
+# (sentiment_data.py included) must now go through this singleton so
+# there is exactly one calculation and one cache.
+# ═══════════════════════════════════════════════════════════════
+_engine_singleton: "CurrencyStrengthEngine | None" = None
+
+
+def get_currency_strength_engine(timeframe: str = "1h", candle_limit: int = 100) -> "CurrencyStrengthEngine":
+    """
+    Process-wide singleton accessor. Returns the same CurrencyStrengthEngine
+    instance (and therefore the same _strength_cache) on every call, so
+    every consumer sees identical, consistently-cached strength numbers.
+
+    First caller's timeframe/candle_limit wins for the lifetime of the
+    process; later calls with different args are ignored (logged once)
+    rather than silently spinning up a second, divergent engine.
+    """
+    global _engine_singleton
+    if _engine_singleton is None:
+        _engine_singleton = CurrencyStrengthEngine(timeframe=timeframe, candle_limit=candle_limit)
+        log.info(
+            f"[CurrencyStrength] Singleton engine created "
+            f"(timeframe={timeframe}, candle_limit={candle_limit})"
+        )
+    elif timeframe != _engine_singleton.timeframe or candle_limit != _engine_singleton.candle_limit:
+        log.warning(
+            f"[CurrencyStrength] get_currency_strength_engine() called with "
+            f"(timeframe={timeframe}, candle_limit={candle_limit}) but singleton "
+            f"already exists with (timeframe={_engine_singleton.timeframe}, "
+            f"candle_limit={_engine_singleton.candle_limit}) — ignoring new args, "
+            f"reusing existing engine so cache/consistency isn't broken."
+        )
+    return _engine_singleton
+
+
 if __name__ == "__main__":
     engine = CurrencyStrengthEngine(timeframe="1h")
     result = engine.analyze(min_diff=40)

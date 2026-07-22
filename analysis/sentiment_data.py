@@ -5,29 +5,27 @@
 # Sources:
 #   - Retail positioning  : Myfxbook / broker COT data (simulated)
 #   - Fear & Greed Index  : Alternative.me API (free)
-#   - Currency Strength   : yfinance price data থেকে calculate
+#   - Currency Strength   : analysis.currency_strength.CurrencyStrengthEngine
+#                            (shared singleton — single source of truth,
+#                            no longer calculated in this file, see
+#                            get_currency_strengths() below)
 #   - DXY                 : yfinance "DX-Y.NYB" symbol
 # ============================================================
 
-import time
 from utils.logger import get_logger
+from analysis.currency_strength import get_currency_strength_engine, MAJOR_CURRENCIES
 
 log = get_logger("sentiment_data")
 
-# Major currencies tracked
-MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD"]
-
-# Currency cross pairs for strength calculation
-CURRENCY_PAIRS = {
-    "USD": ["EURUSD=X", "GBPUSD=X", "AUDUSD=X", "NZDUSD=X", "USDCAD=X", "USDCHF=X", "USDJPY=X"],
-    "EUR": ["EURUSD=X", "EURGBP=X", "EURJPY=X", "EURAUD=X", "EURCAD=X", "EURCHF=X", "EURNZD=X"],
-    "GBP": ["GBPUSD=X", "EURGBP=X", "GBPJPY=X", "GBPAUD=X", "GBPCAD=X", "GBPCHF=X", "GBPNZD=X"],
-    "JPY": ["USDJPY=X", "EURJPY=X", "GBPJPY=X", "AUDJPY=X", "CADJPY=X", "CHFJPY=X", "NZDJPY=X"],
-    "AUD": ["AUDUSD=X", "EURAUD=X", "GBPAUD=X", "AUDJPY=X", "AUDCAD=X", "AUDCHF=X", "AUDNZD=X"],
-    "CAD": ["USDCAD=X", "EURCAD=X", "GBPCAD=X", "CADJPY=X", "AUDCAD=X", "CADCHF=X", "NZDCAD=X"],
-    "CHF": ["USDCHF=X", "EURCHF=X", "GBPCHF=X", "CHFJPY=X", "AUDCHF=X", "CADCHF=X", "NZDCHF=X"],
-    "NZD": ["NZDUSD=X", "EURNZD=X", "GBPNZD=X", "NZDJPY=X", "AUDNZD=X", "NZDCAD=X", "NZDCHF=X"],
-}
+# 2026-07-22 fix: this module used to keep its own MAJOR_CURRENCIES list and
+# a CURRENCY_PAIRS map (7 pairs/currency) alongside a private yfinance-based
+# recalculation in get_currency_strengths() below. That gave the AI two
+# different "currency strength" numbers for the same currency at the same
+# moment — one from this file's 1-day-% -change-on-12-pairs approximation,
+# one from analysis.currency_strength's real 28-pair RSI/momentum engine —
+# and they never agreed. MAJOR_CURRENCIES is now imported from the real
+# engine so the two never drift apart again; CURRENCY_PAIRS is removed
+# entirely since strength is no longer computed here.
 
 
 class SentimentDataProvider:
@@ -49,9 +47,10 @@ class SentimentDataProvider:
     """
 
     def __init__(self):
-        self._strength_cache: dict = {}
-        self._cache_time:     float = 0
-        self._cache_ttl:      int = 300   # 5 minutes
+        # No local strength cache anymore — get_currency_strengths() now
+        # delegates to the shared CurrencyStrengthEngine singleton, which
+        # owns its own cache (see analysis/currency_strength.py).
+        pass
 
     # ═══════════════════════════════════════════════════════════
     # MAIN METHOD
@@ -199,88 +198,33 @@ class SentimentDataProvider:
 
     def get_currency_strengths(self) -> dict:
         """
-        Major 8 currencies-এর relative strength calculate করো।
+        Major 8 currencies-এর relative strength — এখন সরাসরি
+        analysis.currency_strength.CurrencyStrengthEngine (shared singleton)
+        থেকে আসে।
 
-        Method:
-            - প্রতিটা currency-র 7টা cross pair-এর performance দেখো
-            - গত 24 hour-এ কতটা উঠেছে/নেমেছে
-            - সেটা 0–100 scale-এ normalize করো
+        2026-07-22 fix: এই মেথড আগে yfinance দিয়ে নিজের একটা আলাদা
+        calculation করত (12 sample pair, শুধু 1-day % change, broker/MT5
+        candle বা indicator ছাড়া) — যেটা CurrencyStrengthEngine-এর আসল
+        28-pair RSI/momentum-ভিত্তিক calculation-এর সাথে কখনোই মিলত না।
+        একই মুহূর্তে একই currency-র জন্য দুইটা ভিন্ন strength number থাকা
+        মানে এক dataset ভুল বা stale, অথচ কোনটা সেটা ধরার উপায় ছিল না।
+        এখন এই মেথড শুধু shared engine-কে delegate করে, তাই পুরো
+        pipeline-এ ঠিক একটাই currency-strength number থাকে এবং cache-ও
+        শেয়ার হয় (28-pair fetch একবারই হয়, প্রতি consumer-এর জন্য আলাদা
+        করে না)।
 
         Returns:
-            {"strengths": {"USD": 72, "EUR": 48, ...}, "source": "yfinance"}
+            {"strengths": {"USD": 72, "EUR": 48, ...}, "source": "engine" | "fallback"}
         """
-        # Cache check (5 min)
-        if self._strength_cache and (time.time() - self._cache_time) < self._cache_ttl:
-            log.info("[CurrStr] Using cached strength data")
-            return {"strengths": self._strength_cache, "source": "cache"}
-
         try:
-            import yfinance as yf
-
-            raw_scores: dict[str, float] = {c: 0.0 for c in MAJOR_CURRENCIES}
-            count:      dict[str, int]   = {c: 0    for c in MAJOR_CURRENCIES}
-
-            # EURUSD, GBPUSD, USDJPY ইত্যাদির 1-day % change
-            sample_pairs = [
-                ("EURUSD=X", "EUR", "USD"),
-                ("GBPUSD=X", "GBP", "USD"),
-                ("AUDUSD=X", "AUD", "USD"),
-                ("NZDUSD=X", "NZD", "USD"),
-                ("USDCAD=X", "USD", "CAD"),
-                ("USDCHF=X", "USD", "CHF"),
-                ("USDJPY=X", "USD", "JPY"),
-                ("EURGBP=X", "EUR", "GBP"),
-                ("EURJPY=X", "EUR", "JPY"),
-                ("GBPJPY=X", "GBP", "JPY"),
-                ("AUDJPY=X", "AUD", "JPY"),
-                ("EURAUD=X", "EUR", "AUD"),
-            ]
-
-            symbols = [p[0] for p in sample_pairs]
-            tickers = yf.download(symbols, period="2d", interval="1d", progress=False)
-
-            closes = tickers.get("Close", None) if tickers is not None else None
-
-            if closes is not None and not closes.empty and len(closes) >= 2:
-                for sym, base, quote in sample_pairs:
-                    try:
-                        col_data = closes[sym].dropna()
-                        if len(col_data) >= 2:
-                            pct = (float(col_data.iloc[-1]) - float(col_data.iloc[-2])) / float(col_data.iloc[-2]) * 100
-                            raw_scores[base]  += pct
-                            raw_scores[quote] -= pct
-                            count[base]  += 1
-                            count[quote] += 1
-                    except Exception as e:
-                        log.debug(f"[sentiment_data] suppressed: {e}")
-                        continue
-
-            # Average scores
-            avg: dict[str, float] = {}
-            for cur in MAJOR_CURRENCIES:
-                if count[cur] > 0:
-                    avg[cur] = raw_scores[cur] / count[cur]
-                else:
-                    avg[cur] = 0.0
-
-            # Normalize to 0–100
-            vals  = list(avg.values())
-            v_min, v_max = min(vals), max(vals)
-            spread = v_max - v_min if v_max != v_min else 1.0
-
-            strengths: dict[str, float] = {}
-            for cur, val in avg.items():
-                normalized = ((val - v_min) / spread) * 100
-                strengths[cur] = round(normalized, 1)
-
-            self._strength_cache = strengths
-            self._cache_time     = time.time()
-
-            log.info(f"[CurrStr] Calculated: {strengths}")
-            return {"strengths": strengths, "source": "yfinance"}
+            engine = get_currency_strength_engine()
+            result = engine.calculate_strength()
+            strengths = result["strengths"]
+            log.info(f"[CurrStr] From shared CurrencyStrengthEngine: {strengths}")
+            return {"strengths": strengths, "source": "engine"}
 
         except Exception as e:
-            log.warning(f"[CurrStr] Error: {e} — using fallback")
+            log.warning(f"[CurrStr] Shared engine unavailable: {e} — using fallback")
             fallback = {c: 50.0 for c in MAJOR_CURRENCIES}
             return {"strengths": fallback, "source": "fallback"}
 

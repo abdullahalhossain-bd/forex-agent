@@ -1,8 +1,16 @@
-# fundamental/news_filter.py  —  Day 11 (base) + Day 43 + Day 90 + Day 91 + Day 92
+# fundamental/news_filter.py  —  Day 11 (base) + Day 43 + Day 90 + Day 91 + Day 92 + Day 101
 #
 # Day 92 fix: নিজস্ব _FAIRECONOMY_CACHE সরিয়ে shared
 # fundamental.faireconomy_cache.fetch_faireconomy() ব্যবহার করা হচ্ছে।
 # এতে economic_calendar_api এবং news_filter দুটোই একই cache থেকে পাবে।
+#
+# Day 101 fix: Layer 3 (hardcoded fallback) previously modeled CPI/FOMC/
+# ECB/BOE as fake weekly-recurring events (e.g. "every Wednesday = CPI"),
+# which caused a confirmed false positive on 2026-07-22. Replaced with the
+# real confirmed 2026 release calendar (STATIC_EVENTS_2026) plus a correct
+# "1st Friday of month" rule for NFP. See comments above STATIC_EVENTS_2026
+# and in _build_hardcoded_events() for details — including the maintenance
+# note that STATIC_EVENTS_2026 must be refreshed for 2027.
 
 import os
 import time
@@ -70,13 +78,75 @@ CURRENCY_PAIR_MAP = {
 
 AFTERMATH_WAIT_MINUTES = 15
 
-HARDCODED_WEEKLY_EVENTS = [
-    (2, 12, 30, "USD", "CPI (typical release day/time — verify live calendar)"),
-    (4, 12, 30, "USD", "Non-Farm Payrolls (typical 1st-Friday release — verify live calendar)"),
-    (2, 18, 0,  "USD", "FOMC Statement (typical — verify live calendar)"),
-    (3, 11, 45, "EUR", "ECB Rate Decision (typical — verify live calendar)"),
-    (3, 6, 0,   "GBP", "BOE Rate Decision (typical — verify live calendar)"),
+# Day 101+ FIX: the old HARDCODED_WEEKLY_EVENTS modeled CPI, FOMC, ECB, and
+# BOE as if they recurred on a fixed WEEKDAY every single week (e.g. "every
+# Wednesday at 12:30 UTC = CPI"). That's wrong — these releases happen
+# roughly monthly / every 6-8 weeks, not weekly — so the fallback was
+# flagging a guessed event on weeks where nothing was actually scheduled.
+# This produced a confirmed false positive on 2026-07-22 (a Wednesday):
+# the filter blocked trading for a "USD CPI" release that didn't exist —
+# the real July CPI print was 2026-07-14, and the next is 2026-08-12.
+#
+# Fix: replace the fake weekly-recurrence model with the ACTUAL confirmed
+# 2026 release calendar for CPI/FOMC/ECB/BOE, sourced from the official
+# BLS, Federal Reserve, ECB, and Bank of England published schedules.
+# NFP is still computed on a rule (real "first Friday of the month"),
+# instead of matching literally every Friday like the old code did.
+#
+# ⚠️ MAINTENANCE: STATIC_EVENTS_2026 is only valid for 2026. It must be
+# refreshed with the 2027 schedules (BLS/Fed/ECB/BoE usually publish these
+# the preceding December) or this fallback will silently go stale again —
+# see the "has_future_static_event" check in _build_hardcoded_events(),
+# which logs a WARNING once the table runs out of future dates so that
+# staleness is visible instead of silent.
+STATIC_EVENTS_2026 = [
+    # (date "YYYY-MM-DD", local time "HH:MM", tz name, currency, title)
+    # ── US CPI — BLS release schedule, 8:30 AM Eastern ──
+    ("2026-01-13", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-02-13", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-03-11", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-04-10", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-05-12", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-06-10", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-07-14", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-08-12", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-09-11", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-10-14", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-11-10", "08:30", "US/Eastern", "USD", "CPI"),
+    ("2026-12-10", "08:30", "US/Eastern", "USD", "CPI"),
+    # ── FOMC statement — Federal Reserve, 2:00 PM Eastern (2nd meeting day) ──
+    ("2026-01-28", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-03-18", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-04-29", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-06-17", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-07-29", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-09-16", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-10-28", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    ("2026-12-09", "14:00", "US/Eastern", "USD", "FOMC Statement"),
+    # ── ECB rate decision — 14:15 CET/CEST (2nd day of Governing Council) ──
+    ("2026-01-25", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-03-19", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-04-30", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-06-11", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-07-23", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-09-10", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-10-29", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    ("2026-12-17", "14:15", "Europe/Berlin", "EUR", "ECB Rate Decision"),
+    # ── BOE Bank Rate decision — 12:00 noon UK time ──
+    ("2026-02-05", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-03-19", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-04-30", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-06-18", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-07-30", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-09-17", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-11-05", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
+    ("2026-12-17", "12:00", "Europe/London", "GBP", "BOE Rate Decision"),
 ]
+
+# How far from "now" (in days) a static event is worth keeping in the
+# returned event list. Keeps _build_hardcoded_events() cheap without
+# loading the whole year's calendar into every fallback call.
+STATIC_EVENT_LOOKAROUND_DAYS = 10
 
 
 class NewsFilter:
@@ -375,53 +445,78 @@ class NewsFilter:
         return None
 
     def _build_hardcoded_events(self) -> list:
-        # Day 99+ FIX: previously this computed `days_ahead` using
-        # `(weekday - now_utc.weekday()) % 7`, which is correct for the
-        # date portion but combined the computed date with a UTC
-        # hour/minute and a UTC "now" — meaning a process running at
-        # 23:55 UTC on a Tuesday could see `now.weekday() == 1` (Tuesday)
-        # while the next event at 00:30 UTC was effectively on Wednesday
-        # (weekday 2). The arithmetic still worked, but the comparison
-        # against `now_utc` later in the filter could flag or skip
-        # events incorrectly near the UTC midnight boundary.
+        # Day 101+ FIX: see the STATIC_EVENTS_2026 comment above for why
+        # the old weekday-recurrence model was replaced. This method now
+        # builds fallback events from two sources instead of one fake one:
         #
-        # The fix below computes the event datetime in a single
-        # timezone-aware step: it picks the soonest upcoming occurrence
-        # of (weekday, hour, minute) strictly after `now_utc`, then also
-        # adds the previous-week occurrence so events that just happened
-        # are still visible in the post-event block window. This is
-        # robust to running at any time of day, including across UTC
-        # midnight.
+        #   1. NFP — a genuinely weekly-structured rule ("1st Friday of
+        #      the month"), computed correctly instead of matching every
+        #      Friday.
+        #   2. Everything else (CPI/FOMC/ECB/BOE) — looked up from the
+        #      real confirmed STATIC_EVENTS_2026 calendar, not guessed.
         now_utc = datetime.now(pytz.utc)
         events = []
-        for weekday, hour, minute, currency, title in HARDCODED_WEEKLY_EVENTS:
-            # Find the next occurrence of this weekday at the given UTC time
-            # that is strictly in the future. If today is the target weekday
-            # but the time has already passed, we pick next week.
-            days_ahead = (weekday - now_utc.weekday()) % 7
-            candidate = now_utc + timedelta(days=days_ahead)
-            candidate = candidate.replace(
-                hour=hour, minute=minute, second=0, microsecond=0,
-            )
-            if candidate <= now_utc:
-                # Target time already passed today; roll forward 7 days.
-                candidate += timedelta(days=7)
 
+        # ── NFP: real "first Friday of the month" rule ──
+        eastern = pytz.timezone("US/Eastern")
+        for month_offset in (0, 1):  # this month + next, so it's never empty
+            friday_date = self._first_friday_of_month(now_utc, month_offset)
+            naive_dt = datetime.combine(friday_date, datetime.min.time()).replace(
+                hour=8, minute=30
+            )
+            utc_dt = eastern.localize(naive_dt).astimezone(pytz.utc)
             events.append({
-                "title":       title,
-                "currency":    currency,
+                "title":       "Non-Farm Payrolls (1st Friday release — verify live calendar)",
+                "currency":    "USD",
                 "high_impact": True,
-                "time":        candidate,
+                "time":        utc_dt,
             })
-            # Also include the previous-week occurrence so post-event
-            # block windows still trigger for events that just happened.
-            events.append({
-                "title":       title,
-                "currency":    currency,
-                "high_impact": True,
-                "time":        candidate - timedelta(days=7),
-            })
+
+        # ── CPI / FOMC / ECB / BOE: real confirmed 2026 dates ──
+        has_future_static_event = False
+        for date_str, time_str, tz_name, currency, title in STATIC_EVENTS_2026:
+            event_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            hour, minute = (int(x) for x in time_str.split(":"))
+            tz = pytz.timezone(tz_name)
+            naive_dt = datetime.combine(event_date, datetime.min.time()).replace(
+                hour=hour, minute=minute
+            )
+            utc_dt = tz.localize(naive_dt).astimezone(pytz.utc)
+
+            if utc_dt > now_utc:
+                has_future_static_event = True
+
+            # Only keep events near "now" — no need to return the whole
+            # year's calendar on every fallback call.
+            if abs((utc_dt - now_utc).total_seconds()) <= STATIC_EVENT_LOOKAROUND_DAYS * 24 * 3600:
+                events.append({
+                    "title":       f"{title} (confirmed schedule — verify live calendar)",
+                    "currency":    currency,
+                    "high_impact": True,
+                    "time":        utc_dt,
+                })
+
+        if not has_future_static_event:
+            log.warning(
+                "[NewsFilter] STATIC_EVENTS_2026 has no dates left in the "
+                "future — this hardcoded fallback calendar needs updating "
+                "with next year's CPI/FOMC/ECB/BOE schedule, or it will "
+                "silently stop producing any CPI/FOMC/ECB/BOE fallback "
+                "events (NFP will keep working, since it's rule-based)."
+            )
+
         return events
+
+    @staticmethod
+    def _first_friday_of_month(now_utc: datetime, month_offset: int = 0):
+        """Return the date of the first Friday of (this month + month_offset)."""
+        year, month = now_utc.year, now_utc.month + month_offset
+        while month > 12:
+            month -= 12
+            year += 1
+        first_day = datetime(year, month, 1)
+        days_to_friday = (4 - first_day.weekday()) % 7  # Mon=0 ... Fri=4
+        return (first_day + timedelta(days=days_to_friday)).date()
 
     def _parse_ff(self, html: str) -> list:
         soup   = BeautifulSoup(html, "html.parser")
