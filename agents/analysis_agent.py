@@ -31,6 +31,7 @@ from analysis.smc_engine import SMCEngine
 from analysis.sentiment_data import SentimentDataProvider
 from analysis.session_analyzer import SessionAnalyzer   # ← Day 63
 from analysis.intermarket import IntermarketEngine       # ← Day 65
+from analysis.currency_strength import CurrencyStrengthEngine  # ← Day 64, wired 2026-07-22
 # Day 90 — Six new analyzers
 from analysis.divergence import DivergenceEngine
 from analysis.ichimoku import IchimokuEngine
@@ -144,6 +145,17 @@ class AnalysisAgent:
         # takes effect, in both backtest and live.
         self.sentiment_data_provider  = SentimentDataProvider()
         self.institutional_flow_engine = InstitutionalFlowEngine()
+        # 2026-07-22 dead-file audit fix: Day-64 CurrencyStrengthEngine was
+        # fully implemented (28-pair MT5 matrix, momentum, ranking,
+        # opportunity finder) but never wired — the sentiment step below
+        # was silently falling back to a crude 1-day yfinance %-change
+        # proxy for "currency strength" (see analysis/sentiment_data.py
+        # get_currency_strengths()). Constructed once here, same reasoning
+        # as institutional_flow_engine/intermarket_engine above, so its
+        # internal 5-min strength-matrix cache actually persists across
+        # cycles instead of being rebuilt (and re-fetching 28 pairs) every
+        # single call.
+        self.currency_strength_engine = CurrencyStrengthEngine(timeframe="1h")
 
     def run(self, market_output: dict, memory_ctx: dict = None) -> dict:
         if "error" in market_output:
@@ -250,6 +262,7 @@ class AnalysisAgent:
                 "session_ctx":       session_ctx,
                 "intermarket":       {},
                 "intermarket_ctx":   {},
+                "currency_strength_ctx": {},
                 "macro_fusion":      {},
                 "master":            {},
                 "master_ctx":        {"master_signal": "WAIT", "master_confidence": 0,
@@ -495,6 +508,24 @@ class AnalysisAgent:
         except Exception as e:
             log.debug(f"[AnalysisAgent] Oscillator gate error: {e}")
 
+        # ── 6.5 Currency Strength Matrix (Day 64, wired 2026-07-22) ──
+        # Runs BEFORE the sentiment step below so its (possibly richer,
+        # possibly stale-cache, possibly failed) strengths dict is ready
+        # to hand to SentimentEngine.final_sentiment_score() in place of
+        # the crude yfinance 1-day-change proxy it used to get. Kept as
+        # its own try/except so a currency-strength failure can never
+        # take down the sentiment step — falls back to the old proxy.
+        currency_strength_result = {}
+        currency_strength_ctx    = {}
+        try:
+            currency_strength_result = self.currency_strength_engine.analyze()
+            self.currency_strength_engine.print_summary(currency_strength_result)
+            currency_strength_ctx = self.currency_strength_engine.get_ai_context(
+                currency_strength_result
+            )
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Currency Strength Engine error: {e}")
+
         # ── 7. Sentiment Engine ─────────────────────────────
         sentiment_ctx    = {}
         sentiment_result = {}
@@ -504,17 +535,31 @@ class AnalysisAgent:
             sent_data        = sent_provider.get_all(symbol)
             sent_provider.print_summary(sent_data)
 
+            # Prefer the Day-64 MT5 multi-timeframe matrix (28 cross pairs,
+            # real candles) over sent_data's crude yfinance 1-day %-change
+            # proxy. Only fall back to the proxy if the matrix engine
+            # failed above or came back with no usable strengths (e.g. all
+            # 28 fetches failed) — never silently trade on an empty dict.
+            currency_strengths = (
+                currency_strength_ctx.get("currency_strengths")
+                or sent_data["currency_strengths"]
+            )
+
             sent_engine      = SentimentEngine()
             sentiment_result = sent_engine.final_sentiment_score(
                 pair               = sent_data["pair"],
                 retail_long_pct    = sent_data["retail_long_pct"],
                 fg_index           = sent_data["fg_index"],
-                currency_strengths = sent_data["currency_strengths"],
+                currency_strengths = currency_strengths,
                 dxy_trend          = sent_data["dxy_trend"],
                 dxy_change_pct     = sent_data["dxy_change_pct"],
             )
             sent_engine.print_summary(sentiment_result)
             sentiment_ctx = sent_engine.get_ai_context(sentiment_result)
+            sentiment_ctx["currency_strength_source"] = (
+                "day64_mt5_matrix" if currency_strength_ctx.get("currency_strengths")
+                else "yfinance_1d_proxy_fallback"
+            )
 
             conflict_result = sent_engine.detect_conflict(
                 technical_signal = signal_result.get("signal", "NO TRADE"),
@@ -1132,6 +1177,7 @@ class AnalysisAgent:
                 "session_ctx":       session_ctx,
                 "intermarket":       intermarket_result,
                 "intermarket_ctx":   intermarket_ctx,
+                "currency_strength_ctx": currency_strength_ctx,
                 "macro_fusion":      macro_fusion,
                 "master":            master_result,
                 "master_ctx":        master_ctx,
@@ -1483,6 +1529,7 @@ class AnalysisAgent:
                 "smc_ctx": smc_ctx,
                 "session_ctx": session_ctx,
                 "intermarket_ctx": intermarket_ctx,
+                "currency_strength_ctx": currency_strength_ctx,
                 "sentiment_ctx": sentiment_ctx,
                 "news_intelligence": news_intel_ctx,
                 "signal": signal_result,
@@ -1601,6 +1648,7 @@ class AnalysisAgent:
                 "smc_ctx": smc_ctx,
                 "session_ctx": session_ctx,
                 "intermarket_ctx": intermarket_ctx,
+                "currency_strength_ctx": currency_strength_ctx,
                 "sentiment_ctx": sentiment_ctx,
                 "news_intelligence": news_intel_ctx,
                 "bias_ctx": bias_ctx,
@@ -2119,6 +2167,7 @@ class AnalysisAgent:
             # Day 65
             "intermarket":       intermarket_result,
             "intermarket_ctx":   intermarket_ctx,
+            "currency_strength_ctx": currency_strength_ctx,
             "macro_fusion":      macro_fusion,
             # Master
             "master":            master_result,

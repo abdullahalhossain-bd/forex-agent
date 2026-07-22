@@ -19,6 +19,7 @@
 # ============================================================
 
 import os
+import time
 import json
 from datetime import datetime
 
@@ -29,6 +30,17 @@ from analysis.currency_ranker import CurrencyRanker
 from utils.logger import get_logger
 
 log = get_logger("currency_strength")
+
+# 2026-07-22 wiring fix: calculate_strength() fetches all 28 CROSS_PAIRS
+# every call. Before this engine was wired into the live pipeline that
+# cost was never paid (module was dead). Now that AnalysisAgent calls
+# analyze() once per cycle, an unconditional 28-pair fetch every cycle
+# would multiply MT5/broker call volume ~28x versus the single-pair
+# analysis the rest of the pipeline does — same class of problem as the
+# already-known Groq dual-call rate-limit issue. Cache the strength
+# matrix across cycles; a currency's relative strength doesn't need
+# recomputing every 15m-bar-close anyway.
+_STRENGTH_CACHE_TTL_SECONDS = 300  # 5 min, matches sentiment_data.py's convention
 
 # ── Tracked currencies ──────────────────────────────────────────
 MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD"]
@@ -80,6 +92,8 @@ class CurrencyStrengthEngine:
         self.ind          = Indicators()
         self.calculator   = StrengthCalculator()
         self.ranker       = CurrencyRanker()
+        self._strength_cache      = None
+        self._strength_cache_time = 0.0
 
     # ═══════════════════════════════════════════════════════
     # STEP 1: CURRENCY STRENGTH CALCULATION
@@ -89,7 +103,15 @@ class CurrencyStrengthEngine:
         """
         সব CROSS_PAIRS fetch করে প্রতিটা currency-র raw contribution
         accumulate করো, তারপর normalize (0-100) করো।
+
+        Cached for _STRENGTH_CACHE_TTL_SECONDS — see module docstring
+        for why (28-pair fetch is too heavy to repeat every cycle).
         """
+        now = time.time()
+        if self._strength_cache and (now - self._strength_cache_time) < _STRENGTH_CACHE_TTL_SECONDS:
+            log.debug("[CurrencyStrength] Using cached strength matrix")
+            return self._strength_cache
+
         raw_scores     = {c: 0.0 for c in MAJOR_CURRENCIES}
         counts         = {c: 0   for c in MAJOR_CURRENCIES}
         pair_details   = {}
@@ -124,7 +146,7 @@ class CurrencyStrengthEngine:
 
         log.info(f"[CurrencyStrength] Normalized strengths: {normalized}")
 
-        return {
+        result = {
             "strengths":    normalized,
             "raw_scores":   avg_scores,
             "pair_details": pair_details,
@@ -133,6 +155,9 @@ class CurrencyStrengthEngine:
             "pairs_failed": fetch_failures,
             "timestamp":    datetime.utcnow().isoformat(),
         }
+        self._strength_cache      = result
+        self._strength_cache_time = now
+        return result
 
     # ═══════════════════════════════════════════════════════
     # STEP 2: MOMENTUM DETECTION  ⭐⭐⭐⭐⭐

@@ -25,7 +25,7 @@ the existing bull_score / bear_score accumulation with no change to the
 scoring model itself. See `apply_extended_votes()` at the bottom, which
 is the single entry point analysis_agent.py / signal_engine.py calls.
 
-Modules wired here (13)
+Modules wired here (15)
 ------------------------
   andean_oscillator, supertrend, utbot_alerts, nadaraya_watson_envelope,
   daily_high_low, auction_market_theory, candlestick_patterns_ml,
@@ -46,6 +46,15 @@ Modules wired here (13)
   and all three are working per-candle directional generators, they were
   wired in here rather than deleted. core/obsolete.py has been updated to
   match — see that file's entries for these three paths.)
+
+  vw_macd, supermao_bands
+  (2 more added in the 2026-07-22 dead-file audit — both were in the
+  fully-dead, zero-importers bucket. Both already expose a clean +1/-1/0
+  directional column (vwmacd_cross, sm_signal) — same contract as
+  supertrend/andean_oscillator — so no new scoring logic was needed,
+  just a wrapper. supermao_bands also computes sm_tp/sm_sl, but only the
+  directional signal is used here; TP/SL sizing is deliberately left to
+  the risk engine, not duplicated in the fusion layer.)
 
 Modules deliberately NOT wired here (7) — with reasons
 --------------------------------------------------------
@@ -78,6 +87,19 @@ Modules deliberately NOT wired here (7) — with reasons
                             engine's job (risk/capital_manager.py etc.)
                             and must never be treated as a trade-entry
                             vote.
+  - adx_trend_filter.py  -> outputs adx_filter_pass (should we trade at
+                            all given trend strength) plus adx_direction,
+                            but its job is gating, not casting a vote of
+                            its own. Faking a bullish/bearish vote out of
+                            a strength-only filter would double-count
+                            trend strength that other modules already
+                            price in. Candidate for a future confluence
+                            *gate* (multiply confidence, don't add score),
+                            not this vote list.
+  - adx_filters.py       -> same reasoning as adx_trend_filter.py:
+                            bishop_exit/adx_rising are filter helpers
+                            (should we exit / is momentum still valid),
+                            not directional votes.
 
 Every wrapper below is defensive: any exception is caught and logged,
 and that module's vote is simply omitted. This mirrors the existing
@@ -372,6 +394,50 @@ def _vote_curve_mtf(
     return None
 
 
+def _vote_vw_macd(df: pd.DataFrame) -> Optional[Vote]:
+    """Volume-Weighted MACD (analysis/vw_macd.py). Was fully dead (zero
+    importers) — audit fix wires it in here. `vwmacd_cross` is already a
+    clean +1/-1/0 crossover signal (institutional review already fixed
+    the real_volume/tick_volume column-priority bug and confirmed the
+    calc is causal), same shape as the already-wired supertrend/andean
+    votes. Needs tick_volume or real_volume in df; if neither is present
+    compute() raises and this wrapper just skips the vote."""
+    from analysis.vw_macd import compute
+    try:
+        out = compute(df)
+    except Exception as e:
+        log.debug(f"[ExtendedSignals] vw_macd failed: {e}")
+        return None
+    cross = out["vwmacd_cross"].iloc[-1]
+    if pd.isna(cross) or int(cross) == 0:
+        return None
+    if int(cross) == 1:
+        return ("bullish", 2, "VW-MACD: bullish volume-weighted crossover")
+    return ("bearish", 2, "VW-MACD: bearish volume-weighted crossover")
+
+
+def _vote_supermao_bands(df: pd.DataFrame) -> Optional[Vote]:
+    """SuperMao multi-band Bollinger + MACD strategy (analysis/supermao_bands.py).
+    Was fully dead (zero importers) — audit fix wires it in here.
+    `sm_signal` is a clean +1/-1/0 entry signal (the module also computes
+    sm_tp/sm_sl for a full trade plan, but only the directional signal is
+    used for the fusion vote — SL/TP sizing stays the risk engine's job).
+    Needs avg_period=50 warm-up bars; short history returns NaN and the
+    vote is skipped."""
+    from analysis.supermao_bands import compute
+    try:
+        out = compute(df)
+    except Exception as e:
+        log.debug(f"[ExtendedSignals] supermao_bands failed: {e}")
+        return None
+    sig = out["sm_signal"].iloc[-1]
+    if pd.isna(sig) or int(sig) == 0:
+        return None
+    if int(sig) == 1:
+        return ("bullish", 2, "SuperMao Bands: long signal (band + MACD confluence)")
+    return ("bearish", 2, "SuperMao Bands: short signal (band + MACD confluence)")
+
+
 # ──────────────────────────────────────────────────────────────────
 # Public entry point
 # ──────────────────────────────────────────────────────────────────
@@ -415,6 +481,8 @@ def get_extended_votes(
         ("breaker_block", lambda: _vote_breaker_block(df, order_blocks)),
         ("flip_zones", lambda: _vote_flip_zones(df, nearest_demand, nearest_supply)),
         ("curve_mtf", lambda: _vote_curve_mtf(current_price, nearest_demand, nearest_supply)),
+        ("vw_macd", lambda: _vote_vw_macd(df)),
+        ("supermao_bands", lambda: _vote_supermao_bands(df)),
     ]
 
     votes: List[Vote] = []

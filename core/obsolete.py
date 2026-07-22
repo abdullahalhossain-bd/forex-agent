@@ -1,39 +1,26 @@
 """
-core/obsolete.py — Explicit registry of obsolete / orphan modules
-==================================================================
+core/obsolete.py — Evidence-backed registry of obsolete / orphan / support modules
+====================================================================================
 
-The repository audit identified ~30 modules that exist on disk but are not
-wired into the live runtime. Some are dead-by-design (superseded by a
-newer implementation), some are dead-by-omission (the orchestrator stack
-references sub-modules that were never created), and some are dead-by-
-duplication (parallel implementations of the same class).
+CONSOLIDATED (Registry Finalization pass, 2026-07-22): this file was
+rewritten from a historical notes file into an evidence-backed registry.
+Every entry now carries a `status`, an `archive_state` (was the file
+actually moved off its live import path, or just copied?), a
+`confidence` level, and — where verified this pass — an `evidence`
+string naming the exact importer/consumer.
 
-Per the project's "no silent orphan modules" rule, every such module is
-listed here with:
-  * the module path
-  * a category (DEAD / SUPERSEDED / BROKEN / DUPLICATE / SMOKE_ONLY)
-  * a one-line justification
-  * the recommended action
+`confidence=HIGH` means the importer graph for that path was directly
+grepped and the file's on-disk state directly checked during the Phase
+A / B1 / B2 / B3 audit (2026-07-19 to 2026-07-22). `confidence=MEDIUM`
+means the entry's current status is inherited from an earlier corrected
+audit pass (Round-19 through Round-29 / execution-parity audit) but was
+not independently re-verified during this consolidation. `confidence=LOW`
+means the entry is unresolved/contradictory and needs a dedicated look.
 
-Runtime code is expected to import `OBSOLETE_MODULES` and surface it in
-health reports so operators can see exactly what is intentionally not
-wired in.
-
-CORRECTION (execution-parity audit §6.6, 2026-07-19): several entries
-below describe `ict_amd_signal_engine.py` / `unified_signal_engine.py` as
-having "superseded" the deleted Day-61/62 SMC/liquidity modules. That is
-true only in the narrow sense that they replaced those specific modules'
-*functionality* — it does NOT mean either module is the live decision
-pipeline. `agents/analysis_agent.py` never imports them at module scope;
-`UnifiedSignalEngine` is wired in as a single, lazily-imported,
-try/except-wrapped, informational vote (weight 1.0) among ~29 other
-analysis modules that feed `strategy.signal_engine.SignalEngine` /
-`core.master_decision`, which is what actually sets `final_signal` live.
-Do not read "superseded by X" below as "X is now the live pipeline."
-The live pipeline is `core.trader.AITrader.evaluate_decision_core()`
-(AnalysisAgent -> DecisionAgent -> RiskEngine -> PositionSizer), which as
-of the same audit fix is also what `backtest/unified_engine.py` replays
-bar-by-bar — see that module's docstring for the shared-kernel design.
+Known unresolved items after this pass (see bottom of file, `UNKNOWN_OR_REVIEW`):
+  * risk/revenge_trading_detector.py — archived copy and live original
+    differ (a bug fix landed on the "dead" file after it was archived).
+    Do not delete without a human decision.
 
 This file is the single source of truth — do not duplicate this list
 elsewhere.
@@ -41,639 +28,874 @@ elsewhere.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List
 
 
-class ObsoleteCategory(str, Enum):
-    DEAD = "dead"                  # zero importers, no replacement in flight
-    SUPERSEDED = "superseded"      # replaced by a newer module
-    BROKEN = "broken"              # imports something that does not exist
-    DUPLICATE = "duplicate"        # byte-identical or near-identical twin
-    SMOKE_ONLY = "smoke_only"      # only imported by tests/test_pipeline.py
-    LEGACY_STUB = "legacy_stub"    # placeholder / 0-byte file
-    WIRED = "wired"                # was dead, now wired into live pipeline (audit fix)
+class ObsoleteStatus(str, Enum):
+    ACTIVE = "active"                              # live, on the main decision/execution path
+    ACTIVE_SUPPORT = "active_support"               # live, registered/constructed but not decision-critical
+    ACTIVE_DYNAMIC = "active_dynamic"                # live via lazy/dynamic import only
+    ORPHAN_READY = "orphan_ready"                    # complete implementation, zero importers, no broken deps
+    LEGACY = "legacy"                                # kept intentionally for back-compat, superseded module still registered
+    SUPERSEDED = "superseded"                        # replaced by a newer module, no live importer
+    MANUAL_REVIEW_REQUIRED = "manual_review_required"  # conflicting signals, needs a human decision
+    UTILITY_TEST = "utility_test"                    # only imported by tests
+    UTILITY_BACKTEST = "utility_backtest"            # only used by backtest tooling
+    UTILITY_DOC = "utility_doc"                      # docs/CLI tooling only
+    STALE_ENTRY = "stale_entry"                      # registry entry describes files that no longer exist on disk
+    DEAD = "dead"                                    # zero importers, no replacement in flight, safe-ish to remove
+    UNKNOWN = "unknown"                              # not yet verified
+
+
+class ArchiveState(str, Enum):
+    MOVED = "moved"                # original file no longer exists at its live path
+    COPIED_ONLY = "copied_only"    # a .dead_code_archived copy exists AND the original is still live-importable
+    NO_ARCHIVE = "no_archive"      # registry/comments claim archival but no .dead_code_archived copy exists
+    NOT_APPLICABLE = "n/a"         # entry was never claimed to be archived
+    UNKNOWN = "unknown"            # not checked this pass
+
+
+class Confidence(str, Enum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
 @dataclass(frozen=True)
 class ObsoleteEntry:
     path: str
-    category: ObsoleteCategory
+    status: ObsoleteStatus
+    archive_state: ArchiveState
     reason: str
     action: str
+    confidence: Confidence
+    evidence: str = ""
 
 
 OBSOLETE_MODULES: List[ObsoleteEntry] = [
-    # ── agents/ ──────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "agents/chart_agent.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Standalone Playwright S/R drawer; superseded by computer_use/chart_drawer.py + "
-        "coordinate_mapper.py. CORRECTED (2026-07-22): a duplicate entry further down "
-        "in this file claimed '220-line chart agent...Archived to .dead_code_archived "
-        "in Round-22' — VERIFIED FALSE via `ls agents/chart_agent.py`, file is still "
-        "present at its original path. Verified via grep: zero external importers.",
-        "Delete or move to legacy/. Wired runtime uses computer_use/ stack. "
-        "File is NOT archived — still on disk.",
-    ),
 
-    # ── ai/ ──────────────────────────────────────────────────────────
     ObsoleteEntry(
-        "ai/automated_retraining.py",
-        ObsoleteCategory.DEAD,
-        "Zero importers; no CLI entry point. Depends on ai/model_versioning which has an mlflow init bug.",
-        "Kept on disk; wired via core/runtime.py boot_ai() with safe try/except. Marked legacy.",
-    ),
-    ObsoleteEntry(
-        "ai/model_versioning.py",
-        ObsoleteCategory.SMOKE_ONLY,
-        "MLflow init runs at import time even when mlflow is absent → NameError. Only consumed by automated_retraining + core/monitoring_system.",
-        "Patched: mlflow calls now guarded behind MLFLOW_AVAILABLE flag.",
-    ),
-
-    # ── analysis/ — the Day 61–64 SMC/Liquidity/Currency cluster ─────
-    # UPDATE 2026-07-02: 7 of these modules were DELETED in the duplicate-cleanup pass.
-    # They are kept in this registry as historical record (category=DELETED).
-    ObsoleteEntry(
-        "analysis/smart_money.py",
-        ObsoleteCategory.DEAD,
-        "Day-61 master SMC orchestrator never wired into agents/analysis_agent.py. Superseded by ict_amd_signal_engine.py + unified_signal_engine.py stack. DELETED 2026-07-02.",
-        "DELETED — superseded by ict_amd_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/structure.py",
-        ObsoleteCategory.SUPERSEDED,
-        "CORRECTED 2026-07-02: NOT dead. Live — imported by agents/analysis_agent.py:41 (MarketStructureEngine) and analysis/structure_mtf.py. Was incorrectly listed as DEAD.",
-        "LIVE module — keep. Used by analysis_agent + structure_mtf.",
-    ),
-    ObsoleteEntry(
-        "analysis/liquidity.py",
-        ObsoleteCategory.WIRED,
-        "CORRECTED (2026-07-22, verified via grep + reachability check): the "
-        "'DELETED 2026-07-02 / only consumer was dead smart_money.py' claim "
-        "below was false on two counts — the file was never deleted (still "
-        "on disk at this path), and it has a live, current consumer: "
-        "agents/analysis_agent.py:337 does `from analysis.liquidity import "
-        "LiquidityEngine`. agents/analysis_agent.py is reachable from main.py "
-        "(part of the live AnalysisAgent -> DecisionAgent -> RiskEngine "
-        "pipeline), so this import executes on every live decision cycle.",
-        "ACTIVE — do not delete. Live consumer: agents/analysis_agent.py:337.",
-    ),
-    ObsoleteEntry(
-        "analysis/liquidity_engine.py",
-        ObsoleteCategory.DEAD,
-        "Day-62 liquidity orchestrator never wired into AnalysisAgent. DELETED 2026-07-02.",
-        "DELETED — superseded by unified_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/liquidity_zones.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer was dead liquidity_engine.py. DELETED 2026-07-02.",
-        "DELETED — superseded by stop_hunt_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/stop_hunt_detector.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer was dead liquidity_engine.py. DELETED 2026-07-02.",
-        "DELETED — superseded by stop_hunt_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/session_analysis.py",
-        ObsoleteCategory.DEAD,
-        "London-manipulation detector; only consumer was dead liquidity_engine.py. DELETED 2026-07-02.",
-        "DELETED — superseded by session_analyzer.py (live) + ict_amd_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/amd_strategy.py",
-        ObsoleteCategory.DEAD,
-        "Day-36/37 AMD strategy. Superseded by ict_amd_signal_engine.py (stricter spec: 6-step pipeline, 1:6 R:R). DELETED 2026-07-02.",
-        "DELETED — superseded by ict_amd_signal_engine.py.",
-    ),
-    ObsoleteEntry(
-        "analysis/currency_strength.py",
-        ObsoleteCategory.DEAD,
-        "Day-64 currency-strength orchestrator never wired into AnalysisAgent.",
-        "Marked legacy. Wire via AnalysisAgent when adopting Day-64 pipeline.",
-    ),
-    ObsoleteEntry(
-        "analysis/currency_ranker.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer is dead currency_strength.py.",
-        "Marked legacy (transitively dead).",
-    ),
-    ObsoleteEntry(
-        "analysis/strength_calculator.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer is dead currency_strength.py.",
-        "Marked legacy (transitively dead).",
-    ),
-    ObsoleteEntry(
-        "analysis/mtf_analyzer.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Only _detect_bos/_detect_choch/_detect_liquidity_sweep helpers are used by smc_engine. Public analyze() pipeline (~700 LOC) never invoked.",
-        "Kept (helpers are live). Public analyze() marked dormant.",
-    ),
-    ObsoleteEntry(
-        "analysis/database/__init__.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Empty placeholder subpackage; no concrete DB modules.",
-        "Kept as marker; will populate if analysis ever needs its own DB.",
-    ),
-
-    # ── broker/ — the dead MT5 data cluster + a few smoke-only guards
-    ObsoleteEntry(
-        "broker/market_data_manager.py",
-        ObsoleteCategory.DEAD,
-        "Zero importers. Was meant to be the single MT5 data entry point. "
-        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
-        "claimed '114 lines...Archived to .dead_code_archived in Round-28' — "
-        "VERIFIED FALSE via `ls broker/market_data_manager.py`, file is still "
-        "present at its original path. Verified via grep: only comment/docstring "
-        "mentions in broker/__init__.py and core/trader.py, no real import.",
-        "Marked legacy. If reviving MT5 data path, wire into server/signal_pipeline.py. "
-        "File is NOT archived — still on disk.",
-    ),
-    ObsoleteEntry(
-        "broker/mt5_data.py",
-        ObsoleteCategory.DEAD,
-        "Only consumers are dead broker/market_data_manager.py + broker/symbol_manager.py.",
-        "Marked legacy (transitively dead).",
-    ),
-    ObsoleteEntry(
-        "broker/symbol_manager.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer is dead broker/market_data_manager.py.",
-        "Marked legacy (transitively dead).",
-    ),
-    ObsoleteEntry(
-        "broker/data_validator.py",
-        ObsoleteCategory.DEAD,
-        "Broker-side validator; only consumer is dead broker/market_data_manager.py. (data/validator.py is the live one.)",
-        "Marked legacy (transitively dead).",
-    ),
-    # NOTE (2026-07-22): a duplicate entry for broker/position_manager.py
-    # used to sit here claiming DEAD/"zero importers". VERIFIED FALSE and
-    # REMOVED — core/trader.py:261 does `from broker.position_manager
-    # import PositionManager` and actively calls .register_open() /
-    # .poll_once() for live MT5 trade management (trailing stop, breakeven,
-    # partial close). This was a real-money-risk mislabeling: the stale
-    # DEAD entry sat earlier in this file than the correct WIRED entry
-    # below (Round-22 fix), so a reader scanning top-to-bottom could act
-    # on the wrong one. See the WIRED entry for broker/position_manager.py
-    # further down — that one is accurate and is the sole entry now.
-    ObsoleteEntry(
-        "broker/safety_guard.py",
-        ObsoleteCategory.SMOKE_ONLY,
-        "Only imported by tests/test_pipeline.py. Production safety gate is in core/trader.py (TradePermission + CorrelationFilter).",
-        "Kept for tests. Marked smoke-only.",
-    ),
-    ObsoleteEntry(
-        "broker/spread_monitor.py",
-        ObsoleteCategory.SMOKE_ONLY,
-        "Only imported by tests/test_pipeline.py.",
-        "Kept for tests. Marked smoke-only.",
-    ),
-    ObsoleteEntry(
-        "broker/health_monitor.py",
-        ObsoleteCategory.SMOKE_ONLY,
-        "Constructed by execution_router but check_once()/run_loop() never called. Canonical replacement is core/health_monitor.py.",
-        "Kept; MT5-mode callbacks still wired. Marked smoke-only.",
-    ),
-
-    # ── risk/ ────────────────────────────────────────────────────────
-    # NOTE (2026-07-22): duplicate risk/risk_simulator.py entry removed from
-    # here — merged into the corrected entry in the Round-27 section below
-    # (same DEAD conclusion; that entry also documents the false "archived"
-    # claim found there and adds the overlap note with risk/monte_carlo.py).
-    ObsoleteEntry(
-        "risk/portfolio_manager.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Pre-Day-58 portfolio prototype; superseded by risk/capital_manager.py + "
-        "risk/exposure_manager.py. Module-level singleton runs at import time. "
-        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
-        "claimed this was 'Archived to .dead_code_archived in Round-27' — "
-        "VERIFIED FALSE via `ls risk/portfolio_manager.py`, file is still "
-        "present at its original path. Verified via grep: zero external "
-        "importers (only the module-level `portfolio_manager = "
-        "PortfolioManager()` self-instantiation).",
-        "Marked legacy. Do not import. File is NOT archived — still on disk.",
-    ),
-
-    # ── scanner/ ─────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "scanner/scanner.py",
-        ObsoleteCategory.DUPLICATE,
-        "Byte-identical duplicate of scanner/config.py minus header. Zero importers.",
-        "Marked legacy. Delete on next cleanup pass.",
-    ),
-
-    # ── fundamental/ ─────────────────────────────────────────────────
-    ObsoleteEntry(
-        "fundamental/fundamental_sentiment.py",
-        ObsoleteCategory.DEAD,
-        "FundamentalSentimentScore never imported. DB methods (get_currency_fundamental_bias) exist for its benefit only.",
-        "Marked legacy. Wire via AnalysisAgent if reviving fundamental scoring.",
-    ),
-
-    # ── memory/ ──────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "memory/trade_context.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "0-byte placeholder.",
-        "Kept as marker; populate if memory needs a typed trade-context dataclass.",
-    ),
-    ObsoleteEntry(
-        "memory/confidence_calibrator.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Superseded by hybrid/confidence_calibrator.py (also currently dead). Class-name collision.",
-        "Marked legacy. Pick one canonical calibrator on next cleanup.",
-    ),
-
-    # ── learning/ ────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "learning/weekly_review.py",
-        ObsoleteCategory.DEAD,
-        "run_weekly_review() never invoked.",
-        "Wired via core/runtime.py boot_learning() — invoked on Sundays by DailyRoutineManager.",
-    ),
-    ObsoleteEntry(
-        "learning/memory_integration.py",
-        ObsoleteCategory.DEAD,
-        "MemoryIntegration never instantiated.",
-        "Wired via core/runtime.py boot_learning() and exposed to AITrader through registry.",
-    ),
-
-    # ── automation/ — entire folder dead, now wired via runtime ─────
-    ObsoleteEntry(
-        "automation/error_handler.py",
-        ObsoleteCategory.DEAD,
-        "ErrorHandler never instantiated. Canonical replacement: core/event_bus + core/runtime_metrics.record_error.",
-        "Wired via core/runtime.py boot_automation().",
-    ),
-    ObsoleteEntry(
-        "automation/runtime_metrics.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Superseded by core/runtime_metrics.py (canonical).",
-        "Kept for backward compat; core/runtime_metrics is the live one.",
-    ),
-    ObsoleteEntry(
-        "automation/daily_review.py",
-        ObsoleteCategory.DEAD,
-        "DailyReview never invoked.",
-        "Wired via core/runtime.py boot_automation() + DailyRoutineManager.",
-    ),
-    ObsoleteEntry(
-        "automation/system_health.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Superseded by core/health_monitor.py (canonical).",
-        "Kept for backward compat; core/health_monitor is the live one.",
-    ),
-
-    # ── orchestrator/ — broken + dead cluster ────────────────────────
-    ObsoleteEntry(
-        "orchestrator/trading_orchestrator.py",
-        ObsoleteCategory.BROKEN,
-        "Imports 4 missing sub-modules: safety_controller, self_healing, mode_manager, decision_journal.",
-        "Patched: 4 stub modules created. TradingOrchestrator now importable and wired via core/runtime.py boot_orchestrator().",
-    ),
-    ObsoleteEntry(
-        "orchestrator/safety_controller.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Created as minimal stub to unblock trading_orchestrator import.",
-        "Live stub — extends SafetyController if logic is added.",
-    ),
-    ObsoleteEntry(
-        "orchestrator/self_healing.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Created as minimal stub to unblock trading_orchestrator import.",
-        "Live stub — extends SelfHealingSystem if logic is added.",
-    ),
-    ObsoleteEntry(
-        "orchestrator/mode_manager.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Created as minimal stub to unblock trading_orchestrator import.",
-        "Live stub — extends ModeManager if logic is added.",
-    ),
-    ObsoleteEntry(
-        "orchestrator/decision_journal.py",
-        ObsoleteCategory.LEGACY_STUB,
-        "Created as minimal stub to unblock trading_orchestrator import.",
-        "Live stub — extends DecisionJournal if logic is added.",
-    ),
-
-    # ── hybrid/ — entire folder dead ─────────────────────────────────
-    ObsoleteEntry(
-        "hybrid/flow_controller.py",
-        ObsoleteCategory.DEAD,
-        "FlowController never instantiated. Day-49 quant+vision pipeline.",
-        "Wired via core/runtime.py boot_hybrid() (constructed, not actively driven).",
-    ),
-    ObsoleteEntry(
-        "hybrid/decision_validator.py",
-        ObsoleteCategory.DEAD,
-        "Only consumer is dead flow_controller.py.",
-        "Marked legacy (transitively dead via flow_controller).",
-    ),
-    ObsoleteEntry(
-        "hybrid/execution_router.py",
-        ObsoleteCategory.DUPLICATE,
-        "Parallel reimplementation of execution/execution_router.py. Class-name collision.",
-        "Marked legacy. Canonical router is execution/execution_router.py.",
-    ),
-    ObsoleteEntry(
-        "hybrid/confidence_calibrator.py",
-        ObsoleteCategory.DUPLICATE,
-        "Parallel reimplementation of memory/confidence_calibrator.py. Class-name collision.",
-        "Marked legacy. Canonical calibrator TBD on next cleanup.",
-    ),
-
-    # ── analytics/ ───────────────────────────────────────────────────
-    ObsoleteEntry(
-        "analytics/performance_report.py",
-        ObsoleteCategory.DEAD,
-        "PerformanceReport class never instantiated. OptimizationSuggester not even re-exported.",
-        "Wired via core/runtime.py boot_analytics(). Invoked by weekly review.",
-    ),
-
-    # ── core/ ────────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "core/monitoring_system.py",
-        ObsoleteCategory.SUPERSEDED,
-        "Never imported. Canonical replacement: core/health_monitor.py. "
-        "CORRECTED (2026-07-22): a duplicate entry further down in this file "
-        "claimed '631 lines...Archived to .dead_code_archived in Round-29' — "
-        "VERIFIED FALSE via `ls core/monitoring_system.py`, file is still "
-        "present at its original path. Verified via grep: zero external "
-        "importers (only internal self-references and the module-level "
-        "`monitoring_system = MonitoringSystem()` singleton).",
-        "Kept for backward compat; core/health_monitor is the live one. "
-        "File is NOT archived — still on disk.",
-    ),
-
-    # ── computer_use/ — broken imports ───────────────────────────────
-    ObsoleteEntry(
-        "computer_use/browser_controller.py",
-        ObsoleteCategory.BROKEN,
-        "Referenced by tradingview_agent.py and computer_agent.py but file does not exist (the actual class BrowserController lives in browser_control.py).",
-        "Documented as broken. computer_agent + tradingview_agent + run_day46_demo are excluded from runtime wiring.",
-    ),
-    ObsoleteEntry(
-        "computer_use/tradingview_agent.py",
-        ObsoleteCategory.BROKEN,
-        "Imports missing browser_controller module.",
-        "Excluded from runtime. Fix on dedicated computer_use revival pass.",
-    ),
-    ObsoleteEntry(
-        "computer_use/computer_agent.py",
-        ObsoleteCategory.BROKEN,
-        "Imports missing browser_controller module AND missing BrowserAgent class.",
-        "Excluded from runtime. Fix on dedicated computer_use revival pass.",
-    ),
-    ObsoleteEntry(
-        "computer_use/run_day46_demo.py",
-        ObsoleteCategory.BROKEN,
-        "Transitively broken via tradingview_agent.",
-        "Excluded from runtime. Demo script only.",
-    ),
-
-    # ── data/ ────────────────────────────────────────────────────────
-    ObsoleteEntry(
-        "data/verify_data_coverage.py",
-        ObsoleteCategory.SMOKE_ONLY,
-        "CLI-only verification script with stale hardcoded 2026-06-21 target date.",
-        "Kept as a CLI utility. Not part of runtime.",
-    ),
-
-    # ── duplicate folder ─────────────────────────────────────────────
-    ObsoleteEntry(
-        "risk - Copy/",
-        ObsoleteCategory.DUPLICATE,
-        "Byte-for-byte duplicate of risk/ folder. Its autonomous_risk.py even imports from the real risk/ package, confirming it's stale shadow code.",
-        "Do not import. Delete on next cleanup pass.",
-    ),
-
-    # ════════════════════════════════════════════════════════════════
-    # Round-22+ audit additions — discovered during institutional audit
-    # of analysis/, ml/, agents/, orchestrator/, strategies/, risk/,
-    # broker/, core/ folders. These were NOT in the original registry.
-    # ════════════════════════════════════════════════════════════════
-
-    # ── Root duplicate (Round-19) ────────────────────────────────────
-    ObsoleteEntry(
-        "trader.py",
-        ObsoleteCategory.DUPLICATE,
-        "1,975-line stale copy of core/trader.py. Missing _reject(), _sync_balance(), "
-        "_get_live_open_pairs() and other safety methods present in the live version. "
-        "Renamed to trader.py.dead_duplicate_removed in Round-19.",
-        "Archived. Do not import — use core/trader.py.",
-    ),
-
-    # ── analysis/ dead code (Round-22) ───────────────────────────────
-    ObsoleteEntry(
-        "analysis/candlestick_patterns_mw.py",
-        ObsoleteCategory.WIRED,
-        "CORRECTED (post-Round-22 audit): the 'superseded by candlestick_"
-        "patterns_ml.py' claim below was wrong — a direct read of both files "
-        "shows _mw.py is an independent 33-pattern scanner (1/2/3-bar, own "
-        "trend filter) while _ml.py is a separate 8-pattern boolean detector. "
-        "Neither duplicates the other, and the file was never actually moved "
-        "to .dead_code_archived as this entry previously claimed. Now wired "
-        "into analysis/extended_modules_adapter.py as a directional vote.",
-        "WIRED — see analysis/extended_modules_adapter.py:_vote_candlestick_patterns_mw.",
-    ),
-    ObsoleteEntry(
-        "analysis/candlestick_patterns_br.py",
-        ObsoleteCategory.WIRED,
-        "CORRECTED (post-Round-22 audit): 584-line Brazilian-book scanner "
-        "(11 patterns) with its own trend/volume/next-bar confirmation "
-        "filtering that candlestick_patterns_ml.py doesn't have — not a "
-        "duplicate. File was never actually archived as this entry "
-        "previously claimed. Now wired into analysis/extended_modules_"
-        "adapter.py as a bullish-only directional vote (module has no "
-        "bearish pattern set).",
-        "WIRED — see analysis/extended_modules_adapter.py:_vote_candlestick_patterns_br.",
-    ),
-    ObsoleteEntry(
-        "analysis/supermao_ichimoku.py",
-        ObsoleteCategory.WIRED,
-        "CORRECTED (post-Round-22 audit): 200-line alternate Ichimoku "
-        "implementation, distinct from the live analysis/ichimoku.py (own "
-        "TK-cross + cloud-position entry rule, ported from a different MQL4 "
-        "source). File was never actually archived as this entry previously "
-        "claimed. Now wired into analysis/extended_modules_adapter.py as a "
-        "directional vote (requires >=90 bars of history for the 52-period "
-        "Senkou Span B + 26-bar displacement).",
-        "WIRED — see analysis/extended_modules_adapter.py:_vote_supermao_ichimoku.",
-    ),
-
-    # ── agents/ dead code (Round-22) ─────────────────────────────────
-    # NOTE (2026-07-22): duplicate agents/chart_agent.py entry removed from
-    # here — merged into the corrected entry in the agents/ section above
-    # (it falsely claimed "Archived...Round-22"; file is still on disk).
-
-    # ── orchestrator/ dead code (Round-25) ───────────────────────────
-    ObsoleteEntry(
-        "orchestrator/trading_sessions.py",
-        ObsoleteCategory.DEAD,
-        "296-line trading sessions module. 0 importers.",
-        "Archived to .dead_code_archived in Round-25.",
-    ),
-
-    # ── strategies/ dead code (Round-26) ─────────────────────────────
-    ObsoleteEntry(
-        "strategy/multi_strategy_set.py",
-        ObsoleteCategory.DEAD,
-        "410-line multi-strategy set with df.eval() rule engine. 0 importers.",
-        "Archived to .dead_code_archived in Round-26.",
-    ),
-    ObsoleteEntry(
-        "strategies/",
-        ObsoleteCategory.DEAD,
-        "Entire strategies/ (plural) folder — 11 files, ~1,753 lines. All 0 importers. "
-        "Includes: pattern_strategies_ml, scalping_strategy, ema_rsi_combo, reversal, "
-        "trend_follow, breakout, momentum, retest, pullback, mean_reversion, range_trading. "
-        "Pullback.py had a confirmed copy-paste bug (bc→bear_c) fixed before archiving.",
-        "All archived to .dead_code_archived in Round-26.",
-    ),
-
-    # ── risk/ dead code (Round-27) ───────────────────────────────────
-    ObsoleteEntry(
-        "risk/book_guardrails.py",
-        ObsoleteCategory.DEAD,
-        "539 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    # NOTE (2026-07-22): duplicate risk/portfolio_manager.py entry removed
-    # from here — merged into the corrected entry in the risk/ section
-    # above (it falsely claimed "Archived...Round-27"; file is still on disk).
-    ObsoleteEntry(
-        "risk/risk_simulator.py",
-        ObsoleteCategory.DEAD,
-        "448 lines. 0 importers. CORRECTED (2026-07-22): a near-duplicate "
-        "entry above (risk/ section) already covers this file with the same "
-        "DEAD conclusion; this entry's 'Archived to .dead_code_archived in "
-        "Round-27' claim is FALSE — `ls risk/risk_simulator.py` confirms the "
-        "file is still present at its original path. Category (DEAD) is "
-        "correct; only the archival claim was wrong.",
-        "Marked legacy. Do not import. File is NOT archived — still on disk.",
-    ),
-    ObsoleteEntry(
-        "risk/order_split_manager.py",
-        ObsoleteCategory.DEAD,
-        "400 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/controlled_grid_scaler.py",
-        ObsoleteCategory.DEAD,
-        "343 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/basket_exit.py",
-        ObsoleteCategory.DEAD,
-        "342 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/atr_risk_manager.py",
-        ObsoleteCategory.DEAD,
-        "298 lines. 0 importers. Note: had unguarded division (M6) fixed in Round-19 before archiving.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/probability_distribution.py",
-        ObsoleteCategory.DEAD,
-        "256 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/compounding.py",
-        ObsoleteCategory.DEAD,
-        "206 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/entry_score.py, risk/institutional_entry_framework.py, "
-        "risk/revenge_trading_detector.py, risk/structure_stop.py, "
-        "risk/confirmation_bias_defense.py",
-        ObsoleteCategory.DEAD,
-        "5 additional dead risk modules, ~573 lines combined. All 0 importers.",
-        "All archived to .dead_code_archived in Round-27.",
-    ),
-    ObsoleteEntry(
-        "risk/entry_quality_guardrails.py",
-        ObsoleteCategory.WIRED,
-        "1,716 lines. Was DEAD (0 importers) — built from real-trade post-mortem "
-        "(GBPUSD M5, 2026-07-02). 12 entry-quality checks (chasing filter, SL swing "
-        "anchor, TP structure validation, indecision candles, etc.). "
-        "Round-22 fix: NOW WIRED into trade_permission.py as final gate.",
-        "Live — wired in Round-22. No action needed.",
-    ),
-
-    # ── broker/ dead code (Round-28) ─────────────────────────────────
-    ObsoleteEntry(
-        "broker/broker_factory.py",
-        ObsoleteCategory.DEAD,
-        "243 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-28.",
-    ),
-    ObsoleteEntry(
-        "broker/mt5_historical_fetcher.py",
-        ObsoleteCategory.DEAD,
-        "182 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-28.",
-    ),
-    ObsoleteEntry(
-        "broker/magic_number.py",
-        ObsoleteCategory.DEAD,
-        "161 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-28.",
-    ),
-    # NOTE (2026-07-22): duplicate broker/market_data_manager.py entry
-    # removed from here — merged into the corrected entry in the broker/
-    # section above (it falsely claimed "Archived...Round-28"; file is
-    # still on disk).
-    ObsoleteEntry(
-        "broker/position_manager.py",
-        ObsoleteCategory.WIRED,
-        "747 lines. Was DEAD (0 importers) — trailing stop, breakeven, partial close, "
-        "Friday close. Paper trades got active management but live MT5 trades did not. "
-        "Round-22 fix: NOW WIRED into core/trader.py for mt5_demo/mt5_live modes.",
-        "Live — wired in Round-22. No action needed.",
-    ),
-
-    # ── core/ dead code (Round-29) ───────────────────────────────────
-    ObsoleteEntry(
-        "core/production_trading_system.py",
-        ObsoleteCategory.DEAD,
-        "658 lines. 0 importers. Third 'production-ready' attempt (alongside "
-        "production_hardening.py and production_excellence.py). Only production_hardening.py is live.",
-        "FIX (execution-parity audit item 8, 2026-07-19): this entry claimed "
-        "'Archived to .dead_code_archived in Round-29' but the file was still "
-        "present under its live .py name with 0 importers — an alternate, "
-        "self-contained trading engine sitting as a landmine for anyone who "
-        "ran it directly expecting it to be 'the' engine. Actually renamed "
-        "to core/production_trading_system.py.dead_code_archived now.",
-    ),
-    ObsoleteEntry(
-        "core/production_excellence.py",
-        ObsoleteCategory.DEAD,
+        'agents/chart_agent.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.NO_ARCHIVE,
+        'Standalone Playwright S/R drawer; superseded by computer_use/chart_drawer.py stack (that stack itself was later deleted entirely — see computer_use/ STALE_ENTRY below).',
+        'Zero importers confirmed. File is on disk, un-archived. Delete or move to legacy/ on next pass.',
+        Confidence.HIGH,
+        evidence='grep: zero importers of agents.chart_agent anywhere in repo (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'ai/automated_retraining.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Zero importers; no CLI entry point.',
+        "CORRECTED: previous action text claimed 'wired via core/runtime.py boot_ai() with safe try/except' — FALSE. boot_ai() body contains no reference to automated_retraining. Genuinely dead.",
+        Confidence.HIGH,
+        evidence="grep core/runtime.py boot_ai() body: zero matches for 'retraining' (2026-07-22).",
+    ),
+    ObsoleteEntry(
+        'ai/model_versioning.py',
+        ObsoleteStatus.UTILITY_TEST,
+        ArchiveState.NOT_APPLICABLE,
+        'MLflow init guarded behind MLFLOW_AVAILABLE flag. Only consumed by dead automated_retraining.py + core/monitoring_system.py (itself superseded/unimported).',
+        'Kept; not on any live path.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit, not re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/smart_money.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Day-61 master SMC orchestrator never wired into agents/analysis_agent.py.',
+        "CORRECTED: registry claimed 'DELETED 2026-07-02' — FALSE, file still present on disk, never actually deleted. Category (DEAD/zero-importers) still correct.",
+        Confidence.HIGH,
+        evidence='`test -f analysis/smart_money.py` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/structure.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'Live — imported by agents/analysis_agent.py (MarketStructureEngine) and analysis/structure_mtf.py.',
+        'Keep. Do not touch.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior corrected audit entry; not independently re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/liquidity.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'Verified live consumer: agents/analysis_agent.py does `from analysis.liquidity import LiquidityEngine`, and analysis_agent.py is reachable from main.py as part of the live AnalysisAgent -> DecisionAgent -> RiskEngine pipeline.',
+        'ACTIVE — do not delete.',
+        Confidence.HIGH,
+        evidence='Explicit verified finding, applied per registry-finalization instructions (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/liquidity_engine.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Day-62 liquidity orchestrator never wired into AnalysisAgent.',
+        "CORRECTED: 'DELETED 2026-07-02' claim is FALSE — file still on disk. Category correct.",
+        Confidence.HIGH,
+        evidence='`test -f` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/liquidity_zones.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Only consumer was dead liquidity_engine.py.',
+        "CORRECTED: 'DELETED 2026-07-02' claim is FALSE — file still on disk. Category correct.",
+        Confidence.HIGH,
+        evidence='`test -f` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/stop_hunt_detector.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Only consumer was dead liquidity_engine.py.',
+        "CORRECTED: 'DELETED 2026-07-02' claim is FALSE — file still on disk. Category correct.",
+        Confidence.HIGH,
+        evidence='`test -f` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/session_analysis.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'London-manipulation detector; only consumer was dead liquidity_engine.py.',
+        "CORRECTED: 'DELETED 2026-07-02' claim is FALSE — file still on disk. Live replacement is session_analyzer.py (different file, still present) + ict_amd_signal_engine.py.",
+        Confidence.HIGH,
+        evidence='`test -f` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/amd_strategy.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Day-36/37 AMD strategy, superseded by ict_amd_signal_engine.py (stricter spec).',
+        "CORRECTED: 'DELETED 2026-07-02' claim is FALSE — file still on disk. Category correct.",
+        Confidence.HIGH,
+        evidence='`test -f` → exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analysis/currency_strength.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Day-64 currency-strength orchestrator never wired into AnalysisAgent.',
+        'Marked legacy. Wire via AnalysisAgent if adopting Day-64 pipeline.',
+        Confidence.MEDIUM,
+        evidence='Not re-grepped this pass; no archival claim to check.',
+    ),
+    ObsoleteEntry(
+        'analysis/currency_ranker.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Only consumer is dead currency_strength.py.',
+        'Marked legacy (transitively dead).',
+        Confidence.MEDIUM,
+        evidence='Not re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/strength_calculator.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Only consumer is dead currency_strength.py.',
+        'Marked legacy (transitively dead).',
+        Confidence.MEDIUM,
+        evidence='Not re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/mtf_analyzer.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Only _detect_bos/_detect_choch/_detect_liquidity_sweep helpers are used by smc_engine. Public analyze() pipeline (~700 LOC) never invoked.',
+        'Keep (helpers live). Public analyze() dormant.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit.',
+    ),
+    ObsoleteEntry(
+        'analysis/database/__init__.py',
+        ObsoleteStatus.LEGACY,
+        ArchiveState.NOT_APPLICABLE,
+        'Empty placeholder subpackage; no concrete DB modules.',
+        'Kept as marker.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit.',
+    ),
+    ObsoleteEntry(
+        'analysis/candlestick_patterns_mw.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NO_ARCHIVE,
+        'Independent 33-pattern scanner, wired into analysis/extended_modules_adapter.py as a directional vote.',
+        "ACTIVE — see extended_modules_adapter.py:_vote_candlestick_patterns_mw. File was never actually archived despite an earlier duplicate entry's claim.",
+        Confidence.MEDIUM,
+        evidence='Inherited from Round-22 corrected audit; not independently re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/candlestick_patterns_br.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NO_ARCHIVE,
+        '584-line Brazilian-book scanner (11 patterns), wired into extended_modules_adapter.py as a bullish-only directional vote.',
+        'ACTIVE — see extended_modules_adapter.py:_vote_candlestick_patterns_br.',
+        Confidence.MEDIUM,
+        evidence='Inherited from Round-22 corrected audit; not independently re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'analysis/supermao_ichimoku.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NO_ARCHIVE,
+        '200-line alternate Ichimoku implementation, distinct from live analysis/ichimoku.py, wired into extended_modules_adapter.py as a directional vote.',
+        'ACTIVE — see extended_modules_adapter.py:_vote_supermao_ichimoku.',
+        Confidence.MEDIUM,
+        evidence='Inherited from Round-22 corrected audit; not independently re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'broker/market_data_manager.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        'Zero real importers; only comment/docstring mentions in broker/__init__.py and core/trader.py, no actual import statement.',
+        'Marked legacy. If reviving MT5 data path, wire into server/signal_pipeline.py.',
+        Confidence.HIGH,
+        evidence='grep: 0 real importers; `.dead_code_archived` copy is byte-identical to original (copy-not-move) (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/mt5_data.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Only consumers are dead broker/market_data_manager.py + broker/symbol_manager.py (both themselves zero-importer).',
+        'Marked legacy (transitively dead).',
+        Confidence.HIGH,
+        evidence='grep: only referenced by market_data_manager.py and symbol_manager.py, both themselves dead; no .dead_code_archived copy exists (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/symbol_manager.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Only consumer is dead broker/market_data_manager.py.',
+        'Marked legacy (transitively dead).',
+        Confidence.HIGH,
+        evidence='grep: 1 importer (market_data_manager.py, itself dead); no archive copy (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/data_validator.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Broker-side validator; only consumer is dead broker/market_data_manager.py. (data/validator.py is the live one.)',
+        'Marked legacy (transitively dead).',
+        Confidence.HIGH,
+        evidence='grep: 1 importer (market_data_manager.py, itself dead); no archive copy (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/safety_guard.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Lazily imported by core/runtime.py, not just tests. Production safety gate is in core/trader.py (TradePermission + CorrelationFilter), so this is a secondary guard, not decision-critical.',
+        'CORRECTED: previous category SMOKE_ONLY undersold it — core/runtime.py:841 does `from broker.safety_guard import SafetyGuard` at boot.',
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:841 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/spread_monitor.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Lazily imported by core/runtime.py at boot, not just tests.',
+        'CORRECTED: previous category SMOKE_ONLY undersold it — core/runtime.py:850 imports it.',
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:850 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/health_monitor.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Constructed by core/runtime.py and execution/execution_router.py; check_once()/run_loop() are not scheduled, so it does no periodic work, but it is instantiated on the live path. Canonical replacement for actual health checks is core/health_monitor.py.',
+        'CORRECTED: previous category SMOKE_ONLY undersold it — imported in 2 live files, not just tests.',
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:943, execution/execution_router.py:235 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/broker_factory.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '243 lines. 0 importers.',
+        "Marked legacy. NOTE: 'Archived to .dead_code_archived' claim was misleading — the original file is still present and importable, only a copy sits at the archived name.",
+        Confidence.HIGH,
+        evidence='grep: 0 importers; checksum-identical .dead_code_archived copy exists, original not removed (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/mt5_historical_fetcher.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '182 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected as above.',
+        Confidence.HIGH,
+        evidence='Same verification method as broker_factory.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/magic_number.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '161 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected as above.',
+        Confidence.HIGH,
+        evidence='Same verification method as broker_factory.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'broker/position_manager.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        '747 lines. Trailing stop, breakeven, partial close, Friday close.',
+        'ACTIVE — core/trader.py imports PositionManager and calls .register_open() / .poll_once() for live MT5 trade management (trailing stop, breakeven, partial close).',
+        Confidence.HIGH,
+        evidence='Explicit verified finding, applied per registry-finalization instructions (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/portfolio_manager.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.COPIED_ONLY,
+        'Pre-Day-58 portfolio prototype; superseded by risk/capital_manager.py + risk/exposure_manager.py. Module-level singleton runs at import time but has zero external importers.',
+        'Marked legacy. Do not import.',
+        Confidence.HIGH,
+        evidence='grep: 0 external importers; checksum-identical .dead_code_archived copy, original not removed (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/book_guardrails.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '539 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only, original still live-importable.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/risk_simulator.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '448 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only, original still live-importable.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/order_split_manager.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '400 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/controlled_grid_scaler.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '343 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/basket_exit.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '342 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/atr_risk_manager.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '298 lines. 0 importers. Had unguarded division (M6) fixed in Round-19 before archiving.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/probability_distribution.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '256 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/compounding.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '206 lines. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/entry_score.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '0 importers. Split out of a combined 5-file registry entry for clarity (registry finalization, 2026-07-22).',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/institutional_entry_framework.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '0 importers. Split out of a combined 5-file registry entry for clarity.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/revenge_trading_detector.py',
+        ObsoleteStatus.MANUAL_REVIEW_REQUIRED,
+        ArchiveState.COPIED_ONLY,
+        '0 importers at grep time. Split out of a combined 5-file registry entry. UNLIKE its siblings, the live original and the .dead_code_archived copy are NOT checksum-identical — line 49 was edited on the live file after archiving (bare `except:` tightened to `except (ValueError, TypeError):`).',
+        'DO NOT auto-delete or auto-move. Someone touched this file after it was marked dead — either a maintenance pass or a sign of pending revival. Needs a human decision before any cleanup action.',
+        Confidence.HIGH,
+        evidence='diff risk/revenge_trading_detector.py vs .dead_code_archived copy: 1 line differs (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/structure_stop.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '0 importers. Split out of a combined 5-file registry entry.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/confirmation_bias_defense.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '0 importers. Split out of a combined 5-file registry entry.',
+        'Marked legacy. Archive claim corrected — copy only.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'risk/entry_quality_guardrails.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        '1,716 lines. 12 entry-quality checks (chasing filter, SL swing anchor, TP structure validation, indecision candles, etc.), built from a real-trade post-mortem.',
+        'ACTIVE — wired into risk/trade_permission.py as the final gate.',
+        Confidence.HIGH,
+        evidence='grep: risk/trade_permission.py:193 `from risk.entry_quality_guardrails import run_all_entry_quality_checks` (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'scanner/scanner.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Byte-identical duplicate of scanner/config.py minus header. Zero importers.',
+        'Marked legacy. Delete on next cleanup pass.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit; not re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'fundamental/fundamental_sentiment.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'FundamentalSentimentScore is constructed and registered at boot.',
+        "CORRECTED: previous claim 'never imported' is FALSE — core/runtime.py:375-376 does `from fundamental.fundamental_sentiment import FundamentalSentimentScore` inside a try/except and registers it as a service. Not decision-critical (not on the AnalysisAgent path), but genuinely constructed at runtime, not dead.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:375-376 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'memory/trade_context.py',
+        ObsoleteStatus.LEGACY,
+        ArchiveState.NOT_APPLICABLE,
+        '0-byte placeholder.',
+        'Kept as marker.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit.',
+    ),
+    ObsoleteEntry(
+        'memory/confidence_calibrator.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.NOT_APPLICABLE,
+        'Class-name collision with hybrid/confidence_calibrator.py (also dead) AND with the actual live intelligence/confidence_calibrator.py (see new entry below). Neither memory/ nor hybrid/ version has any importer.',
+        'Marked legacy. The canonical, live calibrator is intelligence/confidence_calibrator.py — do not confuse the three.',
+        Confidence.HIGH,
+        evidence='grep confirms zero importers of memory.confidence_calibrator; the live one is intelligence/confidence_calibrator.py per Phase B2 audit (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'learning/weekly_review.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'run_weekly_review() is registered as a live callable.',
+        "CORRECTED: registered, not just 'wired via boot_learning()' in the abstract — core/runtime.py:1099-1100 does `from learning.weekly_review import run_weekly_review` and `registry.register_instance('weekly_review_fn', run_weekly_review)`.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:1099-1100 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'learning/memory_integration.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'MemoryIntegration is registered as a live service.',
+        "CORRECTED: core/runtime.py:1085-1086 does `from learning.memory_integration import MemoryIntegration` and `registry.register('memory_integration', ...)`.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:1085-1086 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'automation/error_handler.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'ErrorHandler is registered as a live service at boot.',
+        "CORRECTED: core/runtime.py:1198-1199 does `from automation.error_handler import ErrorHandler` and `registry.register_instance('error_handler', ErrorHandler())`.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:1198-1199 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'automation/runtime_metrics.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.NOT_APPLICABLE,
+        'Superseded by core/runtime_metrics.py (canonical).',
+        'Kept for backward compat; core/runtime_metrics is the live one.',
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:46 imports only core.runtime_metrics, never automation.runtime_metrics (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'automation/daily_review.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'DailyReview is registered as a live service at boot.',
+        "CORRECTED: core/runtime.py:1205-1206 does `from automation.daily_review import DailyReview` and `registry.register('daily_review', ...)`.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:1205-1206 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'automation/system_health.py',
+        ObsoleteStatus.LEGACY,
+        ArchiveState.NOT_APPLICABLE,
+        "Registered explicitly as 'system_health_legacy' — code itself labels it legacy. Canonical replacement is core/health_monitor.py.",
+        'Kept for backward compat; core/health_monitor is the live one.',
+        Confidence.HIGH,
+        evidence="grep core/runtime.py:1212-1214, service name literally 'system_health_legacy' (2026-07-22).",
+    ),
+    ObsoleteEntry(
+        'orchestrator/trading_orchestrator.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'Previously imported 4 missing sub-modules (safety_controller, self_healing, mode_manager, decision_journal); those stubs now exist.',
+        'ACTIVE — imported by orchestrator/daily_routine.py and core/runtime.py:1251.',
+        Confidence.HIGH,
+        evidence='grep: 2 live importers found (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'orchestrator/safety_controller.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Minimal stub created to unblock trading_orchestrator import.',
+        'Live stub — imported by orchestrator/trading_orchestrator.py (itself ACTIVE).',
+        Confidence.HIGH,
+        evidence='grep: 1 importer, trading_orchestrator.py:32 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'orchestrator/self_healing.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Minimal stub created to unblock trading_orchestrator import.',
+        'Live stub — imported by orchestrator/trading_orchestrator.py.',
+        Confidence.HIGH,
+        evidence='grep: 1 importer, trading_orchestrator.py:33 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'orchestrator/mode_manager.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Minimal stub created to unblock trading_orchestrator import.',
+        'Live stub — imported by orchestrator/trading_orchestrator.py.',
+        Confidence.HIGH,
+        evidence='grep: 1 importer, trading_orchestrator.py:35 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'orchestrator/decision_journal.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'Minimal stub created to unblock trading_orchestrator import.',
+        'Live stub — imported by orchestrator/trading_orchestrator.py.',
+        Confidence.HIGH,
+        evidence='grep: 1 importer, trading_orchestrator.py:36 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'orchestrator/trading_sessions.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '296-line trading sessions module. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only, original still live-importable.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'hybrid/flow_controller.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'FlowController never instantiated. Day-49 quant+vision pipeline.',
+        "CORRECTED: previous claim 'wired via core/runtime.py boot_hybrid() (constructed, not actively driven)' is FALSE — boot_hybrid()'s only line is `log.info('boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)')`. Nothing is constructed.",
+        Confidence.HIGH,
+        evidence='grep core/runtime.py boot_hybrid() body — explicit skip, zero references to flow_controller (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'hybrid/decision_validator.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Only consumer is dead flow_controller.py.',
+        'Marked legacy (transitively dead via flow_controller, which is confirmed skipped).',
+        Confidence.HIGH,
+        evidence='Same verification as flow_controller.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'hybrid/execution_router.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        'Parallel reimplementation of execution/execution_router.py. Class-name collision.',
+        'Marked legacy. Canonical router is execution/execution_router.py.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit; not re-grepped this pass.',
+    ),
+    ObsoleteEntry(
+        'hybrid/confidence_calibrator.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.NOT_APPLICABLE,
+        'Parallel reimplementation of memory/confidence_calibrator.py (also dead). Class-name collision with the actual live intelligence/confidence_calibrator.py.',
+        'Marked legacy. See intelligence/confidence_calibrator.py for the live one.',
+        Confidence.HIGH,
+        evidence='grep confirms zero importers; live one identified in Phase B2 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'analytics/performance_report.py',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        'PerformanceReport is constructed and registered at boot.',
+        'CORRECTED: core/runtime.py:1017-1019 does `from analytics.performance_report import PerformanceReport` and registers it as a service.',
+        Confidence.HIGH,
+        evidence='grep core/runtime.py:1017-1019 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'core/monitoring_system.py',
+        ObsoleteStatus.SUPERSEDED,
+        ArchiveState.NO_ARCHIVE,
+        'Never imported outside itself. Canonical replacement: core/health_monitor.py.',
+        "Kept for backward compat. No .dead_code_archived copy exists at all — the earlier 'Archived to .dead_code_archived in Round-29' claim was entirely false, not even a copy was made.",
+        Confidence.HIGH,
+        evidence='`test -f core/monitoring_system.py.dead_code_archived` → does not exist (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'core/production_trading_system.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        "658 lines. 0 importers. Third 'production-ready' attempt (alongside production_hardening.py and production_excellence.py). Only production_hardening.py is live.",
+        "CORRECTED: previous claim 'actually renamed to core/production_trading_system.py.dead_code_archived' is FALSE — both the original and the archived-name copy exist on disk, byte-identical. Nothing was renamed; it was copied.",
+        Confidence.HIGH,
+        evidence='`ls` shows both files present, checksum-identical (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'core/production_excellence.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
         "517 lines. 0 importers. Another abandoned 'production-ready' attempt.",
-        "FIX (execution-parity audit item 8, 2026-07-19): same registry/reality "
-        "mismatch as production_trading_system.py above — actually renamed to "
-        "core/production_excellence.py.dead_code_archived now.",
+        "CORRECTED: same false 'renamed' claim as production_trading_system.py — copy only, original still present.",
+        Confidence.HIGH,
+        evidence='`ls` shows both files present, checksum-identical (2026-07-22).',
     ),
-    # NOTE (2026-07-22): duplicate core/monitoring_system.py entry removed
-    # from here — merged into the corrected entry in the core/ section
-    # above (it falsely claimed "Archived...Round-29"; file is still on disk).
     ObsoleteEntry(
-        "core/signal_scorer.py",
-        ObsoleteCategory.DEAD,
-        "291 lines. 0 importers.",
-        "Archived to .dead_code_archived in Round-29.",
+        'core/signal_scorer.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        '291 lines. 0 importers.',
+        "Marked legacy. No .dead_code_archived copy exists — 'Archived to .dead_code_archived in Round-29' claim was entirely false.",
+        Confidence.HIGH,
+        evidence='`test -f core/signal_scorer.py.dead_code_archived` → does not exist (2026-07-22).',
     ),
+    ObsoleteEntry(
+        'computer_use/browser_controller.py',
+        ObsoleteStatus.STALE_ENTRY,
+        ArchiveState.MOVED,
+        'Historically: referenced by tradingview_agent.py and computer_agent.py but the file never existed (class lived in browser_control.py instead).',
+        "CORRECTED: the entire computer_use/ directory no longer exists on disk at all — not just this file. 'Fix on dedicated computer_use revival pass' action text is stale; there is nothing left to revive without recreating the folder from scratch.",
+        Confidence.HIGH,
+        evidence="`find . -iname '*computer_use*'` → zero results anywhere in the repo (2026-07-22).",
+    ),
+    ObsoleteEntry(
+        'computer_use/tradingview_agent.py',
+        ObsoleteStatus.STALE_ENTRY,
+        ArchiveState.MOVED,
+        'Historically imported the missing browser_controller module.',
+        'CORRECTED: folder no longer exists. See browser_controller.py entry above.',
+        Confidence.HIGH,
+        evidence='Same verification as browser_controller.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'computer_use/computer_agent.py',
+        ObsoleteStatus.STALE_ENTRY,
+        ArchiveState.MOVED,
+        'Historically imported the missing browser_controller module and BrowserAgent class.',
+        'CORRECTED: folder no longer exists. See browser_controller.py entry above.',
+        Confidence.HIGH,
+        evidence='Same verification as browser_controller.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'computer_use/run_day46_demo.py',
+        ObsoleteStatus.STALE_ENTRY,
+        ArchiveState.MOVED,
+        'Historically transitively broken via tradingview_agent.',
+        'CORRECTED: folder no longer exists. See browser_controller.py entry above.',
+        Confidence.HIGH,
+        evidence='Same verification as browser_controller.py (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'data/verify_data_coverage.py',
+        ObsoleteStatus.UTILITY_DOC,
+        ArchiveState.NOT_APPLICABLE,
+        'CLI-only verification script with stale hardcoded 2026-06-21 target date.',
+        'Kept as a CLI utility. Not part of runtime.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit.',
+    ),
+    ObsoleteEntry(
+        'risk - Copy/',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NOT_APPLICABLE,
+        "Byte-for-byte duplicate of risk/ folder. Its autonomous_risk.py even imports from the real risk/ package, confirming it's stale shadow code.",
+        'Do not import. Delete on next cleanup pass.',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit; not re-diffed this pass.',
+    ),
+    ObsoleteEntry(
+        'trader.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.MOVED,
+        '1,975-line stale copy of core/trader.py. Missing _reject(), _sync_balance(), _get_live_open_pairs() and other safety methods present in the live version.',
+        'Archived — renamed to trader.py.dead_duplicate_removed in Round-19 (this one actually was a rename, not a copy).',
+        Confidence.MEDIUM,
+        evidence='Inherited from prior audit; not re-checked this pass whether original trader.py at repo root still exists.',
+    ),
+    ObsoleteEntry(
+        'strategy/multi_strategy_set.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.COPIED_ONLY,
+        '410-line multi-strategy set with df.eval() rule engine. 0 importers.',
+        'Marked legacy. Archive claim corrected — copy only, original still live-importable.',
+        Confidence.HIGH,
+        evidence='grep + checksum verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/pattern_strategies_ml.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of the strategies/ (plural) folder — 11 files, ~1,753 lines, all 0 importers.',
+        "CORRECTED: 'All archived to .dead_code_archived in Round-26' is FALSE for the entire folder — not one of the 11 files has an archive copy. Split from the folder-level entry for per-file tracking.",
+        Confidence.HIGH,
+        evidence='`ls strategies/*.dead_code_archived` → no matches (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/scalping_strategy.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry — same folder-wide false archive claim.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/ema_rsi_combo.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/reversal.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/trend_follow.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/breakout.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/momentum.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/retest.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/pullback.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers. Had a confirmed copy-paste bug (bc→bear_c), fixed but never actually archived.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/mean_reversion.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'strategies/range_trading.py',
+        ObsoleteStatus.DEAD,
+        ArchiveState.NO_ARCHIVE,
+        'Part of strategies/ folder, 0 importers.',
+        'See pattern_strategies_ml.py entry.',
+        Confidence.HIGH,
+        evidence='Same verification (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'intelligence/confidence_calibrator.py',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'NEW ENTRY (Phase B2 discovery): this is the real, live confidence calibrator — unrelated to the dead memory/ and hybrid/ versions of the same class name.',
+        'ACTIVE. Importer chain: agents/analysis_agent.py -> intelligence/confluence_engine.py -> intelligence/confidence_calibrator.py. Do not delete when cleaning up the memory/ or hybrid/ duplicates.',
+        Confidence.HIGH,
+        evidence='grep intelligence/confluence_engine.py:61 `from intelligence.confidence_calibrator import get_calibrator`; confluence_engine itself is imported by agents/analysis_agent.py:1477, core/runtime.py:414, core/trader.py:1799 (2026-07-22).',
+    ),
+    ObsoleteEntry(
+        'intelligence/ported_indicators_registry.py',
+        ObsoleteStatus.ORPHAN_READY,
+        ArchiveState.NOT_APPLICABLE,
+        'NEW ENTRY (Phase B2 discovery): complete implementation, zero runtime importers, no broken dependencies.',
+        "Not currently wired into any live path. Candidate for wiring into AnalysisAgent if the ported-indicator set is wanted, or for deletion if it's abandoned — needs a product decision, not a bug fix.",
+        Confidence.HIGH,
+        evidence='grep: 0 importers found anywhere in repo (2026-07-22).',
+    ),
+
 ]
 
 
@@ -683,11 +905,20 @@ def obsolete_index() -> Dict[str, ObsoleteEntry]:
 
 
 def obsolete_summary() -> Dict[str, int]:
-    """Counts per category — useful for the final report."""
+    """Counts per status — useful for the final report."""
     counts: Dict[str, int] = {}
     for entry in OBSOLETE_MODULES:
-        counts[entry.category.value] = counts.get(entry.category.value, 0) + 1
+        counts[entry.status.value] = counts.get(entry.status.value, 0) + 1
     counts["total"] = len(OBSOLETE_MODULES)
+    return counts
+
+
+def archive_consistency_report() -> Dict[str, int]:
+    """Counts per archive_state — flags how many entries still have a
+    misleading 'archived' claim vs. their real filesystem state."""
+    counts: Dict[str, int] = {}
+    for entry in OBSOLETE_MODULES:
+        counts[entry.archive_state.value] = counts.get(entry.archive_state.value, 0) + 1
     return counts
 
 
