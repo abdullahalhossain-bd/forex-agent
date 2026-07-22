@@ -1,7 +1,14 @@
 # core/audit_report.py
 import json
 import time
+import threading
 from datetime import datetime
+from pathlib import Path
+from typing import Dict
+
+_AUDIT_LOCK = threading.Lock()
+_AUDIT_LOG_PATH = Path("memory/decision_audit_reports.jsonl")
+
 
 class DecisionAuditReport:
     def __init__(self):
@@ -31,7 +38,16 @@ class DecisionAuditReport:
         }
         
         self.reports.append(report_data)
-        
+
+        with _AUDIT_LOCK:
+            try:
+                _AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+                with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(report_data, ensure_ascii=False) + "\n")
+            except Exception:
+                # Never let audit persistence break the trading cycle.
+                pass
+
         # ফরম্যাটেড টেক্সট রিপোর্ট
         report_text = f"""
 =========================
@@ -65,3 +81,12 @@ Confidence: {report_data['confidence']:.2f}%
 =========================
 """
         return report_text
+
+
+_global_audit_report = DecisionAuditReport()
+
+
+def get_audit_report() -> DecisionAuditReport:
+    """Singleton accessor, same convention as get_confidence_manager() /
+    get_trade_journal() elsewhere in core/."""
+    return _global_audit_report

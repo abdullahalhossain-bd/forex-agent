@@ -25,7 +25,7 @@ the existing bull_score / bear_score accumulation with no change to the
 scoring model itself. See `apply_extended_votes()` at the bottom, which
 is the single entry point analysis_agent.py / signal_engine.py calls.
 
-Modules wired here (15)
+Modules wired here (17)
 ------------------------
   andean_oscillator, supertrend, utbot_alerts, nadaraya_watson_envelope,
   daily_high_low, auction_market_theory, candlestick_patterns_ml,
@@ -56,7 +56,34 @@ Modules wired here (15)
   directional signal is used here; TP/SL sizing is deliberately left to
   the risk engine, not duplicated in the fusion layer.)
 
-Modules deliberately NOT wired here (7) — with reasons
+  golden_death_cross (crossover_signals.py)
+  (Added in the Tier 2 pass, 2026-07-22. crossover_signals.py had zero
+  importers anywhere in the codebase. Its golden_cross/death_cross
+  helpers (sma_50/sma_200, confirmation=True to reject fake crosses)
+  don't duplicate any existing live vote — grep confirmed the only other
+  "crossover" usages in the codebase are research/strategy_generator.py's
+  config dict for an unrelated research tool and phase5_regime.py's
+  ema20 crossover used for *regime classification*, not a directional
+  fusion vote. Wired directly into get_extended_votes.)
+
+  cci_state_machine (Book 5 Ch.11, added Tier 2 pass 2026-07-22)
+  (This one is intentionally wired into get_zone_dependent_votes, NOT
+  get_extended_votes, because its own docstring explicitly states CCI
+  is "a CONFLUENCE layer, not a standalone signal" and requires a
+  coincident supply/demand zone to mean anything (Book P125 explicitly
+  warns against standalone CCI use). It needs the same nearest_demand/
+  nearest_supply zone data breaker_block/flip_zones/curve_mtf already
+  depend on, so it slots into that existing second-pass mechanism
+  instead of being forced into the first-pass list. Only the "ENTER"
+  action produces a vote (long at demand zone with CCI < -100, short at
+  supply zone with CCI > +100); ADD/EXIT/HOLD/NO_TRADE states are
+  position-management concepts this adapter has no position context
+  for, so they're not translated into votes. trend_align defaults to
+  True (matching the module's own default) since this adapter doesn't
+  have an independent trend proxy to feed it without duplicating trend
+  signals other wired modules already contribute.)
+
+Modules deliberately NOT wired here (12) — with reasons
 --------------------------------------------------------
   - atr_sl_finder.py     -> stop-loss sizing tool, not a directional
                             signal. Belongs in the risk/execution layer
@@ -100,6 +127,75 @@ Modules deliberately NOT wired here (7) — with reasons
                             bishop_exit/adx_rising are filter helpers
                             (should we exit / is momentum still valid),
                             not directional votes.
+
+Tier 2 pass (2026-07-22) — additional exclusions, with reasons
+----------------------------------------------------------------
+  - engulfing_bar_strategy.py -> genuinely richer than a bare pattern
+                            flag (Nison counter-trend requirement, MA/
+                            Fib/SR confluence scoring, quality grading,
+                            entry/SL/TP), but engulfing detection itself
+                            is NOT new: candlestick_patterns_ml.py,
+                            _br.py, and _mw.py are all already wired
+                            above and each independently flags bullish/
+                            bearish engulfing. A 4th independent vote on
+                            the same candle shape would double-count one
+                            pattern as up to 4 votes. Its unique value
+                            (the confluence/quality layer) belongs as a
+                            confidence multiplier on the *existing*
+                            engulfing votes, not a 4th additive vote —
+                            that redesign is out of scope for this pass.
+  - pin_bar_strategy.py  -> same double-count problem as above: a pin
+                            bar is a Hammer/Shooting Star/Inverted
+                            Hammer by shape, and candlestick_patterns_mw.py
+                            (already wired) explicitly scans for exactly
+                            those patterns. Wiring this as a 2nd vote on
+                            the same candle shape was rejected for the
+                            same reason as engulfing_bar_strategy.py.
+  - trend_level_signal.py -> not a raw signal at all; its own header
+                            says it synthesizes market_regime.py (Trend)
+                            + support_resistance.py (Level) +
+                            high_reliability_patterns.py (Signal) into
+                            one decision. All three inputs already feed
+                            the live pipeline independently elsewhere;
+                            adding this as a 4th vote would double-count
+                            all three simultaneously, not just once.
+  - amd_strategy.py      -> confirmed dead code, not a Tier 2 candidate
+                            at all: core/obsolete.py already documents
+                            it as superseded by ict_amd_signal_engine.py
+                            ("stricter spec"), which is live. Verified
+                            the file is still present on disk but has no
+                            live consumer — a Tier 3-style duplicate that
+                            happened to not be listed with the other
+                            Tier 3 files in the original audit.
+  - megaphone_pennant.py -> by design does NOT produce a directional
+                            vote. Its own docstring is explicit: MEGAPHONE
+                            means "no trade possible" and PENNANT means
+                            "bracket both sides" (buy-stop above + sell-
+                            stop below simultaneously) — neither is a
+                            bullish/bearish call, and the module says a
+                            directional trend should be evaluated by
+                            trend-following logic elsewhere. Forcing a
+                            vote out of it would misrepresent what it
+                            classifies, same reasoning as
+                            quantitative_factors.py above.
+  - crossover_signals.py -> the golden_cross/death_cross convenience
+                            functions ARE wired (see golden_death_cross
+                            above); cross_above/cross_below/Cruzamentos
+                            remain unwired as they're generic helpers
+                            other modules can import directly, not
+                            signal generators of their own.
+
+Note on risk_management.py (re-audited during the Tier 2 pass): its
+MarginCallDetector/DrawdownSimulator are static Book-formula
+calculators (loss% x leverage margin-call math, compounding-loss
+simulation) — checked against risk/kill_switch.py and
+risk/drawdown_controller.py and confirmed these do NOT duplicate that
+math; the risk/ engine tracks live balance/peak-equity state, while
+risk_management.py computes hypothetical/reference scenarios. So it is
+not a redundant duplicate of the live risk engine as originally
+assumed — but the original exclusion reason still holds unchanged: it
+is sizing/scenario math, not a directional entry signal, and must never
+be wired as a trade-entry vote.
 
 Every wrapper below is defensive: any exception is caught and logged,
 and that module's vote is simply omitted. This mirrors the existing
@@ -438,6 +534,83 @@ def _vote_supermao_bands(df: pd.DataFrame) -> Optional[Vote]:
     return ("bearish", 2, "SuperMao Bands: short signal (band + MACD confluence)")
 
 
+def _vote_golden_death_cross(df: pd.DataFrame) -> Optional[Vote]:
+    """SMA-50/SMA-200 golden/death cross (analysis/crossover_signals.py).
+    Was fully dead (zero importers). Uses the sma_50/sma_200 columns
+    data/indicators_ext.py already computes; confirmation=True so a
+    cross that immediately reverses doesn't fire. Needs at least 3 bars
+    of both columns present (2 lookback + current)."""
+    if "sma_50" not in df.columns or "sma_200" not in df.columns:
+        return None
+    from analysis.crossover_signals import golden_cross, death_cross
+
+    fast, slow = df["sma_50"], df["sma_200"]
+    if fast.isna().iloc[-3:].any() or slow.isna().iloc[-3:].any():
+        return None
+    if bool(golden_cross(fast, slow, confirmation=True).iloc[-1]):
+        return ("bullish", 2, "Golden Cross: SMA50 crossed above SMA200 (confirmed)")
+    if bool(death_cross(fast, slow, confirmation=True).iloc[-1]):
+        return ("bearish", 2, "Death Cross: SMA50 crossed below SMA200 (confirmed)")
+    return None
+
+
+def _vote_cci_state_machine(
+    df: pd.DataFrame,
+    nearest_demand: Optional[Dict],
+    nearest_supply: Optional[Dict],
+) -> Optional[Vote]:
+    """Book 5 Ch.11 CCI confluence layer (analysis/cci_state_machine.py).
+    Explicitly not a standalone signal per the book -- only fires an
+    ENTER vote when CCI is at an extreme AND price is at the matching
+    zone type, mirroring the same nearest_demand/nearest_supply contract
+    breaker_block/flip_zones/curve_mtf already use. Uses df['cci'] if
+    data/indicators_ext.py already computed it this cycle, otherwise
+    computes it locally with the same length=20 default so the module's
+    own thresholds (calibrated to that period) stay valid."""
+    if df is None or len(df) < 20:
+        return None
+    if "cci" in df.columns and not pd.isna(df["cci"].iloc[-1]):
+        cci_value = float(df["cci"].iloc[-1])
+    else:
+        try:
+            import pandas_ta as ta
+            cci_series = ta.cci(df["high"], df["low"], df["close"], length=20)
+            if cci_series is None or pd.isna(cci_series.iloc[-1]):
+                return None
+            cci_value = float(cci_series.iloc[-1])
+        except Exception as e:
+            log.debug(f"[ExtendedSignals] cci_state_machine cci calc failed: {e}")
+            return None
+
+    # "At zone" proximity: reuse whichever zone dict is closer, same
+    # small-pip-distance idea as the confluence checks elsewhere in this
+    # file. distance_pips is produced by supply_demand_zones.py.
+    AT_ZONE_PIPS = 15.0
+    zone_type = None
+    if nearest_demand and nearest_demand.get("distance_pips") is not None:
+        if abs(float(nearest_demand["distance_pips"])) <= AT_ZONE_PIPS:
+            zone_type = "demand"
+    if zone_type is None and nearest_supply and nearest_supply.get("distance_pips") is not None:
+        if abs(float(nearest_supply["distance_pips"])) <= AT_ZONE_PIPS:
+            zone_type = "supply"
+    if zone_type is None:
+        return None
+
+    from analysis.cci_state_machine import CCIStateMachine
+    sm = CCIStateMachine()
+    # No open-position tracking available at this layer, so position is
+    # always None here -- this only ever evaluates the ENTER branch,
+    # never ADD/EXIT (those require knowing about an existing trade).
+    result = sm.evaluate(cci_value=cci_value, zone_type=zone_type, position=None, trend_align=True, at_zone=True)
+    if result.action != "ENTER":
+        return None
+    if result.direction == "long":
+        return ("bullish", 1, f"CCI State Machine: {result.reason}")
+    if result.direction == "short":
+        return ("bearish", 1, f"CCI State Machine: {result.reason}")
+    return None
+
+
 # ──────────────────────────────────────────────────────────────────
 # Public entry point
 # ──────────────────────────────────────────────────────────────────
@@ -483,6 +656,7 @@ def get_extended_votes(
         ("curve_mtf", lambda: _vote_curve_mtf(current_price, nearest_demand, nearest_supply)),
         ("vw_macd", lambda: _vote_vw_macd(df)),
         ("supermao_bands", lambda: _vote_supermao_bands(df)),
+        ("golden_death_cross", lambda: _vote_golden_death_cross(df)),
     ]
 
     votes: List[Vote] = []
@@ -530,6 +704,7 @@ def get_zone_dependent_votes(
         ("breaker_block", lambda: _vote_breaker_block(df, order_blocks)),
         ("flip_zones", lambda: _vote_flip_zones(df, nearest_demand, nearest_supply)),
         ("curve_mtf", lambda: _vote_curve_mtf(current_price, nearest_demand, nearest_supply)),
+        ("cci_state_machine", lambda: _vote_cci_state_machine(df, nearest_demand, nearest_supply)),
     ]
 
     votes: List[Vote] = []

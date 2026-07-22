@@ -1921,6 +1921,28 @@ class AITrader:
             log.warning(f"Suppressed exception at line 1130: {e}")
             pass
 
+        # ── Tier-3 audit fix (2026-07-22): core/audit_report.py existed but
+        # had a NameError bug (missing `Dict` import) that made it crash on
+        # import, so it had zero callers anywhere in the codebase. Fixed the
+        # bug and wired it in here, best-effort, using whatever `result`
+        # already has -- the fusion/risk breakdown fields it was designed
+        # for (weights, contributors) aren't produced anywhere yet, so those
+        # sections of the report render as zeros for now rather than being
+        # left completely absent.
+        try:
+            from core.audit_report import get_audit_report
+            get_audit_report().generate(
+                trade_id=str(result.get("ticket") or result.get("paper_trade_id") or "-"),
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+                analysis_ctx=analysis_out if isinstance(analysis_out, dict) else {},
+                fusion_result={},
+                risk_result={},
+                final_decision=result.get("final_action") or result.get("decision", "WAIT"),
+            )
+        except Exception as e:
+            log.debug(f"[Trader] audit_report generation skipped: {e}")
+
         # ── Day 84+ — Record trade in frequency controller ──
         if freq_ctrl:
             _final_for_freq = result.get("final_action")

@@ -185,19 +185,56 @@ class ExtendedIndicators:
     # MAIN ENTRY POINT
     # ─────────────────────────────────────────────────────────
 
-    def add_all(self, df: pd.DataFrame, include_patterns: bool = True) -> pd.DataFrame:
+    def add_all(
+        self,
+        df: pd.DataFrame,
+        include_patterns: bool = True,
+        symbol: Optional[str] = None,
+        timeframe: Optional[str] = None,
+    ) -> pd.DataFrame:
         """Compute ALL indicators + append to df.
 
         Args:
             df: OHLCV DataFrame with columns: open, high, low, close, volume
             include_patterns: if True, also compute 30+ candlestick patterns
                               (slightly slower — skip for tight loops)
+            symbol, timeframe: optional cache-key hints. add_all() is called
+                from 25+ places across the codebase (market_agent.py,
+                analysis/timeframe.py, structure.py, liquidity.py,
+                fibonacci.py, smart_money.py, currency_strength.py, etc.),
+                frequently on the EXACT SAME candle data within a single
+                analysis cycle. Passing symbol/timeframe here lets
+                core/indicator_cache.py (previously wired nowhere in the
+                codebase — zero importers) skip recomputation when a
+                caller asks for indicators on data it already has cached.
+                Omitting them still works (backward compatible with every
+                existing call site) — the cache key then falls back to the
+                data hash alone, which still catches same-cycle duplicate
+                calls, just without the extra symbol/timeframe namespacing.
 
         Returns: df with 60+ new indicator columns.
         """
         if df is None or len(df) < 30:
             log.warning(f"[IndicatorsExt] Insufficient data ({len(df) if df is not None else 0} rows) — need 30+")
             return df
+
+        cache_key_parts = None
+        try:
+            from core.indicator_cache import global_indicator_cache
+            # Hash the OHLCV block actually consumed below, not the whole
+            # df (extra pre-existing columns from a prior partial pass
+            # shouldn't bust the cache).
+            _cols = [c for c in ("open", "high", "low", "close", "volume") if c in df.columns]
+            data_hash = str(pd.util.hash_pandas_object(df[_cols], index=True).sum())
+            cache_key_parts = (symbol or "_any", timeframe or "_any", "add_all",
+                               {"include_patterns": include_patterns, "rows": len(df)}, data_hash)
+            cached = global_indicator_cache.get(*cache_key_parts)
+            if cached is not None:
+                log.debug(f"[IndicatorsExt] add_all cache HIT ({symbol or '?'}/{timeframe or '?'}, {len(df)} rows)")
+                return cached.copy()
+        except Exception as e:
+            log.debug(f"[IndicatorsExt] indicator_cache unavailable, computing uncached: {e}")
+            cache_key_parts = None
 
         df = df.copy()
 
@@ -228,6 +265,15 @@ class ExtendedIndicators:
             f"[IndicatorsExt] {len(df.columns)} columns after add_all "
             f"({len(df)} rows)"
         )
+
+        if cache_key_parts is not None:
+            try:
+                from core.indicator_cache import global_indicator_cache
+                symbol_k, timeframe_k, name_k, params_k, hash_k = cache_key_parts
+                global_indicator_cache.set(symbol_k, timeframe_k, name_k, params_k, hash_k, df.copy())
+            except Exception as e:
+                log.debug(f"[IndicatorsExt] indicator_cache store failed (non-fatal): {e}")
+
         return df
 
     # ─────────────────────────────────────────────────────────
