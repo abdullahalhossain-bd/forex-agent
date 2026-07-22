@@ -58,8 +58,15 @@ class MT5ExecutionAdapter(ExecutionAdapter):
     def open_trade(self, *, symbol: str, direction: str, entry_price: float,
                    sl: float, tp: float, lot: float, confidence: int,
                    **kwargs) -> dict:
+        # BUGFIX (execution-parity wiring): ExecutionRouter.execute() reads
+        # decision_result.get("decision") for BUY/SELL — NOT "action". This
+        # key was wrong since the adapter was first written, which is why
+        # it was never wired anywhere: had it been wired with "action", the
+        # router's hard gate (`decision_result.get("decision") not in
+        # (BUY, SELL)`) would have silently treated every trade as
+        # "no action" and never executed a single order.
         decision_result = {
-            "symbol": symbol, "action": direction, "entry": entry_price,
+            "symbol": symbol, "decision": direction, "entry": entry_price,
             "sl": sl, "tp": tp, "lot": lot, "confidence": confidence,
             **kwargs,
         }

@@ -6,6 +6,7 @@
 # ============================================================
 
 import os
+import time
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta, timezone
@@ -219,6 +220,14 @@ class DataFetcher:
         self.source = self._detect_source()
         self._mt5_conn = None
         self._owns_mt5_conn = False
+        # Dynamic broker UTC-offset cache (see _get_broker_utc_offset_hours).
+        # Re-checked periodically instead of once at startup so a broker's
+        # DST flip mid-session (most brokers change GMT+2 <-> GMT+3 on a
+        # different date than the local PC's DST, since MT5 servers often
+        # follow US or EU DST calendars) is picked up without a restart.
+        self._broker_offset_cache: Optional[float] = None
+        self._broker_offset_cache_at: float = 0.0
+        self._BROKER_OFFSET_CACHE_TTL_SEC = 1800  # 30 min
         if self.source == "mt5":
             self._init_mt5_connection(mt5_conn)
         log.info(f"[OK] DataFetcher initialized | source: {self.source}")
@@ -466,6 +475,71 @@ class DataFetcher:
     # SOURCE 1: MetaTrader5 (PRIMARY)
     # ─────────────────────────────────────────────
 
+    def _get_broker_utc_offset_hours(self, symbol: str = "EURUSD") -> float:
+        """Dynamically detect the broker's current UTC offset by comparing
+        a LIVE tick timestamp (mt5.symbol_info_tick) against the PC's real
+        UTC clock — not a hardcoded/manual guess, and not dependent on
+        MT5_BROKER_TZ_OFFSET_HOURS being set correctly by a human.
+
+        Why tick time instead of bar time: a tick is "right now" by
+        definition, so the comparison against datetime.now(timezone.utc)
+        is a direct, same-instant measurement. Bar-based detection (see
+        detect_broker_tz_offset() below) has to assume the last bar is
+        recent, which isn't true when the market is closed or a symbol is
+        thin.
+
+        Self-correcting across DST: cached for
+        _BROKER_OFFSET_CACHE_TTL_SEC (30 min) then re-measured, so if the
+        broker flips GMT+2 <-> GMT+3 mid-session the fetcher picks up the
+        new offset on its own within 30 minutes — no manual
+        MT5_BROKER_TZ_OFFSET_HOURS edit, no restart, and it never "breaks"
+        on the DST boundary the way a hardcoded 2 or 3 would.
+
+        MT5_BROKER_TZ_OFFSET_HOURS is still honored as an explicit manual
+        override (e.g. for a broker whose tick time is itself unreliable)
+        — if the env var is set, it wins and detection is skipped.
+        """
+        env_override = os.getenv("MT5_BROKER_TZ_OFFSET_HOURS")
+        if env_override not in (None, ""):
+            return float(env_override)
+
+        now = time.time()
+        if (
+            self._broker_offset_cache is not None
+            and (now - self._broker_offset_cache_at) < self._BROKER_OFFSET_CACHE_TTL_SEC
+        ):
+            return self._broker_offset_cache
+
+        if not MT5_AVAILABLE or self._mt5_conn is None:
+            return self._broker_offset_cache or 0.0
+
+        try:
+            tick = self._mt5_conn.get_tick(symbol)
+            if tick is None or not getattr(tick, "time", None):
+                log.debug(
+                    f"[MT5] Dynamic tz offset: no live tick for {symbol} — "
+                    f"keeping previous offset ({self._broker_offset_cache or 0.0}h)"
+                )
+                return self._broker_offset_cache or 0.0
+
+            broker_now = datetime.fromtimestamp(tick.time, tz=timezone.utc)
+            utc_now = datetime.now(timezone.utc)
+            offset_hours = round((broker_now - utc_now).total_seconds() / 3600)
+
+            if self._broker_offset_cache is not None and offset_hours != self._broker_offset_cache:
+                log.info(
+                    f"[MT5] Broker UTC offset changed: "
+                    f"{self._broker_offset_cache:+.0f}h -> {offset_hours:+.0f}h "
+                    f"(likely a DST flip) — picked up automatically"
+                )
+            self._broker_offset_cache = float(offset_hours)
+            self._broker_offset_cache_at = now
+            return self._broker_offset_cache
+        except Exception as e:
+            log.warning(f"[MT5] Dynamic tz offset detection failed: {e} — "
+                        f"keeping previous offset ({self._broker_offset_cache or 0.0}h)")
+            return self._broker_offset_cache or 0.0
+
     def _fetch_mt5(self, symbol, timeframe, limit):
         """
         Fetch OHLCV data from MetaTrader5.
@@ -565,18 +639,20 @@ class DataFetcher:
             # true UTC — which is exactly the "11126s left on M15" bug
             # reported by the operator.
             #
-            # We now expose this as an explicit env-var so the operator
-            # can compensate:
+            # We now auto-detect this by comparing a live tick timestamp
+            # against the PC's real UTC clock every fetch (cached 30 min —
+            # see _get_broker_utc_offset_hours), so this self-corrects
+            # across a broker's DST flip instead of needing a human to
+            # notice and edit an env var:
             #
-            #   MT5_BROKER_TZ_OFFSET_HOURS=2   (winter,  GMT+2 broker)
-            #   MT5_BROKER_TZ_OFFSET_HOURS=3   (summer,  GMT+3 broker)
-            #   MT5_BROKER_TZ_OFFSET_HOURS=0   (default, broker is UTC)
+            #   MT5_BROKER_TZ_OFFSET_HOURS=2   (manual override, optional)
+            #   MT5_BROKER_TZ_OFFSET_HOURS=3   (manual override, optional)
             #
             # When non-zero, we SUBTRACT the offset from the parsed time
             # to convert broker wall-clock → true UTC, then attach
             # tzinfo=timezone.utc so downstream code (is_candle_closed,
             # check_data_staleness) can rely on the tz tag.
-            broker_offset_hours = float(os.getenv("MT5_BROKER_TZ_OFFSET_HOURS", "0") or 0)
+            broker_offset_hours = self._get_broker_utc_offset_hours(symbol)
 
             # Convert 'time' from Unix seconds to datetime.
             # `pd.to_datetime(unit='s')` returns NAIVE UTC by default.

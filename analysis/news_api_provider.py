@@ -145,10 +145,14 @@ class NewsAPIProvider:
             pair: e.g. "EURUSD", "GBPUSD", "XAUUSD"
 
         Returns: dict with news_bias, news_score, top_headlines, etc.
-                 If API unavailable, returns a safe NEUTRAL fallback.
+                 If NewsAPI is unavailable (no key, quota exhausted, or the
+                 request errors), falls back to scoring the free RSS feeds
+                 in intelligence/news_sources.py before giving up to a flat
+                 NEUTRAL — RSS has no key/quota, so a 429 from NewsAPI no
+                 longer means "zero sentiment signal for the rest of today".
         """
         if not self.available:
-            return self._fallback_result("NEWSAPI_API_KEY not set")
+            return self._rss_fallback(pair, "NEWSAPI_API_KEY not set")
 
         # Currency extraction: EURUSD → ["EUR", "USD"]
         currencies = self._extract_currencies(pair)
@@ -164,7 +168,7 @@ class NewsAPIProvider:
 
         # Quota check — only relevant for a live call (cache hits above are free)
         if not self._check_quota():
-            result = self._fallback_result("Daily NewsAPI request quota reached")
+            result = self._rss_fallback(pair, "Daily NewsAPI request quota reached")
             result["quota_exhausted"] = True
             return result
 
@@ -203,11 +207,11 @@ class NewsAPIProvider:
             data = resp.json()
         except Exception as e:
             log.warning(f"[NewsAPI] fetch failed: {e}")
-            return self._fallback_result(f"NewsAPI fetch error: {e}")
+            return self._rss_fallback(pair, f"NewsAPI fetch error: {e}")
 
         if data.get("status") != "ok":
             log.warning(f"[NewsAPI] bad status: {data.get('status')} | {data.get('message','')}")
-            return self._fallback_result(f"NewsAPI status: {data.get('status')}")
+            return self._rss_fallback(pair, f"NewsAPI status: {data.get('status')}")
 
         articles = data.get("articles", [])
         if not articles:
@@ -334,6 +338,73 @@ class NewsAPIProvider:
             "currency_filtered":  False,
             "source":             "fallback",
             "currencies_checked": [],
+            "fetched_at":         datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+
+    def _rss_fallback(self, pair: str, reason: str) -> Dict[str, Any]:
+        """Free, no-key, no-quota fallback for when NewsAPI is unavailable.
+
+        Reuses intelligence/news_sources.py's already-wired RSS feeds
+        (DailyFX, ForexLive, Investing.com, MarketWatch) instead of just
+        returning a flat NEUTRAL with zero signal. Same keyword scoring as
+        the live NewsAPI path, so downstream consumers (MasterAnalyst)
+        see a consistent shape either way. Falls through to
+        _fallback_result() only if RSS itself has nothing relevant right
+        now (feeds unreachable, or no headline mentions this pair).
+        """
+        currencies = self._extract_currencies(pair)
+        try:
+            from intelligence.news_sources import NewsSources
+            rss_items = NewsSources().fetch_rss_feeds()
+        except Exception as e:
+            log.debug(f"[NewsAPI] RSS fallback unavailable: {e}")
+            return self._fallback_result(reason)
+
+        scored = []
+        for item in rss_items:
+            title = item.headline or item.event or ""
+            if not any(c.lower() in title.lower() for c in currencies):
+                continue
+            sentiment, score = self._score_headline(title)
+            scored.append({
+                "title":        title,
+                "source":       item.source,
+                "published_at": item.time_iso or "",
+                "url":          item.url or "",
+                "sentiment":    sentiment,
+                "score":        score,
+            })
+
+        if not scored:
+            log.info(f"[NewsAPI] RSS fallback: no {currencies}-relevant headlines "
+                      f"in {len(rss_items)} RSS items — using flat neutral")
+            result = self._fallback_result(reason)
+            result["rss_checked"] = len(rss_items)
+            return result
+
+        total_score = sum(s["score"] for s in scored)
+        normalized = int((total_score / max(1, len(scored))) * 100)
+        if normalized >= 25:
+            bias = "BULLISH"
+        elif normalized <= -25:
+            bias = "BEARISH"
+        else:
+            bias = "NEUTRAL"
+
+        log.info(
+            f"[NewsAPI] RSS fallback ({reason}) | {pair} | "
+            f"{len(scored)} headlines | bias={bias} score={normalized}"
+        )
+        return {
+            "trade_allowed":      normalized > -50,
+            "reason":             f"RSS fallback ({reason}) | {len(scored)} headlines | bias={bias} score={normalized}",
+            "news_bias":          bias,
+            "news_score":         normalized,
+            "headline_count":     len(scored),
+            "top_headlines":      scored[:5],
+            "currency_filtered":  True,
+            "source":             "rss_fallback",
+            "currencies_checked": currencies,
             "fetched_at":         datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
 

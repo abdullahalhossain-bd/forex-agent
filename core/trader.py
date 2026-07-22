@@ -188,6 +188,13 @@ class AITrader:
         )
 
         self._market = MarketAgent(self.symbol, timeframe)
+        # Execution-parity wiring: thin wrappers around self._market /
+        # self._router (constructed below). No new logic — same objects,
+        # same methods, just accessed through the shared DataProvider /
+        # ExecutionAdapter contract that backtest/unified_engine.py
+        # already uses, so live and historical go through one boundary.
+        from core.data_provider import LiveMT5Provider
+        self._data_provider = LiveMT5Provider(self._market)
         self._analysis = AnalysisAgent()
         self._decision = DecisionAgent()
         self._risk = RiskEngine(balance=balance, symbol=self.symbol)
@@ -247,6 +254,8 @@ class AITrader:
             self._router = ExecutionRouter(
                 mode=self.execution_mode, db=self._db, paper_trader=self._paper
             )
+        from core.execution_adapter import MT5ExecutionAdapter
+        self._execution_adapter = MT5ExecutionAdapter(self._router)
 
         # Round-22 audit fix (B1): wire PositionManager for active trade
         # management (trailing stop, breakeven, partial close, Friday close).
@@ -1219,7 +1228,7 @@ class AITrader:
 
         log.info("[1/9] Market Agent...")
         with self._stage(f"aitrader.{self.symbol}.market"):
-            market_out = self._market.run()
+            market_out = self._data_provider.get_market_out(self.symbol, self.timeframe)
         if "error" in market_out:
             # Don't send Telegram alert for market fetch failures — they're
             # common (market closed, symbol temporarily unavailable) and
@@ -1689,40 +1698,42 @@ class AITrader:
         log.info("[9/9] Execution + Alerts...")
         if approved_to_execute:
             with self._stage(f"aitrader.{self.symbol}.execute"):
-                trade = self._router.execute(
-                    {
-                        "decision": result["final_action"],
-                        "symbol": self.symbol,
-                        "entry": result["entry"],
-                        "sl": result["sl"],
-                        "tp": result["tp"],
-                        "lot": result["lot"],
-                        "confidence": result["confidence"],
-                        "rr": result["rr"],
-                        # Day 81+ hotfix: pass trade_allowed + risk_approved
-                        # so ExecutionRouter can hard-block on permission bypass.
-                        "trade_allowed": result["trade_allowed"],
-                        "risk_approved": result.get("risk_approved", True),
-                        "timeframe": self.timeframe,
-                        # BUGFIX: these were already computed in `result` by
-                        # _build_result() (trend/rsi/regime/session — same
-                        # data that lands correctly in the `analysis` table
-                        # every cycle) but never forwarded here. journal_bridge
-                        # .log_mt5_open() reads exactly these keys off
-                        # decision_result to fill the trades table's
-                        # pattern/regime/trend/rsi/session columns — without
-                        # them every real MT5 trade recorded NULL for all
-                        # five, permanently losing the strategy context that
-                        # produced that specific trade.
-                        "trend": result.get("trend"),
-                        "rsi": result.get("rsi"),
-                        "regime": result.get("regime"),
-                        "session": result.get("session"),
-                        "pattern": (result.get("pattern_context") or {}).get("pattern")
-                                   or result.get("rule_signal"),
-                        "mtf_bias": result.get("mtf_bias"),
-                        "llm_signal": result.get("llm_signal"),
-                    }
+                trade = self._execution_adapter.open_trade(
+                    symbol=self.symbol,
+                    direction=result["final_action"],
+                    entry_price=result["entry"],
+                    sl=result["sl"],
+                    tp=result["tp"],
+                    lot=result["lot"],
+                    confidence=result["confidence"],
+                    # Everything below rides through **kwargs on
+                    # MT5ExecutionAdapter.open_trade() straight into the same
+                    # decision_result dict ExecutionRouter.execute() always
+                    # received — no field dropped by the adapter swap.
+                    rr=result["rr"],
+                    # Day 81+ hotfix: pass trade_allowed + risk_approved
+                    # so ExecutionRouter can hard-block on permission bypass.
+                    trade_allowed=result["trade_allowed"],
+                    risk_approved=result.get("risk_approved", True),
+                    timeframe=self.timeframe,
+                    # BUGFIX: these were already computed in `result` by
+                    # _build_result() (trend/rsi/regime/session — same
+                    # data that lands correctly in the `analysis` table
+                    # every cycle) but never forwarded here. journal_bridge
+                    # .log_mt5_open() reads exactly these keys off
+                    # decision_result to fill the trades table's
+                    # pattern/regime/trend/rsi/session columns — without
+                    # them every real MT5 trade recorded NULL for all
+                    # five, permanently losing the strategy context that
+                    # produced that specific trade.
+                    trend=result.get("trend"),
+                    rsi=result.get("rsi"),
+                    regime=result.get("regime"),
+                    session=result.get("session"),
+                    pattern=(result.get("pattern_context") or {}).get("pattern")
+                            or result.get("rule_signal"),
+                    mtf_bias=result.get("mtf_bias"),
+                    llm_signal=result.get("llm_signal"),
                 )
             if trade:
                 result["paper_trade_id"] = trade.get("id")
@@ -1984,7 +1995,7 @@ class AITrader:
 
     def monitor_open_trades(self, price: float = None) -> list[dict]:
         if price is None:
-            market_out = self._market.run()
+            market_out = self._data_provider.get_market_out(self.symbol, self.timeframe)
             price = market_out.get("ind_ctx", {}).get("close")
             if price is None:
                 log.warning("[PaperTrader] No price available to check open trades")
