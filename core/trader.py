@@ -2824,6 +2824,7 @@ class AITrader:
                 payload,
                 result.get("confidence", 0),
                 dec_out.get("reasons", []),
+                confidence_breakdown_lines=dec_out.get("confidence_breakdown_lines", []),
             )
         )
 

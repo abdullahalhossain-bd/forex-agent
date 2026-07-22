@@ -261,7 +261,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 
 # OUTPUT — JSON ONLY, no markdown, no extra text:
 {
-  "market_story": "3-5 sentence narrative: session context + macro regime + key structural observation",
+  "market_story": "3-5 sentence narrative. MUST be decision-grade and concrete, not generic ('New York session, trend continuation' is NOT acceptable). State the SPECIFIC structural facts that justify the trade, e.g.: which HTF shows HH-HL (or LH-LL) structure intact and on what timeframe; whether price is above/below the key EMA on H1; whether M15 shows a confirmed higher-low (or lower-high) pullback structure; the EXACT pip distance to the nearest resistance/support level relevant to the trade direction; and whether any high-impact news event is within the risk window. Name concrete numbers/levels wherever you have them — do not describe the setup only in terms of session name and generic trend words.",
   "key_levels": [float, float, float],
   "trade_plan": {
     "signal": "BUY" | "SELL" | "WAIT",

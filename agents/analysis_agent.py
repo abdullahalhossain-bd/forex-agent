@@ -80,7 +80,14 @@ def _apply_confidence_penalty(signal_result: dict, amount: float, reason: str, s
         if not isinstance(signal_result, dict):
             return
         current_conf = float(signal_result.get("confidence", 0) or 0)
-        new_conf = max(0, min(99, current_conf - amount))
+        # Confidence Calibration (audit Rule 6): cap below 100% — real
+        # markets always carry uncertainty. Uses the same ceiling as
+        # EntrySafetyFilters.calibrate_confidence() for consistency.
+        try:
+            from core.entry_safety_filters import EntrySafetyFilters
+            new_conf = EntrySafetyFilters.calibrate_confidence(current_conf - amount)
+        except Exception:
+            new_conf = max(0, min(96, current_conf - amount))
         signal_result["confidence"] = new_conf
         penalties = signal_result.setdefault("confidence_penalties", [])
         penalties.append({
@@ -218,6 +225,7 @@ class AnalysisAgent:
                 "advanced_pat_ctx":  {},
                 "sr_result":         {"support_zones": [], "resistance_zones": []},
                 "sr_ctx":            {},
+                "liquidity_ctx":     {},
                 "fib_result":        {},
                 "fib_ctx":           {},
                 "bias_result":       {},
@@ -318,6 +326,21 @@ class AnalysisAgent:
         sr_res  = sr.analyze(df)
         sr.get_summary(sr_res)
         sr_ctx  = sr.get_ai_context(sr_res)
+
+        # ── 2b. Liquidity (equal highs/lows + sweep detection) ─
+        # Feeds the entry-safety Liquidity Sweep Detector (audit fix) —
+        # without this, the override gate below has no sweep data and
+        # defaults to "safe", which is not a fail-closed default we want
+        # for something this cheap to compute.
+        liquidity_ctx = {}
+        try:
+            from analysis.liquidity import LiquidityEngine
+            liq_engine = LiquidityEngine()
+            liq_res    = liq_engine.analyze(df)
+            liquidity_ctx = liq_engine.get_ai_context(liq_res)
+        except Exception as e:
+            log.debug(f"[AnalysisAgent] Liquidity engine unavailable: {e}")
+            liquidity_ctx = {}
 
         # ── 3. Advanced Patterns ─────────────────────────────
         advanced_pat_ctx = {}
@@ -1042,7 +1065,7 @@ class AnalysisAgent:
                 "advanced_pat_ctx":  advanced_pat_ctx,
                 "sr_result":         sr_res,
                 "sr_ctx":            sr_ctx,
-                "fib_result":        fib_result,
+                "liquidity_ctx":     liquidity_ctx,
                 "fib_ctx":           fib_ctx,
                 "bias_result":       bias_result,
                 "bias_ctx":          bias_ctx,
@@ -1192,11 +1215,21 @@ class AnalysisAgent:
 
         elif master_ctx.get("master_signal") in ("BUY", "SELL", "WAIT", "STRONG_BUY", "STRONG_SELL"):
             ma_signal    = master_ctx["master_signal"]
-            # If master returns WAIT but rule signal is BUY/SELL/STRONG_BUY/STRONG_SELL
-            # with good confidence, use rule signal instead of letting master override.
-            # Day 81+ hotfix: previously only "BUY"/"SELL" were checked, but the rule
-            # engine also returns "STRONG_BUY"/"STRONG_SELL" — those were falling through
-            # to the else branch and getting overridden by master's WAIT.
+            # CRITICAL FIX (audit Priority 1 — Consensus Lock):
+            # A single RuleEngine signal used to be able to override a
+            # consensus WAIT (SignalFusion/MasterDecision) on its own
+            # whenever confidence >= 30%:
+            #     SignalFusion consensus = WAIT -> Confidence Override -> BUY
+            # That is a critical-severity bug: a multi-layer consensus
+            # WAIT should never be overridable by one layer acting alone.
+            # It is now gated by EntrySafetyFilters.evaluate_override_gate(),
+            # which only allows the override when ALL of these hold at once:
+            #   - rule confidence clears a stricter 60% floor (was 30%)
+            #   - HTF bias agrees with the rule signal's direction
+            #   - the breakout level is confirmed by a CLOSED candle
+            #   - no unresolved liquidity-sweep risk sits in the way
+            #   - price isn't sitting 10-20 pips from the opposing S/R level
+            #   - risk manager has approved the trade
             rule_sig = signal_result.get("signal", "WAIT")
             rule_conf = signal_result.get("confidence", 0)
             # Normalize STRONG_BUY → BUY, STRONG_SELL → SELL for the final signal
@@ -1206,9 +1239,40 @@ class AnalysisAgent:
             elif "STRONG_SELL" in str(rule_sig):
                 rule_sig_normalized = "SELL"
 
-            if ma_signal == "WAIT" and rule_sig_normalized in ("BUY", "SELL") and rule_conf >= 30:
-                final_signal = rule_sig_normalized
-                log.info(f"[AnalysisAgent] -> {final_signal} (Rule signal: {rule_sig} {rule_conf}% conf, master WAIT — rule override)")
+            if ma_signal == "WAIT" and rule_sig_normalized in ("BUY", "SELL"):
+                from core.entry_safety_filters import get_entry_safety_filters
+                safety = get_entry_safety_filters()
+                gate = safety.evaluate_override_gate(
+                    master_signal=ma_signal,
+                    rule_signal=rule_sig_normalized,
+                    rule_confidence=rule_conf,
+                    mtf_bias={"bias": mtf_bias} if isinstance(mtf_bias, str) else mtf_bias,
+                    sr_ctx=sr_ctx,
+                    liquidity_ctx=liquidity_ctx,
+                    df=df,
+                    risk_approved=True,  # final risk gate still runs downstream in AITrader
+                )
+
+                if gate.allowed:
+                    final_signal = rule_sig_normalized
+                    # Trend-exhaustion penalty (Rule 5) still applies even
+                    # when the override is otherwise allowed.
+                    exhaustion_penalty = gate.details.get("exhaustion_penalty", 0.0)
+                    if exhaustion_penalty:
+                        _apply_confidence_penalty(signal_result, exhaustion_penalty, "trend_exhaustion", "analysis")
+                    log.info(
+                        f"[AnalysisAgent] -> {final_signal} (Rule signal: {rule_sig} {rule_conf}% conf, "
+                        f"master WAIT — consensus-lock override APPROVED: {gate.reason})"
+                    )
+                else:
+                    # Consensus lock holds — WAIT stands. Rule signal alone
+                    # is not enough to force a trade against the 4-layer
+                    # consensus.
+                    final_signal = "WAIT"
+                    log.info(
+                        f"[AnalysisAgent] -> WAIT (Rule signal: {rule_sig} {rule_conf}% conf, "
+                        f"master WAIT — consensus-lock override BLOCKED: {gate.reason})"
+                    )
             else:
                 if ma_signal == "WAIT":
                     if final_signal in ("BUY", "SELL"):
@@ -1988,6 +2052,7 @@ class AnalysisAgent:
             "advanced_pat_ctx":  advanced_pat_ctx,
             "sr_result":         sr_res,
             "sr_ctx":            sr_ctx,
+            "liquidity_ctx":     liquidity_ctx,
             "fib_result":        fib_result,
             "fib_ctx":           fib_ctx,
             "bias_result":       bias_result,

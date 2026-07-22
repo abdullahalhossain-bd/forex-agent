@@ -179,6 +179,15 @@ class SignalFusion:
                     f"Opposition from {', '.join(s.layer for s in opposing)}"
                 )
 
+        # Confidence Calibration (audit Rule 6): real markets always carry
+        # uncertainty, so usable confidence is never allowed to reach 100%.
+        # A system that hits 100% confidence trades too aggressively.
+        try:
+            from core.entry_safety_filters import EntrySafetyFilters
+            weighted_conf = EntrySafetyFilters.calibrate_confidence(weighted_conf)
+        except Exception as e:
+            log.debug(f"[SignalFusion] Confidence calibration unavailable: {e}")
+
         result.master_confidence = round(weighted_conf, 1)
 
         # Determine final signal based on agreement

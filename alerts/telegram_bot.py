@@ -324,11 +324,19 @@ class TelegramNotifier:
         trade_data: dict,
         confidence: int,
         reasons: list,
+        confidence_breakdown_lines: list = None,
     ):
         """
         trade_data keys: pair, signal, entry, sl, tp, lot
         confidence: 0-100
         reasons: list of AI reasoning strings (top 3 shown)
+        confidence_breakdown_lines: itemized scorecard lines, e.g.
+            ["Rule: +18", "Trend: +15", "Momentum: +10", "Sentiment: +8",
+             "LLM: -12", "Liquidity: -6", "Resistance: -5", "Total = 68%"]
+            Produced by core/confidence_breakdown.py — Liquidity and
+            Resistance are always included here, even when those
+            EntrySafetyFilters checks passed, so the risk they carried
+            stays visible instead of disappearing once filtered.
         """
         pair   = _escape_markdown(trade_data.get("pair", "—"))
         signal = _escape_markdown(trade_data.get("signal", "—"))
@@ -353,8 +361,15 @@ class TelegramNotifier:
             f"🎯 *Take Profit:* `{tp}`\n"
             f"📦 *Lot Size:* {lot}\n"
             f"{conf_icon} *Confidence:* {confidence}%\n\n"
-            f"🧠 *AI Reasoning:*\n"
         )
+
+        if confidence_breakdown_lines:
+            msg += "📐 *Confidence Breakdown:*\n"
+            for line in confidence_breakdown_lines:
+                msg += f"  {_escape_markdown(line)}\n"
+            msg += "\n"
+
+        msg += f"🧠 *AI Reasoning:*\n"
         for r in reasons[:3]:
             msg += f"  ✅ {_escape_markdown(r)}\n"
 

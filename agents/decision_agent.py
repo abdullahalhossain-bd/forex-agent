@@ -828,6 +828,30 @@ class DecisionAgent:
 
         adj_conf = max(0, min(99, base_conf + conf_adjustment + sentiment_boost))
 
+        # ── Transparent confidence scorecard (Telegram alert) ──────────
+        # Shows Rule/Trend/Momentum/Sentiment/LLM/Liquidity/Resistance as
+        # individual line items. Liquidity and Resistance come from the
+        # same EntrySafetyFilters checks used by the Consensus Lock fix —
+        # they're surfaced here even when they didn't block the trade, so
+        # the risk they represent doesn't just disappear once filtered.
+        confidence_breakdown = None
+        try:
+            from core.confidence_breakdown import build_confidence_breakdown
+            _scorecard_direction = "BUY" if buy_votes > sell_votes else "SELL"
+            confidence_breakdown = build_confidence_breakdown(
+                direction=_scorecard_direction,
+                rule_confidence=rule_conf,
+                llm_signal=llm_signal,
+                llm_confidence=llm_conf,
+                sentiment_boost=sentiment_boost,
+                ind_ctx=analysis_out.get("ind_ctx", {}),
+                sr_ctx=analysis_out.get("sr_ctx", {}),
+                liquidity_ctx=analysis_out.get("liquidity_ctx", {}),
+            )
+        except Exception as e:
+            log.debug(f"[DecisionAgent] Confidence breakdown unavailable: {e}")
+            confidence_breakdown = None
+
         # BUGFIX: sentiment_score is a raw external value (SentimentEngine
         # output), realistically a float — but the reasons list below used
         # to format it with `:+d`, which raises ValueError for any
@@ -1059,6 +1083,7 @@ class DecisionAgent:
             confidence_engine_result=confidence_engine_result,
             analysis_out=analysis_out,
             excluded_layers=_excluded_layers,
+            confidence_breakdown=confidence_breakdown,
         )
 
     # ──────────────────────────────────────────────────────────
@@ -1085,7 +1110,8 @@ class DecisionAgent:
                 pattern=None, pair=None, timeframe=None, regime=None,
                 confidence_engine_result=None,
                 analysis_out=None,
-                excluded_layers: tuple = ()) -> dict:
+                excluded_layers: tuple = (),
+                confidence_breakdown=None) -> dict:
         """
         Args:
             excluded_layers: names ("master", "llm") of layers decide()
@@ -1235,6 +1261,8 @@ class DecisionAgent:
             "lot":              risk_out.get("lot", risk_out.get("lot_size", 0)),
             "rr":               risk_out.get("rr_ratio", 0),
             "reasons":          reasons,
+            "confidence_breakdown": confidence_breakdown.to_dict() if confidence_breakdown else None,
+            "confidence_breakdown_lines": confidence_breakdown.to_telegram_lines() if confidence_breakdown else [],
             "pattern":          pattern,
             "pair":             pair,
             "timeframe":        timeframe,
