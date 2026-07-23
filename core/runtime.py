@@ -1319,8 +1319,50 @@ def boot_alerts(registry: ServiceRegistry) -> PhaseResult:
         except Exception as e:
             log.warning(f"[Runtime] Telegram bus notification failed: {e}")
 
-    get_bus().subscribe("risk.event", lambda e: _send(f"⚠️ RISK: {e.payload}"))
-    get_bus().subscribe("risk.circuit_breaker", lambda e: _send(f"⚠️ RISK: {e.payload}"))
+    # BUG FIX: risk-gate spam. Two separate problems were combining to
+    # flood Telegram (utils/api_rate_limiter's own log showed "dropped 81
+    # messages (10/10 in last 60s)" from a single 5-minute run):
+    #
+    #   1. core/trader.py publishes BOTH "risk.circuit_breaker" AND
+    #      "risk.event" for the exact same circuit-breaker block (see the
+    #      two back-to-back self._publish() calls in run_cycle()'s
+    #      Circuit Breaker Gate step). This bus previously subscribed
+    #      BOTH channels to the identical _send(...) action below, so
+    #      every single block sent the SAME alert to Telegram twice.
+    #      Fix: only "risk.event" is wired to Telegram here — it's the
+    #      general risk-gate channel per event_bus.py's own channel list
+    #      ("risk-gate triggered (circuit breaker, daily-loss, etc.)"),
+    #      and every risk.circuit_breaker publish in this codebase is
+    #      always accompanied by a risk.event publish for the same
+    #      event, so nothing is lost by dropping the second subscription.
+    #      risk.circuit_breaker remains a valid bus channel for any other
+    #      (non-Telegram) consumer that wants circuit-breaker-only events.
+    #
+    #   2. Even with only one subscription, an UNCHANGED risk condition
+    #      (e.g. a multi-hour COOLDOWN) still re-published risk.event on
+    #      every single cycle for every one of 60+ pairs, each becoming
+    #      its own Telegram send attempt — far beyond Telegram's
+    #      practical rate limit regardless of de-duplication upstream.
+    #      Fix: de-dupe identical alert text here, at the single point
+    #      all risk/broker/error alerts funnel through, so an unchanged
+    #      condition alerts once immediately and then at most once per
+    #      _ALERT_DEDUP_WINDOW_SEC while it stays unchanged — mirroring
+    #      the same pattern already used for the equivalent LOG spam fix
+    #      in core/trader.py (AITrader._cb_last_log_ts).
+    _alert_last_sent: dict[str, float] = {}
+    _alert_lock = threading.Lock()
+    _ALERT_DEDUP_WINDOW_SEC = 900  # 15 min
+
+    def _send_deduped(msg: str):
+        now = time.time()
+        with _alert_lock:
+            last = _alert_last_sent.get(msg, 0.0)
+            if now - last < _ALERT_DEDUP_WINDOW_SEC:
+                return
+            _alert_last_sent[msg] = now
+        _send(msg)
+
+    get_bus().subscribe("risk.event", lambda e: _send_deduped(f"⚠️ RISK: {e.payload}"))
     get_bus().subscribe("broker.failure", lambda e: _send(f"🔴 BROKER: {e.payload}"))
     get_bus().subscribe("system.error", lambda e: _send(f"❌ ERROR: {e.payload}"))
 

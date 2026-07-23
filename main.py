@@ -363,8 +363,8 @@ class ForexAISystem:
         #   - MT5 Balance   : live account equity at the broker
         _mt5_balance_str = ""
         try:
-            from utils.registry import ServiceRegistry
-            _mt5_conn = ServiceRegistry.try_resolve("mt5_connection")
+            from core.service_registry import get_registry
+            _mt5_conn = get_registry().try_resolve("mt5_connection")
             if _mt5_conn is not None:
                 _acct = _mt5_conn.account_info()
                 if _acct is not None:

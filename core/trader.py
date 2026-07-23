@@ -35,6 +35,7 @@
 import asyncio
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -149,6 +150,19 @@ class AITrader:
         self.notifier = notifier
         self.execution_mode = (execution_mode or EXECUTION_MODE).lower()
         self._last_decision_candle = None
+        # BUG FIX: the circuit-breaker block message used to be logged at
+        # WARNING level on every single cycle it stayed tripped, with no
+        # de-duplication — a multi-hour COOLDOWN produced dozens of
+        # identical "Cooldown active — N min remaining" lines (48 in a
+        # single 5-minute run were reported), drowning the log without
+        # adding information. Mirrors the pattern utils/api_rate_limiter.py
+        # already uses (_COOLDOWN_LOG_INTERVAL): log immediately on the
+        # first block and on any change of mode/reason, otherwise at most
+        # once per _CB_LOG_INTERVAL_SEC while the block is unchanged.
+        self._cb_last_logged_mode = None
+        self._cb_last_logged_reason = None
+        self._cb_last_log_ts = 0.0
+        self._CB_LOG_INTERVAL_SEC = 300  # log unchanged block at most every 5 min
 
         # ── Day 131 fix: Risk/Paper/Live balance synchronization ──────
         # self.balance used to be a frozen snapshot taken once at boot and
@@ -1400,7 +1414,35 @@ class AITrader:
         self._circuit_breaker.reset_daily()
         cb_check = self._circuit_breaker.allow_trade()
         if not cb_check["allowed"]:
-            log.warning(f"[CircuitBreaker] {cb_check['mode']} — {cb_check['reason']}")
+            _cb_mode = cb_check["mode"]
+            _cb_reason = cb_check["reason"]
+            # BUG FIX: the COOLDOWN reason string embeds a live countdown
+            # ("... — 97 min remaining. Resume after 11:19 UTC") that
+            # ticks down roughly once a minute. Comparing the FULL string
+            # for "did anything change" meant it looked "changed" on
+            # almost every cycle purely because the minute count moved —
+            # completely defeating the 5-minute quiet window this
+            # throttle exists for (log/Telegram lines kept firing about
+            # once a minute per symbol instead of once per
+            # _CB_LOG_INTERVAL_SEC). Strip the volatile countdown before
+            # comparing so "changed" only fires on an actual mode/reason
+            # change (new trigger, mode transition), not the clock ticking.
+            _cb_reason_stable = re.sub(
+                r"\s*—\s*\d+\s*min remaining\.?\s*Resume after \d{2}:\d{2} UTC",
+                "", _cb_reason,
+            )
+            _cb_changed = (
+                _cb_mode != self._cb_last_logged_mode
+                or _cb_reason_stable != self._cb_last_logged_reason
+            )
+            _cb_due = (time.time() - self._cb_last_log_ts) >= self._CB_LOG_INTERVAL_SEC
+            if _cb_changed or _cb_due:
+                log.warning(f"[CircuitBreaker] {_cb_mode} — {_cb_reason}")
+                self._cb_last_logged_mode = _cb_mode
+                self._cb_last_logged_reason = _cb_reason_stable
+                self._cb_last_log_ts = time.time()
+            else:
+                log.debug(f"[CircuitBreaker] {_cb_mode} — {_cb_reason} (suppressed repeat)")
             if debugger:
                 debugger.record("circuit_breaker", "BLOCK", f"{cb_check['mode']}: {cb_check['reason']}")
                 debugger.record_final("NO_TRADE", f"CircuitBreaker: {cb_check['reason']}")
