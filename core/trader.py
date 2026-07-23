@@ -984,8 +984,19 @@ class AITrader:
         # (default rsi=50, no macd_cross, no trend match, so the
         # confirmation-bias gate could never actually fire).
         dec_out["ind_ctx"] = market_out.get("ind_ctx", {})
-        dec_out["market_bias"] = dec_out.get("market_bias") or market_out.get("market_bias")
-        dec_out["mtf_bias"] = dec_out.get("mtf_bias") or market_out.get("mtf_bias")
+        # BUG FIX: market_out never contains a "market_bias" key anywhere in
+        # the pipeline (grep-verified) — the previous line always evaluated
+        # to None, so confirmation_bias_defense's market_bias check could
+        # never fire. The real source is analysis_agent's MarketBiasEngine
+        # output, stored in analysis_out["bias_ctx"]["bias"].
+        dec_out["market_bias"] = dec_out.get("market_bias") or (analysis_out.get("bias_ctx", {}) or {}).get("bias")
+        # BUG FIX: market_out["mtf_bias"] is a dict ({"bias": ..., "confidence":
+        # ...} — see agents/market_agent.py), not a plain string. It "worked"
+        # by accident because downstream code does substring checks like
+        # "bear" in str(mtf_bias).lower(), and str(dict) happens to contain
+        # the bias word — but that's fragile, not correct. Extract the
+        # actual bias string explicitly.
+        dec_out["mtf_bias"] = dec_out.get("mtf_bias") or (market_out.get("mtf_bias") or {}).get("bias", "NEUTRAL")
 
         # 2026-07-23: feed the advisory (log-only) entry-score /
         # institutional-entry-framework check in trade_permission with real

@@ -426,9 +426,9 @@ class TradePermission:
         if risk_out.get("approved"):
             try:
                 from risk.revenge_trading_detector import check_revenge_trading
-                from database.db import Database
+                from database.db import TraderDB
                 _rt_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
-                _rt_hist = Database().get_trade_history(pair=_rt_symbol, limit=10)
+                _rt_hist = TraderDB().get_trade_history(pair=_rt_symbol, limit=10)
                 _rt_recent = (
                     _rt_hist.to_dict("records")
                     if _rt_hist is not None and len(_rt_hist) else []
