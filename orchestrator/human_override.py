@@ -13,9 +13,8 @@
 # ============================================================
 
 import json
-import time
+import threading
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional
 
 from utils.logger import get_logger
@@ -47,8 +46,8 @@ class HumanOverrideSystem:
         self._override_history: list[dict] = []
         self._last_check_time = 0
         self._poll_interval = 5  # Check command file every 5 seconds
-        self._poll_thread: Optional[__import__("threading").Thread] = None
-        self._stop_polling = __import__("threading").Event()
+        self._poll_thread: Optional[threading.Thread] = None
+        self._stop_polling = threading.Event()
 
     def start(self):
         """Start monitoring for human override commands.

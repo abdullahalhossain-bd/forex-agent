@@ -148,17 +148,7 @@ class CircuitBreaker:
             if cooldown_until:
                 until_dt = datetime.fromisoformat(cooldown_until)
                 if datetime.utcnow() < until_dt:
-                    remaining = (until_dt - datetime.utcnow()).seconds // 60
-                    # BUG FIX: this message used to show only the countdown,
-                    # never the reason the breaker tripped in the first place
-                    # (that reason was only ever logged once, at the moment
-                    # _trigger_pause() fired). Any later session — or later
-                    # cycle in the same session, after log rotation — had no
-                    # way to tell WHY it's in cooldown, only that it is and
-                    # for how much longer. Carry the original pause_reason
-                    # along with every subsequent COOLDOWN response so it's
-                    # always visible, not just at trigger time.
-                    original_reason = self._state.get("pause_reason", "")
+                    remaining = int((until_dt - datetime.utcnow()).total_seconds() // 60)
                     return self._response(
                         False, "COOLDOWN",
                         f"Cooldown active ({original_reason}) — {remaining} min remaining. "
