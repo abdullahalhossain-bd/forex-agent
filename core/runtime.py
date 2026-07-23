@@ -479,6 +479,81 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
         services.append("model_store")
         models = store.list_models()
         log.info("Day 69 ModelStore wired (%d models on disk)", len(models))
+
+        # Bugfix: registry vs disk consistency check. A registry entry
+        # can outlive its .pkl file (deleted/moved outside ModelStore,
+        # failed write, partial deploy) — previously this was only
+        # discovered per-symbol at predict() time as a silent NOT_READY,
+        # e.g. GBPUSD/EURUSD 15m losing their ML voter mid-session. Audit
+        # every registry entry against disk here, at boot, before any
+        # trading cycle runs.
+        audit = store.audit_registry_vs_disk()
+        if audit["missing"]:
+            from config import ML_MODEL_CONSISTENCY_ACTION
+            missing_desc = ", ".join(
+                f"{m['pair']}_{m['timeframe']}/{m['model_type']}_{m['version']} "
+                f"(expected {m['expected_path']})"
+                for m in audit["missing"]
+            )
+            log.error(
+                "[ModelStore] Registry/disk MISMATCH: %d of %d registered model "
+                "file(s) missing on disk — %s",
+                len(audit["missing"]), audit["checked"], missing_desc,
+            )
+
+            if ML_MODEL_CONSISTENCY_ACTION == "hard_fail":
+                raise RuntimeError(
+                    f"ML model registry/disk mismatch: {len(audit['missing'])} "
+                    f"model file(s) referenced in _registry.json are missing on "
+                    f"disk ({missing_desc}). Refusing to start with "
+                    f"ML_MODEL_CONSISTENCY_ACTION=hard_fail. Retrain the affected "
+                    f"pairs (scripts/train_missing_pairs.py) or set "
+                    f"ML_MODEL_CONSISTENCY_ACTION=auto_retrain / warn to proceed."
+                )
+
+            elif ML_MODEL_CONSISTENCY_ACTION == "auto_retrain":
+                # Retrain baseline models for just the affected pairs —
+                # this replaces the missing files AND rewrites their
+                # registry entries (ModelStore.save_model), so the
+                # dangling reference is gone, not just papered over.
+                affected_pairs = sorted({
+                    (m["pair"], m["timeframe"]) for m in audit["missing"] if m["pair"]
+                })
+                try:
+                    from scripts.train_missing_pairs import train_one_pair
+                    for pair, timeframe in affected_pairs:
+                        log.warning(
+                            "[ModelStore] auto-retraining %s %s to repair "
+                            "missing model file(s) found at boot",
+                            pair, timeframe,
+                        )
+                        ok = train_one_pair(pair, timeframe)
+                        if not ok:
+                            log.error(
+                                "[ModelStore] auto-retrain FAILED for %s %s — "
+                                "it will still report NOT_READY this run",
+                                pair, timeframe,
+                            )
+                    # Re-load registry from disk so the freshly-written
+                    # entries (new versions, correct paths) are what the
+                    # rest of the process sees, not the stale in-memory
+                    # copy loaded before the retrain.
+                    store._registry = store._load_registry()
+                except Exception as e:
+                    log.error("[ModelStore] auto-retrain pass failed: %s", e)
+
+            else:  # "warn" (or any unrecognized value — fail open, don't block boot)
+                log.warning(
+                    "[ModelStore] ML_MODEL_CONSISTENCY_ACTION=%s — continuing to "
+                    "boot with %d model(s) unavailable; affected pairs will "
+                    "report NOT_READY until retrained",
+                    ML_MODEL_CONSISTENCY_ACTION, len(audit["missing"]),
+                )
+        else:
+            log.info(
+                "[ModelStore] registry/disk consistency OK (%d model file(s) verified)",
+                audit["checked"],
+            )
     except Exception as e:
         log.warning("ModelStore init failed: %s", e)
 

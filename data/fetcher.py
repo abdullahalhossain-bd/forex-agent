@@ -16,8 +16,36 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 # ─────────────────────────────────────────────────────────────
-# MT5 AVAILABILITY GUARD
+# LOG SPAM GUARD — repeated per-symbol config errors
 # ─────────────────────────────────────────────────────────────
+# Bugfix: "[Finnhub] API key not set" (and same for AlphaVantage/
+# TwelveData/Polygon) was logged at ERROR level on every symbol, every
+# cycle — e.g. 7x per cycle for a 7-symbol watchlist — even though it's
+# not a per-symbol condition, it's a one-time missing-config fact that
+# never changes until the operator sets the env var. Log it loudly once,
+# then drop to DEBUG so it doesn't drown out real per-symbol errors in
+# the log.
+import threading as _threading
+_missing_key_lock = _threading.Lock()
+_missing_key_warned: set = set()
+
+
+def _log_missing_api_key(provider: str) -> None:
+    """Log 'API key not set' at ERROR the first time for this provider
+    in this process, DEBUG every time after."""
+    with _missing_key_lock:
+        first_time = provider not in _missing_key_warned
+        _missing_key_warned.add(provider)
+    if first_time:
+        log.error(
+            f"[{provider}] API key not set — set the corresponding "
+            f"env var (see .env.example) to enable this fallback source. "
+            f"(further occurrences this run are logged at DEBUG level)"
+        )
+    else:
+        log.debug(f"[{provider}] API key not set (already warned this run)")
+
+
 # MetaTrader5 package is Windows-only. On Linux/Mac the import
 # would crash the whole project at module-load time. We guard it
 # here so DataFetcher still imports cleanly and falls back to
@@ -925,6 +953,35 @@ class DataFetcher:
     # ─────────────────────────────────────────────
 
     # ── Day 90 — yfinance fallback (Linux VPS / demo) ──
+    @staticmethod
+    def _resample_h1_to_h4(df_h1: "pd.DataFrame", limit: int) -> Optional["pd.DataFrame"]:
+        """Aggregate H1 candles into H4 bars.
+
+        Bugfix: yfinance and Alpha Vantage have no native 4-hour interval
+        on their free tiers ("unsupported timeframe: H4"), which was
+        cascading into MTF confluence failures ("Could not fetch 4h").
+        Rather than failing outright, resample from H1 — the standard
+        technique for synthesizing a timeframe a provider doesn't expose
+        natively. Uses the MT5/forex session convention of 4h bars
+        starting at 00:00 UTC (00-04, 04-08, ... 20-24) via origin="epoch",
+        so bars line up with MT5's own H4 candles instead of drifting to
+        whatever hour the fetched H1 series happens to start on.
+        """
+        if df_h1 is None or len(df_h1) == 0:
+            return None
+        try:
+            agg = {"open": "first", "high": "max", "low": "min", "close": "last"}
+            if "volume" in df_h1.columns:
+                agg["volume"] = "sum"
+            df_h4 = df_h1.resample("4h", origin="epoch").agg(agg)
+            df_h4 = df_h4.dropna(subset=["open", "high", "low", "close"])
+            if len(df_h4) == 0:
+                return None
+            return df_h4.tail(limit)
+        except Exception as e:
+            log.warning(f"[resample] H1→H4 aggregation failed: {e}")
+            return None
+
     def _fetch_yfinance(self, symbol, timeframe, limit):
         """
         Fetch OHLCV data from Yahoo Finance via yfinance.
@@ -954,6 +1011,15 @@ class DataFetcher:
         # Map timeframe to yfinance interval
         interval = self._tf_to_yfinance_interval(timeframe)
         if interval is None:
+            # Bugfix: H4 has no native yfinance interval. Instead of
+            # failing outright (the old behavior — correct for avoiding a
+            # *silent* substitution, but left H4 permanently unusable from
+            # this source), fetch H1 and resample. Still explicit/logged,
+            # just no longer a dead end.
+            if timeframe.upper() == "H4":
+                log.info("[yfinance] H4 not natively supported — fetching H1 and resampling")
+                df_h1 = self._fetch_yfinance(symbol, "H1", limit=limit * 4 + 20)
+                return self._resample_h1_to_h4(df_h1, limit)
             log.error(f"[yfinance] unsupported timeframe: {timeframe}")
             return None
 
@@ -1099,13 +1165,21 @@ class DataFetcher:
         from utils.api_rate_limiter import rate_limited_get
         api_key = os.getenv("ALPHA_VANTAGE_API_KEY", "")
         if not api_key:
-            log.error("[AlphaVantage] API key not set")
+            _log_missing_api_key("AlphaVantage")
             return None
 
         # AV uses EUR/USD format (with slash)
         av_symbol = self._to_av_symbol(symbol)
         av_interval = self._tf_to_av_interval(timeframe)
         if av_interval is None:
+            # Bugfix: Alpha Vantage's FX_INTRADAY only offers 1/5/15/30/60min
+            # buckets — no native 4h. Resample from the 60min series instead
+            # of returning "unsupported timeframe" (which was the direct
+            # cause of MTF's "Could not fetch 4h").
+            if timeframe.upper() == "H4":
+                log.info("[AlphaVantage] H4 not natively supported — fetching H1 and resampling")
+                df_h1 = self._fetch_alpha_vantage(symbol, "H1", limit=limit * 4 + 20)
+                return self._resample_h1_to_h4(df_h1, limit)
             log.error(f"[AlphaVantage] unsupported timeframe: {timeframe}")
             return None
 
@@ -1232,7 +1306,7 @@ class DataFetcher:
         from utils.api_rate_limiter import rate_limited_get
         api_key = os.getenv("POLYGON_API_KEY", "")
         if not api_key:
-            log.error("[Polygon] API key not set")
+            _log_missing_api_key("Polygon")
             return None
 
         # Polygon uses C:EURUSD format
@@ -1332,7 +1406,7 @@ class DataFetcher:
         from utils.api_rate_limiter import rate_limited_get
         api_key = os.getenv("FINNHUB_API_KEY", "")
         if not api_key:
-            log.error("[Finnhub] API key not set")
+            _log_missing_api_key("Finnhub")
             return None
 
         # Finnhub uses OANDA:EUR_USD format
@@ -1426,7 +1500,7 @@ class DataFetcher:
         from utils.api_rate_limiter import rate_limited_get
         api_key = os.getenv("TWELVE_DATA_API_KEY", "")
         if not api_key:
-            log.error("[TwelveData] API key not set")
+            _log_missing_api_key("TwelveData")
             return None
 
         # Twelve Data uses EUR/USD format

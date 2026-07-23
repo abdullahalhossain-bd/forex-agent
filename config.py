@@ -386,6 +386,23 @@ MT5_INVESTOR = os.getenv("MT5_INVESTOR")
 # for a Linux/Mac dev box with no MT5 terminal at all).
 MT5_ONLY_MODE = os.getenv("MT5_ONLY_MODE", "true").lower() == "true"
 
+# ── ML model registry/disk consistency check (startup) ───────────
+# `memory/ml_models/_registry.json` can drift from disk (deleted/moved
+# .pkl files, partial deploys, manual cleanup) — the registry still says
+# a model exists, but load_model() returns None at trade time and the
+# predictor silently degrades to NOT_READY mid-session. core/runtime.py
+# audits registry-vs-disk for every configured pair during the AI boot
+# phase; this controls what it does when it finds a mismatch:
+#   "warn"          — log the mismatch loudly, keep booting (old behavior)
+#   "auto_retrain"  — log it, then retrain baseline models for just the
+#                      affected pair/timeframe (scripts/train_missing_pairs
+#                      .train_one_pair), so NOT_READY is fixed before the
+#                      first trading cycle instead of discovered during it
+#   "hard_fail"      — log it and refuse to start (exit 1); use when you
+#                      want a broken model registry to block deployment
+#                      rather than silently run with a degraded ensemble
+ML_MODEL_CONSISTENCY_ACTION = os.getenv("ML_MODEL_CONSISTENCY_ACTION", "auto_retrain").lower()
+
 # ── REAL-MONEY execution gate (execution-parity audit, §9) ──────
 # execution/execution_router.py imports these four names when
 # EXECUTION_MODE=mt5_live. They previously did not exist in this file

@@ -403,15 +403,31 @@ class TradePermission:
         total += 1
 
         # Day 97+ Book rule: Min R:R
-        rr = risk_out.get("rr_ratio", 0)
-        ok_rr = rr >= self.MIN_RR
-        checks.append({
-            "check":  "Min R:R",
-            "passed": ok_rr,
-            "detail": f"1:{rr} (min 1:{self.MIN_RR})",
-        })
-        if ok_rr: passed += 1
-        total += 1
+        if risk_out.get("approved", False):
+            rr = risk_out.get("rr_ratio", 0)
+            ok_rr = rr >= self.MIN_RR
+            checks.append({
+                "check":  "Min R:R",
+                "passed": ok_rr,
+                "detail": f"1:{rr} (min 1:{self.MIN_RR})",
+            })
+            if ok_rr: passed += 1
+            total += 1
+        else:
+            # RiskEngine already rejected this trade upstream (see "Risk
+            # approved" check above) for a reason unrelated to R:R — its
+            # rr_ratio is a zeroed placeholder, not a real measurement,
+            # because SL/TP were never computed for a trade that was
+            # already dead. Don't evaluate/log it as a distinct R:R
+            # failure; that just duplicates and mislabels the real reason
+            # already captured by "Risk approved" above.
+            checks.append({
+                "check":  "Min R:R",
+                "passed": True,
+                "detail": f"N/A — RiskEngine already rejected ({risk_out.get('reject_reason', 'unknown')})",
+            })
+            passed += 1
+            total += 1
 
         # ── Round-5 audit fix: SMC + Session Fusion gate ──────────────
         # The session_smc_fusion() in analysis/session_analyzer.py

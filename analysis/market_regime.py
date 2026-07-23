@@ -38,11 +38,48 @@ class MarketRegimeDetector:
     # MAIN METHOD
     # ─────────────────────────────────────────────
 
+    @staticmethod
+    def _safe_atr_avg(df: pd.DataFrame) -> float:
+        """Mean of df['atr'], defaulting to 0.0 when the column is
+        missing, empty, or its mean is NaN. Plain `x.mean() or 0.0`
+        doesn't work here because NaN is truthy in Python, so a missing
+        'atr' column (empty Series -> mean() == nan) was still leaking
+        through as atr_avg=nan instead of the intended 0.0 fallback."""
+        val = df.get('atr', pd.Series(dtype=float)).mean()
+        return 0.0 if pd.isna(val) else float(val)
+
+    def _unknown_result(self) -> dict:
+        """Safe placeholder result when df is empty/invalid — same shape
+        as a normal detect() result so callers (get_ai_context,
+        print_summary, downstream regime_ctx consumers) don't need a
+        separate code path."""
+        return {
+            'regime':        'UNKNOWN',
+            'direction':     'NEUTRAL',
+            'strength':      'WEAK',
+            'volatility':    'NORMAL',
+            'adx':           0.0,
+            'atr':           0.0,
+            'atr_avg':       0.0,
+            'strategy':      'NO_TRADE — insufficient data',
+        }
+
     def detect(self, df: pd.DataFrame) -> dict:
         """
         Full market regime analysis।
         df-এ indicators আগে থেকে থাকতে হবে (add_all করা)।
         """
+        # Bugfix (KeyError: 'atr'): defense-in-depth guard. MarketAgent now
+        # checks row count before this is ever called, but detect() can
+        # also be invoked directly (backtests, other callers) with a df
+        # that never went through the indicator pipeline (e.g. add_all()
+        # no-ops under 30 rows), so 'atr'/'adx' columns may not exist at
+        # all. Bail out with a safe, clearly-labeled result instead of
+        # letting a bare df['atr'] KeyError propagate.
+        if df is None or len(df) == 0 or 'close' not in df.columns:
+            log.warning("[MarketRegimeDetector] Empty/invalid df — returning UNKNOWN regime")
+            return self._unknown_result()
+
         df   = df.copy()
         df   = self._add_adx(df)
         last = df.iloc[-1]
@@ -60,7 +97,12 @@ class MarketRegimeDetector:
             'volatility':    volatility,
             'adx':           round(float(last.get('adx', 0)), 2),
             'atr':           round(float(last.get('atr', 0)), 5),
-            'atr_avg':       round(float(df['atr'].mean()), 5),
+            # Bugfix: was bare df['atr'].mean() — raised KeyError when the
+            # indicator pipeline never ran (e.g. <30 rows) and no 'atr'
+            # column exists at all. _safe_atr_avg() falls back to 0.0,
+            # matching the same "no data → 0" convention already used for
+            # last.get('atr', 0) above.
+            'atr_avg':       round(self._safe_atr_avg(df), 5),
             'strategy':      strategy,
         }
 
@@ -182,7 +224,7 @@ class MarketRegimeDetector:
     def _detect_volatility(self, df: pd.DataFrame, last) -> str:
         """ATR vs historical average দিয়ে volatility"""
         atr     = float(last.get('atr', 0))
-        atr_avg = float(df['atr'].mean())
+        atr_avg = self._safe_atr_avg(df)
 
         if atr_avg == 0:
             return 'NORMAL'

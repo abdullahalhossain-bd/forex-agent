@@ -215,6 +215,29 @@ class MarketAgent:
             log.error(f"[MarketAgent] Validation failed for {self.symbol}")
             return {"error": "validation_failed"}
 
+        # ── Row-count guard (bugfix) ──
+        # ExtendedIndicators.add_all() silently no-ops (returns df
+        # unchanged, no 'atr'/'adx'/etc columns) when len(df) < 30 — it
+        # only logs a warning, it doesn't signal failure. Previously that
+        # under-sized df sailed straight through to MarketRegimeDetector,
+        # which does `df['atr'].mean()` and raised a bare KeyError: 'atr'.
+        # Check row count here, BEFORE the indicator pipeline runs at all,
+        # so thin-history symbols (XAUUSD, USDCHF, USDCAD, NZDUSD, EURJPY,
+        # EURGBP, EURCHF, etc.) skip this cycle with a clear reason instead
+        # of crashing deep in regime detection.
+        _MIN_ROWS_FOR_INDICATORS = 30
+        if df is None or len(df) < _MIN_ROWS_FOR_INDICATORS:
+            _rows = len(df) if df is not None else 0
+            log.warning(
+                f"[MarketAgent] Insufficient data for {self.symbol} "
+                f"({_rows} rows, need {_MIN_ROWS_FOR_INDICATORS}+) — skipping this cycle"
+            )
+            return {
+                "error": "insufficient_data",
+                "detail": f"{_rows} rows, need {_MIN_ROWS_FOR_INDICATORS}+",
+                "skipped": True,
+            }
+
         # ── Indicators — three-tier fallback ──
         # Co-founder fix: prefer the canonical indicator registry (single
         # source of truth, delegates to ExtendedIndicators/pandas-ta).

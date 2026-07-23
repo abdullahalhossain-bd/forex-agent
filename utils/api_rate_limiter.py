@@ -51,14 +51,35 @@ BACKTEST_REPLAY_MODE = False
 class _ProviderState:
     """Per-provider rate-limit state."""
 
-    __slots__ = ("min_interval", "max_retries", "_last_call", "_lock")
+    __slots__ = ("min_interval", "max_retries", "_last_call", "_lock",
+                 "_cooldown_until", "_last_cooldown_log")
 
     def __init__(self, min_interval: float, max_retries: int):
         self.min_interval = min_interval
         self.max_retries = max_retries
         self._last_call = 0.0
         self._lock = threading.Lock()
+        # Bugfix: TwelveData (and any provider) hitting 429 was retried
+        # with full exponential backoff on EVERY symbol, EVERY cycle —
+        # e.g. 7 symbols x (max_retries+1) attempts x up to 30s backoff,
+        # even when the underlying cause (daily quota exhausted, not a
+        # transient burst) meant every single one of those retries was
+        # guaranteed to fail too. Once a provider exhausts its retries on
+        # 429, put it in a short circuit-breaker cooldown: subsequent
+        # calls fail fast (no wait, no retry loop) until the cooldown
+        # expires, instead of repeating a doomed retry sequence 7x/cycle.
+        self._cooldown_until = 0.0
+        self._last_cooldown_log = 0.0
 
+
+# How long a provider stays in circuit-breaker cooldown after exhausting
+# its retries on 429. Long enough to stop hammering a daily-quota-exhausted
+# provider every cycle, short enough to recover automatically once the
+# provider's own window resets.
+_COOLDOWN_SECONDS = 120.0
+# Minimum gap between "still in cooldown" log lines per provider, so a
+# multi-symbol cycle logs this once instead of once per symbol.
+_COOLDOWN_LOG_INTERVAL = 60.0
 
 # Registry of known providers + their free-tier limits.
 # `min_interval` is the minimum number of seconds between consecutive
@@ -159,6 +180,25 @@ def rate_limited_get(
         state = _PROVIDERS.get(provider)
     max_retries = state.max_retries if state else 0
 
+    # ── Circuit breaker: fast-fail if this provider is in cooldown ──
+    if state is not None and not BACKTEST_REPLAY_MODE:
+        now = time.monotonic()
+        if now < state._cooldown_until:
+            remaining = state._cooldown_until - now
+            if now - state._last_cooldown_log >= _COOLDOWN_LOG_INTERVAL:
+                state._last_cooldown_log = now
+                log.warning(
+                    f"[api_rate_limiter] {provider}: in cooldown after "
+                    f"repeated 429s — skipping request, {remaining:.0f}s remaining "
+                    f"(logged at most once per {_COOLDOWN_LOG_INTERVAL:.0f}s)"
+                )
+            else:
+                log.debug(
+                    f"[api_rate_limiter] {provider}: in cooldown, "
+                    f"{remaining:.0f}s remaining — skipping request"
+                )
+            return None
+
     if BACKTEST_REPLAY_MODE:
         # See module-level comment on BACKTEST_REPLAY_MODE. Skip the
         # provider rate-limit wait (replaying historical bars isn't a
@@ -249,6 +289,16 @@ def rate_limited_get(
             if attempt < max_retries:
                 time.sleep(sleep_s)
                 continue
+            # Retries exhausted on 429 — trip the circuit breaker so the
+            # next N seconds of calls (across all symbols in this and
+            # subsequent cycles) fail fast instead of repeating this same
+            # retry+backoff sequence.
+            if state is not None:
+                state._cooldown_until = time.monotonic() + _COOLDOWN_SECONDS
+                log.warning(
+                    f"[api_rate_limiter] {provider}: exhausted retries on 429 — "
+                    f"entering {_COOLDOWN_SECONDS:.0f}s cooldown"
+                )
             return resp  # caller can inspect .status_code
 
         # ── Server error (5xx) — retry ────────────────────────

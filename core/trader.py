@@ -1092,14 +1092,33 @@ class AITrader:
         # Day 81+ hotfix: log permission outcome to execution.log
         try:
             from core.execution_logger import log_permission_checked
+            # Bugfix (decision/allowed mismatch): `decision` must reflect the
+            # *gated* outcome, not the raw analysis signal. Previously this
+            # always logged dec_out["decision"] verbatim, so a blocked SELL
+            # (allowed=false) still showed decision="SELL" in execution.log —
+            # any downstream dashboard/analytics reading that field alone
+            # would think the SELL actually went through. Mirror the same
+            # "GATED — analysis verdict preserved" convention already used
+            # around line ~1614 for dec_out["execution_action"]: keep the raw
+            # signal in its own field, and make `decision` the value that was
+            # actually acted on.
+            _raw_signal = dec_out.get("decision")
+            _perm_allowed = perm_out.get("allowed", False)
+            if _perm_allowed:
+                _gated_decision = _raw_signal
+            elif _raw_signal in (None, "", "WAIT", "NO TRADE", "HOLD"):
+                _gated_decision = "NO_TRADE"
+            else:
+                _gated_decision = f"BLOCKED_{_raw_signal}"
             log_permission_checked(
                 symbol=self.symbol,
-                allowed=perm_out.get("allowed", False),
+                allowed=_perm_allowed,
                 passed=perm_out.get("passed", 0),
                 total=perm_out.get("total", 0),
                 failed_checks=[c.get("check", "?") for c in perm_out.get("checks", [])
                                if not c.get("passed", True)],
-                decision=dec_out.get("decision"),
+                decision=_gated_decision,
+                raw_signal=_raw_signal,
                 # Day 81+ fix (log discrepancy): previously logged only
                 # dec_out["confidence"] (pre-penalty), which could show e.g.
                 # "Confidence: 73%" right next to a failed "Min confidence"

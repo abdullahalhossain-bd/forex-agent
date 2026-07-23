@@ -246,6 +246,68 @@ class ModelStore:
         log.info(f"[ModelStore] rolled back {key} to {to_version}")
         return True
 
+    def audit_registry_vs_disk(self) -> Dict[str, Any]:
+        """Startup consistency check: verify every model file the registry
+        claims to have actually exists on disk.
+
+        Bugfix: `_registry.json` can drift from `memory/ml_models/` on
+        disk — e.g. a registry entry pointing at `xgboost_v5.pkl` /
+        `random_forest_v6.pkl` that was never written, or was deleted/
+        moved outside of ModelStore (manual cleanup, failed disk write,
+        partial deploy). Previously this was only discovered lazily, one
+        symbol at a time, as `load_model()` returned None and the
+        predictor logged "no models loaded ... NOT_READY" — silently, in
+        the middle of live trading. This walks the whole registry up
+        front so the gap is caught and reported (or auto-repaired) at
+        boot, not discovered piecemeal during trading.
+
+        Uses the same filename/pair-dir re-resolution `load_model()`
+        already does for a genuinely-moved file, so this doesn't flag
+        false positives for that already-handled case.
+
+        Returns:
+            {
+                "checked": int,          # total (pair, tf, model_type, version) entries examined
+                "ok": int,               # entries whose file exists (directly or after re-resolve)
+                "missing": [             # entries whose file could not be found at all
+                    {"key": str, "pair": str, "timeframe": str,
+                     "model_type": str, "version": str, "expected_path": str},
+                    ...
+                ],
+            }
+        """
+        checked = 0
+        ok = 0
+        missing: List[Dict[str, Any]] = []
+
+        for key, entry in self._registry.get("models", {}).items():
+            pair = entry.get("pair", "")
+            timeframe = entry.get("timeframe", "")
+            model_type = entry.get("model_type", "")
+            for ver_entry in entry.get("versions", []):
+                checked += 1
+                raw_path = ver_entry.get("model_path", "")
+                model_path = Path(raw_path) if raw_path else None
+                found = bool(model_path and model_path.exists())
+                if not found and model_path is not None:
+                    # Same re-resolution load_model() uses for a file that
+                    # moved but still exists under base_dir/pair_dir/name.
+                    _resolved = self.base_dir / model_path.parent.name / model_path.name
+                    found = _resolved.exists()
+                if found:
+                    ok += 1
+                else:
+                    missing.append({
+                        "key": key,
+                        "pair": pair,
+                        "timeframe": timeframe,
+                        "model_type": model_type,
+                        "version": ver_entry.get("version"),
+                        "expected_path": raw_path,
+                    })
+
+        return {"checked": checked, "ok": ok, "missing": missing}
+
     def list_models(self, pair: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all models (optionally filtered by pair)."""
         result = []
