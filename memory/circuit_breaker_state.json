@@ -1,8 +1,8 @@
 {
   "mode": "COOLDOWN",
   "consecutive_losses": 3,
-  "daily_loss_usd": 5.49,
-  "date": "2026-07-23",
+  "daily_loss_usd": 0.0,
+  "date": "2026-07-24",
   "recent_results": [
     {
       "result": "WIN",
@@ -27,5 +27,5 @@
   ],
   "pause_reason": "\ud83d\uded1 3 consecutive losses \u2014 entering cooldown",
   "daily_loss_sync_stale": false,
-  "cooldown_until": "2026-07-23T11:19:30.118412"
+  "cooldown_until": "2026-07-23T23:43:27.768127"
 }

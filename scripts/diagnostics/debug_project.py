@@ -363,7 +363,7 @@ def check_boot() -> CheckResult:
         critical_services = [
             # Originals
             "config", "db", "trade_memory", "data_fetcher",
-            "market_scanner", "circuit_breaker", "risk_engine_factory",
+            "market_scanner", "circuit_breaker_factory", "risk_engine_factory",
             "execution_router", "paper_trader", "trader",
             # Day 37+ runtime unification (main.py resolves these after boot)
             "trading_engine", "telegram_notifier", "correlation_filter",

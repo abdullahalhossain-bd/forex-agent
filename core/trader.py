@@ -321,10 +321,15 @@ class AITrader:
                     f"[AITrader] {self.symbol} PositionManager init failed "
                     f"(live management unavailable): {_pm_e}"
                 )
-        # Circuit breaker / approval mode are global state (single JSON file
-        # each) — accept a shared instance from AutonomousTraderSystem, or
-        # make a private one if this AITrader is used standalone.
-        self._circuit_breaker = circuit_breaker or CircuitBreaker(balance=balance)
+        # BUG FIX (cooldown leaking across symbols): approval mode is
+        # legitimately global (one human-in-the-loop switch for the whole
+        # system), but the circuit breaker must NOT be — it used to fall
+        # back to `CircuitBreaker(balance=balance)` with symbol=None, which
+        # writes to the legacy shared state file. When this AITrader is used
+        # standalone (no circuit_breaker passed in), give it its own
+        # per-symbol instance so a losing streak on this symbol can't also
+        # cooldown every other AITrader sharing that same legacy file.
+        self._circuit_breaker = circuit_breaker or CircuitBreaker(symbol=self.symbol, balance=balance)
         self._approval = approval or ApprovalMode(mode=approval_mode)
         # Correlation filter — prefer shared instance from registry.
         if registry is not None:
@@ -3066,15 +3071,22 @@ class AutonomousTraderSystem:
         else:
             self.scanner = MarketScanner(risk_engine=None) if (use_scanner and MarketScanner) else None
 
-        # Circuit breaker + approval mode are global state (one shared JSON
-        # file each) — created ONCE here and handed to every symbol's
-        # AITrader so they don't overwrite each other's state.
-        # Prefer the registry's shared instances if available.
-        if registry is not None:
-            shared_cb = registry.try_resolve("circuit_breaker")
-            self.circuit_breaker = shared_cb if shared_cb is not None else CircuitBreaker(balance=balance)
-        else:
-            self.circuit_breaker = CircuitBreaker(balance=balance)
+        # BUG FIX (circuit-breaker cooldown leaking across symbols): this
+        # used to create ONE CircuitBreaker (symbol=None) and hand the same
+        # shared instance to every symbol's AITrader via _build_trader().
+        # symbol=None makes CircuitBreaker write to the legacy single global
+        # state file, so a losing streak / daily-loss trip on ONE pair
+        # cooled down or paused EVERY pair, including ones that hadn't lost
+        # a single trade. CircuitBreaker already supports per-symbol
+        # isolation (symbol=<pair> -> its own memory/circuit_breaker/
+        # <symbol>.json) — it just was never constructed that way here.
+        # Approval mode genuinely IS global (one human-in-the-loop switch
+        # for the whole system) so it's left as a single shared instance.
+        # Circuit breakers are now cached per-symbol, lazily, the same way
+        # SignalPipeline._get_risk_engine() already caches per-symbol
+        # RiskEngines.
+        self._cb_factory = registry.try_resolve("circuit_breaker_factory") if registry is not None else None
+        self._circuit_breakers: dict = {}
         self.approval = ApprovalMode(mode=approval_mode)
 
         if registry is not None:
@@ -3124,6 +3136,39 @@ class AutonomousTraderSystem:
             # The next cycle will write a fresh latest_report.json
             pass
 
+    def _get_circuit_breaker(self, symbol: str) -> "CircuitBreaker":
+        """Per-symbol CircuitBreaker, lazily created and cached — mirrors
+        SignalPipeline._get_risk_engine(). Fixes the cooldown-leaking-across-
+        symbols bug: each pair now gets its own memory/circuit_breaker/
+        <symbol>.json instead of every pair sharing one global file."""
+        if symbol not in self._circuit_breakers:
+            if self._cb_factory is not None:
+                self._circuit_breakers[symbol] = self._cb_factory(symbol, self.balance)
+            else:
+                self._circuit_breakers[symbol] = CircuitBreaker(symbol=symbol, balance=self.balance)
+        return self._circuit_breakers[symbol]
+
+    def _circuit_breaker_status_summary(self) -> dict:
+        """Aggregate per-symbol CircuitBreaker status for dashboards.
+
+        Now that each symbol has its own CircuitBreaker (see
+        _get_circuit_breaker), there's no longer a single global status to
+        report. `by_symbol` gives the full per-pair breakdown; `worst`
+        surfaces whichever symbol is currently the most restricted
+        (PAUSED > COOLDOWN > LEARNING > TRADING) so existing dashboard code
+        expecting one summary object still has something sensible to show.
+        """
+        by_symbol = {
+            sym: cb.get_status() for sym, cb in self._circuit_breakers.items()
+        }
+        if not by_symbol:
+            return {"mode": "TRADING", "by_symbol": {}}
+        priority = {"PAUSED": 3, "COOLDOWN": 2, "LEARNING": 1, "TRADING": 0}
+        worst_sym = max(by_symbol, key=lambda s: priority.get(by_symbol[s].get("mode"), 0))
+        worst = dict(by_symbol[worst_sym])
+        worst["by_symbol"] = by_symbol
+        return worst
+
     def _build_trader(self, symbol: str) -> AITrader:
         return AITrader(
             balance=self.balance,
@@ -3133,7 +3178,7 @@ class AutonomousTraderSystem:
             notifier=self.notifier,
             execution_mode=self.execution_mode,
             approval_mode=self.approval_mode,
-            circuit_breaker=self.circuit_breaker,
+            circuit_breaker=self._get_circuit_breaker(symbol),
             approval=self.approval,
             registry=self._registry,
             paper_trader=self._shared_paper,
@@ -3916,7 +3961,7 @@ class AutonomousTraderSystem:
             "timeframe": self.timeframe,
             "balance": self.balance,
             "system_state": "PAUSED" if self._manual_pause_active() or self._is_paused() else "RUNNING",
-            "circuit_breaker": self.circuit_breaker.get_status(),
+            "circuit_breaker": self._circuit_breaker_status_summary(),
             "summary": {
                 "trades": stats.get("total", 0),
                 "wins": stats.get("wins", 0),
@@ -3949,7 +3994,7 @@ class AutonomousTraderSystem:
         """Return a snapshot of system health for the dashboard / health monitor.
         Aggregates circuit-breaker state, open positions, last cycle results,
         and any registered runtime metrics."""
-        cb = self.circuit_breaker.get_status() if self.circuit_breaker else None
+        cb = self._circuit_breaker_status_summary()
         open_positions = []
         for trader in self.traders.values():
             try:

@@ -53,7 +53,20 @@ class SignalPipeline:
         self.db = TraderDB()
         self.analyst = AIAnalyst()
         self.decision_agent = DecisionAgent()
-        self.circuit_breaker = CircuitBreaker(balance=starting_balance)
+        # BUG FIX (circuit-breaker cooldown leaking across symbols): this
+        # used to be ONE shared `CircuitBreaker(balance=starting_balance)`
+        # with symbol=None, gating every symbol's trades through the same
+        # legacy global state file. Worse, `process()` called
+        # `self.circuit_breaker.allow_trade()` BEFORE `symbol` was even
+        # extracted from the payload — the gate was symbol-agnostic by
+        # construction. A losing streak on one pair (e.g. EURUSD hits 3
+        # consecutive losses) would set COOLDOWN on the shared file and
+        # silently block every other pair's signals for
+        # CircuitBreaker.COOLDOWN_HOURS, even pairs that never lost a trade.
+        # Fixed the same way _risk_engines already caches a RiskEngine per
+        # symbol below: lazily create and cache one CircuitBreaker per
+        # symbol, each with its own memory/circuit_breaker/<symbol>.json.
+        self._circuit_breakers: dict[str, CircuitBreaker] = {}
         self.router = ExecutionRouter(db=self.db)
         self.starting_balance = starting_balance
         # Symbol-ভিত্তিক RiskEngine cache — প্রতিটা symbol-এর নিজের
@@ -62,6 +75,14 @@ class SignalPipeline:
         # balance দিয়ে নতুন instance বানালেও state ফাইল থেকেই আসে।
         self._risk_engines: dict[str, RiskEngine] = {}
         log.info("[SignalPipeline] Initialized — all modules wired")
+
+    def _get_circuit_breaker(self, symbol: str) -> CircuitBreaker:
+        """প্রতি symbol-এর নিজের CircuitBreaker — একটার cooldown আরেকটাকে block করবে না।"""
+        if symbol not in self._circuit_breakers:
+            self._circuit_breakers[symbol] = CircuitBreaker(
+                symbol=symbol, balance=self.starting_balance
+            )
+        return self._circuit_breakers[symbol]
 
     def _get_risk_engine(self, symbol: str) -> RiskEngine:
         """প্রতি symbol-এর জন্য balance-synced RiskEngine — current account balance ব্যবহার করে।"""
@@ -91,13 +112,18 @@ class SignalPipeline:
         S-R module থাকলে candle history fetch করে সেগুলো এখানে যোগ করো —
         এই pipeline শুধু wiring দেখাচ্ছে, ওই module গুলো uploaded না)।
         """
-        # Step 0 — Circuit breaker gate (সবার আগে, যাতে অকারণে LLM call না হয়)
-        cb_check = self.circuit_breaker.allow_trade()
-        if not cb_check["allowed"]:
-            log.warning(f"[Pipeline] Blocked by circuit breaker: {cb_check['reason']}")
-            return {"action": "BLOCKED", "reason": cb_check["reason"], "mode": cb_check["mode"]}
-
+        # BUG FIX: symbol must be resolved BEFORE the circuit-breaker gate —
+        # this used to gate on a single shared, symbol-agnostic CircuitBreaker
+        # (see __init__ comment), so it didn't matter that `symbol` wasn't
+        # extracted yet. Now that the gate is per-symbol, we need the symbol
+        # first to look up the right breaker.
         symbol = payload.get("symbol", "EURUSD")
+
+        # Step 0 — Circuit breaker gate (সবার আগে, যাতে অকারণে LLM call না হয়)
+        cb_check = self._get_circuit_breaker(symbol).allow_trade()
+        if not cb_check["allowed"]:
+            log.warning(f"[Pipeline] {symbol} blocked by circuit breaker: {cb_check['reason']}")
+            return {"action": "BLOCKED", "reason": cb_check["reason"], "mode": cb_check["mode"]}
 
         # Step 1 — payload থেকে indicator context বানানো
         ind_ctx = self._build_indicator_context(payload)
@@ -178,7 +204,7 @@ class SignalPipeline:
         """
         risk_engine = self._get_risk_engine(symbol)
         risk_engine.record_trade_close(symbol, pnl_usd)
-        self.circuit_breaker.record_result(result, pnl_usd)
+        self._get_circuit_breaker(symbol).record_result(result, pnl_usd)
         log.info(
             f"[Pipeline] Trade closed → {symbol} {result} (${pnl_usd}) "
             f"— RiskEngine + CircuitBreaker updated"

@@ -849,15 +849,29 @@ def boot_risk(registry: ServiceRegistry) -> PhaseResult:
             _CONFIG_INITIAL_BALANCE = 10000
         balance = registry.get("balance", _CONFIG_INITIAL_BALANCE)
         
-        cb = CircuitBreaker(balance=balance)
         dd = DrawdownController(initial_balance=balance)
-        registry.register_instance("circuit_breaker", cb)
+        # BUG FIX (circuit-breaker cooldown leaking across symbols): this used
+        # to register ONE shared CircuitBreaker instance (`cb = CircuitBreaker(
+        # balance=balance)` with symbol=None) that every AITrader for every
+        # symbol received via AutonomousTraderSystem._build_trader(). Because
+        # symbol=None makes CircuitBreaker fall back to the legacy single
+        # global state file, a losing streak / daily-loss trip on ONE pair
+        # put every other pair into COOLDOWN/PAUSED/LEARNING too — even pairs
+        # that hadn't taken a single losing trade. CircuitBreaker itself
+        # already supports per-symbol isolation (symbol=<pair> writes to its
+        # own memory/circuit_breaker/<symbol>.json), it just was never
+        # constructed that way here. Now exposed as a factory — same pattern
+        # already used for risk_engine_factory just below — so each caller
+        # builds its own per-symbol instance instead of sharing one.
+        registry.register("circuit_breaker_factory",
+                          lambda r: (lambda symbol, balance=balance:
+                                     CircuitBreaker(symbol=symbol, balance=balance)))
         registry.register_instance("drawdown_controller", dd)
         registry.register_instance("trade_permission", TradePermission())
         registry.register("risk_engine_factory",
                           lambda r: (lambda symbol, balance=balance:
                                      RiskEngine(balance=balance, symbol=symbol)))
-        services.extend(["circuit_breaker", "drawdown_controller",
+        services.extend(["circuit_breaker_factory", "drawdown_controller",
                          "trade_permission", "risk_engine_factory"])
     except Exception as e:
         log.critical("CRITICAL: Risk core init failed — trading must not proceed ungated: %s", e, exc_info=True)
