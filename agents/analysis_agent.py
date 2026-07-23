@@ -40,6 +40,8 @@ from analysis.volume_profile import VolumeProfileEngine
 from analysis.smc_advanced import SMCAdvancedEngine
 from analysis.structure_mtf import MTFStructureEngine
 from analysis.structure import MarketStructureEngine
+from analysis.follow_through_engine import get_follow_through_engine
+from analysis.shadow_follow_through_logger import get_shadow_logger
 # Day 92 — NewsAPI.org provider (real-time news sentiment)
 from analysis.news_api_provider import get_news_api_provider
 # Day 94 — Institutional grade: economic calendar + FRED + retail sentiment
@@ -615,6 +617,33 @@ class AnalysisAgent:
             structure_ctx    = self.structure_engine.get_ai_context(structure_result)
         except Exception as e:
             log.warning(f"[AnalysisAgent] Market Structure error: {e}")
+
+        # ── 8.15 FollowThroughEngine — SHADOW MODE ONLY ──────
+        # LOGGING ONLY. ZERO INFLUENCE ON THE SIGNAL RETURNED BY THIS
+        # METHOD. Per the Phase-1 rollout plan: this just observes each
+        # BOS event, scores it, and logs the prediction + (later) its
+        # actual outcome to memory/shadow_follow_through.db for offline
+        # analysis. It is NOT read by structure_ctx, signal_result,
+        # SignalFusion, RiskEngine, or DecisionValidator anywhere in this
+        # pipeline. Do not wire its output into anything downstream until
+        # Phase 1's evidence bar (>=500 shadow events, positive
+        # score-vs-outcome correlation, pair/timeframe-validated) is met
+        # — see analysis/shadow_follow_through_logger.py's module
+        # docstring.
+        try:
+            bos = (structure_result or {}).get("bos") or {}
+            if bos.get("event") not in (None, "NONE"):
+                ft_engine = get_follow_through_engine()
+                ft_result = ft_engine.evaluate_from_bos(df, bos)
+                shadow_logger = get_shadow_logger()
+                shadow_logger.log_prediction(symbol, timeframe, bos, ft_result, df)
+            # Resolve any earlier predictions for this pair/timeframe
+            # whose outcome horizon has now elapsed — cheap no-op once
+            # nothing is pending, safe to call every cycle regardless of
+            # whether a new BOS fired this time.
+            get_shadow_logger().resolve_pending_outcomes(symbol, timeframe, df)
+        except Exception as e:
+            log.debug(f"[AnalysisAgent] Shadow FollowThrough logging error (non-fatal, shadow-only): {e}")
 
         # ── 8.2 Divergence Engine (Day 83) ───────────────────
         # RSI/MACD divergence — false-breakout filter.
