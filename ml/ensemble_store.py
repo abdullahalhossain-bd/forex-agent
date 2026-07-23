@@ -23,11 +23,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.constants import MEMORY_DIR
+
 from utils.logger import get_logger
 
 log = get_logger("ensemble_store")
 
-DB_PATH = Path("memory/ensemble_decisions.db")
+DB_PATH = MEMORY_DIR / "ensemble_decisions.db"
 
 
 class EnsembleStore:

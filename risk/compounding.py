@@ -31,10 +31,11 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("compounding")
 
-STATE_FILE = "memory/compounding_state.json"
+STATE_FILE = str(MEMORY_DIR / "compounding_state.json")
 
 
 @dataclass

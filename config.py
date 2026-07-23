@@ -217,6 +217,16 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 # OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 HF_TOKEN = os.getenv("HF_TOKEN", "")
+# Propagate HF_TOKEN to all recognised HuggingFace Hub env-var names so
+# that huggingface_hub / sentence-transformers never issue "unauthenticated"
+# warnings regardless of which module loads first.
+if HF_TOKEN:
+    os.environ.setdefault("HUGGING_FACE_HUB_TOKEN", HF_TOKEN)
+    os.environ.setdefault("HF_HUB_AUTH_TOKEN", HF_TOKEN)
+    os.environ.setdefault("HF_TOKEN", HF_TOKEN)
+
+# Disable HF telemetry (reduces unnecessary network noise)
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
 # ── Execution Mode ─────────────────────────────────────────────
 # "mt5_demo"  -> Real MT5 demo account execution (DEFAULT — user has MT5 set up)

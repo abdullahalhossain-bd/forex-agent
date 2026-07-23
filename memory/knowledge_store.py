@@ -13,6 +13,7 @@ from pathlib import Path
 from datetime import datetime
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 log = get_logger("knowledge_store")
 
 CHROMA_AVAILABLE = False
@@ -102,7 +103,7 @@ class KnowledgeStore:
     store.search_memory("bearish reversal setup at support")
     """
 
-    def __init__(self, path: str = "memory/chroma_db"):
+    def __init__(self, path: str = str(MEMORY_DIR / "chroma_db")):
         if not CHROMA_AVAILABLE:
             log.warning(
                 f"[KnowledgeStore] ChromaDB not installed — knowledge store disabled.\n"

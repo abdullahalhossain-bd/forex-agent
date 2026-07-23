@@ -28,6 +28,7 @@ from data.indicators import Indicators
 from analysis.strength_calculator import StrengthCalculator
 from analysis.currency_ranker import CurrencyRanker
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("currency_strength")
 
@@ -67,8 +68,8 @@ CROSS_PAIRS = [
 ]
 
 # ── Memory (currency_strength_history table-এর JSON-ভিত্তিক সংস্করণ) ──
-HISTORY_PATH         = "memory/currency_strength_history.json"
-TRADE_HISTORY_PATH   = "memory/currency_strength_trades.json"
+HISTORY_PATH         = str(MEMORY_DIR / "currency_strength_history.json")
+TRADE_HISTORY_PATH   = str(MEMORY_DIR / "currency_strength_trades.json")
 HISTORY_MAX_ENTRIES  = 2000
 MOMENTUM_LOOKBACK    = 5
 MOMENTUM_THRESHOLD   = 1.5   # এর কম change হলে FLAT ধরা হবে

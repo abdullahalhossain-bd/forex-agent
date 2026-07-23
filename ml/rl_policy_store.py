@@ -22,10 +22,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("rl_policy_store")
 
-POLICY_DIR = Path("memory/rl_policy_versions")
+POLICY_DIR = MEMORY_DIR / "rl_policy_versions"
 REGISTRY_PATH = POLICY_DIR / "_registry.json"
 
 

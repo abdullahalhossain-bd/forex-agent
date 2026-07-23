@@ -6,13 +6,13 @@
 # ============================================================
 
 from utils.logger import get_logger
-from core.constants import PIP_SIZE, CORRELATION_GROUPS, get_pip_size, get_pip_value_usd, clean_symbol, pips_to_price
+from core.constants import PIP_SIZE, CORRELATION_GROUPS, get_pip_size, get_pip_value_usd, clean_symbol, pips_to_price, MEMORY_DIR
 import json, os
 from datetime import datetime, date, timezone
 
 log = get_logger("risk_engine")
 
-DAILY_LOG_PATH = "memory/daily_risk.json"
+DAILY_LOG_PATH = str(MEMORY_DIR / "daily_risk.json")
 
 
 class RiskEngine:

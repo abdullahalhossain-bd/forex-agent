@@ -34,10 +34,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("confidence_manager")
 
-DB_PATH = Path("memory/confidence_manager.db")
+DB_PATH = MEMORY_DIR / "confidence_manager.db"
 
 DEFAULT_WEIGHTS = {
     "rule_engine":  0.30,

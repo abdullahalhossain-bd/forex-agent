@@ -8,11 +8,13 @@ import json
 import os
 from datetime import datetime, date, timedelta
 from utils.logger import get_logger
+from config import DAILY_LOSS_LIMIT_PCT as _CFG_DLL
+from core.constants import MEMORY_DIR
 
 log = get_logger("circuit_breaker")
 
 CB_STATE_DIR  = "memory"
-CB_STATE_PATH = "memory/circuit_breaker_state.json"   # legacy/global path — kept only
+CB_STATE_PATH = str(MEMORY_DIR / "circuit_breaker_state.json")   # legacy/global path — kept only
                                                         # for symbol=None backward-compat
 
 
@@ -67,7 +69,6 @@ class CircuitBreaker:
     # far more dangerous." This mirrors that pattern so CircuitBreaker and
     # RiskEngine can never silently disagree about the daily-loss ceiling
     # because one of them quietly downgraded to a different default.
-    from config import DAILY_LOSS_LIMIT_PCT as _CFG_DLL
     MAX_DAILY_LOSS_PCT = float(_CFG_DLL)
 
     # 2026-07-23 addition: weekly loss halt. Wired in from risk/strict_risk_manager.py
@@ -149,9 +150,10 @@ class CircuitBreaker:
                 until_dt = datetime.fromisoformat(cooldown_until)
                 if datetime.utcnow() < until_dt:
                     remaining = int((until_dt - datetime.utcnow()).total_seconds() // 60)
+                    cooldown_reason = self._state.get('pause_reason', 'unknown reason')
                     return self._response(
                         False, "COOLDOWN",
-                        f"Cooldown active ({original_reason}) — {remaining} min remaining. "
+                        f"Cooldown active ({cooldown_reason}) — {remaining} min remaining. "
                         f"Resume after {until_dt.strftime('%H:%M UTC')}",
                     )
                 else:
@@ -601,7 +603,7 @@ class CircuitBreaker:
         thought loss was only $128.  Now both read from the same file.
         """
         try:
-            risk_path = "memory/daily_risk.json"
+            risk_path = str(MEMORY_DIR / "daily_risk.json")
             with open(risk_path) as f:
                 risk_state = json.load(f)
             # Only sync if the date matches today (RiskEngine resets on

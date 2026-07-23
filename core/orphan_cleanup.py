@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR, DATABASE_DIR
 
 log = get_logger("orphan_cleanup")
 
@@ -71,7 +72,7 @@ def reconcile_open_positions(
         log.info("[OrphanCleanup] No MT5 connection — will reconcile against paper trader only")
 
     # ── Step 2: get DB open trades ──
-    db_path = Path("database/trader.db")
+    db_path = DATABASE_DIR / "trader.db"
     if not db_path.exists():
         log.info("[OrphanCleanup] No DB file — nothing to reconcile")
         return result
@@ -190,7 +191,7 @@ def _clear_stale_open_pairs(live_pairs: Optional[List[str]] = None) -> None:
     BUGFIX: Wiping out this file completely blocks RiskEngine correlation checks. 
     Now it dynamically retains verified active pairs or resets gracefully if explicitly empty.
     """
-    dr_path = Path("memory/daily_risk.json")
+    dr_path = MEMORY_DIR / "daily_risk.json"
     if not dr_path.exists():
         return
     try:
@@ -211,7 +212,7 @@ def _clear_stale_open_pairs(live_pairs: Optional[List[str]] = None) -> None:
 
 def quick_close_all_db_open() -> int:
     """One-shot utility: mark ALL DB-OPEN trades as CLOSED."""
-    db_path = Path("database/trader.db")
+    db_path = DATABASE_DIR / "trader.db"
     if not db_path.exists():
         return 0
     try:

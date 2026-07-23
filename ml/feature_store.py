@@ -33,10 +33,11 @@ from config import MIN_TRAINING_SAMPLES
 import pandas as pd
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("feature_store")
 
-DB_PATH = Path("memory/ml_features.db")
+DB_PATH = MEMORY_DIR / "ml_features.db"
 
 
 class FeatureStore:

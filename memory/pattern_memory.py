@@ -14,12 +14,13 @@ import json
 import logging
 from pathlib import Path
 from datetime import datetime
+from core.constants import MEMORY_DIR
 
 
 log = logging.getLogger("pattern_memory")
 
 
-MEMORY_DIR = Path("memory")
+MEMORY_DIR = MEMORY_DIR
 
 
 class PatternMemory:

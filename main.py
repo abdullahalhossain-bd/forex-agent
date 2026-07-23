@@ -140,6 +140,7 @@ def setup_logging():
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
     logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+    logging.getLogger("huggingface_hub").setLevel(logging.WARNING)
 
 
 # ──────────────────────────────────────────────────────────────

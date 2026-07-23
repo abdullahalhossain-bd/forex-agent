@@ -15,11 +15,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.performance_feedback")
 
-FEEDBACK_DB_PATH = "memory/performance_feedback.json"
-TIMEFRAME_DB_PATH = "memory/timeframe_performance.json"
+FEEDBACK_DB_PATH = str(MEMORY_DIR / "performance_feedback.json")
+TIMEFRAME_DB_PATH = str(MEMORY_DIR / "timeframe_performance.json")
 
 
 class PerformanceFeedback:

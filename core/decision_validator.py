@@ -1,5 +1,5 @@
 """
-core/decision_validator.py — Final Decision Validation (Day 73)
+core/decision_validator.py — Final Decision Validation (Day 73+)
 =================================================================
 
 The last gate before a trade is allowed. Runs safety checks that
@@ -11,12 +11,14 @@ override the Master Decision Engine if necessary:
 3. Conflict Escalation — if 2+ layers strongly oppose → NO TRADE
 4. Reasonableness Check — signal must align with at least one of
    rule_engine or llm_analyst
+5. Ollama Institutional Check (Qwen3:4B) — local LLM veto gate
+   that can reject trades based on full market context analysis
 """
 
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
@@ -38,21 +40,52 @@ class ValidationResult:
     position_size: str
     position_multiplier: float
     override_reason: str = ""
-    checks: List[Dict[str, Any]] = None
+    checks: List[Dict[str, Any]] = field(default_factory=list)
+    # Ollama validation context (populated if Check 5 ran)
+    ollama_check: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        return d
 
 
 class DecisionValidator:
-    """Final validation gate for master decisions."""
+    """Final validation gate for master decisions.
+
+    Pipeline:
+      Checks 1-4 (deterministic) → Check 5 (Ollama Qwen3:4B veto)
+    """
+
+    def __init__(self):
+        # Lazy-init Ollama validator (fail-open if unavailable)
+        self._ollama = None
+        try:
+            from core.ollama_validator import get_ollama_validator
+            self._ollama = get_ollama_validator()
+        except Exception as e:
+            log.debug(f"[DecisionValidator] Ollama validator unavailable: {e}")
 
     def validate(
         self,
         fusion: FusionResult,
         signals: List[LayerSignal],
+        market_data: Optional[Dict[str, Any]] = None,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        take_profit: float = 0.0,
+        risk_reward: float = 0.0,
     ) -> ValidationResult:
-        """Run all validation checks on the fused decision."""
+        """Run all validation checks on the fused decision.
+
+        Args:
+            fusion: Fused signal result from SignalFusion.
+            signals: Individual layer signals.
+            market_data: Market context for Ollama validation (optional).
+            entry_price: Proposed entry price for Ollama.
+            stop_loss: Proposed SL for Ollama.
+            take_profit: Proposed TP for Ollama.
+            risk_reward: Proposed R:R for Ollama.
+        """
         checks: List[Dict[str, Any]] = []
         result = ValidationResult(
             passed=fusion.final_signal in ("BUY", "SELL"),
@@ -137,6 +170,66 @@ class DecisionValidator:
                 result.override_reason = "Reasonableness check failed"
             else:
                 checks.append({"check": "reasonableness", "passed": True, "reason": "At least one critical layer agrees"})
+
+        # ── Check 5: Ollama Qwen3:4B Institutional Veto ───────────
+        # Only runs if previous checks passed and Ollama is available.
+        # This is a local LLM that independently evaluates the trade.
+        # It can VETO but cannot promote.
+        if result.passed and self._ollama is not None and market_data:
+            try:
+                ollama_result = self._ollama.validate(
+                    market_data=market_data,
+                    proposed_signal=fusion.final_signal,
+                    proposed_confidence=fusion.master_confidence,
+                    entry_price=entry_price,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    risk_reward=risk_reward,
+                )
+                ollama_dict = ollama_result.to_dict()
+                result.ollama_check = ollama_dict
+
+                if ollama_result.checked and not ollama_result.approved:
+                    checks.append({
+                        "check": "ollama_institutional_veto",
+                        "passed": False,
+                        "reason": ollama_result.reason[:200],
+                        "detail": {
+                            "model_decision": ollama_result.decision,
+                            "model_confidence": ollama_result.confidence,
+                            "risk_level": ollama_result.risk_level,
+                            "response_ms": ollama_result.response_time_ms,
+                        },
+                    })
+                    result.passed = False
+                    result.final_signal = "NO_TRADE"
+                    result.override_reason = f"Ollama veto: {ollama_result.reason[:150]}"
+                elif ollama_result.checked and ollama_result.approved:
+                    checks.append({
+                        "check": "ollama_institutional_veto",
+                        "passed": True,
+                        "reason": f"Approved by Qwen3:4B (conf={ollama_result.confidence:.0f}%, risk={ollama_result.risk_level})",
+                        "detail": {
+                            "model_decision": ollama_result.decision,
+                            "model_confidence": ollama_result.confidence,
+                            "risk_level": ollama_result.risk_level,
+                            "response_ms": ollama_result.response_time_ms,
+                        },
+                    })
+                else:
+                    # Not checked (disabled, skipped, or error with fail-open)
+                    checks.append({
+                        "check": "ollama_institutional_veto",
+                        "passed": True,
+                        "reason": ollama_result.reason or "Not checked (fail-open)",
+                    })
+            except Exception as e:
+                log.debug(f"[DecisionValidator] Ollama check skipped: {e}")
+                checks.append({
+                    "check": "ollama_institutional_veto",
+                    "passed": True,
+                    "reason": f"Ollama unavailable: {e}",
+                })
 
         # Update position if overridden
         if not result.passed:

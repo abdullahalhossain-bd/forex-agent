@@ -17,6 +17,7 @@ import os
 import time
 from pathlib import Path
 import pandas as pd
+from core.constants import MEMORY_DIR
 
 log = get_logger("journal_bridge")
 
@@ -25,7 +26,7 @@ log = get_logger("journal_bridge")
 # this JSONL file so it can be reconciled at next boot instead of
 # being silently lost. Without this, FILLED_ORPHAN positions stay open
 # at the broker but invisible to the risk engine.
-ORPHAN_SPOOL_PATH = Path("memory/orphan_trade_spool.jsonl")
+ORPHAN_SPOOL_PATH = MEMORY_DIR / "orphan_trade_spool.jsonl"
 
 
 class JournalBridge:

@@ -12,10 +12,11 @@ from enum import Enum
 from typing import Optional, TypedDict
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning_agent")
 
-DEFAULT_PATH = "memory/trade_memory.json"
+DEFAULT_PATH = str(MEMORY_DIR / "trade_memory.json")
 PATH = DEFAULT_PATH  # kept for backward compatibility with any external `from agents.learning_agent import PATH`
 MAX_HISTORY = 500
 

@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from typing import Any, Deque, Dict, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("execution_quality")
 
@@ -181,7 +182,7 @@ class ExecutionQualityMonitor:
         """Save trade history to disk (survives restarts)."""
         try:
             os.makedirs("memory", exist_ok=True)
-            path = "memory/execution_quality.json"
+            path = str(MEMORY_DIR / "execution_quality.json")
             with open(path, "w") as f:
                 json.dump(list(self._trades)[-50:], f, indent=2)
         except Exception as e:
@@ -190,7 +191,7 @@ class ExecutionQualityMonitor:
     def _load_history(self):
         """Load trade history from disk."""
         try:
-            path = "memory/execution_quality.json"
+            path = str(MEMORY_DIR / "execution_quality.json")
             if os.path.exists(path):
                 with open(path) as f:
                     data = json.load(f)

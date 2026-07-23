@@ -27,10 +27,12 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from utils.logger import get_logger
+from config import DAILY_LOSS_LIMIT_PCT as _CFG_DLL
+from core.constants import MEMORY_DIR
 
 log = get_logger("kill_switch")
 
-STATE_PATH = Path("memory/kill_switch_state.json")
+STATE_PATH = MEMORY_DIR / "kill_switch_state.json"
 
 
 class KillSwitch:
@@ -41,7 +43,6 @@ class KillSwitch:
     # Day 81+ hotfix: load from config (default 20.0% = 0.20).
     # Was hard-coded 0.03 (3%) — user wants 20%.
     try:
-        from config import DAILY_LOSS_LIMIT_PCT as _CFG_DLL
         DAILY_LOSS_LIMIT = float(_CFG_DLL) / 100.0  # percent → fraction
     except Exception as e:
         # P0 fix: fail-closed on safety-critical config (mirrors circuit_breaker.py:54).

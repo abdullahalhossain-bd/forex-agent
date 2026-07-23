@@ -16,10 +16,11 @@ from datetime import datetime
 from utils.logger import get_logger
 from memory.database import Database
 from memory.pattern_memory import PatternMemory
+from core.constants import MEMORY_DIR
 
 log = get_logger("trade_memory")
 
-MEMORY_DIR = "memory/trade_vectors"
+MEMORY_DIR = str(MEMORY_DIR / "trade_vectors")
 os.makedirs(MEMORY_DIR, exist_ok=True)
 VECTORS_PATH = os.path.join(MEMORY_DIR, "vectors.npy")
 METADATA_PATH = os.path.join(MEMORY_DIR, "metadata.json")

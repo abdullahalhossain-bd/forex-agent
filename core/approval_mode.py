@@ -9,10 +9,11 @@ import json
 import os
 from datetime import datetime
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("approval_mode")
 
-MODE_STATE_PATH = "memory/approval_mode.json"
+MODE_STATE_PATH = str(MEMORY_DIR / "approval_mode.json")
 
 # Mode constants
 MODE_ANALYSIS   = 1   # দেখো, শিখো — trade নেই
@@ -327,7 +328,7 @@ class ApprovalMode:
 
     def _load_pending(self) -> list:
         """Reload pending approvals from disk so Mode 2 survives a restart."""
-        path = "memory/pending_approvals.json"
+        path = str(MEMORY_DIR / "pending_approvals.json")
         if os.path.exists(path):
             try:
                 with open(path) as f:
@@ -341,11 +342,11 @@ class ApprovalMode:
         # P1 fix: atomic write (temp + os.replace) to prevent crash-corruption.
         # Mirrors the pattern used by kill_switch.py:119, circuit_breaker.py:356,
         # risk_engine.py:311, drawdown_controller.py:452, autonomous_risk.py:1165.
-        tmp_path = "memory/pending_approvals.json.tmp"
+        tmp_path = str(MEMORY_DIR / "pending_approvals.json.tmp")
         with open(tmp_path, "w") as f:
             json.dump(self._pending[-20:], f, indent=2)  # শেষ ২০টা রাখো
         try:
-            os.replace(tmp_path, "memory/pending_approvals.json")
+            os.replace(tmp_path, str(MEMORY_DIR / "pending_approvals.json"))
         except OSError as e:
             log.error(f"[ApprovalMode] atomic save failed: {e}")
             try:

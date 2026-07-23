@@ -41,10 +41,11 @@ from typing import Any, Dict, List, Optional
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("market_state_memory")
 
-MEMORY_PATH = Path("memory/market_state_memory.json")
+MEMORY_PATH = MEMORY_DIR / "market_state_memory.json"
 MAX_RECENT_TRADES = 50  # rolling window
 
 

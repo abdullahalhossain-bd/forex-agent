@@ -37,11 +37,12 @@ from pathlib import Path
 from typing import Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("streak_tracker")
 
 # Read from the same path CircuitBreaker uses
-_CB_STATE_PATH = Path("memory/circuit_breaker_state.json")
+_CB_STATE_PATH = MEMORY_DIR / "circuit_breaker_state.json"
 
 
 class StreakTracker:

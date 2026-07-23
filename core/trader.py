@@ -59,7 +59,7 @@ from risk.circuit_breaker import CircuitBreaker
 from risk.risk_engine import RiskEngine
 from risk.trade_permission import TradePermission
 from scanner.correlation_filter import CorrelationFilter
-from core.constants import clean_symbol
+from core.constants import clean_symbol, MEMORY_DIR, DATABASE_DIR, BACKUPS_DIR, REPORTS_DIR
 from utils.logger import get_logger
 from analysis.session_analyzer import SessionAnalyzer
 from visualization.chart import ChartEngine
@@ -1866,8 +1866,8 @@ class AITrader:
                             import json as _json
                             import time as _time
                             import os as _os
-                            _os.makedirs("memory", exist_ok=True)
-                            with open("memory/orphan_trade_spool.jsonl", "a") as _f:
+                            _os.makedirs(str(MEMORY_DIR), exist_ok=True)
+                            with open(str(MEMORY_DIR / "orphan_trade_spool.jsonl"), "a") as _f:
                                 _f.write(_json.dumps({
                                     "ticket": _mt5_ticket,
                                     "db_trade_id": _db_trade_id,
@@ -3418,12 +3418,12 @@ class AutonomousTraderSystem:
                 if cycles % 100 == 0 and cycles > 0:
                     try:
                         import shutil
-                        src = "database/trader.db"
-                        dst = f"database/trader_backup_{cycles}.db"
+                        src = str(DATABASE_DIR / "trader.db")
+                        dst = str(DATABASE_DIR / f"trader_backup_{cycles}.db")
                         shutil.copy2(src, dst)
                         # Keep only last 3 backups
                         import glob
-                        backups = sorted(glob.glob("database/trader_backup_*.db"))
+                        backups = sorted(glob.glob(str(DATABASE_DIR / "trader_backup_*.db")))
                         for old in backups[:-3]:
                             os.remove(old)
                         log.debug(f"[System] DB backed up to {dst}")
@@ -3773,21 +3773,20 @@ class AutonomousTraderSystem:
                 return None
 
         timestamp = now.strftime("%Y%m%d_%H%M%S")
-        backup_dir = Path("backups") / timestamp
+        backup_dir = BACKUPS_DIR / timestamp
         backup_dir.mkdir(parents=True, exist_ok=True)
 
-        for relative_path in [
-            "database/trader.db",
-            "memory/trader.db",
-            "memory/trade_memory.json",
-            "memory/daily_risk.json",
-            "memory/analysis_history.json",
-            "memory/circuit_breaker_state.json",
-            "memory/pending_approvals.json",
+        for src_path in [
+            DATABASE_DIR / "trader.db",
+            MEMORY_DIR / "trader.db",
+            MEMORY_DIR / "trade_memory.json",
+            MEMORY_DIR / "daily_risk.json",
+            MEMORY_DIR / "analysis_history.json",
+            MEMORY_DIR / "circuit_breaker_state.json",
+            MEMORY_DIR / "pending_approvals.json",
         ]:
-            src = Path(relative_path)
-            if src.exists():
-                shutil.copy2(src, backup_dir / src.name)
+            if src_path.exists():
+                shutil.copy2(str(src_path), backup_dir / src_path.name)
 
         self._last_backup = now
         log.info(f"[System] Backup created: {backup_dir}")
@@ -3872,7 +3871,7 @@ class AutonomousTraderSystem:
 
     def _write_runtime_report(self, report: dict | None = None) -> Path:
         report = report or self._build_system_report()
-        report_dir = Path("reports")
+        report_dir = REPORTS_DIR
         report_dir.mkdir(parents=True, exist_ok=True)
         path = report_dir / "latest_report.json"
         path.write_text(json.dumps(report, indent=2), encoding="utf-8")

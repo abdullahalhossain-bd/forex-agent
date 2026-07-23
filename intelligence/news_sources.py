@@ -53,10 +53,11 @@ import requests
 from bs4 import BeautifulSoup
 
 from utils.logger import get_logger
+from core.constants import DATA_DIR
 
 log = get_logger("news_sources")
 
-LOCAL_CALENDAR_PATH = Path("data/economic_calendar.json")
+LOCAL_CALENDAR_PATH = DATA_DIR / "economic_calendar.json"
 
 # ── Central bank schedule (recurring + known events) ────────────────
 # This is a curated list of the most market-moving events. Times are GMT.

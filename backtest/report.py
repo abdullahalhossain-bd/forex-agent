@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from core.constants import REPORTS_DIR
 
 
 class BacktestReport:
@@ -59,7 +60,7 @@ class BacktestReport:
         walk_forward: dict | None = None,
         report_name: str | None = None,
     ) -> dict:
-        report_dir = Path("reports")
+        report_dir = REPORTS_DIR
         report_dir.mkdir(parents=True, exist_ok=True)
         base_name = report_name or self._slug(summary.get("strategy", "backtest_report"))
 

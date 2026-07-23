@@ -22,6 +22,7 @@ from collections import defaultdict, deque
 import json
 from pathlib import Path
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("prod_excellence")
 
@@ -229,7 +230,7 @@ class StrategyMarketplace:
     def _load(self):
         """Load strategy records from disk."""
         try:
-            path = Path("memory/strategy_marketplace.json")
+            path = MEMORY_DIR / "strategy_marketplace.json"
             if path.exists():
                 data = json.loads(path.read_text())
                 for name, rec in data.items():
@@ -240,7 +241,7 @@ class StrategyMarketplace:
     def _save(self):
         """Save to disk."""
         try:
-            path = Path("memory/strategy_marketplace.json")
+            path = MEMORY_DIR / "strategy_marketplace.json"
             path.parent.mkdir(parents=True, exist_ok=True)
             data = {name: rec.__dict__ for name, rec in self._strategies.items()}
             path.write_text(json.dumps(data, indent=2, default=str))

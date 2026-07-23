@@ -45,10 +45,11 @@ from analysis.macro_data import MacroDataProvider
 from analysis.correlation_engine import CorrelationEngine
 from analysis.risk_sentiment import RiskSentimentEngine
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("intermarket_engine")
 
-MACRO_MEMORY_PATH = "memory/intermarket_history.json"
+MACRO_MEMORY_PATH = str(MEMORY_DIR / "intermarket_history.json")
 
 # Macro Score weights (total 100, doc অনুযায়ী)
 MACRO_SCORE_WEIGHTS = {

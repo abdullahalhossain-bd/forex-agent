@@ -39,6 +39,7 @@ MAX_TOK = 1200
 
 import os as _os
 from dotenv import load_dotenv as _load_dotenv
+from core.constants import MEMORY_DIR
 _load_dotenv()
 
 try:
@@ -83,10 +84,10 @@ if not LLM_AVAILABLE:
     log.warning("[DeepAnalyzer] No LLM available — heuristic fallback active")
 
 # ── Storage Paths ─────────────────────────────────────────────
-LESSON_MEMORY_PATH     = "memory/lesson_memory.json"
-RULE_STORE_PATH        = "memory/pattern_rules.json"
-PENDING_APPROVALS_PATH = "memory/pending_rule_approvals.json"
-ANALYSIS_LOG_PATH      = "memory/deep_analysis_log.json"
+LESSON_MEMORY_PATH     = str(MEMORY_DIR / "lesson_memory.json")
+RULE_STORE_PATH        = str(MEMORY_DIR / "pattern_rules.json")
+PENDING_APPROVALS_PATH = str(MEMORY_DIR / "pending_rule_approvals.json")
+ANALYSIS_LOG_PATH      = str(MEMORY_DIR / "deep_analysis_log.json")
 
 MISTAKE_THRESHOLD = 5   # একই ভুল কতবার হলে rule update হবে
 

@@ -32,6 +32,7 @@ import numpy as np
 import pandas as pd
 
 from utils.logger import get_logger
+from config import PROJECT_ROOT
 
 log = get_logger("train_rl")
 
@@ -223,7 +224,7 @@ def train_rl_agent(
     # 5. Save final policy with versioning
     try:
         policy_store = get_rl_policy_store()
-        latest_model = Path("ml/rl_policy/ppo_forex_latest.zip")
+        latest_model = PROJECT_ROOT / "ml" / "rl_policy" / "ppo_forex_latest.zip"
         if latest_model.exists():
             version = policy_store.save_policy(
                 model_path=latest_model,

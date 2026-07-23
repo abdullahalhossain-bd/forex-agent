@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 try:
     from intelligence.decision_score import (
@@ -64,7 +65,7 @@ except ImportError:
 
 log = get_logger("confluence_engine")
 
-DECISION_HISTORY_PATH = Path("memory/decision_history.jsonl")
+DECISION_HISTORY_PATH = MEMORY_DIR / "decision_history.jsonl"
 
 
 @dataclass

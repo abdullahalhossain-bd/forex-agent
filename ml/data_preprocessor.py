@@ -27,10 +27,11 @@ import pandas as pd
 
 from utils.logger import get_logger
 from utils.safe_pickle import safe_pickle_load as _safe_load
+from core.constants import MEMORY_DIR
 
 log = get_logger("data_preprocessor")
 
-PROCESSED_DIR = Path("memory/ml_processed")
+PROCESSED_DIR = MEMORY_DIR / "ml_processed"
 
 
 @dataclass

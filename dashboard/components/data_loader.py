@@ -20,22 +20,24 @@ import os
 import random
 from datetime import datetime, timedelta, timezone
 
+from core.constants import MEMORY_DIR
+
 # ── Paths (Day 52-55 modules-এর সাথে identical) ─────────────────
-PATTERN_STATS_PATH       = "memory/pattern_stats.json"
-DISABLED_PATTERNS_PATH   = "memory/disabled_patterns.json"
-LESSON_MEMORY_PATH       = "memory/lesson_memory.json"
-PATTERN_RULES_PATH       = "memory/pattern_rules.json"
-PENDING_RULE_APPROVALS   = "memory/pending_rule_approvals.json"
-DEEP_ANALYSIS_LOG_PATH   = "memory/deep_analysis_log.json"
-PERFORMANCE_FEEDBACK_PATH = "memory/performance_feedback.json"
-STRATEGY_CONFIG_PATH     = "memory/strategy_config.json"
-STRATEGY_VERSIONS_DIR    = "memory/strategy_versions"
-PENDING_OPTIMIZER_PATH   = "memory/pending_optimizer_approvals.json"
-WEEKLY_REPORTS_PATH      = "memory/weekly_reports.json"
-OPTIMIZER_RUN_LOG_PATH   = "memory/optimizer_run_log.json"
-SYSTEM_CONTROL_PATH      = "memory/system_control.json"
+PATTERN_STATS_PATH       = str(MEMORY_DIR / "pattern_stats.json")
+DISABLED_PATTERNS_PATH   = str(MEMORY_DIR / "disabled_patterns.json")
+LESSON_MEMORY_PATH       = str(MEMORY_DIR / "lesson_memory.json")
+PATTERN_RULES_PATH       = str(MEMORY_DIR / "pattern_rules.json")
+PENDING_RULE_APPROVALS   = str(MEMORY_DIR / "pending_rule_approvals.json")
+DEEP_ANALYSIS_LOG_PATH   = str(MEMORY_DIR / "deep_analysis_log.json")
+PERFORMANCE_FEEDBACK_PATH = str(MEMORY_DIR / "performance_feedback.json")
+STRATEGY_CONFIG_PATH     = str(MEMORY_DIR / "strategy_config.json")
+STRATEGY_VERSIONS_DIR    = str(MEMORY_DIR / "strategy_versions")
+PENDING_OPTIMIZER_PATH   = str(MEMORY_DIR / "pending_optimizer_approvals.json")
+WEEKLY_REPORTS_PATH      = str(MEMORY_DIR / "weekly_reports.json")
+OPTIMIZER_RUN_LOG_PATH   = str(MEMORY_DIR / "optimizer_run_log.json")
+SYSTEM_CONTROL_PATH      = str(MEMORY_DIR / "system_control.json")
 # Day 65
-INTERMARKET_HISTORY_PATH = "memory/intermarket_history.json"
+INTERMARKET_HISTORY_PATH = str(MEMORY_DIR / "intermarket_history.json")
 
 
 def load_json(path: str, default):
@@ -81,7 +83,7 @@ def set_system_control(**kwargs) -> dict:
 
 def get_live_signals() -> list:
     """বাস্তব scanner থাকলে memory/live_signals.json থেকে আসবে; নাহলে demo।"""
-    data = load_json("memory/live_signals.json", None)
+    data = load_json(str(MEMORY_DIR / "live_signals.json"), None)
     if data:
         return data
     pairs = ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD"]
@@ -103,7 +105,7 @@ def get_live_signals() -> list:
 
 
 def get_open_positions() -> list:
-    data = load_json("memory/open_positions.json", None)
+    data = load_json(str(MEMORY_DIR / "open_positions.json"), None)
     if data:
         return data
     return []
@@ -140,7 +142,7 @@ def _safe_date(ts: str):
 
 def get_ai_brain_state() -> dict:
     """বাস্তব engine থাকলে memory/ai_brain_state.json থেকে আসবে; নাহলে demo।"""
-    data = load_json("memory/ai_brain_state.json", None)
+    data = load_json(str(MEMORY_DIR / "ai_brain_state.json"), None)
     if data:
         return data
     return {
@@ -168,7 +170,7 @@ def get_ai_brain_state() -> dict:
 
 def get_decision_timeline() -> list:
     """⭐ Bonus 1 — AI Decision Timeline।"""
-    data = load_json("memory/decision_timeline.json", None)
+    data = load_json(str(MEMORY_DIR / "decision_timeline.json"), None)
     if data:
         return data
     now = datetime.now(timezone.utc)
@@ -278,7 +280,7 @@ def get_strategy_config() -> dict:
 
 def get_backtest_results() -> list:
     """বাস্তব backtest engine থাকলে memory/backtest_results.json থেকে আসবে।"""
-    data = load_json("memory/backtest_results.json", None)
+    data = load_json(str(MEMORY_DIR / "backtest_results.json"), None)
     if data:
         return data
     return [
@@ -297,7 +299,7 @@ def get_pending_optimizer_suggestions() -> list:
 # ══════════════════════════════════════════════════════════════
 
 def get_equity_curve() -> list:
-    data = load_json("memory/equity_curve.json", None)
+    data = load_json(str(MEMORY_DIR / "equity_curve.json"), None)
     if data:
         return data
     trades = load_json(PERFORMANCE_FEEDBACK_PATH, [])
@@ -317,7 +319,7 @@ def get_equity_curve() -> list:
 
 def get_risk_status() -> dict:
     cfg = get_strategy_config()
-    daily_limit = load_json("memory/daily_risk_limit.json", {"limit": 300, "used": 80})
+    daily_limit = load_json(str(MEMORY_DIR / "daily_risk_limit.json"), {"limit": 300, "used": 80})
     return {
         "current_risk_pct": cfg.get("risk_percent", 1.0),
         "max_allowed_pct":  1.0,
@@ -328,7 +330,7 @@ def get_risk_status() -> dict:
 
 def get_system_health() -> dict:
     """⭐ Bonus 3 — System Health Panel."""
-    data = load_json("memory/system_health.json", None)
+    data = load_json(str(MEMORY_DIR / "system_health.json"), None)
     if data:
         return data
     return {

@@ -26,10 +26,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("risk_reporter")
 
-DB_PATH = Path("memory/risk_events.db")
+DB_PATH = MEMORY_DIR / "risk_events.db"
 
 
 class RiskReporter:

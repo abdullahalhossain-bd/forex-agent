@@ -49,10 +49,11 @@ from ml.walk_forward import WalkForwardResult, get_walk_forward_validator
 from ml.monte_carlo import MonteCarloResult, get_monte_carlo_simulator
 from ml.regime_test import RegimeTestResult, get_regime_tester
 from ml.sensitivity_test import SensitivityResult, LeakageResult, get_sensitivity_tester
+from core.constants import MEMORY_DIR
 
 log = get_logger("validation")
 
-VALIDATION_DB = Path("memory/model_validation.db")
+VALIDATION_DB = MEMORY_DIR / "model_validation.db"
 
 # Weights for final score
 WEIGHTS = {

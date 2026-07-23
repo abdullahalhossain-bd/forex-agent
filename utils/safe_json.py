@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("safe_json")
 
@@ -140,7 +141,7 @@ def safe_modify_json(
         def add_trade(data):
             data["trades"].append(new_trade)
             return data
-        safe_modify_json("memory/daily_risk.json", add_trade, default={"trades": []})
+        safe_modify_json(str(MEMORY_DIR / "daily_risk.json"), add_trade, default={"trades": []})
     """
     filepath = Path(filepath)
     data = safe_read_json(filepath, default=default)

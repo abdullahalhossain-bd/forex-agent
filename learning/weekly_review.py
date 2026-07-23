@@ -18,7 +18,7 @@ from learning.strategy_config import StrategyConfig
 
 log = get_logger("learning.weekly_review")
 
-WEEKLY_REPORT_LOG_PATH = "memory/weekly_reports.json"
+WEEKLY_REPORT_LOG_PATH = str(MEMORY_DIR / "weekly_reports.json")
 REVIEW_DAY = 6   # Python: Monday=0 ... Sunday=6
 
 
@@ -34,6 +34,7 @@ def run_weekly_review(human_approval: bool = True, force: bool = False, days: in
 
     Usage:
         from learning.weekly_review import run_weekly_review
+from core.constants import MEMORY_DIR
         report = run_weekly_review()       # human approval mode (default)
         report = run_weekly_review(human_approval=False)  # fully autonomous
 

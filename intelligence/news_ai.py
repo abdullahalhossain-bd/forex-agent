@@ -39,7 +39,7 @@ from intelligence.event_classifier import (
 
 log = get_logger("news_ai")
 
-MEMORY_PATH = Path("memory/news_analysis_memory.jsonl")
+MEMORY_PATH = MEMORY_DIR / "news_analysis_memory.jsonl"
 
 
 @dataclass

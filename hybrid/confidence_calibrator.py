@@ -30,10 +30,11 @@ import threading
 import time
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("confidence_calibrator")
 
-TRADE_MEMORY_PATH = "memory/trade_memory.json"
+TRADE_MEMORY_PATH = str(MEMORY_DIR / "trade_memory.json")
 
 BUCKETS = [(0, 50), (50, 60), (60, 70), (70, 80), (80, 90), (90, 101)]
 MIN_SAMPLES_FOR_TRUST = 10   # bucket-এ এর কম sample থাকলে raw confidence-কেই বেশি বিশ্বাস করো

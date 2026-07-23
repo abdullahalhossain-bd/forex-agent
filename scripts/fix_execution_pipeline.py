@@ -26,9 +26,11 @@ from pathlib import Path
 # Add workspace to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from config import PROJECT_ROOT
+
 def fix_trade_permission():
     """Fix trade_permission.py - reduce excessive rejection rates."""
-    filepath = Path("/workspace/risk/trade_permission.py")
+    filepath = PROJECT_ROOT / "risk" / "trade_permission.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -60,7 +62,7 @@ def fix_trade_permission():
 
 def fix_fusion_engine_v3():
     """Fix fusion_engine_v3.py - implement adaptive thresholds."""
-    filepath = Path("/workspace/core/fusion_engine_v3.py")
+    filepath = PROJECT_ROOT / "core" / "fusion_engine_v3.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -86,7 +88,7 @@ def fix_fusion_engine_v3():
 
 def fix_decision_agent():
     """Fix decision_agent.py - improve consensus logic."""
-    filepath = Path("/workspace/agents/decision_agent.py")
+    filepath = PROJECT_ROOT / "agents" / "decision_agent.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -110,7 +112,7 @@ def fix_decision_agent():
 
 def fix_rl_agent():
     """Fix rl_agent.py - ensure PPO model loads and is used."""
-    filepath = Path("/workspace/ml/rl_agent.py")
+    filepath = PROJECT_ROOT / "ml" / "rl_agent.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -151,7 +153,7 @@ def fix_rl_agent():
 
 def fix_ensemble():
     """Fix ensemble.py - improve ML integration."""
-    filepath = Path("/workspace/ml/ensemble.py")
+    filepath = PROJECT_ROOT / "ml" / "ensemble.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -170,16 +172,16 @@ def fix_ensemble():
     
     # Fix: In rules-only mode, lower the threshold from 50 to 40
     content = content.replace(
-        "position_size = \"HALF\" if votes[0].confidence >= 50 else \"WAIT\"",
-        "position_size = \"HALF\" if votes[0].confidence >= 40 else \"WAIT\"  # Lowered from 50"
+        'position_size = "HALF" if votes[0].confidence >= 50 else "WAIT"',
+        'position_size = "HALF" if votes[0].confidence >= 40 else "WAIT"  # Lowered from 50'
     )
     content = content.replace(
         "position_multiplier = 0.5 if votes[0].confidence >= 50 else 0.0",
         "position_multiplier = 0.5 if votes[0].confidence >= 40 else 0.0  # Lowered from 50"
     )
     content = content.replace(
-        "if _rules_conf < 50 and _rules_decision in (\"BUY\", \"SELL\"):",
-        "if _rules_conf < 40 and _rules_decision in (\"BUY\", \"SELL\"):  # Lowered from 50"
+        'if _rules_conf < 50 and _rules_decision in ("BUY", "SELL"):',
+        'if _rules_conf < 40 and _rules_decision in ("BUY", "SELL"):  # Lowered from 50'
     )
     
     filepath.write_text(content)
@@ -190,10 +192,10 @@ def fix_ensemble():
 def fix_session_analyzer():
     """Fix session analyzer - reduce fusion gate strictness."""
     # Search for session_analyzer.py
-    filepath = Path("/workspace/analysis/session_analyzer.py")
+    filepath = PROJECT_ROOT / "analysis" / "session_analyzer.py"
     if not filepath.exists():
         # Try alternative location
-        filepath = Path("/workspace/analysis/session_filter.py")
+        filepath = PROJECT_ROOT / "analysis" / "session_filter.py"
         if not filepath.exists():
             print("⚠ session_analyzer.py not found (may not need fixing)")
             return True
@@ -201,7 +203,6 @@ def fix_session_analyzer():
     content = filepath.read_text()
     
     # Look for fusion score thresholds and lower them
-    # Common pattern: fusion_score >= 65 or similar
     import re
     content = re.sub(
         r'fusion_score >= 65',
@@ -221,7 +222,7 @@ def fix_session_analyzer():
 
 def add_detailed_logging():
     """Add detailed logging to trader.py for rejected signals."""
-    filepath = Path("/workspace/core/trader.py")
+    filepath = PROJECT_ROOT / "core" / "trader.py"
     if not filepath.exists():
         print(f"❌ {filepath} not found")
         return False
@@ -234,11 +235,10 @@ def add_detailed_logging():
         return True
     
     # Find the permission check section and add detailed logging
-    # Look for the pattern where perm_out is checked
-    old_pattern = '''if _final_action in ("NO TRADE", "WAIT", None, ""):
+    old_pattern = '''if _final_action in ("NO TRADE", "WAIT", None, "", None):
             # Execution is gated — but analysis verdict is PRESERVED'''
     
-    new_pattern = '''if _final_action in ("NO TRADE", "WAIT", None, ""):
+    new_pattern = '''if _final_action in ("NO TRADE", "WAIT", None, "", None):
             # DETAILED REJECTION LOGGING
             _perm_checks = perm_out.get("checks", [])
             for _chk in _perm_checks:
@@ -272,7 +272,7 @@ def verify_fixes():
     issues = []
     
     # Check trade_permission.py
-    tp_file = Path("/workspace/risk/trade_permission.py")
+    tp_file = PROJECT_ROOT / "risk" / "trade_permission.py"
     if tp_file.exists():
         content = tp_file.read_text()
         if "MIN_CONFIDENCE_PROD  = 35" in content:
@@ -286,7 +286,7 @@ def verify_fixes():
             issues.append("trade_permission.py: MIN_RR_PROD not updated")
     
     # Check fusion_engine_v3.py
-    fe_file = Path("/workspace/core/fusion_engine_v3.py")
+    fe_file = PROJECT_ROOT / "core" / "fusion_engine_v3.py"
     if fe_file.exists():
         content = fe_file.read_text()
         if '"1.3"' in content:
@@ -295,7 +295,7 @@ def verify_fixes():
             issues.append("fusion_engine_v3.py: MIN_RRR not updated")
     
     # Check rl_agent.py
-    rl_file = Path("/workspace/ml/rl_agent.py")
+    rl_file = PROJECT_ROOT / "ml" / "rl_agent.py"
     if rl_file.exists():
         content = rl_file.read_text()
         if ">= 45:" in content:
@@ -304,7 +304,7 @@ def verify_fixes():
             issues.append("rl_agent.py: Heuristic threshold not updated")
     
     # Check ensemble.py
-    ens_file = Path("/workspace/ml/ensemble.py")
+    ens_file = PROJECT_ROOT / "ml" / "ensemble.py"
     if ens_file.exists():
         content = ens_file.read_text()
         if "min_conf = 45.0" in content:

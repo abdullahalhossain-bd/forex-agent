@@ -14,11 +14,12 @@ import os
 from datetime import datetime, timezone
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.rule_updater")
 
-RULE_STORE_PATH   = "memory/pattern_rules.json"
-RULE_HISTORY_PATH = "memory/rule_history.json"
+RULE_STORE_PATH   = str(MEMORY_DIR / "pattern_rules.json")
+RULE_HISTORY_PATH = str(MEMORY_DIR / "rule_history.json")
 
 
 class RuleUpdater:

@@ -524,6 +524,70 @@ class ModelStore:
             return None
         return entry["versions"][-1].get("metrics")
 
+    def cleanup_registry(self) -> Dict[str, int]:
+        """Remove registry entries whose model files no longer exist on disk,
+        and normalize any legacy absolute paths (Windows or POSIX) to portable
+        relative paths. Call this at startup or after migrating between machines.
+
+        Returns {"removed_versions": int, "removed_keys": int, "normalized": int}.
+        """
+        def _normalize(raw: str) -> Optional[str]:
+            """Extract '{pair_dir}/{filename}' from any path format."""
+            if not raw:
+                return None
+            if not raw.startswith(("D:", "d:", "C:", "c:", "/")):
+                return raw  # already relative
+            normalized = raw.replace("\\", "/")
+            marker = "ml_models/"
+            if marker in normalized:
+                return normalized.split(marker)[-1]
+            parts = normalized.rstrip("/").split("/")
+            return (parts[-2] + "/" + parts[-1]) if len(parts) >= 2 else None
+
+        # Collect what's actually on disk (relative to base_dir)
+        files_on_disk: set = set()
+        if self.base_dir.is_dir():
+            for pkl in self.base_dir.rglob("*.pkl"):
+                files_on_disk.add(str(pkl.relative_to(self.base_dir)))
+
+        removed_versions = 0
+        removed_keys = 0
+        normalized = 0
+
+        cleaned = {}
+        for key, entry in self._registry.get("models", {}).items():
+            good = []
+            for v in entry.get("versions", []):
+                raw = v.get("model_path", "")
+                norm = _normalize(raw)
+                if norm and norm in files_on_disk:
+                    if raw != norm:
+                        v["model_path"] = norm
+                        normalized += 1
+                    good.append(v)
+                else:
+                    removed_versions += 1
+            if good:
+                latest = entry.get("latest", "")
+                if not any(vv["version"] == latest for vv in good):
+                    latest = good[-1]["version"]
+                entry["versions"] = good
+                entry["latest"] = latest
+                cleaned[key] = entry
+            else:
+                removed_keys += 1
+
+        with _RegistryLock(self._lock_path):
+            self._registry = self._load_registry()
+            self._registry["models"] = cleaned
+            self._save_registry()
+
+        log.info(
+            f"[ModelStore] cleanup: removed {removed_versions} stale versions, "
+            f"{removed_keys} empty keys, normalized {normalized} paths"
+        )
+        return {"removed_versions": removed_versions, "removed_keys": removed_keys, "normalized": normalized}
+
     def get_feature_names(
         self, pair: str, timeframe: str, model_type: str, version: Optional[str] = None,
     ) -> List[str]:

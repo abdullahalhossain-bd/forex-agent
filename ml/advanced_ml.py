@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("advanced_ml")
 
@@ -203,7 +204,7 @@ class OnlineLearner:
         prediction = learner.predict(X)
     """
 
-    MODEL_PATH = Path("memory/online_model")
+    MODEL_PATH = MEMORY_DIR / "online_model"
     MAX_SAMPLES_BEFORE_RETRAIN = 100
     PERFORMANCE_DECAY_THRESHOLD = 0.3  # if accuracy drops by 30%, rollback
 

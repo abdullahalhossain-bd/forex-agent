@@ -39,10 +39,11 @@ from utils.logger import get_logger
 from hybrid.decision_validator import DecisionValidator
 from hybrid.execution_router import ExecutionRouter, ApprovalMode
 from hybrid.confidence_calibrator import ConfidenceCalibrator
+from core.constants import MEMORY_DIR
 
 log = get_logger("flow_controller")
 
-TRADE_LOG_DIR = "memory/hybrid_trade_log"
+TRADE_LOG_DIR = str(MEMORY_DIR / "hybrid_trade_log")
 
 
 class FlowController:

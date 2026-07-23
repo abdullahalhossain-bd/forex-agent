@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict
 import numpy as np
 import pandas as pd
+from core.constants import MEMORY_DIR
 log = logging.getLogger(__name__)
 
 
@@ -110,7 +111,7 @@ class PositionReconciler:
     def get_status(self): return self._last
 
 class HeartbeatMonitor:
-    FILE = "memory/heartbeat.json"; INTERVAL = 300
+    FILE = str(MEMORY_DIR / "heartbeat.json"); INTERVAL = 300
     def __init__(self): self._thread = None; self._running = False; self._state = {"status": "starting", "positions": 0, "equity": 0}
     def update_state(self, status, positions, equity): self._state = {"status": status, "positions": positions, "equity": equity}
     def start(self):

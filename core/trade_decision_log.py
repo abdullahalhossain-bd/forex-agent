@@ -34,9 +34,10 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
+from core.constants import MEMORY_DIR
 
 _LOCK = threading.Lock()
-_LOG_PATH = Path("memory/trade_decisions.jsonl")
+_LOG_PATH = MEMORY_DIR / "trade_decisions.jsonl"
 
 # ── Issue 11: log rotation ────────────────────────────────────────
 # Without this, trade_decisions.jsonl grows forever — on a busy multi-symbol
@@ -145,7 +146,7 @@ def log_cycle_error(symbol: str, error: str, stage: str = "unknown") -> None:
     """
     try:
         # Write to a separate errors log so they're easy to find
-        err_path = Path("memory/cycle_errors.jsonl")
+        err_path = MEMORY_DIR / "cycle_errors.jsonl"
         record = {
             "ts":      datetime.now(timezone.utc).isoformat(),
             "symbol":  symbol,

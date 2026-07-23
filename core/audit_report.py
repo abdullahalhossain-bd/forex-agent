@@ -5,9 +5,10 @@ import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Dict
+from core.constants import MEMORY_DIR
 
 _AUDIT_LOCK = threading.Lock()
-_AUDIT_LOG_PATH = Path("memory/decision_audit_reports.jsonl")
+_AUDIT_LOG_PATH = MEMORY_DIR / "decision_audit_reports.jsonl"
 
 
 class DecisionAuditReport:

@@ -26,6 +26,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from utils.logger import get_logger
+from config import INITIAL_BALANCE, DAILY_LOSS_LIMIT_PCT
+from core.constants import MEMORY_DIR
 
 log = get_logger("watchdog")
 
@@ -164,7 +166,7 @@ class SystemWatchdog:
     def _check_database() -> Dict[str, str]:
         try:
             import sqlite3
-            db_path = "memory/trader.db"
+            db_path = str(MEMORY_DIR / "trader.db")
             if not os.path.exists(db_path):
                 return {"status": "WARN", "detail": "DB file not found"}
             with sqlite3.connect(db_path) as conn:
@@ -197,13 +199,12 @@ class SystemWatchdog:
     def _check_daily_loss() -> Dict[str, str]:
         try:
             import json
-            path = "memory/daily_risk.json"
+            path = str(MEMORY_DIR / "daily_risk.json")
             if not os.path.exists(path):
                 return {"status": "OK", "detail": "no daily risk file"}
             with open(path) as f:
                 data = json.load(f)
             loss = data.get("total_loss_usd", 0)
-            from config import INITIAL_BALANCE, DAILY_LOSS_LIMIT_PCT
             loss_pct = (loss / INITIAL_BALANCE) * 100 if INITIAL_BALANCE > 0 else 0
             if loss_pct >= DAILY_LOSS_LIMIT_PCT:
                 return {"status": "EXCEEDED", "detail": f"daily loss {loss_pct:.1f}%"}

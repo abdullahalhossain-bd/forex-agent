@@ -42,10 +42,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("confidence_calibrator")
 
-CALIBRATION_PATH = Path("memory/confidence_calibration.json")
+CALIBRATION_PATH = MEMORY_DIR / "confidence_calibration.json"
 
 # ── Confidence buckets ──────────────────────────────────────────────
 BUCKETS = [

@@ -37,6 +37,7 @@ from utils.logger import get_logger
 from core.signal_fusion import SignalFusion, LayerSignal, FusionResult, get_signal_fusion
 from core.decision_validator import DecisionValidator, ValidationResult, get_decision_validator
 from core.confidence_manager import ConfidenceManager, get_confidence_manager
+from core.constants import MEMORY_DIR
 
 # C2 ARCHITECTURAL FIX — wire AdaptiveDecisionEngine as advisory layer.
 # This module is the backtest-calibrated soft scoring system that learns
@@ -54,7 +55,7 @@ except Exception as _e_adaptive:
 
 log = get_logger("master_decision")
 
-DB_PATH = Path("memory/master_decisions.db")
+DB_PATH = MEMORY_DIR / "master_decisions.db"
 
 _ADAPTIVE_LABEL_TO_NUMERIC = {
     "high": 80.0,
@@ -219,6 +220,12 @@ class MasterDecisionEngine:
         mtf_bias: Optional[Dict[str, Any]] = None,
         structure: Optional[Dict[str, Any]] = None,
         strategy_context: Optional[Dict[str, Any]] = None,
+        # Ollama Qwen3:4B institutional validation
+        market_data: Optional[Dict[str, Any]] = None,
+        entry_price: float = 0.0,
+        stop_loss: float = 0.0,
+        take_profit: float = 0.0,
+        risk_reward: float = 0.0,
     ) -> MasterDecision:
         """Run the full master decision pipeline.
 
@@ -358,7 +365,14 @@ class MasterDecisionEngine:
         fusion_result = self.fusion.fuse(signals)
 
         # ── Step 3: Validate ───────────────────────────────────────
-        validation = self.validator.validate(fusion_result, signals)
+        validation = self.validator.validate(
+            fusion_result, signals,
+            market_data=market_data,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            risk_reward=risk_reward,
+        )
 
         # ── Day 90 — Strategy-aware position sizing ─────────────────
         # The validator produces a position_multiplier based on agreement

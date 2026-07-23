@@ -8,10 +8,11 @@ import json
 import os
 from collections import defaultdict
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("confidence_calibrator")
 
-CALIBRATION_PATH = "memory/confidence_calibration.json"
+CALIBRATION_PATH = str(MEMORY_DIR / "confidence_calibration.json")
 
 
 class ConfidenceCalibrator:

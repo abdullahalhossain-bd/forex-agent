@@ -17,11 +17,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.strategy_config")
 
-STRATEGY_CONFIG_PATH = "memory/strategy_config.json"
-VERSIONS_DIR         = "memory/strategy_versions"
+STRATEGY_CONFIG_PATH = str(MEMORY_DIR / "strategy_config.json")
+VERSIONS_DIR         = str(MEMORY_DIR / "strategy_versions")
 
 DEFAULT_CONFIG = {
     "version":            "1.0",

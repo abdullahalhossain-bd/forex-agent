@@ -38,6 +38,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from utils.logger import get_logger
+from config import TEST_MODE
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.confidence_engine")
 
@@ -46,15 +48,14 @@ def _test_mode() -> bool:
     """Lazy check for TEST_MODE flag. Returns False if config isn't
     importable (e.g. during unit tests)."""
     try:
-        from config import TEST_MODE
         return bool(TEST_MODE)
     except Exception:
         return False
 
 # ── Storage ──────────────────────────────────────────────────
-PATTERN_STATS_PATH     = "memory/pattern_stats.json"
-CONFIDENCE_HIST_PATH   = "memory/confidence_history.json"
-DISABLED_PATTERNS_PATH = "memory/disabled_patterns.json"
+PATTERN_STATS_PATH     = str(MEMORY_DIR / "pattern_stats.json")
+CONFIDENCE_HIST_PATH   = str(MEMORY_DIR / "confidence_history.json")
+DISABLED_PATTERNS_PATH = str(MEMORY_DIR / "disabled_patterns.json")
 
 # ── Constants ─────────────────────────────────────────────────
 # FIXED: was 5 — even 5 is too high for a brand-new system.

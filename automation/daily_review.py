@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 load_dotenv()
 log = get_logger("daily_review")
@@ -34,7 +35,7 @@ _gemini_client = None
 _key_manager = None
 MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 MAX_TOKENS = 1200
-REVIEW_LOG_DIR = "memory/daily_reviews"
+REVIEW_LOG_DIR = str(MEMORY_DIR / "daily_reviews")
 
 try:
     from core.llm_key_manager import get_llm_key_manager

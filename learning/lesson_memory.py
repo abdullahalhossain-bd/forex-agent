@@ -17,11 +17,12 @@ import os
 from datetime import datetime, timezone
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.lesson_memory")
 
-LESSON_DB_PATH   = "memory/lesson_memory.json"
-PATTERN_STATS_PATH = "memory/pattern_stats.json"
+LESSON_DB_PATH   = str(MEMORY_DIR / "lesson_memory.json")
+PATTERN_STATS_PATH = str(MEMORY_DIR / "pattern_stats.json")
 
 
 class LessonMemory:

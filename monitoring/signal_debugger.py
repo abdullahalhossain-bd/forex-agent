@@ -95,11 +95,12 @@ from datetime import datetime, timezone
 from typing import Any, Deque, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("signal_debugger")
 
 # Where the latest cycle's full debug log lives (dashboard reads this)
-DEBUG_FILE = "memory/signal_debug.jsonl"
+DEBUG_FILE = str(MEMORY_DIR / "signal_debug.jsonl")
 DEBUG_HISTORY_LIMIT = 500  # keep last N cycles in JSONL (in-memory deque cap)
 
 # Hard-block statuses — a layer with one of these explicitly refused to proceed.

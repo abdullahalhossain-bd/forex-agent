@@ -14,6 +14,8 @@ ml/research_frontier.py — Missing Research Domain Implementations
 
 USAGE:
     from ml.research_frontier import (
+from config import PROJECT_ROOT
+from core.constants import MEMORY_DIR
         TimeSeriesAnalyzer,
         OptimizationEngine,
         ExecutionAlgorithms,
@@ -673,7 +675,7 @@ class SecurityFramework:
     - Access control for dashboard/Telegram
     """
 
-    AUDIT_LOG_PATH = Path("memory/security_audit.jsonl")
+    AUDIT_LOG_PATH = MEMORY_DIR / "security_audit.jsonl"
 
     @classmethod
     def audit_log(cls, action: str, actor: str = "system",
@@ -720,7 +722,7 @@ class SecurityFramework:
         issues = []
 
         # Check if .env exists
-        env_path = Path(".env")
+        env_path = PROJECT_ROOT / ".env"
         if not env_path.exists():
             issues.append({"severity": "WARNING", "issue": ".env file not found"})
             return {"secure": False, "issues": issues}

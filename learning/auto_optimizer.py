@@ -36,11 +36,12 @@ from learning.performance_feedback import PerformanceFeedback, FEEDBACK_DB_PATH
 from learning.confidence_engine import ConfidenceEngine
 from learning.rule_updater import RuleUpdater
 from learning.deep_analyzer import DeepMistakeAnalyzer
+from core.constants import MEMORY_DIR
 
 log = get_logger("learning.auto_optimizer")
 
-PENDING_OPTIMIZER_PATH = "memory/pending_optimizer_approvals.json"
-OPTIMIZER_LOG_PATH     = "memory/optimizer_run_log.json"
+PENDING_OPTIMIZER_PATH = str(MEMORY_DIR / "pending_optimizer_approvals.json")
+OPTIMIZER_LOG_PATH     = str(MEMORY_DIR / "optimizer_run_log.json")
 
 
 class AutoOptimizer:

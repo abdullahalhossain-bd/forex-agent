@@ -23,6 +23,7 @@ from bs4 import BeautifulSoup
 
 from utils.logger import get_logger
 from fundamental.faireconomy_cache import fetch_faireconomy, DEFAULT_HIGH_IMPACT_KEYWORDS
+from core.constants import MEMORY_DIR
 
 log = get_logger("news_filter")
 
@@ -627,7 +628,7 @@ class NewsFilter:
 
     def save_event_memory(self, event: dict, reaction_pips: float = 0) -> None:
         import json, os
-        path = "memory/news_history.json"
+        path = str(MEMORY_DIR / "news_history.json")
         os.makedirs("memory", exist_ok=True)
         history = []
         if os.path.exists(path):

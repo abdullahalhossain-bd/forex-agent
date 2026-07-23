@@ -55,10 +55,11 @@ import numpy as np
 import pandas as pd
 
 from utils.logger import get_logger
+from core.constants import MEMORY_DIR
 
 log = get_logger("ml_backtest")
 
-DB_PATH = Path("memory/ml_backtest_results.db")
+DB_PATH = MEMORY_DIR / "ml_backtest_results.db"
 
 
 @dataclass
