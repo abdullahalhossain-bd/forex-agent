@@ -219,24 +219,49 @@ class ConfluenceEngine:
         return [f for f in factors if f is not None]
 
     def _smc_factor(self, a: Dict[str, Any]) -> FactorScore:
-        """Factor 1: Market Structure (SMC) — BOS / CHoCH / OB / FVG."""
-        smc = a.get("smc_ctx") or a.get("smc") or {}
-        signal = (smc.get("signal") or "").upper()
-        conf = float(smc.get("confluence_score") or smc.get("score") or 0)
-        grade = (smc.get("grade") or "").upper()
+        """Factor 1: Market Structure (SMC) — BOS / CHoCH / OB / FVG.
+
+        BUGFIX (confluence key-mismatch, found while debugging "0 factors,
+        AVOID"): the raw SMC result (a["smc"]) uses plain keys
+        (signal/confluence_score/grade/analysis), but a["smc_ctx"]
+        (built by SMCEngine.get_ai_context()) renames every key with a
+        "smc_" prefix (smc_signal/smc_score/smc_grade/smc_analysis).
+        The old code did `a.get("smc_ctx") or a.get("smc")` — since
+        smc_ctx is always a non-empty dict, the fallback to the
+        correctly-keyed "smc" dict never triggered, so signal/conf/grade
+        were always "" / 0 / "" here. That pinned this factor (25% of
+        total weight) at NEUTRAL/0 on every single evaluation, regardless
+        of what the SMC engine actually found. Fix: read from the raw
+        "smc" dict first (correct keys), and also accept the prefixed
+        smc_ctx keys as a fallback so this stays robust either way.
+        """
+        raw = a.get("smc") or {}
+        ctx = a.get("smc_ctx") or {}
+
+        signal = (raw.get("signal") or ctx.get("smc_signal") or "").upper()
+        conf = float(
+            raw.get("confluence_score")
+            if raw.get("confluence_score") is not None
+            else (ctx.get("smc_score") if ctx.get("smc_score") is not None else 0)
+        )
+        grade = (raw.get("grade") or ctx.get("smc_grade") or "").upper()
+        direction_raw = (raw.get("direction") or ctx.get("smc_direction") or "").upper()
 
         direction = "NEUTRAL"
         strength = conf
-        if signal in ("BUY", "BULLISH"):
+        if signal in ("BUY", "BULLISH") or direction_raw in ("BUY", "BULLISH"):
             direction = "BUY"
-        elif signal in ("SELL", "BEARISH"):
+        elif signal in ("SELL", "BEARISH") or direction_raw in ("SELL", "BEARISH"):
             direction = "SELL"
 
         # Grade bonus
         if grade in ("A+", "A"):
             strength = min(100, strength + 15)
 
-        reasoning = smc.get("explanation") or smc.get("reason") or f"SMC {signal} {grade}"
+        reasoning = (
+            raw.get("analysis") or ctx.get("smc_analysis")
+            or f"SMC {signal or direction_raw} {grade}"
+        )
         return FactorScore(
             name="smc", direction=direction, strength=min(100, strength),
             confidence=70, weight=25, reasoning=str(reasoning)[:100],
@@ -244,28 +269,45 @@ class ConfluenceEngine:
         )
 
     def _liquidity_factor(self, a: Dict[str, Any]) -> FactorScore:
-        """Factor 2: Liquidity — sweep / equal highs-lows / stop hunt."""
-        # Liquidity may come from session_ctx.fusion or smc_ctx.sweep
-        smc = a.get("smc_ctx") or {}
+        """Factor 2: Liquidity — sweep / equal highs-lows / stop hunt.
+
+        BUGFIX (same key-mismatch family as _smc_factor): this only ever
+        looked at a["smc_ctx"], which doesn't carry a "liquidity_sweep"
+        or "sweep" key at all (SMCEngine.get_ai_context() drops that
+        info). Even when a sweep dict was found, the code checked
+        sweep.get("swept") / sweep.get("direction") — but the real
+        sweep detector (mtf_analyzer._detect_liquidity_sweep) returns
+        {"type": "BULLISH_SWEEP" | "BEARISH_SWEEP" | "NONE"}, with no
+        "swept" or "direction" key ever. Net effect: this factor (20%
+        weight) could never produce BUY/SELL, only NEUTRAL. Fix: read
+        the H4 (preferred) / M15 sweep dicts from the raw a["smc"]
+        result and branch on the actual "type" field.
+        """
+        smc_raw = a.get("smc") or {}
+        h4 = smc_raw.get("h4") or {}
+        m15 = smc_raw.get("m15") or {}
+        h4_sweep = h4.get("liquidity_sweep") or {}
+        m15_sweep = m15.get("liquidity_sweep") or {}
+
         session = a.get("session_ctx") or {}
         fusion = session.get("fusion") if isinstance(session, dict) else {}
-        sweep = smc.get("liquidity_sweep") or smc.get("sweep") or {}
 
         direction = "NEUTRAL"
         strength = 30.0
         reasoning = "no clear liquidity signal"
 
-        # If sweep detected with reversal, that's a strong signal
-        if isinstance(sweep, dict) and sweep.get("swept"):
-            sweep_dir = (sweep.get("direction") or "").upper()
-            if sweep_dir in ("BUY", "BULLISH"):
-                direction = "BUY"
-                strength = 70
-                reasoning = f"sell-side liquidity sweep → bullish reversal"
-            elif sweep_dir in ("SELL", "BEARISH"):
-                direction = "SELL"
-                strength = 70
-                reasoning = f"buy-side liquidity sweep → bearish reversal"
+        # H4 sweep preferred (bigger timeframe = stronger signal), M15 fallback
+        sweep_type = h4_sweep.get("type") if h4_sweep.get("type") not in (None, "NONE") else m15_sweep.get("type")
+        sweep_note = h4_sweep.get("note") or m15_sweep.get("note") or ""
+
+        if sweep_type == "BULLISH_SWEEP":
+            direction = "BUY"
+            strength = 70
+            reasoning = f"sell-side liquidity sweep → bullish reversal ({sweep_note})"
+        elif sweep_type == "BEARISH_SWEEP":
+            direction = "SELL"
+            strength = 70
+            reasoning = f"buy-side liquidity sweep → bearish reversal ({sweep_note})"
 
         # Session fusion can add liquidity context
         if isinstance(fusion, dict) and fusion.get("fusion_score", 0) >= 60:
@@ -273,30 +315,37 @@ class ConfluenceEngine:
 
         return FactorScore(
             name="liquidity", direction=direction, strength=strength,
-            confidence=60, weight=20, reasoning=reasoning,
-            details={"sweep": bool(sweep.get("swept")) if isinstance(sweep, dict) else False},
+            confidence=60, weight=20, reasoning=reasoning[:150],
+            details={"sweep_type": sweep_type or "NONE"},
         )
 
     def _session_factor(self, a: Dict[str, Any]) -> FactorScore:
         """Factor 3: Session — London/NY = strong, Asian = range, dead zone = avoid."""
         session = a.get("session_ctx") or {}
         current = (session.get("current_session") or "").upper()
-        trade_quality = (session.get("trade_quality") or "").upper()
-        trade_allowed = session.get("trade_allowed", True)
+        # NOTE: session.get("trade_quality") / session.get("trade_allowed")
+        # below are aliased onto the real keys session_grade /
+        # session_trade_allowed (session_analyzer.get_ai_context() never
+        # emits "trade_quality" or "trade_allowed" directly — those old
+        # lookups always returned "" / default True, which meant the
+        # OVERLAP/GOOD/CAUTION quality bonuses below never fired).
+        trade_quality = (session.get("trade_quality") or session.get("session_grade") or "").upper()
+        trade_allowed = session.get("trade_allowed", session.get("session_trade_allowed", True))
 
         direction = "NEUTRAL"
         strength = 50
         reasoning = f"session={current} quality={trade_quality}"
 
+        is_overlap = bool(session.get("is_overlap"))
         if not trade_allowed or current == "DEAD_ZONE":
             strength = 0
             reasoning = "dead zone — no trades"
-        elif "OVERLAP" in current or "BEST" in trade_quality:
+        elif is_overlap or "OVERLAP" in current or trade_quality in ("BEST", "A+"):
             strength = 80
             reasoning = f"{current} overlap — premium liquidity"
-        elif "GOOD" in trade_quality:
+        elif trade_quality in ("GOOD", "A"):
             strength = 60
-        elif "CAUTION" in trade_quality:
+        elif trade_quality in ("CAUTION", "B"):
             strength = 35
         else:
             strength = 25

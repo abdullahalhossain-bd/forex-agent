@@ -285,11 +285,54 @@ class TradePermission:
                             log.info(f"  Confidence After:  {conf:.0f}")
                         else:
                             log.info("  All checks passed - no penalty")
-                # If _df is None, skip guardrails (can't run without price data)
+                else:
+                    # BUGFIX: this branch used to be just a comment
+                    # ("If _df is None, skip guardrails") with NO code —
+                    # no checks.append(), no log line, no counter bump.
+                    # That meant whenever _df_eq was missing/empty, the
+                    # entry-quality penalty silently stayed at 0 with
+                    # zero trace anywhere: confidence_pre_penalty and
+                    # confidence_post_penalty would always be identical
+                    # and execution.log would show nothing wrong. Now
+                    # this is logged and recorded so a run of "0 delta"
+                    # is immediately diagnosable instead of looking like
+                    # the penalty step silently doesn't fire.
+                    _eq_skip_reason = (
+                        "no OHLCV data attached (decision_out['_df'] and "
+                        "session_ctx['_df'] both missing/empty)"
+                    )
+                    log.warning(
+                        f"[TradePermission] Entry quality guardrails SKIPPED — "
+                        f"{_eq_skip_reason}. Confidence penalty will be 0 this cycle."
+                    )
+                    checks.append({
+                        "check":  "Entry quality guardrails",
+                        "passed": True,
+                        "detail": f"SKIPPED — {_eq_skip_reason} (no penalty applied)",
+                    })
             except ImportError:
                 log.debug("[TradePermission] entry_quality_guardrails not available - skipping")
+                checks.append({
+                    "check":  "Entry quality guardrails",
+                    "passed": True,
+                    "detail": "SKIPPED — entry_quality_guardrails module not importable",
+                })
             except Exception as _eq_e:
-                log.warning(f"[TradePermission] Entry quality check error (non-fatal): {_eq_e}")
+                # BUGFIX: was a bare log.warning(str(e)) with no traceback
+                # and no checks entry — an exception here (e.g. a shape/
+                # dtype mismatch on real broker data) was completely
+                # invisible downstream: penalty stayed 0, confidence_pre
+                # /post_penalty looked identical, and nothing in
+                # execution.log or checks[] hinted an error occurred.
+                log.warning(
+                    "[TradePermission] Entry quality check error (non-fatal) — "
+                    "penalty NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Entry quality guardrails",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_eq_e} (no penalty applied)",
+                })
         # ── END ENTRY QUALITY ──────────────────────────────────────
 
         # 4. Confidence

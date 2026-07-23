@@ -213,6 +213,41 @@ SYMBOL_MAP = {
 }
 
 
+def _is_forex_market_expected_open(now_utc: "pd.Timestamp") -> bool:
+    """
+    Lightweight forex market-hours check — no external deps, safe to call
+    from the low-level fetch path.
+
+    Standard forex convention: the market is closed from Friday ~21:00 UTC
+    (NY close) through Sunday ~21:00 UTC (Sydney open). Outside that window
+    it's a normal trading day. This intentionally does NOT try to model
+    bank holidays (that's a much fuzzier, broker-dependent calendar) — it
+    only answers "is this an ordinary weekend closure", which is exactly
+    the gap that was getting confused with genuine stale-data conditions.
+
+    Returns:
+        True  -> market SHOULD be open right now (a stale bar here is a
+                 real data problem).
+        False -> market is in its expected weekend closure (a stale bar
+                 here is normal and not a feed issue).
+    """
+    try:
+        weekday = now_utc.weekday()  # Monday=0 .. Sunday=6
+        hour = now_utc.hour
+        if weekday == 5:  # Saturday — always closed
+            return False
+        if weekday == 6 and hour < 21:  # Sunday before ~21:00 UTC open
+            return False
+        if weekday == 4 and hour >= 21:  # Friday after ~21:00 UTC close
+            return False
+        return True
+    except Exception:
+        # If anything about `now_utc` is unexpected, don't assert either
+        # way — default to "market open" so genuine staleness still gets
+        # flagged rather than silently waved through as a weekend gap.
+        return True
+
+
 class DataFetcher:
     """
     MT5-first data fetcher.
@@ -787,11 +822,51 @@ class DataFetcher:
                         # to ~12h old.
                         _stale_threshold = max(_tf_sec * 1.5, 3600)
                         if _delta > _stale_threshold:
-                            log.warning(
-                                f"[MT5] Latest {timeframe} bar is "
-                                f"{_delta:.0f}s old (>{_stale_threshold:.0f}s "
-                                f"threshold) — stale data or market closed."
-                            )
+                            # BUGFIX: this used to just log.warning and
+                            # move on — "stale data or market closed" was
+                            # logged as a single ambiguous message with no
+                            # actual market-hours check behind it, and the
+                            # returned df carried no signal that anything
+                            # was wrong. Downstream (AnalysisAgent) would
+                            # happily generate a BUY/SELL signal off a
+                            # 6-8hr-old H1 bar during a normal weekend
+                            # close, because nothing ever distinguished
+                            # "market's closed, this gap is expected" from
+                            # "market's open and our data feed is broken".
+                            # Now: check forex market hours explicitly and
+                            # tag the df via .attrs so AnalysisAgent can
+                            # gate on it instead of guessing from a log line.
+                            _market_open_expected = _is_forex_market_expected_open(_now_utc)
+                            if _market_open_expected:
+                                log.error(
+                                    f"[MT5] Latest {timeframe} bar is "
+                                    f"{_delta:.0f}s old (>{_stale_threshold:.0f}s "
+                                    f"threshold) while the forex market is "
+                                    f"expected to be OPEN — this is a genuine "
+                                    f"stale-data condition (feed/connection "
+                                    f"problem), NOT a weekend gap."
+                                )
+                                df.attrs["stale_data"] = True
+                                df.attrs["stale_reason"] = (
+                                    f"{timeframe} bar {_delta:.0f}s old "
+                                    f"(>{_stale_threshold:.0f}s) during expected "
+                                    f"open market hours"
+                                )
+                            else:
+                                log.info(
+                                    f"[MT5] Latest {timeframe} bar is "
+                                    f"{_delta:.0f}s old (>{_stale_threshold:.0f}s "
+                                    f"threshold) — expected weekend/holiday "
+                                    f"market-closed gap, not a data problem."
+                                )
+                                # Still mark stale (the bar genuinely is old
+                                # and shouldn't be traded on), but with a
+                                # benign reason so it's not confused with a
+                                # feed outage.
+                                df.attrs["stale_data"] = True
+                                df.attrs["stale_reason"] = "market_closed_gap"
+                            df.attrs["bar_age_seconds"] = _delta
+                            df.attrs["market_expected_open"] = _market_open_expected
                         else:
                             # Within tolerance for this timeframe — log
                             # at DEBUG only so we don't spam INFO logs.
@@ -799,6 +874,8 @@ class DataFetcher:
                                 f"[MT5] Latest {timeframe} bar is "
                                 f"{_delta:.0f}s old (within tolerance)."
                             )
+                            df.attrs["stale_data"] = False
+                            df.attrs["bar_age_seconds"] = _delta
             except Exception as _diag_e:
                 log.debug(f"[MT5] future-bar diagnostic skipped: {_diag_e}")
 
