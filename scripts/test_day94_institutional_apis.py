@@ -14,8 +14,7 @@ Each test:
   - Prints clear PASS/SKIP/FAIL summary
 
 Usage:
-    cd D:\Projects\forex_ai
-    python scripts\test_day94_institutional_apis.py
+    python scripts/test_day94_institutional_apis.py
 """
 import os
 import sys

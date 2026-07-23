@@ -1,120 +1,48 @@
-<<<<<<< HEAD
+```
 # Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual Environment
-.venv/
-venv/
-env/
-
-# Environment Variables
-.env
-.env.*
-!.env.example
-
-# Logs
-logs/
-*.log
-*.tmp
-
-# IDE
-.vscode/
-.idea/
-
-# Dependencies
-node_modules/
-
-# Build / Cache
-build/
-dist/
-*.egg-info/
-
-# Machine Learning Models
-models/
-*.pkl
-*.pickle
-*.joblib
-*.h5
-*.pt
-*.onnx
-
-# Trading Bot Data
-data/
-cache/
-backtest_results/
-reports/
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# OS files
-.DS_Store
-Thumbs.db
-=======
-```gitignore
-# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Logs
-*.log
-
-# Environment files
+# Environment
 .env
 .env.local
-*.env.*
+.env.*
 
 # Dependencies
-venv/
 .venv/
-pip-wheel-metadata/
-*.egg-info/
-
-# Coverage reports
-.coverage
-coverage/
-htmlcov/
-
-# IDE specific
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS specific
-.DS_Store
-Thumbs.db
+venv/
+env/
 
 # Build artifacts
 dist/
 build/
-*.so
-*.dylib
-*.dll
-*.exe
-*.out
-*.a
-*.o
+target/
 
-# Testing
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
+# Logs
+*.log
 
-# Distribution / packaging
-*.tar.gz
-*.whl
-*.zip
-*.egg
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
+# IDE
+.vscode/
+.idea/
 
 # Temporary files
 *.tmp
-*~
+*.swp
+*.swo
+
+# MyPy cache
+.mypy_cache/
+# Pytest cache
+.pytest_cache/
 ```
->>>>>>> 6f0cc4f949ff1040bdbfa1fff0b1c749b75de2fc
