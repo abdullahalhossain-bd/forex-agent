@@ -1,0 +1,38 @@
+{
+  "hash": "34e6b5d606706f651a3d096d68891af2710e0b29d9c7663603df7336adf71d66",
+  "saved_at": "2026-07-23T03:31:37.371604+00:00",
+  "metadata": {
+    "pair": "AUDJPY",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v6",
+    "feature_names": [
+      "candle_body",
+      "change_1",
+      "change_3",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "hash": "a4536fd80696f38d095163ca6b075a8d31374c70e7e12ba53e6af8d7e9d8a750",
+  "saved_at": "2026-07-23T03:37:36.151657+00:00",
+  "metadata": {
+    "pair": "CADCHF",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_range",
+      "candle_body_ratio",
+      "candle_lower_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_50_distance",
+      "fvg_detected"
+    ]
+  }
+}
