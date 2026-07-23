@@ -1,0 +1,39 @@
+{
+  "hash": "406944869db347bb60418f3920e6d2f61e5201f7e043a423c79d8c4d7e3457ea",
+  "saved_at": "2026-07-23T04:39:03.962463+00:00",
+  "metadata": {
+    "pair": "CHFJPY",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_range",
+      "candle_upper_wick",
+      "candle_lower_wick",
+      "change_1",
+      "change_3",
+      "change_5",
+      "change_10",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

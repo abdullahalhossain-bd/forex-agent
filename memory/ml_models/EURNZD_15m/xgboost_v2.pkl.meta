@@ -1,0 +1,39 @@
+{
+  "hash": "b4baf6ef58a4576771a0943e2f33b39ce5229875a14087707844a00729cb5750",
+  "saved_at": "2026-07-23T04:45:30.109735+00:00",
+  "metadata": {
+    "pair": "EURNZD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "candle_lower_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

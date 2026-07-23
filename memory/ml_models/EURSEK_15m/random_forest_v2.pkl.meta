@@ -1,0 +1,40 @@
+{
+  "hash": "e3c81f26742347ed78588facc054dc492da92a23dc98a1b45862cb3ea492bc7a",
+  "saved_at": "2026-07-23T04:46:47.570396+00:00",
+  "metadata": {
+    "pair": "EURSEK",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_body",
+      "candle_range",
+      "candle_body_ratio",
+      "candle_lower_wick",
+      "change_1",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_50_distance"
+    ]
+  }
+}

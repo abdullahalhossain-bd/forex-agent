@@ -1,0 +1,39 @@
+{
+  "hash": "34476dc8afafb8e6ed8a5f598cea565297c841f93cc95a8e40e0e9cfb19dd91c",
+  "saved_at": "2026-07-23T04:45:30.185564+00:00",
+  "metadata": {
+    "pair": "EURNZD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "candle_lower_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

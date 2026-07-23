@@ -7,19 +7,19 @@ pairs get NOT_READY from the predictor, meaning the ensemble has no ML
 participation for them — only rules + LLM vote. This significantly reduces
 ensemble confidence and agreement scores.
 
-SOLUTION: This script generates baseline XGBoost + RandomForest models for
-every pair that doesn't already have one, using synthetic OHLCV data
-with pair-specific characteristics (price levels, volatility ranges).
+SOLUTION: This script trains baseline XGBoost + RandomForest models for
+every pair that doesn't already have one, using REAL MT5 historical data
+by default (via ml/mt5_data_loader.py). Synthetic OHLCV data is available
+only as an explicit --synthetic opt-in for offline/no-MT5 testing — it is
+never used automatically, including when this script is invoked by
+core/runtime.py's auto_retrain repair path at boot.
 
-The models are NOT production-grade — they are BASELINE models that:
-  1. Eliminate the NOT_READY status so the ensemble has 3 voters instead of 2
-  2. Provide a starting point that will be overridden when real MT5 data
-     training runs (via train_models_quick.py or train_models.py)
-  3. Use the full 161-feature FeatureEngineer pipeline with proper schema
-     tracking, so the auto-promote fix in model_predictor.py won't skip them
+The models are still "baseline" in the sense that they use default
+hyperparameters/feature selection rather than a full tuning pass, but they
+ARE trained on real market data unless --synthetic is passed explicitly.
 
 USAGE:
-    # Train all missing pairs (synthetic baseline):
+    # Train all missing pairs (real MT5 data):
     python scripts/train_missing_pairs.py
 
     # Train specific missing pair:
@@ -28,9 +28,8 @@ USAGE:
     # Force retrain even if model exists:
     python scripts/train_missing_pairs.py --force
 
-    # After getting real MT5 data, retrain with real data:
-    python scripts/train_models_quick.py --debug-synthetic   # (no MT5)
-    python scripts/train_models_quick.py                      # (with MT5)
+    # Offline/no-MT5 debug only — explicit opt-in, not for production:
+    python scripts/train_missing_pairs.py --synthetic
 
 MODELS SAVED TO:
     memory/ml_models/{PAIR}_15m/xgboost_vN.pkl
@@ -233,12 +232,44 @@ def get_missing_pairs() -> list:
     return missing
 
 
-def train_one_pair(symbol: str, timeframe: str = "15m", bars: int = 2000) -> bool:
-    """Train baseline XGBoost + RandomForest for one pair using synthetic data."""
+def train_one_pair(
+    symbol: str,
+    timeframe: str = "15m",
+    bars: int = 100000,
+    use_synthetic: bool = False,
+) -> bool:
+    """Train baseline XGBoost + RandomForest for one pair.
+
+    REAL MT5 DATA BY DEFAULT (use_synthetic=False). This is what
+    core/runtime.py calls automatically at boot when
+    ML_MODEL_CONSISTENCY_ACTION=auto_retrain finds a registry entry whose
+    .pkl file is missing on disk. Previously this unconditionally trained
+    on synthetic OHLCV data (use_synthetic=True, hardcoded) — every
+    auto-repair silently produced a fake-data model with no indication it
+    wasn't trained on real market data. Synthetic is now an explicit
+    opt-in for offline/no-MT5 testing only, never an automatic production
+    fallback.
+    """
     from scripts.train_models_quick import train_one_pair as _train
 
-    log.info(f"Training baseline models for {symbol} {timeframe}...")
-    return _train(symbol, timeframe, bars=bars, use_synthetic=True)
+    if use_synthetic:
+        log.warning(
+            f"SYNTHETIC data explicitly requested for {symbol} {timeframe} "
+            f"(--synthetic). Do not use this model in production."
+        )
+        return _train(symbol, timeframe, bars=bars, use_synthetic=True)
+
+    log.info(f"Training {symbol} {timeframe} on REAL MT5 data...")
+    ok = _train(symbol, timeframe, bars=bars, use_synthetic=False)
+    if not ok:
+        log.error(
+            f"Real MT5 training FAILED for {symbol} {timeframe} (MT5 "
+            f"unavailable or fetch error). Refusing to silently fall back "
+            f"to synthetic data — fix the MT5 connection and retry, or "
+            f"re-run with --synthetic if you deliberately want a "
+            f"placeholder model."
+        )
+    return ok
 
 
 def main():
@@ -249,14 +280,18 @@ def main():
                         help="Train only this pair (e.g. AUDJPY)")
     parser.add_argument("--force", action="store_true",
                         help="Retrain even if model already exists")
-    parser.add_argument("--bars", type=int, default=2000,
-                        help="Synthetic bars per pair (default: 2000)")
+    parser.add_argument("--bars", type=int, default=100000,
+                        help="Bars per pair to fetch/generate (default: 100000)")
+    parser.add_argument("--synthetic", action="store_true",
+                        help="Use synthetic OHLCV data instead of real MT5 "
+                             "data (DEBUG/offline testing ONLY — not for "
+                             "production, and never the automatic default)")
     args = parser.parse_args()
 
     log.info("=" * 60)
     log.info("  BASELINE MODEL TRAINING — Missing Pairs")
     log.info("=" * 60)
-    log.info(f"  Mode : Synthetic data (baseline only)")
+    log.info(f"  Mode : {'SYNTHETIC data (debug only)' if args.synthetic else 'REAL MT5 data'}")
     log.info(f"  Bars : {args.bars} per pair")
 
     if args.pair:
@@ -292,7 +327,7 @@ def main():
         log.info(f"\n[{i}/{len(pairs)}] {pair}...")
         t0 = time.time()
         try:
-            if train_one_pair(pair, bars=args.bars):
+            if train_one_pair(pair, bars=args.bars, use_synthetic=args.synthetic):
                 success += 1
                 log.info(f"  Done in {time.time() - t0:.1f}s")
             else:
@@ -320,10 +355,11 @@ def main():
 
     log.info(f"\n  NEXT STEPS:")
     log.info(f"  1. Restart the bot — NOT_READY warnings should be gone")
-    log.info(f"  2. For production: retrain with real MT5 data:")
-    log.info(f"     python scripts/train_models_quick.py --pair <PAIR>")
-    log.info(f"  3. Or retrain all pairs at once (requires MT5):")
-    log.info(f"     python scripts/train_models_quick.py")
+    if args.synthetic:
+        log.info(f"  2. These were SYNTHETIC placeholder models — retrain with")
+        log.info(f"     real MT5 data before trading: python scripts/train_missing_pairs.py --force")
+    else:
+        log.info(f"  2. Models were trained on real MT5 data — ready to use.")
     log.info(f"{'=' * 60}")
 
 

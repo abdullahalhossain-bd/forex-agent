@@ -1,0 +1,40 @@
+{
+  "hash": "b9a619b66a146db281141d71a8c99c637d536d10ab39545defa8a22213bc930b",
+  "saved_at": "2026-07-23T04:56:53.142141+00:00",
+  "metadata": {
+    "pair": "NZDJPY",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_range",
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "change_1",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance",
+      "ema_bearish_alignment"
+    ]
+  }
+}

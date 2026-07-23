@@ -1,0 +1,39 @@
+{
+  "hash": "2e32041f1c4b85bf45e157b00ac0816bda3b568a5eae266d5b0da61b9525a74d",
+  "saved_at": "2026-07-23T04:38:16.502514+00:00",
+  "metadata": {
+    "pair": "CADJPY",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_range",
+      "candle_body_ratio",
+      "change_1",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

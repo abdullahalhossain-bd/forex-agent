@@ -1,0 +1,40 @@
+{
+  "hash": "e1091695e44a7f8737a5a47c79a6b59995b199baea7ed1dc89527cc9db6b9d13",
+  "saved_at": "2026-07-23T04:55:35.422596+00:00",
+  "metadata": {
+    "pair": "NZDCAD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_body",
+      "candle_range",
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

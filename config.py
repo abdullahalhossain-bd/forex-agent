@@ -132,8 +132,7 @@ SYMBOLS = [
     "HKDJPY", "MXNJPY",          # HK/Mexico Yen crosses
     # ── ASIA PACIFIC (7) ──
     "USDCNH", "USDHKD", "USDSGD",  # China offshore, HK, Singapore
-    "USDMXN", "USDTHB",            # Mexico, Thailand
-    "USDSAR", "USDAED",            # Saudi Arabia, UAE
+    "USDMXN", "USDTHB",            # Mexico, Thailand            # Saudi Arabia, UAE
 ]
 # Total: 7 + 21 + 4 + 2 + 4 + 4 + 2 + 10 + 8 = 62 pairs
 

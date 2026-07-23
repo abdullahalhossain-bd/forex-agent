@@ -516,31 +516,68 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
                 # this replaces the missing files AND rewrites their
                 # registry entries (ModelStore.save_model), so the
                 # dangling reference is gone, not just papered over.
+                #
+                # AUDIT FIX: this used to run synchronously, in-line,
+                # blocking the entire boot sequence until every affected
+                # pair finished retraining one by one. On a fresh clone
+                # (or after bumping real-MT5-data training to tens of
+                # thousands of bars per pair) that's dozens of pairs x
+                # 1-several minutes each — main.py could take an hour+ to
+                # even reach the trading loop, and any pair whose symbol
+                # isn't offered by the connected broker (e.g. crypto/index
+                # CFDs not enabled on the account) would fail and be
+                # retried from scratch on every single boot. Retraining
+                # now runs in a background daemon thread: boot proceeds
+                # immediately, affected pairs report NOT_READY (same as
+                # the "warn" branch below) until their model is repaired,
+                # and ModelPredictor picks up each newly-saved model as
+                # soon as it lands without requiring a restart.
                 affected_pairs = sorted({
                     (m["pair"], m["timeframe"]) for m in audit["missing"] if m["pair"]
                 })
-                try:
+                log.warning(
+                    "[ModelStore] %d pair(s) missing model file(s) — repairing "
+                    "in the background (boot continues now, affected pairs "
+                    "report NOT_READY until each finishes): %s",
+                    len(affected_pairs),
+                    ", ".join(f"{p}_{tf}" for p, tf in affected_pairs),
+                )
+
+                def _background_repair(pairs, store_ref):
                     from scripts.train_missing_pairs import train_one_pair
-                    for pair, timeframe in affected_pairs:
-                        log.warning(
-                            "[ModelStore] auto-retraining %s %s to repair "
-                            "missing model file(s) found at boot",
-                            pair, timeframe,
-                        )
-                        ok = train_one_pair(pair, timeframe)
-                        if not ok:
-                            log.error(
-                                "[ModelStore] auto-retrain FAILED for %s %s — "
-                                "it will still report NOT_READY this run",
+                    for pair, timeframe in pairs:
+                        try:
+                            log.warning(
+                                "[ModelStore] auto-retraining %s %s to repair "
+                                "missing model file(s) found at boot",
                                 pair, timeframe,
                             )
-                    # Re-load registry from disk so the freshly-written
-                    # entries (new versions, correct paths) are what the
-                    # rest of the process sees, not the stale in-memory
-                    # copy loaded before the retrain.
-                    store._registry = store._load_registry()
-                except Exception as e:
-                    log.error("[ModelStore] auto-retrain pass failed: %s", e)
+                            ok = train_one_pair(pair, timeframe)
+                            if not ok:
+                                log.error(
+                                    "[ModelStore] auto-retrain FAILED for %s %s "
+                                    "— it will keep reporting NOT_READY",
+                                    pair, timeframe,
+                                )
+                            else:
+                                # Re-load registry from disk so the freshly
+                                # written entry is visible to the rest of the
+                                # process (ModelPredictor etc.) right away,
+                                # not just at next restart.
+                                store_ref._registry = store_ref._load_registry()
+                        except Exception as e:
+                            log.error(
+                                "[ModelStore] background retrain crashed for "
+                                "%s %s: %s", pair, timeframe, e,
+                            )
+                    log.info("[ModelStore] background repair pass finished")
+
+                threading.Thread(
+                    target=_background_repair,
+                    args=(affected_pairs, store),
+                    name="model-repair",
+                    daemon=True,
+                ).start()
 
             else:  # "warn" (or any unrecognized value — fail open, don't block boot)
                 log.warning(

@@ -1,0 +1,39 @@
+{
+  "hash": "c525f4ec1b428238b45be78c499c2162e570079f810cf3f10a21464fd0f782bb",
+  "saved_at": "2026-07-23T05:02:34.979360+00:00",
+  "metadata": {
+    "pair": "USDCHF",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "candle_lower_wick",
+      "change_1",
+      "change_3",
+      "change_5",
+      "change_10",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

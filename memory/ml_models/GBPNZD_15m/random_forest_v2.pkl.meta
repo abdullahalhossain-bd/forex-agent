@@ -1,0 +1,39 @@
+{
+  "hash": "bd1b26aeca97be98b88d1a440264458ce6e93d559cae7f1e7eef7b7e99368b66",
+  "saved_at": "2026-07-23T04:51:39.395762+00:00",
+  "metadata": {
+    "pair": "GBPNZD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_range",
+      "change_1",
+      "change_3",
+      "change_5",
+      "change_10",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

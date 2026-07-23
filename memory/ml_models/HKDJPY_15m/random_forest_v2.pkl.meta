@@ -1,0 +1,37 @@
+{
+  "hash": "c9d3a493d57943b9455484f204b78cff773fdd4387d8206e2560ca722a9ccd75",
+  "saved_at": "2026-07-23T04:54:01.195535+00:00",
+  "metadata": {
+    "pair": "HKDJPY",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "candle_upper_wick",
+      "change_1",
+      "change_5",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

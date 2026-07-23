@@ -790,9 +790,22 @@ def train_one_pair(
     context_only_exact_substrings = (
         'news_', 'sentiment_', 'master_', 'llm_', 'macro_', 'dxy', 'vix',
         'sp500', 'us10y', 'currency_strength', 'confluence', 'session_',
-        'days_to_news', 'hours_to_news', 'smc_', 'liquidity_', 'in_fib_zone',
+        'days_to_news', 'hours_to_news', 'in_fib_zone',
         'fib_zone',
     )
+    # NOTE: 'smc_' and 'liquidity_' used to be in the list above, dropping
+    # smc_buy/smc_sell/smc_neutral/smc_confluence_score/liquidity_sweep*
+    # unconditionally on the assumption they were only ever populated from a
+    # LIVE analysis_out (constant 0.0 during historical training). That's no
+    # longer true: FeatureEngineer._smc_liquidity_features() now falls back
+    # to _smc_from_price_action(), which derives real BOS/FVG/order-block/
+    # liquidity-sweep values directly from OHLC with no look-ahead — so
+    # these columns genuinely vary during historical training too. Dropping
+    # them by name was throwing away real signal. They now go through the
+    # same zero_variance_cols safety net below as everything else, so a
+    # column that truly never fires in a given window (e.g. no liquidity
+    # sweep at all for this pair/period) still gets pruned, but one that
+    # does fire is kept.
 
     candidate_cols = [col for col in df.columns if col not in exclude_cols]
 

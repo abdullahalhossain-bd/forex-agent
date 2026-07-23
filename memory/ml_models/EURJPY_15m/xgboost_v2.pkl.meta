@@ -1,0 +1,39 @@
+{
+  "hash": "1bc5b464cc90a9380df64c003fe534f7a2bc240dca0c1e32517030087edb4407",
+  "saved_at": "2026-07-23T04:43:50.390308+00:00",
+  "metadata": {
+    "pair": "EURJPY",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_body",
+      "candle_range",
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "change_3",
+      "change_5",
+      "change_10",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance"
+    ]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "hash": "2eb1e9d5051c34cb60289943142d2829cc8cf7b53d6a07f06eeaac5976949d8e",
+  "saved_at": "2026-07-23T04:48:41.625006+00:00",
+  "metadata": {
+    "pair": "GBPCAD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_body",
+      "candle_range",
+      "candle_body_ratio",
+      "candle_upper_wick",
+      "change_5",
+      "change_20",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_50_distance"
+    ]
+  }
+}

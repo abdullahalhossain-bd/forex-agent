@@ -1,0 +1,38 @@
+{
+  "hash": "4a480d062969fc0ff357e1ad2e51946ac10a799bb3f927b373c482b0aafea5b9",
+  "saved_at": "2026-07-23T04:54:47.923007+00:00",
+  "metadata": {
+    "pair": "MXNJPY",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v2",
+    "feature_names": [
+      "candle_upper_wick",
+      "change_1",
+      "change_5",
+      "change_10",
+      "high_5",
+      "low_5",
+      "range_5_pips",
+      "high_20",
+      "low_20",
+      "range_20_pips",
+      "high_50",
+      "low_50",
+      "range_50_pips",
+      "rsi_7",
+      "rsi_14",
+      "rsi_21",
+      "macd",
+      "macd_signal",
+      "macd_diff",
+      "atr",
+      "atr_percentage",
+      "volume_ratio",
+      "ema_9_distance",
+      "ema_20_distance",
+      "ema_50_distance",
+      "ema_bullish_alignment"
+    ]
+  }
+}
