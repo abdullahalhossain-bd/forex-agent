@@ -976,6 +976,25 @@ class AITrader:
         dec_out["_df"] = market_out.get("df")
         dec_out["_symbol"] = self.symbol
 
+        # 2026-07-23 fix: same silent-gap pattern as the _df fix above.
+        # trade_permission's entry_quality_guardrails AND the newly-wired
+        # confirmation_bias_defense both read decision_out.get("ind_ctx", {}),
+        # but dec_out (DecisionAgent's return dict) never set this key —
+        # it was always {}, so RSI/MACD/trend checks silently no-op'd
+        # (default rsi=50, no macd_cross, no trend match, so the
+        # confirmation-bias gate could never actually fire).
+        dec_out["ind_ctx"] = market_out.get("ind_ctx", {})
+        dec_out["market_bias"] = dec_out.get("market_bias") or market_out.get("market_bias")
+        dec_out["mtf_bias"] = dec_out.get("mtf_bias") or market_out.get("mtf_bias")
+
+        # 2026-07-23: feed the advisory (log-only) entry-score /
+        # institutional-entry-framework check in trade_permission with real
+        # context instead of the {} defaults it would otherwise get.
+        dec_out["sr_ctx"] = analysis_out.get("sr_ctx", {})
+        dec_out["structure_ctx"] = analysis_out.get("structure_ctx", {})
+        dec_out["smc_ctx"] = analysis_out.get("smc_ctx", {})
+        dec_out["liquidity_ctx"] = analysis_out.get("liquidity_ctx", {})
+
         log.info("[6/9] Safety Guard (Permission + Correlation)...")
         perm_out = self._perm.check(
             decision_out=dec_out,

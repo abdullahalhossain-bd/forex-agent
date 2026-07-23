@@ -429,30 +429,46 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ),
     ObsoleteEntry(
         'risk/entry_score.py',
-        ObsoleteStatus.DEAD,
-        ArchiveState.COPIED_ONLY,
-        '0 importers. Split out of a combined 5-file registry entry for clarity (registry finalization, 2026-07-22).',
-        'Marked legacy. Archive claim corrected — copy only.',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        '100-point entry scorer. Overlaps heavily with the ACTIVE '
+        'entry_quality_guardrails + risk_engine gates.',
+        'ACTIVE_SUPPORT — wired into risk/trade_permission.py as a LOG-ONLY '
+        'advisory second opinion (2026-07-23). Deliberately NOT a gate: making '
+        'it one would double-penalize signals entry_quality_guardrails already '
+        'scores. Promote to a real gate only after comparing its log output '
+        'against entry_quality_guardrails over real trades.',
         Confidence.HIGH,
-        evidence='grep + checksum verification (2026-07-22).',
+        evidence='grep: risk/trade_permission.py `from risk.entry_score import '
+                 'compute_entry_score` (2026-07-23).',
     ),
     ObsoleteEntry(
         'risk/institutional_entry_framework.py',
-        ObsoleteStatus.DEAD,
-        ArchiveState.COPIED_ONLY,
-        '0 importers. Split out of a combined 5-file registry entry for clarity.',
-        'Marked legacy. Archive claim corrected — copy only.',
+        ObsoleteStatus.ACTIVE_SUPPORT,
+        ArchiveState.NOT_APPLICABLE,
+        '200-point institutional-grade entry scorer. Overlaps heavily with the '
+        'ACTIVE entry_quality_guardrails + risk_engine gates.',
+        'ACTIVE_SUPPORT — wired into risk/trade_permission.py as a LOG-ONLY '
+        'advisory second opinion, same rationale as entry_score.py above '
+        '(2026-07-23). Deliberately NOT a gate.',
         Confidence.HIGH,
-        evidence='grep + checksum verification (2026-07-22).',
+        evidence='grep: risk/trade_permission.py `from risk.institutional_entry_'
+                 'framework import evaluate_institutional_entry` (2026-07-23).',
     ),
     ObsoleteEntry(
         'risk/revenge_trading_detector.py',
-        ObsoleteStatus.MANUAL_REVIEW_REQUIRED,
-        ArchiveState.COPIED_ONLY,
-        '0 importers at grep time. Split out of a combined 5-file registry entry. UNLIKE its siblings, the live original and the .dead_code_archived copy are NOT checksum-identical — line 49 was edited on the live file after archiving (bare `except:` tightened to `except (ValueError, TypeError):`).',
-        'DO NOT auto-delete or auto-move. Someone touched this file after it was marked dead — either a maintenance pass or a sign of pending revival. Needs a human decision before any cleanup action.',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'Checks last 10 closed trades for the pair for cooldown-after-loss, '
+        'trades/losses-per-hour, and lot-size-jump-after-loss patterns.',
+        'RESOLVED (was MANUAL_REVIEW_REQUIRED — the post-archive edit turned out '
+        'to be a live bugfix, not accidental drift). ACTIVE — wired into '
+        'risk/trade_permission.py as a hard-block gate for HIGH/MEDIUM severity '
+        '(2026-07-23). Any .dead_code_archived copy of this file is now stale '
+        'and should not be treated as the source of truth.',
         Confidence.HIGH,
-        evidence='diff risk/revenge_trading_detector.py vs .dead_code_archived copy: 1 line differs (2026-07-22).',
+        evidence='grep: risk/trade_permission.py `from risk.revenge_trading_detector '
+                 'import check_revenge_trading` (2026-07-23).',
     ),
     ObsoleteEntry(
         'risk/structure_stop.py',
@@ -465,12 +481,15 @@ OBSOLETE_MODULES: List[ObsoleteEntry] = [
     ),
     ObsoleteEntry(
         'risk/confirmation_bias_defense.py',
-        ObsoleteStatus.DEAD,
-        ArchiveState.COPIED_ONLY,
-        '0 importers. Split out of a combined 5-file registry entry.',
-        'Marked legacy. Archive claim corrected — copy only.',
+        ObsoleteStatus.ACTIVE,
+        ArchiveState.NOT_APPLICABLE,
+        'Blocks a trade when disconfirming evidence (RSI/MACD/trend/bias against '
+        'direction) reaches >= 3 factors.',
+        'ACTIVE — wired into risk/trade_permission.py as a hard-block gate '
+        '(2026-07-23).',
         Confidence.HIGH,
-        evidence='grep + checksum verification (2026-07-22).',
+        evidence='grep: risk/trade_permission.py `from risk.confirmation_bias_defense '
+                 'import check_disconfirming_evidence` (2026-07-23).',
     ),
     ObsoleteEntry(
         'risk/entry_quality_guardrails.py',

@@ -70,6 +70,17 @@ class CircuitBreaker:
     from config import DAILY_LOSS_LIMIT_PCT as _CFG_DLL
     MAX_DAILY_LOSS_PCT = float(_CFG_DLL)
 
+    # 2026-07-23 addition: weekly loss halt. Wired in from risk/strict_risk_manager.py
+    # (which was never imported anywhere live) — that file's 5% weekly-loss rule was
+    # the one piece of its 10-rule bundle that had NO live equivalent (daily loss halt
+    # existed here already; drawdown halt exists in live_risk_manager.py's
+    # DrawdownMonitor; correlation/cooldown/trade-caps all exist elsewhere too — see
+    # core/obsolete.py for the full redundancy breakdown). Added here, not as a
+    # separate StrictRiskManager instance, because that class keeps its own parallel
+    # equity/open-positions state that would start at zero and drift from the real
+    # broker/DB state — a second source of truth is worse than no gate at all.
+    MAX_WEEKLY_LOSS_PCT = 5.0
+
     MIN_WIN_RATE_THRESHOLD = 30.0   # ৩০% এর নিচে → learning mode
     COOLDOWN_HOURS         = 4      # pause এর পরে কত ঘণ্টা wait
     LOOKBACK_TRADES        = 10     # win rate চেক করার জন্য কতটা পিছনে
@@ -184,6 +195,19 @@ class CircuitBreaker:
                 f"{consec} consecutive losses hit threshold ({self.MAX_CONSECUTIVE_LOSSES})"
             )
 
+        # 2026-07-23: weekly loss halt (see MAX_WEEKLY_LOSS_PCT comment above).
+        self._reset_week_if_needed()
+        weekly_loss_pct = self._state.get("weekly_loss_usd", 0) / self.balance * 100
+        if weekly_loss_pct >= self.MAX_WEEKLY_LOSS_PCT:
+            self._trigger_pause(
+                f"🛑 Weekly loss limit reached: {weekly_loss_pct:.1f}% "
+                f"(max {self.MAX_WEEKLY_LOSS_PCT}%)"
+            )
+            return self._response(
+                False, "PAUSED",
+                f"Weekly loss {weekly_loss_pct:.1f}% >= {self.MAX_WEEKLY_LOSS_PCT}% — halted for the week"
+            )
+
         # BUG FIX: win rate must be computed over trades with a directional
         # outcome only. recent_results also contains "BREAKEVEN" entries
         # (PositionManager moves SL to entry once a trade reaches 50% of
@@ -260,6 +284,13 @@ class CircuitBreaker:
             # truth).  RiskEngine._save_daily() is called by the same
             # trade-close path and writes the authoritative total.
             self._sync_daily_loss_from_risk_engine()
+            # 2026-07-23: weekly_loss_usd has no separate authoritative
+            # file to sync from (unlike daily_risk.json for the daily
+            # figure), so it's accumulated directly here. Reset on ISO
+            # week rollover is handled by _reset_week_if_needed().
+            self._reset_week_if_needed()
+            self._state["weekly_loss_usd"] = \
+                self._state.get("weekly_loss_usd", 0.0) + abs(pnl_usd)
             log.info(
                 f"[CB{self._log_tag()}] LOSS recorded | consecutive={self._state['consecutive_losses']} "
                 f"| daily_loss=${self._state['daily_loss_usd']:.2f}"
@@ -277,6 +308,15 @@ class CircuitBreaker:
         if daily_loss_pct >= self.MAX_DAILY_LOSS_PCT:
             self._trigger_pause(
                 f"Daily loss limit reached: {daily_loss_pct:.1f}%"
+            )
+            self._save_state()
+            return  # already paused — skip redundant checks below
+
+        # 2026-07-23 REAL-TIME WEEKLY-LOSS CHECK (mirrors the daily check above)
+        weekly_loss_pct = self._state.get("weekly_loss_usd", 0) / self.balance * 100
+        if weekly_loss_pct >= self.MAX_WEEKLY_LOSS_PCT:
+            self._trigger_pause(
+                f"Weekly loss limit reached: {weekly_loss_pct:.1f}%"
             )
             self._save_state()
             return  # already paused — skip redundant checks below

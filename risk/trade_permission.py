@@ -335,6 +335,246 @@ class TradePermission:
                 })
         # ── END ENTRY QUALITY ──────────────────────────────────────
 
+        # ── CONFIRMATION BIAS DEFENSE (wired in — was orphaned code,
+        # 0 importers per core/obsolete.py audit 2026-07-22) ─────────
+        # Blocks a trade when the disconfirming evidence (RSI extreme
+        # against direction, MACD cross against direction, trend/bias
+        # against direction) outweighs the confirming evidence — i.e.
+        # the signal looks right on its own indicator but the broader
+        # picture disagrees. This is a HARD block per the module's own
+        # design (>= 3 disconfirming factors = BLOCKED), same severity
+        # tier as the entry-quality EXTREME BLOCK above.
+        if risk_out.get("approved"):
+            try:
+                from risk.confirmation_bias_defense import check_disconfirming_evidence
+                _cb_ind_ctx = decision_out.get("ind_ctx", {}) or {}
+                _cb_result = check_disconfirming_evidence(
+                    signal=decision_out.get("decision", "WAIT"),
+                    ind_ctx=_cb_ind_ctx,
+                    market_bias=decision_out.get("market_bias"),
+                    mtf_bias=decision_out.get("mtf_bias"),
+                )
+                total += 1
+                if _cb_result.blocked:
+                    checks.append({
+                        "check":  "Confirmation bias defense",
+                        "passed": False,
+                        "detail": _cb_result.reason,
+                    })
+                    log.info(
+                        f"[TradePermission] BLOCKED by confirmation bias defense: "
+                        f"{_cb_result.reason} — disconfirming: {_cb_result.disconfirming_factors}"
+                    )
+                    result = {
+                        "execution_allowed": False,
+                        "blocked_reason":    f"Confirmation bias: {_cb_result.reason}",
+                        "failed_checks":     [
+                            {"check": "Confirmation bias defense", "detail": _cb_result.reason}
+                        ],
+                        "execution_action":  "NO TRADE",
+                        "allowed":       False,
+                        "passed":        passed,
+                        "total":         total,
+                        "checks":        checks,
+                        "final_action":  "NO TRADE",
+                        "entry":         risk_out.get("entry"),
+                        "sl":            risk_out.get("sl_price"),
+                        "tp":            risk_out.get("tp_price"),
+                        "lot":           risk_out.get("lot", 0),
+                        "rr":            risk_out.get("rr_ratio", 0),
+                        "confidence_pre_penalty":  conf,
+                        "confidence_post_penalty": conf,
+                    }
+                    return result
+                else:
+                    passed += 1
+                    checks.append({
+                        "check":  "Confirmation bias defense",
+                        "passed": True,
+                        "detail": _cb_result.reason,
+                    })
+            except ImportError:
+                log.debug("[TradePermission] confirmation_bias_defense not available - skipping")
+                checks.append({
+                    "check":  "Confirmation bias defense",
+                    "passed": True,
+                    "detail": "SKIPPED — confirmation_bias_defense module not importable",
+                })
+            except Exception as _cb_e:
+                log.warning(
+                    "[TradePermission] Confirmation bias check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Confirmation bias defense",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_cb_e}",
+                })
+        # ── END CONFIRMATION BIAS DEFENSE ──────────────────────────
+
+        # ── REVENGE TRADING DETECTOR (wired in — was orphaned code,
+        # 0 importers per core/obsolete.py audit 2026-07-22; the audit
+        # also flagged that someone had edited this file after marking
+        # it dead, which is why it needed a human decision rather than
+        # deletion) ──────────────────────────────────────────────────
+        # Looks at the last 10 closed trades for this pair. HIGH/MEDIUM
+        # severity (tight loss cooldown, too many trades/losses in the
+        # last hour, or a lot-size jump right after a loss) hard-blocks
+        # the trade. LOW severity is logged as a soft warning only —
+        # not blocked — since a single mild flag shouldn't reject an
+        # otherwise-good setup.
+        if risk_out.get("approved"):
+            try:
+                from risk.revenge_trading_detector import check_revenge_trading
+                from database.db import Database
+                _rt_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                _rt_hist = Database().get_trade_history(pair=_rt_symbol, limit=10)
+                _rt_recent = (
+                    _rt_hist.to_dict("records")
+                    if _rt_hist is not None and len(_rt_hist) else []
+                )
+                _rt_proposed = {"lot": risk_out.get("lot", 0)}
+                _rt_result = check_revenge_trading(_rt_recent, _rt_proposed)
+                total += 1
+                if _rt_result.is_revenge and _rt_result.severity in ("HIGH", "MEDIUM"):
+                    _rt_detail = (
+                        f"{_rt_result.severity}: {'; '.join(_rt_result.reasons)} "
+                        f"(cooldown {_rt_result.recommended_cooldown_minutes}m)"
+                    )
+                    checks.append({
+                        "check":  "Revenge trading detector",
+                        "passed": False,
+                        "detail": _rt_detail,
+                    })
+                    log.info(f"[TradePermission] BLOCKED by revenge trading detector: {_rt_detail}")
+                    result = {
+                        "execution_allowed": False,
+                        "blocked_reason":    f"Revenge trading: {_rt_detail}",
+                        "failed_checks":     [
+                            {"check": "Revenge trading detector", "detail": _rt_detail}
+                        ],
+                        "execution_action":  "NO TRADE",
+                        "allowed":       False,
+                        "passed":        passed,
+                        "total":         total,
+                        "checks":        checks,
+                        "final_action":  "NO TRADE",
+                        "entry":         risk_out.get("entry"),
+                        "sl":            risk_out.get("sl_price"),
+                        "tp":            risk_out.get("tp_price"),
+                        "lot":           risk_out.get("lot", 0),
+                        "rr":            risk_out.get("rr_ratio", 0),
+                        "confidence_pre_penalty":  conf,
+                        "confidence_post_penalty": conf,
+                    }
+                    return result
+                else:
+                    passed += 1
+                    _rt_detail = (
+                        f"LOW/none: {'; '.join(_rt_result.reasons)}"
+                        if _rt_result.reasons else "no revenge pattern detected"
+                    )
+                    checks.append({
+                        "check":  "Revenge trading detector",
+                        "passed": True,
+                        "detail": _rt_detail,
+                    })
+            except ImportError:
+                log.debug("[TradePermission] revenge_trading_detector not available - skipping")
+                checks.append({
+                    "check":  "Revenge trading detector",
+                    "passed": True,
+                    "detail": "SKIPPED — revenge_trading_detector module not importable",
+                })
+            except Exception as _rt_e:
+                log.warning(
+                    "[TradePermission] Revenge trading check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Revenge trading detector",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_rt_e}",
+                })
+        # ── END REVENGE TRADING DETECTOR ───────────────────────────
+
+        # ── ADVISORY SCORING: entry_score.py + institutional_entry_
+        # framework.py (wired in — were orphaned code, 0 importers per
+        # core/obsolete.py audit 2026-07-22) ───────────────────────────
+        # These are LOG-ONLY. They never block the trade and never touch
+        # `conf`. Reason: their scoring (R:R, S/R location, ATR band,
+        # trend/momentum) already overlaps heavily with the ACTIVE
+        # entry_quality_guardrails + risk_engine gates above — making
+        # them a second hard-block gate would just double-penalize the
+        # same signals under a different name. Instead they run purely
+        # as a second opinion in the log/dashboard so the operator can
+        # compare "did entry_quality pass this AND would the 100/200-pt
+        # scorer also have called it a good trade?" without changing
+        # execution behavior. If the two consistently disagree in
+        # practice, that's a signal worth promoting one of them to an
+        # actual gate later — but that's a human decision, not this fix.
+        if risk_out.get("approved"):
+            try:
+                from risk.entry_score import compute_entry_score
+                from risk.institutional_entry_framework import evaluate_institutional_entry
+                _adv_direction = decision_out.get("decision", "WAIT")
+                _adv_df = decision_out.get("_df")
+                _adv_ind = decision_out.get("ind_ctx", {}) or {}
+                _adv_entry = float(risk_out.get("entry", 0) or 0)
+                _adv_sl = float(risk_out.get("sl_price", 0) or 0)
+                _adv_tp = float(risk_out.get("tp_price", 0) or 0)
+                _adv_atr = float(_adv_ind.get("atr", 0.001) or 0.001)
+                _adv_spread = float(
+                    (session_ctx or {}).get("spread_pips", 1.0)
+                    or risk_out.get("spread_pips", 1.0) or 1.0
+                )
+                _adv_regime = decision_out.get("regime", {}) or {}
+                _adv_mtf = decision_out.get("mtf_bias")
+                _adv_sr = decision_out.get("sr_ctx", {}) or {}
+                _adv_structure = decision_out.get("structure_ctx", {}) or {}
+                _adv_smc = decision_out.get("smc_ctx", {}) or {}
+                _adv_liq = decision_out.get("liquidity_ctx", {}) or {}
+                _adv_revenge_ctx = {
+                    "is_revenge": bool(locals().get("_rt_result") and _rt_result.is_revenge
+                                       and _rt_result.severity in ("HIGH", "MEDIUM"))
+                }
+
+                _es_result = compute_entry_score(
+                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
+                    mtf_bias=_adv_mtf, direction=_adv_direction, entry=_adv_entry,
+                    sl=_adv_sl, tp=_adv_tp, atr=_adv_atr, spread_pips=_adv_spread,
+                    news_ctx=news_ctx, structure_ctx=_adv_structure,
+                )
+                _ie_result = evaluate_institutional_entry(
+                    direction=_adv_direction, entry=_adv_entry, sl=_adv_sl, tp=_adv_tp,
+                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
+                    mtf_bias=_adv_mtf, structure_ctx=_adv_structure, smc_ctx=_adv_smc,
+                    session_ctx=session_ctx or {}, news_ctx=news_ctx,
+                    liquidity_ctx=_adv_liq, spread_pips=_adv_spread,
+                    revenge_ctx=_adv_revenge_ctx,
+                )
+                checks.append({
+                    "check":  "Advisory scoring (entry_score / institutional)",
+                    "passed": True,
+                    "detail": (
+                        f"entry_score={_es_result.score}/100 [{_es_result.recommendation}] | "
+                        f"institutional={_ie_result.score}/{_ie_result.max_score} "
+                        f"[{_ie_result.trade_quality or _ie_result.hard_block}]"
+                    ),
+                })
+                log.info(
+                    f"[Advisory] entry_score={_es_result.score}/100 "
+                    f"({_es_result.recommendation}) | "
+                    f"institutional={_ie_result.score}/{_ie_result.max_score} "
+                    f"({_ie_result.trade_quality or ('hard_block: ' + _ie_result.hard_block)}) "
+                    f"— informational only, not gating"
+                )
+            except ImportError:
+                log.debug("[TradePermission] advisory scorers not available - skipping")
+            except Exception as _adv_e:
+                log.debug(f"[TradePermission] Advisory scoring error (non-fatal, log-only feature): {_adv_e}")
+        # ── END ADVISORY SCORING ───────────────────────────────────
+
         # 4. Confidence
         ok   = conf >= self.MIN_CONFIDENCE
         checks.append({
