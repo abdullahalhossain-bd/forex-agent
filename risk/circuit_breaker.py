@@ -137,7 +137,7 @@ class CircuitBreaker:
             if cooldown_until:
                 until_dt = datetime.fromisoformat(cooldown_until)
                 if datetime.utcnow() < until_dt:
-                    remaining = (until_dt - datetime.utcnow()).seconds // 60
+                    remaining = int((until_dt - datetime.utcnow()).total_seconds() // 60)
                     return self._response(
                         False, "COOLDOWN",
                         f"Cooldown active — {remaining} min remaining. "
