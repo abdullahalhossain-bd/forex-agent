@@ -115,26 +115,39 @@ SYMBOLS = [
     # ── METALS / COMMODITIES (4) ──
     "XAUUSD", "XAGUSD",          # Gold, Silver
     "XPTUSD", "XPDUSD",          # Platinum, Palladium
-    # ── ENERGY (2) ──
-    "USOUSD", "UKOUSD",          # WTI Crude, Brent Crude
-    # ── CRYPTO (4) — high volatility, 24/7 ──
-    "BTCUSD", "ETHUSD", "LTCUSD", "XRPUSD",
-    # ── INDEX CFDs (4) ──
-    "US30USD", "NAS100USD",      # Dow Jones, NASDAQ 100
-    "SPX500USD", "GER40USD",     # S&P 500, DAX 40
+    # ── ENERGY: REMOVED (2026-07-23) ──
+    # "USOUSD", "UKOUSD" — repeatedly failed to fetch under MT5_ONLY_MODE=true
+    # (no fallback source active), auto-marked unavailable, and contributed
+    # to the "NO_TRADE — Market data fetch failed" spam in the run log.
+    # ── CRYPTO: REMOVED (2026-07-23) ──
+    # "BTCUSD", "ETHUSD", "LTCUSD", "XRPUSD" — same MT5_ONLY_MODE fetch
+    # failure as above; this broker/demo account doesn't offer live MT5
+    # quotes for these and there's no fallback source enabled to cover them.
+    # ── INDEX CFDs: REMOVED (2026-07-23) ──
+    # "US30USD", "NAS100USD", "SPX500USD", "GER40USD" — this broker exposes
+    # these under different tickers (USNUSD, NASNUSD, SPXNUSD, GERNUSD in
+    # the MT5 terminal), so the config names above never resolved and were
+    # auto-marked unavailable too.
     # ── EXOTIC (2) — lower liquidity, higher spread ──
     "USDTRY", "USDZAR",          # Turkish Lira, South African Rand
-    # ── ADDITIONAL CROSSES (10) ──
+    # ── ADDITIONAL CROSSES (9) ──
     "EURNOK", "EURSEK",          # Scandinavian crosses
     "GBPSEK", "GBPNOK",          # Scandinavian GBP crosses
     "AUDSGD", "NZDSGD",          # Singapore Dollar crosses
-    "CADHKD", "SGDJPY",          # HK/Singapore crosses
+    "SGDJPY",                    # HK/Singapore cross (CADHKD removed 2026-07-23 — same fetch-failure issue)
     "HKDJPY", "MXNJPY",          # HK/Mexico Yen crosses
     # ── ASIA PACIFIC (7) ──
     "USDCNH", "USDHKD", "USDSGD",  # China offshore, HK, Singapore
     "USDMXN", "USDTHB",            # Mexico, Thailand            # Saudi Arabia, UAE
 ]
-# Total: 7 + 21 + 4 + 2 + 4 + 4 + 2 + 10 + 8 = 62 pairs
+# Total: 7 + 21 + 4 + 2 + 7 + 7 = 48 pairs
+# (11 pairs removed 2026-07-23: USOUSD, UKOUSD, BTCUSD, ETHUSD, LTCUSD,
+#  XRPUSD, US30USD, NAS100USD, SPX500USD, GER40USD, CADHKD — all were
+#  repeatedly failing "Could not fetch" / "NO_TRADE — Market data fetch
+#  failed" under MT5_ONLY_MODE=true with no fallback source enabled.
+#  Re-add if/when either (a) this broker's correct tickers for the index
+#  CFDs are confirmed and mapped, or (b) MT5_ONLY_MODE is turned off so
+#  the fallback data source can cover crypto/energy.)
 
 # Conservative 6-pair list (kept for reference — uncomment to restore):
 # SYMBOLS = [

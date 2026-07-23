@@ -467,6 +467,37 @@ class ModelStore:
 
         return {"checked": checked, "ok": ok, "missing": missing}
 
+    def get_cold_pairs(self) -> List[tuple]:
+        """Return (pair, timeframe) pairs with ZERO usable models on disk.
+
+        `audit_registry_vs_disk()` reports missing entries one version at a
+        time, so a pair with e.g. 8 stale versions but 1 good one still
+        shows up in "missing" — even though ModelPredictor can load it
+        fine. That's the normal, harmless case. This method distinguishes
+        that from the genuinely broken case: a (pair, timeframe) where
+        NOT A SINGLE version of ANY model_type resolves to a real file.
+        Those pairs are guaranteed to return NOT_READY no matter how many
+        times predict() is called, so callers can skip the load attempt
+        entirely instead of re-hitting disk every trading cycle only to
+        come back empty (see ModelPredictor.mark_cold_pairs()).
+        """
+        any_usable: Dict[tuple, bool] = {}
+        for entry in self._registry.get("models", {}).values():
+            pair = entry.get("pair", "")
+            timeframe = entry.get("timeframe", "")
+            if not pair or not timeframe:
+                continue
+            pt = (pair.upper(), timeframe)
+            if any_usable.get(pt):
+                continue  # already known usable, no need to re-check
+            usable = any(
+                self._resolve_path(v.get("model_path", "")) is not None
+                for v in entry.get("versions", [])
+            )
+            any_usable[pt] = any_usable.get(pt, False) or usable
+
+        return sorted(pt for pt, usable in any_usable.items() if not usable)
+
     def list_models(self, pair: Optional[str] = None) -> List[Dict[str, Any]]:
         """List all models (optionally filtered by pair)."""
         result = []

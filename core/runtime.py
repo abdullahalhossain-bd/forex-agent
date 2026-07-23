@@ -472,6 +472,7 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
     except Exception as e:
         log.warning("ModelEvaluator init failed: %s", e)
 
+    cold_pairs = []  # default; overwritten below if the audit runs successfully
     try:
         from ml.model_store import ModelStore, get_model_store
         store = get_model_store()
@@ -488,6 +489,12 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
         # every registry entry against disk here, at boot, before any
         # trading cycle runs.
         audit = store.audit_registry_vs_disk()
+        # Pairs with ZERO usable models anywhere (not just a stale version
+        # or two) — these are guaranteed to return NOT_READY until
+        # retrained. Handed to ModelPredictor below (once it exists) via
+        # mark_cold_pairs() so it can skip load attempts on every cycle
+        # instead of quietly retrying and failing 60+ times per boot.
+        cold_pairs = store.get_cold_pairs()
         if audit["missing"]:
             from config import ML_MODEL_CONSISTENCY_ACTION
             missing_desc = ", ".join(
@@ -565,6 +572,19 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
                                 # process (ModelPredictor etc.) right away,
                                 # not just at next restart.
                                 store_ref._registry = store_ref._load_registry()
+                                # Clear the cold-pair flag (if set) now that
+                                # a usable model actually exists on disk —
+                                # otherwise ModelPredictor would keep
+                                # short-circuiting to {} forever even after
+                                # a successful repair.
+                                try:
+                                    from ml.model_predictor import get_model_predictor
+                                    get_model_predictor().unmark_cold_pair(pair, timeframe)
+                                except Exception as _unmark_e:
+                                    log.debug(
+                                        "[ModelStore] could not clear cold-pair "
+                                        "flag for %s %s: %s", pair, timeframe, _unmark_e,
+                                    )
                         except Exception as e:
                             log.error(
                                 "[ModelStore] background retrain crashed for "
@@ -607,6 +627,12 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
         registry.register_instance("model_predictor", predictor)
         services.append("model_predictor")
         log.info("Day 69 ModelPredictor wired (ensemble prediction ready)")
+        # Hand off the cold-pair list computed during the ModelStore audit
+        # above, so pairs with zero usable models are pre-flagged before
+        # the trading loop starts — not discovered/re-discovered on the
+        # first (and every subsequent) trading cycle.
+        if cold_pairs:
+            predictor.mark_cold_pairs(cold_pairs)
     except Exception as e:
         log.warning("ModelPredictor init failed: %s", e)
 

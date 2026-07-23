@@ -67,7 +67,39 @@ class ModelPredictor:
         self._lock = threading.RLock()
         self._model_cache: Dict[str, Any] = {}  # pair_tf_modeltype → model
         self._scaler_loaded = False
+        # (pair, timeframe) pairs known at boot to have ZERO usable models
+        # on disk (see ModelStore.get_cold_pairs()). _load_models() checks
+        # this before touching disk at all, so a pair with no trained
+        # model doesn't pay a failed load_model() attempt x3 model_types
+        # on every single trading cycle — it just returns {} immediately.
+        # Populated once via mark_cold_pairs() (called from core/runtime.py
+        # right after the boot-time registry/disk audit) and cleared per
+        # pair via unmark_cold_pair() as soon as a background retrain
+        # actually lands a usable model, so it self-heals without a
+        # restart instead of staying permanently blacklisted.
+        self._cold_pairs: set = set()
         self._init_predictions_db()
+
+    def mark_cold_pairs(self, pairs) -> None:
+        """Pre-flag (pair, timeframe) tuples that have zero usable models
+        on disk, so _load_models() can short-circuit instead of retrying
+        a load every cycle for something guaranteed to fail."""
+        with self._lock:
+            added = {(p.upper(), tf) for p, tf in pairs} - self._cold_pairs
+            self._cold_pairs |= added
+        if added:
+            log.info(
+                f"[Predictor] {len(added)} pair(s) pre-flagged as cold "
+                f"(zero usable models) — skipping load attempts until "
+                f"retrained: {sorted(added)}"
+            )
+
+    def unmark_cold_pair(self, pair: str, timeframe: str) -> None:
+        """Clear a pair's cold flag once a background retrain has landed
+        a usable model, so the very next predict() call tries loading it
+        again instead of waiting for a restart."""
+        with self._lock:
+            self._cold_pairs.discard((pair.upper(), timeframe))
 
     def _init_predictions_db(self) -> None:
         PREDICTIONS_DB.parent.mkdir(parents=True, exist_ok=True)
@@ -106,6 +138,9 @@ class ModelPredictor:
         newer compatible version instead of loading a model that will
         fail at prediction time.
         """
+        if (pair.upper(), timeframe) in self._cold_pairs:
+            return {}
+
         cache_key_prefix = f"{pair.upper()}_{timeframe}_"
         models: Dict[str, Any] = {}
         for model_type in ("xgboost", "random_forest", "lstm"):

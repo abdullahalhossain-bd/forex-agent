@@ -374,6 +374,27 @@ class CircuitBreaker:
             log.info(f"[CB{self._log_tag()}] Daily reset — new trading day")
             self._save_state()
 
+    # BUG FIX (2026-07-23 weekly-loss halt crash): allow_trade() and
+    # record_result() were wired to call self._reset_week_if_needed()
+    # when the MAX_WEEKLY_LOSS_PCT gate was added (see comment above),
+    # but the method itself was never actually written — the weekly
+    # rule was ported over from strict_risk_manager.py's reset logic
+    # in name only. Every call raised AttributeError, which the outer
+    # loop was catching and turning into a COOLDOWN, so the bot never
+    # took a trade after boot. This mirrors reset_daily()'s pattern
+    # exactly, but keyed on ISO year-week instead of the calendar date,
+    # so weekly_loss_usd rolls over to 0 at the start of each new
+    # ISO week (Monday) instead of accumulating forever.
+    def _reset_week_if_needed(self):
+        """নতুন সপ্তাহে weekly_loss_usd reset করো (ISO week, Mon–Sun)."""
+        iso = date.today().isocalendar()
+        current_week = f"{iso[0]}-W{iso[1]:02d}"
+        if self._state.get("week") != current_week:
+            self._state["week"]            = current_week
+            self._state["weekly_loss_usd"] = 0.0
+            log.info(f"[CB{self._log_tag()}] Weekly reset — new ISO week {current_week}")
+            self._save_state()
+
     # ── Status ─────────────────────────────────────────────────
 
     def get_status(self) -> dict:

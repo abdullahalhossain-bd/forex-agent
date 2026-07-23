@@ -1,0 +1,16 @@
+{
+  "mode": "TRADING",
+  "consecutive_losses": 1,
+  "daily_loss_usd": 5.49,
+  "date": "2026-07-23",
+  "recent_results": [
+    {
+      "result": "LOSS",
+      "ts": "2026-07-23T07:48:44.975997"
+    }
+  ],
+  "pause_reason": "",
+  "week": "2026-W30",
+  "weekly_loss_usd": 10.0,
+  "daily_loss_sync_stale": false
+}

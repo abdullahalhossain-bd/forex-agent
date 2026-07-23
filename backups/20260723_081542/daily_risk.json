@@ -1,0 +1,14 @@
+{
+  "date": "2026-07-23",
+  "total_loss_usd": 5.49,
+  "total_win_usd": 0,
+  "open_trades": 0,
+  "open_pairs": [],
+  "trades": [
+    {
+      "symbol": "EURCAD",
+      "pnl_usd": -5.49,
+      "time": "2026-07-23T07:19:29.194352+00:00"
+    }
+  ]
+}
