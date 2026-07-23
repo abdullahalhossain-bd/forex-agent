@@ -430,6 +430,23 @@ class DataFetcher:
             ("yfinance",     self._fetch_yfinance),
         ]
 
+        # Operator fix (2026-07-23): MT5_ONLY_MODE — the external fallback
+        # chain was observed producing data worse than having none at all
+        # (self-contradictory XAUUSD prices between consecutive requests,
+        # 3-candle H1 windows where 200 were requested, a permanently
+        # misconfigured Finnhub key, TwelveData rate-limited on every
+        # attempt). Default: MT5 only. On MT5 failure, return None and let
+        # the existing "no data this cycle" fail-safe path handle it
+        # (skip, log, retry next cycle) instead of silently trading on
+        # corrupted external data. Set MT5_ONLY_MODE=false to restore the
+        # old multi-provider fallback.
+        try:
+            from config import MT5_ONLY_MODE
+        except Exception:
+            MT5_ONLY_MODE = True  # fail-safe default if config import fails
+        if MT5_ONLY_MODE:
+            _FALLBACK_ORDER = [("mt5", self._fetch_mt5)]
+
         # Determine start index: try the configured primary source first,
         # but also allow starting from further down if the primary is known
         # to be unavailable.
@@ -462,6 +479,12 @@ class DataFetcher:
         if result is not None and len(result) > 0:
             record_fetch_success(symbol)
         else:
+            if MT5_ONLY_MODE:
+                log.warning(
+                    f"[DataFetcher] {symbol} {timeframe}: MT5 fetch failed and "
+                    f"MT5_ONLY_MODE=true — no external fallback attempted "
+                    f"(by design; see config.MT5_ONLY_MODE). Skipping this cycle."
+                )
             if record_fetch_failure(symbol):
                 mark_symbol_unavailable(symbol)
                 log.warning(

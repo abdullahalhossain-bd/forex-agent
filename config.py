@@ -368,6 +368,24 @@ MT5_SERVER = os.getenv("MT5_SERVER")
 MT5_PATH = os.getenv("MT5_PATH")  # Optional: MT5 terminal.exe path override
 MT5_INVESTOR = os.getenv("MT5_INVESTOR")
 
+# ── MT5-only data mode (operator request, 2026-07-23) ────────────
+# The external fallback chain (AlphaVantage/Polygon/Finnhub/TwelveData/
+# yfinance) was found producing bad data under real conditions:
+#   - Finnhub: dead all session (API key not set) — not a real fallback
+#   - TwelveData: rate-limited (429) on every attempt — wastes wall-clock
+#   - Polygon: internally inconsistent prices per request (e.g. XAUUSD
+#     swinging $130+ across 70s), 3-candle H1 windows instead of 200
+#   - AlphaVantage/yfinance: "unsupported timeframe" gaps on H4
+# A 3-candle or self-contradictory-price fallback is worse than no data
+# at all — indicators with real lookback (RSI-14, MACD, MAs) are
+# unreliable on that little history, and downstream code already has a
+# fail-safe path for "no data this cycle" (skip, log, retry next cycle).
+# Default TRUE: MT5 is the only data source; on failure, fetch_ohlcv()
+# returns None instead of cascading through the external chain. Set
+# MT5_ONLY_MODE=false to restore the old multi-provider fallback (e.g.
+# for a Linux/Mac dev box with no MT5 terminal at all).
+MT5_ONLY_MODE = os.getenv("MT5_ONLY_MODE", "true").lower() == "true"
+
 # ── REAL-MONEY execution gate (execution-parity audit, §9) ──────
 # execution/execution_router.py imports these four names when
 # EXECUTION_MODE=mt5_live. They previously did not exist in this file

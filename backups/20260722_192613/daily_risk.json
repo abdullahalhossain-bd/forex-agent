@@ -1,0 +1,11 @@
+{
+  "date": "2026-07-23",
+  "total_loss_usd": 0,
+  "total_win_usd": 0,
+  "open_trades": 2,
+  "open_pairs": [
+    "AUDUSD",
+    "EURCAD"
+  ],
+  "trades": []
+}
