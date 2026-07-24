@@ -415,6 +415,38 @@ class ModelPredictor:
         sell_count = 0
         probabilities: List[float] = []
 
+        # AUDIT FIX (2026-07): train_models_quick.py calibrates and saves a
+        # per-model, per-pair optimal threshold (metrics["threshold"] — see
+        # _find_optimal_threshold(), F1-maximized on a held-out calibration
+        # slice, now with a degenerate-prediction guard). Until this fix,
+        # that calibrated value was computed, logged, and saved... and then
+        # never read again: every live prediction used the same fixed
+        # global BUY_THRESHOLD/SELL_THRESHOLD (0.58/0.42) for every model on
+        # every pair regardless of what was actually calibrated for it —
+        # e.g. a real training run logged threshold=0.36 for EURUSD XGBoost
+        # and threshold=0.30 for EURUSD RandomForest, both silently
+        # discarded at inference. Now: look up each model's own saved
+        # threshold and use it as the BUY cutoff. The training calibration
+        # is one-sided (F1 on the "Up" label only — there is no separately-
+        # calibrated SELL cutoff), so SELL is derived as the mirror image
+        # around 0.5 (sell_threshold = 1 - buy_threshold) to preserve a
+        # symmetric WAIT band rather than inventing an unvalidated
+        # asymmetric one. Falls back to the global constants if no
+        # calibrated threshold was saved (e.g. legacy models trained before
+        # this feature existed).
+        model_thresholds: Dict[str, tuple] = {}
+        for model_type in models.keys():
+            buy_t, sell_t = BUY_THRESHOLD, SELL_THRESHOLD
+            try:
+                m = self.store.get_latest_metrics(pair, timeframe, model_type)
+                calibrated = m.get("threshold") if m else None
+                if calibrated is not None and 0.0 < float(calibrated) < 1.0:
+                    buy_t = float(calibrated)
+                    sell_t = 1.0 - buy_t
+            except Exception as e:
+                log.debug(f"[Predictor] {model_type} threshold lookup failed, using global default: {e}")
+            model_thresholds[model_type] = (buy_t, sell_t)
+
         for model_type, model in models.items():
             model_result: Dict[str, Any] = {"prediction": "WAIT", "probability": 0.5}
             try:
@@ -478,10 +510,11 @@ class ModelPredictor:
                     proba = float(proba_arr[0][1]) if proba_arr.shape[1] > 1 else float(proba_arr[0][0])
 
                 model_result["probability"] = round(proba, 4)
-                if proba >= BUY_THRESHOLD:
+                _buy_t, _sell_t = model_thresholds.get(model_type, (BUY_THRESHOLD, SELL_THRESHOLD))
+                if proba >= _buy_t:
                     model_result["prediction"] = "BUY"
                     buy_count += 1
-                elif proba <= SELL_THRESHOLD:
+                elif proba <= _sell_t:
                     model_result["prediction"] = "SELL"
                     sell_count += 1
                 probabilities.append(proba)

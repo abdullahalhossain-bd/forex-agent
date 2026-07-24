@@ -57,6 +57,13 @@ MODEL = ""
 # API as model="" and crashing every fallback call with "model is required".
 GROQ_MODEL = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
+# Local Ollama — same rationale as ai/ai_analyst.py: no key, no rate limit,
+# tried FIRST so this layer stops silently degrading to "always excluded"
+# whenever the cloud keys/quota are the actual problem.
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MASTER_MODEL") or os.getenv("OLLAMA_MODEL") or "qwen3:4b"
+OLLAMA_ENABLED = os.getenv("OLLAMA_MASTER_ENABLED", "true").lower() in ("true", "1", "yes")
+_ollama_client = None
 # Day 90 — token economy for long-duration demo trading.
 # Was 1500 — that's ~1.5k tokens per call × ~5 calls/cycle × 6 pairs =
 # ~45k tokens/cycle. With 6 Groq keys × 100k TPD = 600k tokens/day,
@@ -839,6 +846,52 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 
         return json.dumps(ctx, indent=2, default=str)
 
+    def _call_ollama(self, user_prompt: str) -> "str | None":
+        """Call the local Ollama server. No key/quota, so a single attempt
+        is enough — either it's reachable or it isn't. Returns None (never
+        raises) so _call_llm() falls through to Groq/Gemini/etc. exactly
+        as before if Ollama isn't running or the model isn't pulled."""
+        global _ollama_client
+        if not OLLAMA_ENABLED:
+            return None
+        if _ollama_client is None:
+            try:
+                from ollama import Client
+                _ollama_client = Client(host=OLLAMA_HOST)
+            except ImportError:
+                log.warning(
+                    "[MasterAnalyst] 'ollama' package not installed — "
+                    "install with: pip install ollama"
+                )
+                return None
+        try:
+            system_prompt = getattr(self, "SYSTEM_PROMPT", None) or (
+                "You are a senior institutional Forex market analyst. "
+                "Return ONLY valid JSON, no extra text, no markdown fences, "
+                "no <think> blocks."
+            )
+            response = _ollama_client.chat(
+                model=OLLAMA_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                options={
+                    "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2")),
+                    "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", "512")),
+                },
+            )
+            raw_content = response.get("message", {}).get("content", "") if isinstance(response, dict) else getattr(response.message, "content", "")
+            if not raw_content:
+                return None
+            cleaned = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL)
+            cleaned = re.sub(r"^```json\s*", "", cleaned.strip())
+            cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+            return cleaned.strip()
+        except Exception as e:
+            log.info(f"[MasterAnalyst] Ollama unreachable/failed ({OLLAMA_HOST}, model={OLLAMA_MODEL}): {e}")
+            return None
+
     def _call_llm(self, context: str) -> str:
         """Call LLM with Groq (primary) → Gemini (fallback) chain.
         Multi-key rotation: if one key fails, automatically tries next.
@@ -934,6 +987,17 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
 
         import time as _time
         from core.llm_key_manager import log_llm_call_failure
+
+        # ── PRIMARY: local Ollama (user's own laptop) ──────────
+        # Tried first — no key, no daily quota, so this layer can't
+        # silently degrade to "always excluded from voting" the way it
+        # does when Groq/Gemini keys are missing or exhausted.
+        if OLLAMA_ENABLED:
+            _raw = self._call_ollama(user_prompt)
+            if _raw is not None:
+                log.info(f"[MasterAnalyst] Ollama ({OLLAMA_MODEL}) served this analysis")
+                _store_cache(_raw, "ollama", 0)
+                return _raw
 
         # Primary: Groq (with multi-key retry)
         max_retries = 3

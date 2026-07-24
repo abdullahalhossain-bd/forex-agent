@@ -193,6 +193,15 @@ class TradingOrchestrator:
 
         # ── Process Each Symbol ─────────────────────
         for symbol in self.symbols:
+            # AUDIT FIX (2026-07): self_healing.py's quarantine containment
+            # is only useful if something actually checks it — previously
+            # nothing did, so a symbol failing every single cycle would
+            # keep re-entering _run_symbol_cycle() forever.
+            if self.self_healing.is_quarantined(symbol):
+                cycle_results["trades"].append({
+                    "symbol": symbol, "stages": {"pre_check": "SKIPPED: quarantined by self-healing"},
+                })
+                continue
             try:
                 result = self._run_symbol_cycle(symbol)
                 cycle_results["trades"].append(result)
@@ -878,8 +887,10 @@ class TradingOrchestrator:
 
         log.error(f"[Orchestrator] Cycle error for {symbol}: {error}", exc_info=True)
 
-        # Try self-healing
-        self.self_healing.heal(error)
+        # Self-healing: mt5_reconnect healer works generically; the
+        # symbol_quarantine containment needs the symbol to track
+        # per-symbol repeat failures, which wasn't being passed before.
+        self.self_healing.heal(error, symbol=symbol, stage="cycle")
 
     # ──────────────────────────────────────────────────
     # DISPLAY METHODS

@@ -116,7 +116,31 @@ def _atr(df: pd.DataFrame, period: int = 14) -> float:
 
 
 def _find_swing_lows(df: pd.DataFrame, lookback: int = 20, window: int = 3) -> List[float]:
-    """Find swing lows in the last `lookback` bars (window=3 = 3 bars each side)."""
+    """Find swing lows in the last `lookback` bars (window=3 = 3 bars each side).
+
+    FIX: this used to be its own naive symmetric-window detector — a
+    weaker, independent duplicate of analysis/support_resistance.py's
+    SupportResistance engine (which adds rejection-candle validation and
+    ATR-adaptive clustering and is what the rest of the pipeline actually
+    uses for S/R). Two different swing definitions meant "best entry"
+    filtering here could disagree with what the main analysis already
+    decided was a valid swing. Now delegates to that engine first; falls
+    back to the original naive method only if the import/call fails, so
+    behavior never regresses below what this function did before.
+    """
+    try:
+        from analysis.support_resistance import SupportResistance
+        sr = SupportResistance(swing_window=window)
+        sub = df.iloc[-lookback:] if len(df) > lookback else df
+        raw = sr.find_swing_lows(sub)
+        prices = [s["price"] for s in raw]
+        if prices:
+            return prices
+    except Exception as e:
+        import logging; logging.debug(
+            f"[entry_quality_guardrails] SupportResistance swing-low lookup "
+            f"failed, falling back to naive detector: {e}"
+        )
     try:
         lows = df["low"].values[-lookback:]
         swings = []
@@ -130,7 +154,24 @@ def _find_swing_lows(df: pd.DataFrame, lookback: int = 20, window: int = 3) -> L
 
 
 def _find_swing_highs(df: pd.DataFrame, lookback: int = 100, window: int = 3) -> List[float]:
-    """Find swing highs in the last `lookback` bars."""
+    """Find swing highs in the last `lookback` bars.
+
+    Same fix as _find_swing_lows() above — delegates to the SupportResistance
+    engine first, naive detector only as a fallback.
+    """
+    try:
+        from analysis.support_resistance import SupportResistance
+        sr = SupportResistance(swing_window=window)
+        sub = df.iloc[-lookback:] if len(df) > lookback else df
+        raw = sr.find_swing_highs(sub)
+        prices = [s["price"] for s in raw]
+        if prices:
+            return prices
+    except Exception as e:
+        import logging; logging.debug(
+            f"[entry_quality_guardrails] SupportResistance swing-high lookup "
+            f"failed, falling back to naive detector: {e}"
+        )
     try:
         highs = df["high"].values[-lookback:]
         swings = []

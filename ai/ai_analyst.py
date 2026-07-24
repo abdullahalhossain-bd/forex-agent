@@ -37,6 +37,14 @@ class AIAnalyst:
     GROQ_MODEL   = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
     GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 
+    # Local Ollama — user's own laptop, zero cost, zero rate limits, no API
+    # key needed. Tried FIRST (see analyze()) so cloud providers (several of
+    # which are known broken — see analyze()'s Cerebras/SambaNova comment)
+    # are only reached if the local model is unreachable.
+    OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    OLLAMA_MODEL   = os.getenv("OLLAMA_ANALYST_MODEL") or os.getenv("OLLAMA_MODEL") or "qwen3:4b"
+    OLLAMA_ENABLED = os.getenv("OLLAMA_ANALYST_ENABLED", "true").lower() in ("true", "1", "yes")
+
     # Rough per-1K-token USD prices used only for cost *estimation* /
     # observability, not billing. Overridable via env if pricing changes.
     _TOKEN_COST_PER_1K = {
@@ -50,6 +58,7 @@ class AIAnalyst:
     def __init__(self):
         self._groq_client   = None
         self._gemini_client = None  # google.genai Client object
+        self._ollama_client = None  # ollama.Client object (lazy-init)
         self._init_clients()
 
         # ── Day 92 — token usage / cost tracking ────────────────────
@@ -297,9 +306,20 @@ class AIAnalyst:
         def _remaining():
             return max(0.5, deadline - time.monotonic())
 
-        # Primary: Groq
+        # ── PRIMARY: local Ollama (user's own laptop) ──────────
+        # Tried first: no API key, no daily token budget, no rate limit,
+        # so it can't be the reason this layer silently degrades to
+        # "always excluded" the way a missing/exhausted cloud key can.
+        # Falls through to Groq/Gemini/etc. automatically if Ollama isn't
+        # running or the model isn't pulled — see _call_ollama().
         raw = None
-        if self._groq_client and time.monotonic() < deadline:
+        if self.OLLAMA_ENABLED and time.monotonic() < deadline:
+            raw = self._call_with_timeout(self._call_ollama, prompt, timeout=_remaining(), deadline=deadline)
+            if raw is not None:
+                log.info(f"[AIAnalyst] Ollama ({self.OLLAMA_MODEL}) served this analysis")
+
+        # Fallback: Groq
+        if raw is None and self._groq_client and time.monotonic() < deadline:
             raw = self._call_with_timeout(self._call_groq, prompt, timeout=_remaining(), deadline=deadline)
 
         # ── PRIMARY FALLBACK: Gemini (moved up — most reliable after Groq) ──
@@ -480,6 +500,71 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
   "market_condition": "TRENDING_UP or TRENDING_DOWN or RANGING or VOLATILE",
   "risk_warning": "Any additional risk warning for the trader"
 }}"""
+
+    # ── Local Ollama (primary — no key, no rate limit) ──────────
+    def _get_ollama_client(self):
+        """Lazy-init the Ollama client (same pattern as core/ollama_validator.py)."""
+        if self._ollama_client is not None:
+            return self._ollama_client
+        try:
+            from ollama import Client
+            self._ollama_client = Client(host=self.OLLAMA_HOST)
+            return self._ollama_client
+        except ImportError:
+            log.warning(
+                "[AIAnalyst] 'ollama' package not installed — "
+                "install with: pip install ollama"
+            )
+            return None
+
+    def _call_ollama(self, prompt: str, deadline: float | None = None) -> str | None:
+        """Call the local Ollama server. Single attempt, no multi-key retry
+        needed since there's no key/quota — just a reachability check.
+
+        Fails silently (returns None) if Ollama isn't running or the model
+        isn't pulled, so analyze() falls through to the cloud cascade
+        exactly as before. This must never raise.
+        """
+        if not self.OLLAMA_ENABLED:
+            return None
+        client = self._get_ollama_client()
+        if client is None:
+            return None
+        try:
+            remaining = None
+            if deadline is not None:
+                remaining = max(1.0, deadline - time.monotonic())
+            response = client.chat(
+                model=self.OLLAMA_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a senior Forex market analyst. Return ONLY valid JSON, no extra text, no markdown fences, no <think> blocks."},
+                    {"role": "user", "content": prompt},
+                ],
+                options={
+                    "temperature": float(os.getenv("OLLAMA_TEMPERATURE", "0.2")),
+                    "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", "512")),
+                },
+                # ollama-python's Client.chat doesn't take a wall-clock
+                # timeout directly; the shared _call_with_timeout() wrapper
+                # in analyze() already bounds this call from the outside.
+            )
+            raw_content = response.get("message", {}).get("content", "") if isinstance(response, dict) else getattr(response.message, "content", "")
+            if not raw_content:
+                return None
+            self._record_usage("ollama", prompt_tokens=0, completion_tokens=0)  # local — no token cost
+            return self._strip_ollama_thinking(raw_content)
+        except Exception as e:
+            log.info(f"[AIAnalyst] Ollama unreachable/failed ({self.OLLAMA_HOST}, model={self.OLLAMA_MODEL}): {e}")
+            return None
+
+    @staticmethod
+    def _strip_ollama_thinking(text: str) -> str:
+        """Remove <think>...</think> blocks and markdown fences some local
+        models (e.g. Qwen3) emit before/around the JSON payload."""
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+        cleaned = re.sub(r"^```json\s*", "", cleaned.strip())
+        cleaned = re.sub(r"\s*```$", "", cleaned.strip())
+        return cleaned.strip()
 
     # ── LLM callers (multi-key retry) ───────────────────────────
     def _call_groq(self, prompt: str, deadline: float | None = None) -> str | None:

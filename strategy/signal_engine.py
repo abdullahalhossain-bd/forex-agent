@@ -302,10 +302,22 @@ class SignalEngine:
             # reading (weight +2) trigger BUY/SELL on its own, with no
             # second confirming factor. Raised to 3 so at least two
             # agreeing signals (or one strong + one weak) are required.
-            if net >= 5:    signal = 'STRONG_BUY'
-            elif net >= 3:  signal = 'BUY'
-            elif net <= -5: signal = 'STRONG_SELL'
-            elif net <= -3: signal = 'SELL'
+            # Standalone-backtest audit fix (2026-07): an 8-day/14-pair
+            # sanity-check backtest of this exact engine found it firing on
+            # ~40-45% of bars at the old net>=3 threshold — far too
+            # trigger-happy for live trading once spread/slippage are
+            # accounted for — and that plain BUY/SELL (net==3, one strong +
+            # one weak factor) was the weakest-performing signal tier
+            # (+0.079R avg) versus STRONG_BUY (+0.196R). Raised by one point
+            # per tier so BUY/SELL now needs two solid confirming factors
+            # (e.g. trend+2 AND rsi+2, not trend+2 alone) rather than one.
+            # This will reduce trade frequency — that is the intended
+            # effect, not a bug; re-run the backtest after changing this if
+            # you want to confirm the new frequency/expectancy trade-off.
+            if net >= 6:    signal = 'STRONG_BUY'
+            elif net >= 4:  signal = 'BUY'
+            elif net <= -6: signal = 'STRONG_SELL'
+            elif net <= -4: signal = 'SELL'
             else:           signal = 'WAIT'
 
         # Regime filter

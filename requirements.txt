@@ -32,6 +32,7 @@ plotly>=5.18
 python-telegram-bot>=20.0
 groq>=0.4
 google-genai>=0.3.0
+ollama>=0.3.0
 openai>=1.0
 
 # ── Model Versioning (optional) ───────────────────────────

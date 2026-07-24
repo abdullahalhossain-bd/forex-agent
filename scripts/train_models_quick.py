@@ -585,6 +585,23 @@ def _find_optimal_threshold(model, X_calib: np.ndarray, y_calib: np.ndarray) -> 
     (precision/recall = 0.0 despite non-trivial accuracy — the RandomForest
     symptom from the audit). Returns 0.5 if predict_proba is unavailable or
     only one class is present.
+
+    AUDIT FIX (2026-07): unconstrained F1-argmax had a second, opposite
+    failure mode this guard now catches: when the model's predict_proba
+    output has very low variance (e.g. RandomForest here compressed
+    everything into a ~0.447-0.468 band), EVERY candidate threshold in
+    that band accepts almost the whole calibration set as "Up" — F1 still
+    picks a "best" one, but it's a degenerate always-predict-positive
+    classifier (holdout showed TN=0, FN=0 — literally 100% "Up"
+    predictions). That is worse than useless: it is confidently wrong
+    with no discriminative power at all, yet would previously pass
+    through as if it were a real threshold choice. Now: candidates whose
+    predicted-positive rate falls outside a sane [10%, 90%] band (i.e.
+    would make the model call almost everything, or almost nothing, "Up")
+    are excluded from the F1 search. If every candidate in the full 0.30-
+    0.70 sweep is degenerate — the strongest signal that the base model
+    itself has no real separating power — fall back to 0.5 rather than
+    silently ship a broken classifier.
     """
     from sklearn.metrics import f1_score
 
@@ -596,9 +613,27 @@ def _find_optimal_threshold(model, X_calib: np.ndarray, y_calib: np.ndarray) -> 
         return 0.5
 
     candidates = np.arange(0.30, 0.71, 0.02)
-    scores = [f1_score(y_calib, (proba >= t).astype(int), zero_division=0) for t in candidates]
-    best_idx = int(np.argmax(scores))
+    pos_rate = np.array([(proba >= t).mean() for t in candidates])
+    scores = np.array([f1_score(y_calib, (proba >= t).astype(int), zero_division=0) for t in candidates])
+
+    sane = (pos_rate >= 0.10) & (pos_rate <= 0.90)
+    if not sane.any():
+        import logging
+        logging.getLogger("train_models_quick").warning(
+            "[_find_optimal_threshold] Every threshold in [0.30, 0.70] "
+            "produces a degenerate (>90%% or <10%% positive-rate) "
+            "prediction set — predict_proba has almost no spread "
+            "(min=%.3f max=%.3f). This model has no real separating "
+            "power; falling back to threshold=0.5 instead of shipping a "
+            "broken always-one-class classifier.",
+            float(proba.min()), float(proba.max()),
+        )
+        return 0.5
+
+    scores_masked = np.where(sane, scores, -1.0)
+    best_idx = int(np.argmax(scores_masked))
     return float(round(candidates[best_idx], 2))
+
 
 
 # ── Probability calibration ──────────────────────────────────────────

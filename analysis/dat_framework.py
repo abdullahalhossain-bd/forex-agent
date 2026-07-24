@@ -88,22 +88,18 @@ class DATFramework:
 
     Pulls data from existing modules:
       - Direction: from Indicators trend + MTF bias
-      - Area:      from SupportResistance + FVG + Fibonacci
-                    (OrderBlock is NOT wired in — see note below)
+      - Area:      from SupportResistance + OrderBlock + FVG + Fibonacci
       - Trigger:   from PatternDetector (candlestick patterns)
 
-    AREA STAGE STATUS (institutional review, item #2):
+    AREA STAGE STATUS (institutional review, item #2 — updated 2026-07):
         The class previously claimed Area = "SupportResistance + OrderBlock
         + FVG + Fibonacci" but only ever checked SupportResistance — the
         rest was a TODO comment. FVG (analysis/fvg_detector.py) and
-        Fibonacci (analysis/fibonacci.py) confluence are now genuinely
-        wired in below, since both modules exist in this codebase.
-        OrderBlock is intentionally left NOT implemented: there is no
-        order-block detector module in this codebase to call into, and
-        fabricating one here would be a much larger, unreviewed feature
-        addition rather than a fix. `area_zone_type` will never be
-        "order_block" until a real OrderBlock module is added and wired
-        in the same way FVG/Fibonacci are below.
+        Fibonacci (analysis/fibonacci.py) confluence were wired in first.
+        OrderBlock (analysis/order_block.py's OrderBlockDetector) is now
+        wired in too — it existed in the codebase all along but was never
+        imported here; that was an oversight, not a missing feature.
+        `area_zone_type` can now genuinely be "order_block".
     """
 
     # Minimum confidence thresholds for each stage
@@ -130,11 +126,11 @@ class DATFramework:
             self._init_error = f"Core dependency init failed: {e}"
             log.warning(f"DATFramework init partial: {e}")
 
-        # FVG/Fibonacci have no dependency on the (possibly-unavailable)
-        # data.fetcher/Indicators/PatternDetector/SupportResistance chain
-        # above, so they're imported in their own try/except: a failure
-        # there shouldn't silently disable these newly-wired area checks
-        # too (see item #2).
+        # FVG/Fibonacci/OrderBlock have no dependency on the (possibly-
+        # unavailable) data.fetcher/Indicators/PatternDetector/
+        # SupportResistance chain above, so they're imported in their own
+        # try/except: a failure there shouldn't silently disable these
+        # newly-wired area checks too (see item #2).
         try:
             from analysis.fvg_detector import FVGDetector
             from analysis.fibonacci import FibonacciEngine
@@ -142,6 +138,19 @@ class DATFramework:
             self._fib_engine_cls = FibonacciEngine  # instantiated per-call in evaluate() so it can carry the symbol (see item #1's pip-size fix)
         except Exception as e:
             log.warning(f"DATFramework FVG/Fibonacci init failed: {e}")
+
+        # AUDIT FIX (2026-07): the class docstring and _evaluate_area()
+        # both used to claim OrderBlock detection didn't exist anywhere in
+        # this codebase. It does — analysis/order_block.py's
+        # OrderBlockDetector, same detect()/nearest_active() shape as
+        # FVGDetector above — it was just never imported here. Wiring it
+        # in now the same way FVG/Fibonacci are, rather than leaving a
+        # working module unused and the docstring wrong.
+        try:
+            from analysis.order_block import OrderBlockDetector
+            self.ob = OrderBlockDetector()
+        except Exception as e:
+            log.warning(f"DATFramework OrderBlock init failed: {e}")
 
     def evaluate(self, symbol: str = "EURUSD", timeframe: str = "15m") -> DATResult:
         """Run the full DAT pipeline for a symbol."""
@@ -308,14 +317,11 @@ class DATFramework:
         """
         Check if price is at a significant zone (S/R, FVG, Fib).
 
-        FIX (institutional review, item #2): FVG and Fibonacci confluence
-        are now actually checked here (previously a TODO comment — only
-        S/R was implemented despite the class docstring claiming all
-        three). OrderBlock remains NOT implemented; there is no
-        order-block detector in this codebase to call into (see class
-        docstring). `df` and `symbol` are optional so this method still
-        degrades gracefully to S/R-only if a caller doesn't supply them —
-        no existing caller's behavior changes unless it opts in.
+        FIX (institutional review, item #2, updated 2026-07): S/R, FVG,
+        Fibonacci, and now OrderBlock confluence are all checked here.
+        `df` and `symbol` are optional so this method still degrades
+        gracefully to S/R-only if a caller doesn't supply them — no
+        existing caller's behavior changes unless it opts in.
         """
         price = ind_ctx.get("price", 0)
         if not price:
@@ -332,6 +338,21 @@ class DATFramework:
             return True, "support", nearest_support
         if nearest_resistance and abs(price - nearest_resistance) <= tolerance:
             return True, "resistance", nearest_resistance
+
+        # Check Order Block confluence (requires df with an 'atr' column,
+        # same precondition as the FVG check below). Checked before FVG:
+        # an order block is a narrower, more specific institutional zone
+        # than a fair value gap, so prefer it when both would match.
+        if df is not None and hasattr(self, "ob") and "atr" in getattr(df, "columns", []):
+            try:
+                atr_val = ind_ctx.get("atr")
+                obs = self.ob.detect(df)
+                nearest_ob = self.ob.nearest_active(obs, price, atr=atr_val)
+                if nearest_ob and nearest_ob.get("in_zone"):
+                    zone_mid = (nearest_ob["zone_top"] + nearest_ob["zone_bottom"]) / 2
+                    return True, "order_block", zone_mid
+            except Exception as e:
+                log.warning(f"[DAT] OrderBlock area check failed: {e}")
 
         # Check Fair Value Gap confluence (requires df with an 'atr' column,
         # which self.ind.add_all() is expected to have already added)

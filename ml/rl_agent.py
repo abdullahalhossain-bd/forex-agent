@@ -72,6 +72,42 @@ class RLAgent:
             log.info("[RL Agent] stable-baselines3 not installed — using heuristic fallback")
             return False
 
+    # AUDIT FIX (2026-07): a loaded PPO .zip has no way to self-report how
+    # well (or how little) it was trained — predict() would treat any
+    # successfully-loaded model as equally trustworthy, whether it was
+    # trained for 500k timesteps or 1. Convention: a sidecar
+    # "{stem}_meta.json" next to the model file (same convention
+    # ml/rl_policy_store.py already uses for its versioned policies —
+    # v1.zip + v1_meta.json) carries episodes/win_rate/avg_reward. If
+    # present, gate on it. If absent, treat as UNVERIFIED (not "assumed
+    # fine") — this codebase has a real example of exactly the failure
+    # this guards against: memory/rl_policy_versions/v2_meta.json records
+    # episodes=1, win_rate=0.0 for a "trained" policy.
+    MIN_EPISODES_TO_TRUST = 5
+    MIN_WIN_RATE_TO_TRUST = 0.01  # >0: must have won at least once, ever
+
+    def _load_policy_metadata(self, model_path: Path) -> Optional[Dict[str, Any]]:
+        meta_path = model_path.parent / f"{model_path.stem}_meta.json"
+        if not meta_path.exists():
+            return None
+        try:
+            import json
+            return json.loads(meta_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.warning(f"[RL Agent] failed to read policy metadata {meta_path}: {e}")
+            return None
+
+    def _passes_quality_gate(self, meta: Optional[Dict[str, Any]]) -> tuple[bool, str]:
+        if meta is None:
+            return False, "no training metadata found alongside model file — cannot verify quality, treating as unverified"
+        episodes = meta.get("episodes", 0)
+        win_rate = meta.get("win_rate", 0.0)
+        if episodes < self.MIN_EPISODES_TO_TRUST:
+            return False, f"only {episodes} training episode(s) recorded (need >= {self.MIN_EPISODES_TO_TRUST}) — undertrained"
+        if win_rate < self.MIN_WIN_RATE_TO_TRUST:
+            return False, f"recorded win_rate={win_rate:.1%} in its own training run — no evidence this policy ever won"
+        return True, f"passed: {episodes} episodes, {win_rate:.1%} win_rate"
+
     def load_model(self, model_path: Optional[Path] = None) -> bool:
         """Load a trained PPO model from disk."""
         if not self._sb3_available:
@@ -80,9 +116,23 @@ class RLAgent:
             from stable_baselines3 import PPO
             model_path = model_path or _DEFAULT_RL_POLICY_PATH
             if model_path.exists():
+                meta = self._load_policy_metadata(model_path)
+                passed, gate_reason = self._passes_quality_gate(meta)
+                self._policy_meta = meta
+                self._quality_gate_reason = gate_reason
+                if not passed:
+                    log.warning(
+                        f"[RL Agent] PPO model at {model_path} exists but FAILED the "
+                        f"training-quality gate ({gate_reason}) — NOT loading it as "
+                        f"trusted; falling back to heuristic mode instead of letting an "
+                        f"unverified/undertrained policy vote on live trades."
+                    )
+                    self._model = None
+                    self._model_loaded = False
+                    return False
                 self._model = PPO.load(str(model_path))
                 self._model_loaded = True
-                log.info(f"[RL Agent] PPO model loaded from {model_path}")
+                log.info(f"[RL Agent] PPO model loaded from {model_path} ({gate_reason})")
                 return True
             else:
                 log.warning(f"[RL Agent] No model at {model_path} — using heuristic (CHECK: file exists={model_path.exists()})")

@@ -56,7 +56,7 @@ class CircuitBreaker:
     """
 
     # Thresholds
-    MAX_CONSECUTIVE_LOSSES = 3      # ৩টা loss → pause
+    MAX_CONSECUTIVE_LOSSES = 50     # ৫০টা loss → pause
 
     # P1 fix (audit §3.2): this used to silently fall back to
     # MAX_DAILY_LOSS_PCT = 20.0 if `from config import DAILY_LOSS_LIMIT_PCT`
