@@ -348,7 +348,7 @@ def main():
             return obj.tolist()
         return str(obj)
 
-    with open(json_path, "w") as f:
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump({
             "metadata": {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -548,7 +548,7 @@ def _write_markdown_report(results, n_comparisons, bonferroni_alpha, args):
     md.append("")
 
     report_path = OUTPUT_DIR / "HONEST_VALIDATION_REPORT.md"
-    with open(report_path, "w") as f:
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(md))
 
 
