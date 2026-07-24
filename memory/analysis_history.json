@@ -5484,5 +5484,18 @@
     "recommendation": "Final decision: NO TRADE",
     "has_conflict": false,
     "result": null
+  },
+  {
+    "time": "2026-07-24T13:30:58",
+    "pair": "USDJPY",
+    "timeframe": "15m",
+    "price": 163.677,
+    "trend": "bearish",
+    "rsi": 31.08815,
+    "bias": "NO TRADE",
+    "confidence": 10.200000000000003,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
   }
 ]

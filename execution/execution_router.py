@@ -437,6 +437,71 @@ class ExecutionRouter:
     # PUBLIC ENTRY POINT
     # ─────────────────────────────────────────────
 
+    # ── Pullback-limit-order routing (NEW, 2026-07-24) ──────────────
+    # Root-cause fix for the USDCHF 2026-07-23 post-mortem: the bot
+    # always market-ordered in, even when entry_quality_guardrails had
+    # already flagged the entry as chasing/overextended (it just took a
+    # confidence penalty and went through anyway). place_limit_order()
+    # existed in broker/order_manager.py for exactly this pullback-entry
+    # case but had 0 callers anywhere in the codebase — checked via grep
+    # before writing this, so this isn't a duplicate. This wires it in:
+    # a flagged entry now waits for a pullback via a pending limit order
+    # (auto-cancelled by the broker, or by cancel_stale_pending_orders()
+    # as a fallback, if price never comes back) instead of chasing.
+    PULLBACK_FLAGS = {"chasing_filter", "atr_extension"}
+    PULLBACK_EXPIRY_MINUTES = 120  # give the pullback 2 hours to happen
+
+    @staticmethod
+    def _compute_pullback_order(decision_result: dict) -> dict | None:
+        """Returns {"price": float, "reason": str} if the entry-quality
+        detail says this entry is chasing/overextended and a pullback
+        price can be derived, else None (caller falls through to a
+        normal market order — unchanged behavior for every other case)."""
+        eq = decision_result.get("entry_quality_detail")
+        if not eq or not isinstance(eq, dict):
+            return None
+        flagged = None
+        for r in eq.get("results", []) or []:
+            if r.get("flag_name") in ExecutionRouter.PULLBACK_FLAGS and not r.get("passed", True):
+                flagged = r
+                break
+        if flagged is None:
+            return None
+
+        direction = decision_result.get("decision")
+        entry = decision_result.get("entry")
+        details = flagged.get("details", {}) or {}
+        pullback_price = None
+
+        if flagged["flag_name"] == "atr_extension" and details.get("mean_price") is not None:
+            # Meet the move halfway back to its own mean — a full round
+            # trip to the mean is often too conservative to ever fill.
+            mean = float(details["mean_price"])
+            pullback_price = (entry + mean) / 2.0 if entry is not None else mean
+        elif flagged["flag_name"] == "chasing_filter" and details.get("pullback_pips") is not None:
+            # Require at least the minimum pullback the filter itself
+            # defines (10 pips / 10%, whichever check_chasing_filter used).
+            pip = 0.01 if str(decision_result.get("symbol", "")).upper().endswith("JPY") else 0.0001
+            required_pips = 10.0
+            offset = required_pips * pip
+            if entry is not None:
+                pullback_price = entry - offset if direction == "BUY" else entry + offset
+
+        if pullback_price is None or entry is None:
+            return None
+
+        # Sanity: the pullback price must actually be BETTER than the
+        # current market entry (further from momentum), never worse.
+        if direction == "BUY" and pullback_price >= entry:
+            return None
+        if direction == "SELL" and pullback_price <= entry:
+            return None
+
+        return {
+            "price": round(pullback_price, 5),
+            "reason": flagged.get("reason", "entry-quality pullback flag"),
+        }
+
     def execute(self, decision_result: dict) -> dict | None:
         self._failure_local.reason = None  # clear any stale reason from a prior call on this thread
         # ── HARD GATE 1: decision must be BUY/SELL ──
@@ -568,24 +633,46 @@ class ExecutionRouter:
             return self._fail("broker_symbol is None")
 
         # ── place order ───────────────────────────────────────────
+        pullback = self._compute_pullback_order(decision_result)
         try:
-            order_result = self._order_manager.place_market_order(
-                symbol=broker_symbol,
-                direction=direction,
-                lot=lot,
-                sl=sl,
-                tp=tp,
-                comment="ai_trader_demo" if not self._simulation_mode else "ai_trader_sim",
-            )
+            if pullback is not None:
+                order_result = self._order_manager.place_limit_order(
+                    symbol=broker_symbol,
+                    price=pullback["price"],
+                    direction=direction,
+                    lot=lot,
+                    sl=sl,
+                    tp=tp,
+                    comment="ai_trader_limit",
+                    expiration_minutes=self.PULLBACK_EXPIRY_MINUTES,
+                )
+                log.info(
+                    f"[ExecutionRouter] Overextended entry — routed to PULLBACK LIMIT "
+                    f"@ {pullback['price']} instead of market ({pullback['reason']})"
+                )
+                _log_event(
+                    "router.execute.pullback_limit", symbol=symbol,
+                    market_price=decision_result.get("entry"),
+                    limit_price=pullback["price"], reason=pullback["reason"],
+                )
+            else:
+                order_result = self._order_manager.place_market_order(
+                    symbol=broker_symbol,
+                    direction=direction,
+                    lot=lot,
+                    sl=sl,
+                    tp=tp,
+                    comment="ai_trader_demo" if not self._simulation_mode else "ai_trader_sim",
+                )
         except Exception as e:
             log.error(
-                f"[ExecutionRouter] place_market_order raised: {e}",
+                f"[ExecutionRouter] order placement raised: {e}",
                 exc_info=True,
             )
             _log_event("router.execute.fail", symbol=symbol,
-                       reason=f"place_market_order raised: {e}",
+                       reason=f"order placement raised: {e}",
                        stage="order_send")
-            return self._fail(f"place_market_order raised: {e}")
+            return self._fail(f"order placement raised: {e}")
 
         if not order_result.get("success"):
             log.error(
@@ -596,6 +683,31 @@ class ExecutionRouter:
                        stage="order_result",
                        retcode=order_result.get('retcode'))
             return self._fail(f"broker rejected order: {order_result.get('reason', 'unknown')}")
+
+        # ── PENDING LIMIT ORDER: not filled yet — don't journal as an
+        # open position (there IS no position at the broker yet). The
+        # existing MT5 position-sync path (broker/position_manager.py /
+        # sync_open_positions) is what should pick this up once the
+        # pullback price is actually touched and the broker fills it.
+        if order_result.get("pending"):
+            log.info(
+                f"[ExecutionRouter] ⏳ PULLBACK LIMIT ORDER PENDING — {symbol} "
+                f"{direction} @ {pullback['price'] if pullback else decision_result.get('entry')} "
+                f"ticket={order_result.get('ticket')} "
+                f"expires in {self.PULLBACK_EXPIRY_MINUTES}m"
+            )
+            _log_event(
+                "router.execute.pullback_pending", symbol=symbol,
+                ticket=order_result.get("ticket"),
+                limit_price=pullback["price"] if pullback else None,
+            )
+            return {
+                "id": None, "status": "PENDING",
+                "broker_symbol": broker_symbol, "ticket": order_result.get("ticket"),
+                "entry": pullback["price"] if pullback else decision_result.get("entry"),
+                "sl": sl, "tp": tp, "lot": lot, "type": direction, "pair": broker_symbol,
+                "pending": True,
+            }
 
         filled_entry = order_result.get("price", decision_result.get("entry"))
         ticket       = order_result.get("ticket")

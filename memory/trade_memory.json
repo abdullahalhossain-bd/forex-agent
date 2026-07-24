@@ -14177,5 +14177,41 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 423,
+    "timestamp": "2026-07-24T07:30:58.258145+00:00",
+    "symbol": "USDJPY",
+    "timeframe": "15m",
+    "decision": "WAIT",
+    "raw_signal": "WAIT",
+    "gated": true,
+    "confidence": 10.200000000000003,
+    "entry": 163.77,
+    "sl": 163.91,
+    "tp": 163.5,
+    "lot": 0,
+    "rr": 0,
+    "regime": "CHOPPY",
+    "trend": "bearish",
+    "rsi": 31.08815,
+    "patterns": [
+      "bearish_pin_bar",
+      "breakout_bearish"
+    ],
+    "rule_signal": "SELL",
+    "llm_signal": "SELL",
+    "reasons": [
+      "MasterAnalyst: SELL | On the 15m chart USDJPY is testing the key resistance at 163.8965 while the Lond",
+      "Rule: SELL (41.0%) | LLM: WAIT (67.0%)",
+      "Sentiment: BULLISH (score +28, adj -10%)",
+      "Risk: approved | Lot 0",
+      "Risks: Higher timeframe (1D/4H) bullish bias could cause a rapid reversal., Hidden bullish divergence and strong retail long positioning may push price back above resistance.",
+      "Critique: If the market holds above the pivot and re-establishes bullish momentum, the sel",
+      "\u26a0\ufe0f ConfidenceEngine WAIT: \u26a0\ufe0f Small sample (0/3) \u2014 Bayesian penalty -3 | \ud83d\udcc9 Recent 10 poor (10%) | \ud83d\udeab Regime unfavorable (10%) (analysis confidence 10% preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]

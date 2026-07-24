@@ -6032,5 +6032,19 @@
     "bond_yield": 0.47,
     "sp500_change": -1.209,
     "vix_value": 18.99
+  },
+  {
+    "timestamp": "2026-07-24T07:31:13.480380+00:00",
+    "pair": "AUDUSD",
+    "regime": "RISK_OFF",
+    "macro_score": 55,
+    "pair_bias": "SELL",
+    "dxy_value": 101.313,
+    "dxy_trend": "NEUTRAL",
+    "gold_change": null,
+    "oil_change": -1.757,
+    "bond_yield": 0.47,
+    "sp500_change": -1.209,
+    "vix_value": 18.96
   }
 ]

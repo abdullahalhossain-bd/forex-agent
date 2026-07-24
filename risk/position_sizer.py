@@ -288,6 +288,47 @@ class PositionSizer:
             actual_risk_pct = actual_risk / balance
             explanation.append(f"Hard cap: risk capped at {MAX_RISK_PCT:.0%} → lot {final_lot:.2f}")
 
+        # ── Tiny-balance safety gate (NEW, 2026-07-24 — added for the
+        # user's stated $5 real-money account) ───────────────────────
+        # MIN_LOT (0.01, the broker's own minimum) is a FLOOR applied
+        # above. A floor can silently violate MAX_RISK_PCT once the
+        # balance is small enough: the risk-based lot risk_pct actually
+        # calls for can be far below what any broker will accept, and
+        # forcing it up to MIN_LOT means the REAL risk taken is
+        # whatever MIN_LOT × sl_pips × pip_value works out to — not
+        # what risk_pct asked for. The "Hard cap" block right above
+        # this ALSO floors at MIN_LOT, so on a small enough balance it
+        # cannot actually enforce the cap it claims to. Checked first —
+        # grepped risk_engine.py and live_risk_manager.py for any gate
+        # on sizing.risk_pct: none exists; the only downstream check is
+        # `if sizing.lot <= 0`, which a MIN_LOT floor can never trigger.
+        # So a too-small balance would trade anyway with real risk_pct
+        # silently 5-50x the configured limit. This refuses instead.
+        min_lot_risk = MIN_LOT * sl_pips * pip_value_per_lot
+        min_lot_risk_pct = (min_lot_risk / balance) if balance > 0 else float("inf")
+        if min_lot_risk_pct > MAX_RISK_PCT:
+            explanation.append(
+                f"REFUSED — even the broker minimum lot ({MIN_LOT}) risks "
+                f"${min_lot_risk:.2f} ({min_lot_risk_pct:.1%}) of the "
+                f"${balance:.2f} balance, above the {MAX_RISK_PCT:.0%} hard "
+                f"cap. Balance is too small to trade this pair/SL within "
+                f"the configured risk limit."
+            )
+            return AdvancedPositionResult(
+                lot=0.0, risk_amount_usd=round(min_lot_risk, 2),
+                risk_pct=round(min_lot_risk_pct, 4), base_lot=round(base_lot, 2),
+                kelly_result=kelly_res.to_dict(), volatility_result=vol_res.to_dict(),
+                confidence_result=conf_res.to_dict(), correlation_result=corr_res.to_dict(),
+                drawdown_mult=dd_mult, streak_mult=streak_mult,
+                profit_protection_mult=profit_mult, tier_mult=tier_mult, final_mult=0.0,
+                explanation=explanation, approved=False,
+                reject_reason=(
+                    f"Balance too small: minimum tradable risk ${min_lot_risk:.2f} "
+                    f"({min_lot_risk_pct:.1%}) exceeds {MAX_RISK_PCT:.0%} cap "
+                    f"(balance=${balance:.2f}, sl_pips={sl_pips:.1f})"
+                ),
+            )
+
         explanation.append(f"→ FINAL: lot={final_lot:.2f} | risk=${actual_risk:.0f} ({actual_risk_pct:.2%})")
 
         return AdvancedPositionResult(

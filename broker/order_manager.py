@@ -127,6 +127,31 @@ def _mt5_positions_get(retries: int = 2, delay: float = 0.3, **kwargs):
     return None
 
 
+def _supports_specified_expiration(broker_symbol: str) -> bool:
+    """Probe whether this broker/symbol accepts ORDER_TIME_SPECIFIED
+    (bitmask on symbol_info().expiration_mode, bit2 = SYMBOL_EXPIRATION_SPECIFIED).
+    Mirrors _resolve_filling_mode()'s defensive pattern above — same
+    reasoning: not all brokers support every expiration mode, and
+    blindly sending an unsupported one just trades a silent hang for a
+    noisy retcode=10030-style rejection. Falls back to False (caller
+    then uses GTC) on any probe failure — never blocks order placement.
+    """
+    if not MT5_AVAILABLE:
+        return False
+    try:
+        info = mt5.symbol_info(broker_symbol)
+        if info is None:
+            return False
+        mode = getattr(info, "expiration_mode", 0)  # bitmask: bit0=GTC,bit1=DAY,bit2=SPECIFIED,bit3=SPECIFIED_DAY
+        return bool(mode & 4)
+    except Exception as e:
+        log.warning(
+            f"[OrderManager] _supports_specified_expiration({broker_symbol}) raised: {e} "
+            f"— falling back to GTC"
+        )
+        return False
+
+
 def _resolve_filling_mode(broker_symbol: str):
     """Pick the most permissive filling mode the broker supports.
 
@@ -514,8 +539,19 @@ class OrderManager:
     def place_limit_order(
         self, symbol: str, price: float, direction: str, lot: float,
         sl: float = None, tp: float = None, comment: str = "ai_trader_limit",
+        expiration_minutes: float = None,
     ) -> dict:
-        """Pullback/support/breakout-retest entry-র জন্য — future price-এ pending order।"""
+        """Pullback/support/breakout-retest entry-র জন্য — future price-এ pending order।
+
+        expiration_minutes: NEW (pullback-limit-order routing, 2026-07-24).
+        If given, the pending order gets ORDER_TIME_SPECIFIED with an
+        expiration timestamp `expiration_minutes` from now — the BROKER
+        auto-cancels it if price never pulls back to `price` in time, so
+        the bot never accumulates stale pending orders waiting on a
+        pullback that stopped mattering (regime changed, session ended,
+        etc). If None, falls back to the original GTC (Good-Till-Cancel)
+        behavior, unchanged.
+        """
         validation = self._pre_trade_validate(symbol, direction, lot, sl, tp)
         if not validation["ok"]:
             return {"success": False, "reason": validation["reason"]}
@@ -536,9 +572,20 @@ class OrderManager:
             "tp":           tp or 0.0,
             "magic":        424242,
             "comment":      comment,
-            "type_time":    mt5.ORDER_TIME_GTC,
             "type_filling": filling_mode,
         }
+
+        if expiration_minutes and expiration_minutes > 0 and _supports_specified_expiration(broker_symbol):
+            import time as _time
+            request["type_time"] = mt5.ORDER_TIME_SPECIFIED
+            request["expiration"] = int(_time.time()) + int(expiration_minutes * 60)
+        else:
+            if expiration_minutes and expiration_minutes > 0:
+                log.info(
+                    f"[OrderManager] {broker_symbol} doesn't support ORDER_TIME_SPECIFIED "
+                    f"— falling back to GTC (pending order will need manual/periodic cleanup)"
+                )
+            request["type_time"] = mt5.ORDER_TIME_GTC
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             result = mt5.order_send(request)
@@ -549,13 +596,67 @@ class OrderManager:
                 continue
             outcome = self._check_confirmation(result, attempt)
             if outcome["success"]:
-                log.info(f"[OrderManager] ✅ LIMIT ORDER PLACED — {direction} {broker_symbol} @ {price}")
+                _exp_note = f", expires in {expiration_minutes:.0f}m" if expiration_minutes else " (GTC)"
+                log.info(f"[OrderManager] ✅ LIMIT ORDER PLACED — {direction} {broker_symbol} @ {price}{_exp_note}")
                 return outcome
             if not outcome.get("retryable", True):
                 return outcome
             self._wait_retry(attempt, outcome["reason"])
 
         return {"success": False, "reason": f"Limit order failed after {self.MAX_RETRIES} retries"}
+
+    # ─────────────────────────────────────────────
+    # FUNCTION 2a — CANCEL STALE PENDING ORDERS
+    # ─────────────────────────────────────────────
+    # Belt-and-suspenders for place_limit_order()'s expiration_minutes:
+    # some brokers silently ignore ORDER_TIME_SPECIFIED or the demo
+    # server never processes the expiry tick if there's no incoming
+    # quote for that symbol. This gives a second, broker-independent
+    # cleanup path — call once per cycle from the main loop.
+
+    def cancel_order(self, ticket: int) -> dict:
+        """Cancel a single pending order by ticket."""
+        request = {"action": mt5.TRADE_ACTION_REMOVE, "order": ticket}
+        result = mt5.order_send(request)
+        if result is None or not hasattr(result, "retcode"):
+            return {"success": False, "reason": "invalid API response on cancel"}
+        ok = result.retcode == mt5.TRADE_RETCODE_DONE
+        if ok:
+            log.info(f"[OrderManager] ✅ Pending order #{ticket} cancelled")
+        else:
+            log.warning(f"[OrderManager] Cancel failed for #{ticket} — retcode={result.retcode}")
+        return {"success": ok, "retcode": getattr(result, "retcode", None)}
+
+    def cancel_stale_pending_orders(
+        self, max_age_minutes: float = 30, comment_prefix: str = "ai_trader_limit"
+    ) -> dict:
+        """Cancel our own pending limit orders (magic=424242, comment
+        prefix matches place_limit_order's default) older than
+        max_age_minutes. Safe no-op if MT5 isn't connected or nothing's
+        stale. Returns {"cancelled": [...], "checked": n}."""
+        if not MT5_AVAILABLE:
+            return {"cancelled": [], "checked": 0}
+        try:
+            import time as _time
+            orders = mt5.orders_get()
+            if not orders:
+                return {"cancelled": [], "checked": 0}
+            now = _time.time()
+            cancelled = []
+            for o in orders:
+                if getattr(o, "magic", None) != 424242:
+                    continue
+                if not str(getattr(o, "comment", "")).startswith(comment_prefix):
+                    continue
+                age_min = (now - getattr(o, "time_setup", now)) / 60.0
+                if age_min >= max_age_minutes:
+                    res = self.cancel_order(o.ticket)
+                    if res.get("success"):
+                        cancelled.append(o.ticket)
+            return {"cancelled": cancelled, "checked": len(orders)}
+        except Exception as e:
+            log.warning(f"[OrderManager] cancel_stale_pending_orders raised: {e}")
+            return {"cancelled": [], "checked": 0, "error": str(e)}
 
     # ─────────────────────────────────────────────
     # FUNCTION 2b — PLACE STOP ORDER (Buy Stop / Sell Stop)

@@ -187,6 +187,7 @@ class TradePermission:
         # indecision, small candles, chasing, etc.) become confidence
         # penalties.  Entry quality alone NEVER rejects the trade.
         _eq_penalty = 0
+        _eq_result = None
         _conf_before_eq = conf
         if risk_out.get("approved"):
             try:
@@ -817,6 +818,15 @@ class TradePermission:
             # post-penalty number (see risk/trade_permission.py check()).
             "confidence_pre_penalty":  _confidence_pre_penalty,
             "confidence_post_penalty": _confidence_post_penalty,
+            # NEW (pullback-limit-order routing, 2026-07-24): expose the
+            # full entry-quality result so ExecutionRouter can see WHICH
+            # specific flags failed (e.g. chasing_filter / atr_extension)
+            # and route overextended entries to a pullback limit order
+            # instead of a market order. Previously this data died inside
+            # this function — only a folded confidence penalty escaped,
+            # so execution had no way to know a signal was a "good
+            # direction, bad timing" chase.
+            "entry_quality_detail": _eq_result,
         }
 
         # ── INSTITUTIONAL LOG FORMAT ────────────────────────────────
