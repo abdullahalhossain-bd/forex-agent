@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "timestamp": "2026-07-24 14:48:13",
+    "timestamp": "2026-07-24 15:21:11",
     "pairs": [
       "EURUSD",
       "GBPUSD",
@@ -32,7 +32,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 3.683869325056636,
+      "mc_95th_pct_drawdown": 3.6831033728122593,
       "mc_wr_ci_low": 0.27097222661692455,
       "mc_wr_ci_high": 0.3298182940037474,
       "wf_verdict": "fail",
@@ -40,14 +40,14 @@
       "wf_degradation": 0.027658689112695367,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 6.4
+      "backtest_time_seconds": 6.6
     },
     {
       "pair": "EURUSD",
@@ -66,7 +66,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.4062561298987624,
+      "mc_95th_pct_drawdown": 1.405586061665215,
       "mc_wr_ci_low": 0.338743582058776,
       "mc_wr_ci_high": 0.42503995657062604,
       "wf_verdict": "fail",
@@ -74,14 +74,14 @@
       "wf_degradation": 0.015746081956681424,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 9.8
+      "backtest_time_seconds": 5.1
     },
     {
       "pair": "EURUSD",
@@ -100,7 +100,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.005611830283147,
+      "mc_95th_pct_drawdown": 1.005602998257276,
       "mc_wr_ci_low": 0.27220094079178714,
       "mc_wr_ci_high": 0.3696833616897841,
       "wf_verdict": "fail",
@@ -108,14 +108,14 @@
       "wf_degradation": 0.029512650865331835,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 6.4
+      "backtest_time_seconds": 4.2
     },
     {
       "pair": "EURUSD",
@@ -134,7 +134,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.958364127004764,
+      "mc_95th_pct_drawdown": 1.9603810641968926,
       "mc_wr_ci_low": 0.26605977254883345,
       "mc_wr_ci_high": 0.33949350472091616,
       "wf_verdict": "fail",
@@ -142,14 +142,14 @@
       "wf_degradation": 0.004105090311986859,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.4
+      "backtest_time_seconds": 1.3
     },
     {
       "pair": "EURUSD",
@@ -168,7 +168,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.4869885131729506,
+      "mc_95th_pct_drawdown": 1.4876307728358014,
       "mc_wr_ci_low": 0.3415108903633582,
       "mc_wr_ci_high": 0.39865213773477376,
       "wf_verdict": "fail",
@@ -176,14 +176,14 @@
       "wf_degradation": -0.005551643498469205,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.8
+      "backtest_time_seconds": 4.6
     },
     {
       "pair": "EURUSD",
@@ -202,7 +202,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.8449026361558352,
+      "mc_95th_pct_drawdown": 0.8456332591319036,
       "mc_wr_ci_low": 0.3376539974201697,
       "mc_wr_ci_high": 0.41389543069178664,
       "wf_verdict": "fail",
@@ -210,14 +210,14 @@
       "wf_degradation": -0.019021363773899957,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 6.1
+      "backtest_time_seconds": 5.2
     },
     {
       "pair": "EURUSD",
@@ -235,8 +235,8 @@
       "p_value": 1.0,
       "is_significant": false,
       "bonferroni_significant": false,
-      "mc_probability_of_ruin": 0.5615,
-      "mc_95th_pct_drawdown": 0.5306410614549787,
+      "mc_probability_of_ruin": 0.5495,
+      "mc_95th_pct_drawdown": 0.5354681509877364,
       "mc_wr_ci_low": 0.27572658119852045,
       "mc_wr_ci_high": 0.378308307045398,
       "wf_verdict": "fail",
@@ -244,14 +244,14 @@
       "wf_degradation": -0.003409847335137328,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.3
+      "backtest_time_seconds": 10.3
     },
     {
       "pair": "EURUSD",
@@ -270,7 +270,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.717161156978022,
+      "mc_95th_pct_drawdown": 0.7152113542118086,
       "mc_wr_ci_low": 0.3258857745893595,
       "mc_wr_ci_high": 0.40282808277337967,
       "wf_verdict": "fail",
@@ -278,14 +278,14 @@
       "wf_degradation": -0.023734885803851302,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.9
+      "backtest_time_seconds": 1.7
     },
     {
       "pair": "GBPUSD",
@@ -304,7 +304,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 3.130442108299873,
+      "mc_95th_pct_drawdown": 3.1316245593904437,
       "mc_wr_ci_low": 0.29240534558153997,
       "mc_wr_ci_high": 0.3506112912589813,
       "wf_verdict": "fail",
@@ -312,14 +312,14 @@
       "wf_degradation": 0.023068734170320848,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 6.5
+      "backtest_time_seconds": 5.2
     },
     {
       "pair": "GBPUSD",
@@ -338,7 +338,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.483942335071236,
+      "mc_95th_pct_drawdown": 1.4845248466704648,
       "mc_wr_ci_low": 0.3050102531177989,
       "mc_wr_ci_high": 0.3848078518139832,
       "wf_verdict": "fail",
@@ -346,14 +346,14 @@
       "wf_degradation": 0.021765988874599018,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.7
+      "backtest_time_seconds": 9.6
     },
     {
       "pair": "GBPUSD",
@@ -368,11 +368,11 @@
       "max_drawdown_r": 181.69,
       "n_gap_losses": 6,
       "avg_cost_pips": 5.23,
-      "p_value": 1.0,
+      "p_value": 0.995,
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.9033808102504085,
+      "mc_95th_pct_drawdown": 0.9054995148454402,
       "mc_wr_ci_low": 0.2870329102440308,
       "mc_wr_ci_high": 0.37950137304036075,
       "wf_verdict": "fail",
@@ -380,7 +380,7 @@
       "wf_degradation": 0.0045781762152432015,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
@@ -406,7 +406,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.6876252119036763,
+      "mc_95th_pct_drawdown": 1.6877930271966477,
       "mc_wr_ci_low": 0.2676668652114999,
       "mc_wr_ci_high": 0.34121507638508736,
       "wf_verdict": "fail",
@@ -414,14 +414,14 @@
       "wf_degradation": -0.010673234811165888,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.4
+      "backtest_time_seconds": 1.9
     },
     {
       "pair": "GBPUSD",
@@ -440,7 +440,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.3003624547351358,
+      "mc_95th_pct_drawdown": 1.301738324968872,
       "mc_wr_ci_low": 0.332642311185192,
       "mc_wr_ci_high": 0.38904163382099194,
       "wf_verdict": "fail",
@@ -448,14 +448,14 @@
       "wf_degradation": 0.008964301933814256,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.0
+      "backtest_time_seconds": 7.9
     },
     {
       "pair": "GBPUSD",
@@ -470,11 +470,11 @@
       "max_drawdown_r": 114.26,
       "n_gap_losses": 0,
       "avg_cost_pips": 5.2,
-      "p_value": 1.0,
+      "p_value": 0.9995,
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.6180207692299582,
+      "mc_95th_pct_drawdown": 0.6155858569572034,
       "mc_wr_ci_low": 0.34151353542009755,
       "mc_wr_ci_high": 0.4181649273534467,
       "wf_verdict": "fail",
@@ -482,14 +482,14 @@
       "wf_degradation": 0.011368186431572669,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.4
+      "backtest_time_seconds": 9.4
     },
     {
       "pair": "GBPUSD",
@@ -504,25 +504,25 @@
       "max_drawdown_r": 50.14,
       "n_gap_losses": 0,
       "avg_cost_pips": 5.2,
-      "p_value": 1.0,
+      "p_value": 0.6381,
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 0.0,
-      "mc_95th_pct_drawdown": 0.3677239957367265,
+      "mc_95th_pct_drawdown": 0.3743849423818763,
       "mc_wr_ci_low": 0.29360617888631346,
       "mc_wr_ci_high": 0.3913388357278159,
-      "wf_verdict": "fail",
+      "wf_verdict": "marginal",
       "wf_oos_wr": 0.33627540895432423,
       "wf_degradation": 0.01685865903584377,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 4.6
+      "backtest_time_seconds": 7.6
     },
     {
       "pair": "GBPUSD",
@@ -541,7 +541,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.7050840232238536,
+      "mc_95th_pct_drawdown": 0.7026740628841406,
       "mc_wr_ci_low": 0.3177592035282798,
       "mc_wr_ci_high": 0.3943113322002716,
       "wf_verdict": "fail",
@@ -549,14 +549,14 @@
       "wf_degradation": -0.00738916256157629,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.3
+      "backtest_time_seconds": 2.1
     },
     {
       "pair": "USDJPY",
@@ -575,7 +575,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 3.170960991667762,
+      "mc_95th_pct_drawdown": 3.171348145222469,
       "mc_wr_ci_low": 0.3002749922583758,
       "mc_wr_ci_high": 0.3583776749878846,
       "wf_verdict": "fail",
@@ -583,14 +583,14 @@
       "wf_degradation": 0.002883501556662005,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.1
+      "backtest_time_seconds": 8.4
     },
     {
       "pair": "USDJPY",
@@ -609,7 +609,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 2.228070962002514,
+      "mc_95th_pct_drawdown": 2.2282291695694414,
       "mc_wr_ci_low": 0.27552158230375196,
       "mc_wr_ci_high": 0.34633833021170907,
       "wf_verdict": "fail",
@@ -617,14 +617,14 @@
       "wf_degradation": 0.002013146727170345,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.2
+      "backtest_time_seconds": 8.9
     },
     {
       "pair": "USDJPY",
@@ -643,7 +643,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.2455231749890783,
+      "mc_95th_pct_drawdown": 1.2444367748358618,
       "mc_wr_ci_low": 0.23683622592527256,
       "mc_wr_ci_high": 0.33038694303529864,
       "wf_verdict": "fail",
@@ -651,14 +651,14 @@
       "wf_degradation": -0.00858189350518379,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 4.5
+      "backtest_time_seconds": 7.1
     },
     {
       "pair": "USDJPY",
@@ -677,7 +677,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.7396108384928077,
+      "mc_95th_pct_drawdown": 1.7396060269220177,
       "mc_wr_ci_low": 0.277321361357165,
       "mc_wr_ci_high": 0.3515325662004475,
       "wf_verdict": "fail",
@@ -685,14 +685,14 @@
       "wf_degradation": 0.015599343185550119,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.4
+      "backtest_time_seconds": 2.2
     },
     {
       "pair": "USDJPY",
@@ -711,7 +711,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.839090392112433,
+      "mc_95th_pct_drawdown": 1.8365190574408168,
       "mc_wr_ci_low": 0.28716012819181286,
       "mc_wr_ci_high": 0.3412080390788805,
       "wf_verdict": "fail",
@@ -719,14 +719,14 @@
       "wf_degradation": 0.020837515078972246,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 4.8
+      "backtest_time_seconds": 7.7
     },
     {
       "pair": "USDJPY",
@@ -745,7 +745,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 1.2861784128951936,
+      "mc_95th_pct_drawdown": 1.286068064646704,
       "mc_wr_ci_low": 0.26879239794866183,
       "mc_wr_ci_high": 0.3364939915337909,
       "wf_verdict": "fail",
@@ -753,14 +753,14 @@
       "wf_degradation": 0.022036797271611452,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 5.3
+      "backtest_time_seconds": 9.4
     },
     {
       "pair": "USDJPY",
@@ -779,7 +779,7 @@
       "is_significant": false,
       "bonferroni_significant": false,
       "mc_probability_of_ruin": 1.0,
-      "mc_95th_pct_drawdown": 0.5719972358193571,
+      "mc_95th_pct_drawdown": 0.5733039610334288,
       "mc_wr_ci_low": 0.2754133263884754,
       "mc_wr_ci_high": 0.3674814445779072,
       "wf_verdict": "fail",
@@ -787,14 +787,14 @@
       "wf_degradation": -0.004893116955107857,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "probability_of_ruin",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 4.3
+      "backtest_time_seconds": 7.6
     },
     {
       "pair": "USDJPY",
@@ -809,11 +809,11 @@
       "max_drawdown_r": 83.59,
       "n_gap_losses": 3,
       "avg_cost_pips": 5.21,
-      "p_value": 1.0,
+      "p_value": 0.9881,
       "is_significant": false,
       "bonferroni_significant": false,
-      "mc_probability_of_ruin": 0.0135,
-      "mc_95th_pct_drawdown": 0.472587044422241,
+      "mc_probability_of_ruin": 0.0105,
+      "mc_95th_pct_drawdown": 0.46770817221609384,
       "mc_wr_ci_low": 0.33076773411951743,
       "mc_wr_ci_high": 0.4079321162237345,
       "wf_verdict": "fail",
@@ -821,13 +821,13 @@
       "wf_degradation": -0.011867442901925651,
       "deployment_verdict": "BLOCKED \u2014 DO NOT DEPLOY",
       "blocking_failures": [
-        "win_rate_ci",
+        "expectancy_ci",
         "bonferroni_significance",
         "walk_forward",
         "max_drawdown_95",
         "profit_factor"
       ],
-      "backtest_time_seconds": 1.3
+      "backtest_time_seconds": 1.9
     }
   ]
 }

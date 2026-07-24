@@ -5497,5 +5497,31 @@
     "recommendation": "Final decision: NO TRADE",
     "has_conflict": false,
     "result": null
+  },
+  {
+    "time": "2026-07-24T15:50:35",
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "price": 1.13858,
+    "trend": "bullish",
+    "rsi": 51.10133,
+    "bias": "NO TRADE",
+    "confidence": 44.0,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
+  },
+  {
+    "time": "2026-07-24T16:20:08",
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "price": 1.1388,
+    "trend": "bullish",
+    "rsi": 54.13271,
+    "bias": "NO TRADE",
+    "confidence": 41.8,
+    "recommendation": "Final decision: NO TRADE",
+    "has_conflict": false,
+    "result": null
   }
 ]

@@ -14213,5 +14213,61 @@
     "outcome": null,
     "pnl_pips": null,
     "result": null
+  },
+  {
+    "id": 424,
+    "timestamp": "2026-07-24T09:50:35.130945+00:00",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 44.0,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "RANGING",
+    "trend": "bullish",
+    "rsi": 51.10133,
+    "patterns": [],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "SignalFusion gate: WAIT (consensus=0/3, conf=0%) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
+  },
+  {
+    "id": 425,
+    "timestamp": "2026-07-24T10:20:08.555969+00:00",
+    "symbol": "EURUSD",
+    "timeframe": "15m",
+    "decision": "NO TRADE",
+    "raw_signal": "NO TRADE",
+    "gated": true,
+    "confidence": 41.8,
+    "entry": null,
+    "sl": null,
+    "tp": null,
+    "lot": 0,
+    "rr": 0,
+    "regime": "RANGING",
+    "trend": "bullish",
+    "rsi": 54.13271,
+    "patterns": [
+      "three_bar_continuation_bullish"
+    ],
+    "rule_signal": "WAIT",
+    "llm_signal": "WAIT",
+    "reasons": [
+      "SignalFusion gate: WAIT (consensus=0/3, conf=0%) (analysis confidence preserved)"
+    ],
+    "outcome": null,
+    "pnl_pips": null,
+    "result": null
   }
 ]

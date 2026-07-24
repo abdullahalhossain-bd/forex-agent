@@ -117,7 +117,7 @@ class HonestResult:
     total_cost_pips: float = 0.0
     avg_cost_per_trade_pips: float = 0.0
     # Statistical significance
-    p_value: float = 1.0            # binomial test vs 50% null
+    p_value: float = 1.0            # t-test: mean R-multiple > 0 (expectancy)
     is_significant: bool = False    # p < 0.05 (uncorrected)
     bonferroni_significant: bool = False  # p < 0.05/n_tests
     # Equity curve
@@ -524,13 +524,32 @@ class HonestBacktester:
         result.total_cost_pips = sum(total_costs)
         result.avg_cost_per_trade_pips = float(np.mean(total_costs)) if total_costs else 0.0
 
-        # Statistical significance (binomial test vs 50%)
-        # H0: true win rate = 50%
-        # H1: true win rate ≠ 50%
-        from scipy.stats import binomtest
+        # Statistical significance — test EXPECTANCY, not raw win rate.
+        #
+        # BUG (fixed): this used to run `binomtest(n_wins, n_trades, p=0.5,
+        # alternative="greater")` — i.e. H0: win rate = 50%. That null is
+        # only correct for a 1:1 payoff strategy. These strategies use
+        # ~2:1 R:R (TP=3xATR/SL=1.5xATR, or 4x/2x for donchian), whose
+        # breakeven win rate is ~33%, not 50%. Testing WR vs 50% meant
+        # p-value was ~1.0 for every strategy regardless of real edge,
+        # since none of them were designed to hit 50%+ win rate.
+        #
+        # Fix: one-sample t-test on the R-multiples themselves.
+        # H0: mean R-multiple = 0 (no edge, whatever the win rate/R:R is)
+        # H1: mean R-multiple > 0 (positive expectancy)
+        # This is R:R-agnostic and directly answers "is there an edge".
+        from scipy.stats import ttest_1samp
         try:
-            bt = binomtest(result.n_wins, result.n_trades, p=0.5, alternative="greater")
-            result.p_value = bt.pvalue
+            r_arr = np.array(r_values)
+            if len(r_arr) >= 2 and np.std(r_arr, ddof=1) > 0:
+                t_stat, two_sided_p = ttest_1samp(r_arr, popmean=0.0)
+                # one-sided p-value for H1: mean > 0
+                if t_stat > 0:
+                    result.p_value = float(two_sided_p / 2)
+                else:
+                    result.p_value = float(1 - two_sided_p / 2)
+            else:
+                result.p_value = 1.0
             result.is_significant = result.p_value < 0.05
             # Bonferroni: divide alpha by number of comparisons
             bonferroni_alpha = 0.05 / max(n_comparisons, 1)
@@ -738,6 +757,11 @@ class MonteCarloValidator:
         }
 
         # Win rate confidence interval (Wilson score)
+        # NOTE: this is informational only. It answers "what's the win rate
+        # range", not "is there an edge" — for asymmetric R:R strategies a
+        # win rate well under 50% can still be profitable, so the deployment
+        # gate no longer uses win_rate_ci_low as a pass/fail threshold (see
+        # expectancy_ci_low below, which is the correct gate).
         # FIX: guard against n=0 division (defensive — validate() checks
         # `if not trades` earlier, but r_values could theoretically be empty
         # if all trades had NaN r_multiple)
@@ -755,6 +779,23 @@ class MonteCarloValidator:
             results["win_rate"] = wr
             results["win_rate_ci_low"] = max(0.0, center - margin)
             results["win_rate_ci_high"] = min(1.0, center + margin)
+
+        # Expectancy confidence interval (bootstrap on mean R-multiple).
+        # This is the R:R-agnostic edge test: does the CI for the average
+        # R-multiple per trade exclude zero? Used by DeploymentGate instead
+        # of win_rate_ci, which was the wrong gate for ~2:1 R:R strategies.
+        if n >= 2:
+            boot_means = np.empty(self.n_simulations)
+            for i in range(self.n_simulations):
+                sample = np.random.choice(r_values, size=n, replace=True)
+                boot_means[i] = np.mean(sample)
+            results["expectancy_mean"] = float(np.mean(r_values))
+            results["expectancy_ci_low"] = float(np.percentile(boot_means, 2.5))
+            results["expectancy_ci_high"] = float(np.percentile(boot_means, 97.5))
+        else:
+            results["expectancy_mean"] = float(np.mean(r_values)) if n else 0.0
+            results["expectancy_ci_low"] = 0.0
+            results["expectancy_ci_high"] = 0.0
 
         return results
 
@@ -845,10 +886,20 @@ class WalkForwardValidator:
         oos_avg_wr = np.mean([r["win_rate"] for r in oos_results if r["n_trades"] > 0]) if oos_results else 0
         degradation = is_avg_wr - oos_avg_wr
 
-        # Verdict
-        if oos_avg_wr >= 0.50 and degradation < 0.10:
+        # BUG (fixed): verdict used to require oos_avg_wr >= 0.50, i.e. the
+        # same 50%-win-rate null used in _compute_stats(). These strategies
+        # run at ~2:1 R:R (breakeven WR ~33%), so gating pass/fail on a raw
+        # 50% win rate meant "fail" was baked in regardless of the strategy's
+        # real edge. Verdict now uses EXPECTANCY (avg R-multiple) OOS, which
+        # is the right measure for asymmetric R:R strategies, plus a check
+        # that OOS expectancy hasn't degraded much vs IS (overfitting check).
+        is_avg_r = np.mean([r["avg_r"] for r in is_results if r["n_trades"] > 0]) if is_results else 0
+        oos_avg_r = np.mean([r["avg_r"] for r in oos_results if r["n_trades"] > 0]) if oos_results else 0
+        r_degradation = is_avg_r - oos_avg_r  # positive = OOS worse than IS
+
+        if oos_avg_r > 0 and r_degradation < 0.10:
             verdict = "pass"
-        elif oos_avg_wr >= 0.45 and degradation < 0.15:
+        elif oos_avg_r > -0.05 and r_degradation < 0.20:
             verdict = "marginal"
         else:
             verdict = "fail"
@@ -857,8 +908,11 @@ class WalkForwardValidator:
             "n_splits": len(splits),
             "in_sample_avg_wr": is_avg_wr,
             "out_of_sample_avg_wr": oos_avg_wr,
+            "in_sample_avg_r": is_avg_r,
+            "out_of_sample_avg_r": oos_avg_r,
+            "r_degradation": r_degradation,
             "degradation": degradation,
-            "is_degraded": degradation > 0.10,
+            "is_degraded": r_degradation > 0.10,
             "verdict": verdict,
             "in_sample_results": is_results,
             "out_of_sample_results": oos_results,
@@ -901,13 +955,22 @@ class DeploymentGate:
             "severity": "BLOCKING",
         })
 
-        # 2. Win rate CI
-        wr_low = monte_carlo.get("win_rate_ci_low", 0)
+        # 2. Expectancy CI (was: win_rate_ci > 50%)
+        #
+        # BUG (fixed): this used to require win_rate_ci_low > 0.50 — i.e.
+        # the bootstrap lower bound of the raw win rate had to clear 50%.
+        # That's only correct for a 1:1 payoff. These strategies run at
+        # ~2:1 R:R (breakeven WR ~33%), so this gate blocked every strategy
+        # by construction, independent of whether it actually had an edge.
+        # Fix: gate on the expectancy CI (mean R-multiple) instead — the
+        # lower bound of the bootstrap CI must be > 0, i.e. even in a
+        # pessimistic resample the strategy still makes money per trade.
+        exp_low = monte_carlo.get("expectancy_ci_low", -1.0)
         checks.append({
-            "name": "win_rate_ci",
-            "passed": wr_low > 0.50,
-            "value": f"{wr_low*100:.1f}% (lower bound)",
-            "required": "> 50%",
+            "name": "expectancy_ci",
+            "passed": exp_low > 0,
+            "value": f"{exp_low:+.3f}R (lower bound)",
+            "required": "> 0R",
             "severity": "BLOCKING",
         })
 

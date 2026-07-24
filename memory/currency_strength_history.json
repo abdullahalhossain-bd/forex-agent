@@ -14590,5 +14590,261 @@
     "momentum": "UP",
     "timeframe": "1h",
     "timestamp": "2026-07-24T07:31:07.560998"
+  },
+  {
+    "id": 1825,
+    "currency": "USD",
+    "strength_score": 38.6,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1826,
+    "currency": "EUR",
+    "strength_score": 100.0,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1827,
+    "currency": "GBP",
+    "strength_score": 13.0,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1828,
+    "currency": "JPY",
+    "strength_score": 43.5,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1829,
+    "currency": "AUD",
+    "strength_score": 79.3,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1830,
+    "currency": "CAD",
+    "strength_score": 58.5,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1831,
+    "currency": "CHF",
+    "strength_score": 15.0,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1832,
+    "currency": "NZD",
+    "strength_score": 0.0,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:37:26.369097"
+  },
+  {
+    "id": 1833,
+    "currency": "USD",
+    "strength_score": 47.7,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1834,
+    "currency": "EUR",
+    "strength_score": 76.4,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1835,
+    "currency": "GBP",
+    "strength_score": 0.0,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1836,
+    "currency": "JPY",
+    "strength_score": 49.3,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1837,
+    "currency": "AUD",
+    "strength_score": 100.0,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1838,
+    "currency": "CAD",
+    "strength_score": 31.1,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1839,
+    "currency": "CHF",
+    "strength_score": 48.6,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1840,
+    "currency": "NZD",
+    "strength_score": 57.8,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T09:50:41.440805"
+  },
+  {
+    "id": 1841,
+    "currency": "USD",
+    "strength_score": 29.4,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1842,
+    "currency": "EUR",
+    "strength_score": 69.3,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1843,
+    "currency": "GBP",
+    "strength_score": 0.0,
+    "momentum": "FLAT",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1844,
+    "currency": "JPY",
+    "strength_score": 36.8,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1845,
+    "currency": "AUD",
+    "strength_score": 100.0,
+    "momentum": "FLAT",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1846,
+    "currency": "CAD",
+    "strength_score": 34.0,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1847,
+    "currency": "CHF",
+    "strength_score": 35.3,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1848,
+    "currency": "NZD",
+    "strength_score": 68.2,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:02:00.783307"
+  },
+  {
+    "id": 1849,
+    "currency": "USD",
+    "strength_score": 11.6,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1850,
+    "currency": "EUR",
+    "strength_score": 66.8,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1851,
+    "currency": "GBP",
+    "strength_score": 0.0,
+    "momentum": "FLAT",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1852,
+    "currency": "JPY",
+    "strength_score": 31.1,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1853,
+    "currency": "AUD",
+    "strength_score": 100.0,
+    "momentum": "FLAT",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1854,
+    "currency": "CAD",
+    "strength_score": 48.1,
+    "momentum": "UP",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1855,
+    "currency": "CHF",
+    "strength_score": 31.8,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
+  },
+  {
+    "id": 1856,
+    "currency": "NZD",
+    "strength_score": 64.6,
+    "momentum": "DOWN",
+    "timeframe": "1h",
+    "timestamp": "2026-07-24T10:20:14.678317"
   }
 ]

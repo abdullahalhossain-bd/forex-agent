@@ -1363,3 +1363,5 @@ timestamp,cycle,symbol,timeframe,session,decision,confidence,entry,sl,tp1,tp2,lo
 2026-07-23T20:15:04+00:00,13,EURNZD,15m,New York,NO TRADE,43.0,1.97092,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
 2026-07-23T20:15:51+00:00,14,GBPJPY,15m,New York,NO TRADE,73.0,218.156,218.02361,218.42078,,0.0,2.0,0.0,LiveRiskManager gate: Position sizing: Loss streak 3 — trading halted,,,,0.0,0.0,
 2026-07-24T07:30:58+00:00,3,USDJPY,15m,London/Tokyo,NO TRADE,10.200000000000003,163.77,,,,0.0,0.0,0.0,Signal is WAIT — no trade,,,,0.0,0.0,
+2026-07-24T09:50:35+00:00,1,EURUSD,15m,London,NO TRADE,44.0,1.13858,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
+2026-07-24T10:20:09+00:00,1,EURUSD,15m,London,NO TRADE,41.8,1.1388,,,,0.0,0.0,0.0,Signal is NO TRADE — no trade,,,,0.0,0.0,
