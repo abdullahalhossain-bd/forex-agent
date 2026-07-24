@@ -499,6 +499,87 @@ class TradePermission:
                 })
         # ── END REVENGE TRADING DETECTOR ───────────────────────────
 
+        # ── COST-AWARE EXPECTED-VALUE GATE (book_guardrails.py) ─────
+        # 2026-07-24: book_guardrails.check_cost_aware_ev() existed in the
+        # repo but was never imported/called anywhere (0 importers — audit
+        # confirmed). Its other two guardrails (correlation, anti-revenge)
+        # are redundant with correlation_manager.py / streak_tracker.py,
+        # which ARE wired — so only this one is being added here. This is
+        # an ACTUAL blocking gate (unlike the advisory scoring below),
+        # because a trade whose expected profit doesn't clear spread +
+        # commission + slippage is a losing trade by construction, not a
+        # matter of opinion. It matters most on a small/cent account where
+        # fixed per-trade costs are a large fraction of the account, so a
+        # marginal-edge signal that would be a rounding error on a $10k
+        # account can be a meaningful, recurring drag on a $5 one.
+        if risk_out.get("approved"):
+            try:
+                from risk.book_guardrails import check_cost_aware_ev
+                from core.constants import get_pip_size
+
+                _ev_symbol = str(
+                    decision_out.get("_symbol", "") or risk_out.get("symbol", "")
+                ).upper()
+                _ev_pip_size = get_pip_size(_ev_symbol) or 0.0001
+                _ev_entry = float(risk_out.get("entry", 0) or 0)
+                _ev_sl = float(risk_out.get("sl_price", 0) or 0)
+                _ev_tp = float(risk_out.get("tp_price", 0) or 0)
+                _ev_sl_pips = abs(_ev_entry - _ev_sl) / _ev_pip_size if _ev_sl else 20.0
+                _ev_tp_pips = abs(_ev_tp - _ev_entry) / _ev_pip_size if _ev_tp else 40.0
+
+                # Win probability proxy: decision confidence (0-100) → 0-1.
+                # This is an approximation, not a calibrated probability —
+                # same limitation the Kelly calculator already has
+                # elsewhere in this codebase (see kelly_calculator.py).
+                _ev_confidence = float(decision_out.get("confidence", 50) or 50)
+                _ev_win_prob = max(0.0, min(1.0, _ev_confidence / 100.0))
+
+                _ev_spread = float(
+                    (session_ctx or {}).get("spread_pips", 0)
+                    or risk_out.get("spread_pips", 0) or 0
+                )
+                _ev_kwargs = dict(
+                    expected_pnl_pips=None,  # computed from win_prob + SL/TP inside
+                    pair=_ev_symbol or "EURUSD",
+                    win_probability=_ev_win_prob,
+                    sl_pips=_ev_sl_pips,
+                    tp_pips=_ev_tp_pips,
+                )
+                if _ev_spread > 0:
+                    _ev_kwargs["spread_pips"] = _ev_spread
+                # else: let check_cost_aware_ev fall back to its own
+                # DEFAULT_SPREAD_PIPS lookup for the symbol.
+
+                _ev_result = check_cost_aware_ev(**_ev_kwargs)
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": _ev_result.passed,
+                    "detail": _ev_result.reason,
+                })
+            except ImportError:
+                log.debug("[TradePermission] book_guardrails not available - skipping EV gate")
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": True,
+                    "detail": "SKIPPED — book_guardrails module not importable",
+                })
+            except Exception as _ev_e:
+                # Fail-open (non-fatal), matching the pattern every other
+                # optional gate in this function uses (revenge trading,
+                # entry_quality, etc.) — a bug in an advisory-adjacent
+                # module should degrade to "not applied this cycle", not
+                # halt trading entirely.
+                log.warning(
+                    "[TradePermission] Cost-aware EV check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_ev_e}",
+                })
+        # ── END COST-AWARE EV GATE ──────────────────────────────────
+
         # ── ADVISORY SCORING: entry_score.py + institutional_entry_
         # framework.py (wired in — were orphaned code, 0 importers per
         # core/obsolete.py audit 2026-07-22) ───────────────────────────

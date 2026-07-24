@@ -447,13 +447,32 @@ class AITrader:
             direction = dec_out.get("decision") or risk_out.get("signal") or "WAIT"
             confidence = float(dec_out.get("confidence", 0) or 0)
 
-            # Pip value per lot — RiskEngine uses get_pip_value_usd(symbol).
-            # We approximate with the same lookup so the sizer stays in sync.
+            # Pip value per lot — MUST be in the same unit as self.balance.
+            # 2026-07-24: switched from the static USD table to a live MT5
+            # lookup (get_live_pip_value_per_lot). The static table assumes
+            # a real-USD Standard account; on a Cent account both balance
+            # and pip value are reported in cents by MT5, and mixing a
+            # cents-denominated balance with a real-USD pip value produces
+            # a ~100x error in every risk-% calculation downstream. The
+            # live lookup pulls tick value from the same MT5 session that
+            # already supplies self.balance, so the two stay unit-consistent
+            # regardless of account currency/type. Falls back to the static
+            # table (with a warning) only if MT5 is unreachable.
             try:
-                from core.constants import get_pip_value_usd
-                pip_value = get_pip_value_usd(self.symbol)
+                from core.constants import get_live_pip_value_per_lot
+                mt5_conn = self._resolve_mt5_connection() if hasattr(self, "_resolve_mt5_connection") else None
+                pip_value = get_live_pip_value_per_lot(self.symbol, mt5_conn=mt5_conn)
             except Exception as e:
-                pip_value = 10.0  # safe default for non-JPY majors
+                try:
+                    from core.constants import get_pip_value_usd
+                    pip_value = get_pip_value_usd(self.symbol)
+                    log.warning(
+                        f"[Trader] get_live_pip_value_per_lot failed ({e}) — "
+                        f"using static USD pip value {pip_value}. If this is "
+                        f"a Cent account, sizing will be wrong by ~100x."
+                    )
+                except Exception:
+                    pip_value = 10.0  # last-resort default for non-JPY majors
 
             # ATR + median ATR for volatility adjustment.
             atr = float(ind.get("atr", 0.0005) or 0.0005)
@@ -663,10 +682,15 @@ class AITrader:
                 risk_out["approved"] = True
                 risk_out["lot"] = 0.01
                 try:
-                    from core.constants import get_pip_value_usd
-                    _pip_value = get_pip_value_usd(self.symbol)
+                    from core.constants import get_live_pip_value_per_lot
+                    mt5_conn = self._resolve_mt5_connection() if hasattr(self, "_resolve_mt5_connection") else None
+                    _pip_value = get_live_pip_value_per_lot(self.symbol, mt5_conn=mt5_conn)
                 except Exception:
-                    _pip_value = 10.0  # safe fallback ~EURUSD pip value
+                    try:
+                        from core.constants import get_pip_value_usd
+                        _pip_value = get_pip_value_usd(self.symbol)
+                    except Exception:
+                        _pip_value = 10.0  # last-resort fallback ~EURUSD pip value
                 _sl_pips = float(risk_out.get("sl_pips", 30) or 30)
                 risk_out["risk_usd"] = round(0.01 * _sl_pips * _pip_value, 2)
                 risk_out["risk_pc"] = 1.0
@@ -1256,6 +1280,24 @@ class AITrader:
                     # Keep the risk-sizing balance synced to the real,
                     # authoritative broker balance (see _sync_balance()).
                     self._sync_balance(live_balance=acct.balance)
+
+                    # 2026-07-24: log the account currency/unit once at
+                    # connect time — makes Cent vs Standard visible in the
+                    # logs instead of silently inferred, so a misconfigured
+                    # or unexpectedly-wrong account type is caught by
+                    # reading the log rather than by a mis-sized trade.
+                    if not getattr(self, "_account_currency_logged", False):
+                        acct_currency = getattr(acct, "currency", "?")
+                        is_cent_like = str(acct_currency).upper() in ("USC", "CENT", "EURC")
+                        log.info(
+                            f"[Trader] MT5 account currency: {acct_currency} "
+                            f"({'CENT/micro-denominated' if is_cent_like else 'standard'}) "
+                            f"| balance={acct.balance} | login={getattr(acct, 'login', '?')} "
+                            f"| server={getattr(acct, 'server', '?')} — "
+                            f"position sizing now uses live tick-value pip pricing "
+                            f"in this same unit (see get_live_pip_value_per_lot)."
+                        )
+                        self._account_currency_logged = True
                     if equity_ratio < 0.90:
                         log.critical(
                             f"[Trader] EQUITY STOP: equity=${acct.equity:.0f} "
@@ -2343,7 +2385,22 @@ class AITrader:
                                 if info:
                                     pip_size = info.point * (10 if info.digits in (3, 5) else 1)
                                     pips = abs(entry - sl) / pip_size if pip_size else 0.0
-                                    pip_value = get_pip_value_usd(p.symbol)
+                                    # 2026-07-24: compute pip value live from the same
+                                    # `info` object (tick_value/tick_size), in the
+                                    # account's own currency/unit — see
+                                    # get_live_pip_value_per_lot() for why the static
+                                    # USD table is wrong on Cent accounts.
+                                    tick_value = float(getattr(info, "trade_tick_value", 0) or 0)
+                                    tick_size = float(getattr(info, "trade_tick_size", 0) or 0)
+                                    if tick_value > 0 and tick_size > 0:
+                                        pip_value = tick_value * (pip_size / tick_size)
+                                    else:
+                                        pip_value = get_pip_value_usd(p.symbol)
+                                        log.warning(
+                                            f"[Sizing] {p.symbol}: symbol_info missing "
+                                            f"tick_value/tick_size — falling back to "
+                                            f"static USD pip value (wrong on Cent accounts)"
+                                        )
                                     risk_usd = round(pips * pip_value * volume, 2)
                         except Exception as e:
                             log.warning(f"[Sizing] risk_usd estimate failed for {p.symbol}: {e}")

@@ -154,9 +154,100 @@ def get_pip_size(symbol: str) -> float:
 
 
 def get_pip_value_usd(symbol: str) -> float:
-    """Get per-standard-lot pip value in USD for a symbol."""
+    """Get per-standard-lot pip value in USD for a symbol.
+
+    WARNING: this is a STATIC table, hardcoded in real USD. It is only
+    correct on a real-money, USD-denominated Standard account. On a
+    Cent account, MT5's own account_info().balance is reported in
+    cents (e.g. $5 shows as ~500), but this table still returns a
+    real-USD pip value (~10.0) — mixing the two produces a ~100x unit
+    mismatch in every risk-% calculation downstream (position_sizer,
+    risk_engine, etc.), which can silently size a position at roughly
+    100x the intended risk. Use get_live_pip_value_per_lot() instead
+    whenever a live MT5 connection is available; this function should
+    only be the last-resort fallback when MT5 is unreachable.
+    """
     clean = symbol.upper().replace("/", "").replace("=X", "").strip()
     return PIP_VALUE_USD.get(clean, PIP_VALUE_USD["DEFAULT"])
+
+
+def get_live_pip_value_per_lot(symbol: str, mt5_conn=None) -> float:
+    """Get per-standard-lot pip value in the ACCOUNT'S OWN currency/unit,
+    read live from the broker via MT5 symbol_info().
+
+    Why this exists (2026-07-24, added for cent-account real-money use):
+    get_pip_value_usd() above is a static USD table. It is silently
+    wrong on any account whose deposit currency/unit isn't real USD at
+    1:1 — the most common case being a Cent account (Exness "Cent"
+    accounts and similar), where balance, equity, and pip value are all
+    reported in cents (~100x the real-USD figures). Because
+    account_info().balance and this pip value must be in the SAME unit
+    for risk-% math (risk_amount = balance * risk_pct;
+    lot = risk_amount / (sl_pips * pip_value_per_lot)) to mean anything,
+    pulling both from the SAME live MT5 source (symbol_info(), which
+    always reports in the account's actual deposit currency/unit)
+    removes the mismatch entirely — this works correctly whether the
+    account is Standard, Cent, JPY-denominated, or anything else,
+    without needing to special-case "is this a cent account?" anywhere.
+
+    Formula: pip_value_per_lot = trade_tick_value * (pip_size / trade_tick_size)
+      - trade_tick_value: account-currency value of one tick move, for
+        1.0 lot (this is what makes the result unit-safe — MT5 computes
+        it in whatever the account actually uses).
+      - trade_tick_size / pip_size: converts "per tick" to "per pip"
+        (a pip is usually a whole number of ticks, e.g. 10 on a
+        5-digit-quote broker).
+
+    Args:
+        symbol: trading symbol, e.g. "EURUSD".
+        mt5_conn: an already-connected MT5 connector/session exposing
+            .symbol_info(symbol). If None, tries to resolve the shared
+            connection via core.service_registry; if that also fails,
+            falls back to the static USD table with a loud warning
+            (never fails silently — a silent fallback here is exactly
+            the bug this function exists to prevent).
+
+    Returns:
+        Pip value per 1.0 lot, in the account's own currency/unit.
+    """
+    import logging
+    log = logging.getLogger("core.constants")
+
+    try:
+        if mt5_conn is None:
+            from core.service_registry import get_registry
+            mt5_conn = get_registry().try_resolve("mt5_connection")
+
+        if mt5_conn is None:
+            raise RuntimeError("no MT5 connection available")
+
+        info = mt5_conn.symbol_info(symbol)
+        tick_value = float(getattr(info, "trade_tick_value", 0) or 0)
+        tick_size = float(getattr(info, "trade_tick_size", 0) or 0)
+        pip_size = get_pip_size(symbol)
+
+        if tick_value <= 0 or tick_size <= 0:
+            raise ValueError(
+                f"symbol_info({symbol}) returned tick_value={tick_value}, "
+                f"tick_size={tick_size} — unusable"
+            )
+
+        pip_value_per_lot = tick_value * (pip_size / tick_size)
+        if pip_value_per_lot <= 0:
+            raise ValueError(f"computed non-positive pip value: {pip_value_per_lot}")
+
+        return pip_value_per_lot
+
+    except Exception as e:
+        fallback = get_pip_value_usd(symbol)
+        log.warning(
+            f"[get_live_pip_value_per_lot] Could not get live pip value for "
+            f"{symbol} from MT5 ({e}). Falling back to static USD table "
+            f"({fallback}). If this account is a Cent account, this "
+            f"fallback is WRONG by ~100x and position sizing will be "
+            f"unsafe — fix the MT5 connection before trading real money."
+        )
+        return fallback
 
 
 def clean_symbol(symbol: str) -> str:
