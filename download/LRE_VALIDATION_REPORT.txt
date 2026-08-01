@@ -1,0 +1,464 @@
+==========================================================================================
+LOSS REJECTION ENGINE — SCIENTIFIC VALIDATION REPORT
+==========================================================================================
+Generated: 2026-07-31T19:54:09.400869
+Data: 87 EURUSD H1 trades (2023-01-03 to 2023-03-25)
+Method: Walk-forward with expanding window (no lookahead, no data leakage)
+LRE Code: core/loss_rejection_engine/ (existing production code)
+
+==========================================================================================
+SECTION 1: STRATEGY PERFORMANCE COMPARISON
+==========================================================================================
+Metric                                     Baseline        With LRE          Change
+------------------------------------------------------------------------------------------
+Total Trades                                     87              33             -54
+Winning Trades                                   45              31             -14
+Losing Trades                                    42               2             -40
+Win Rate                                      51.7%           93.9%           42.2%
+
+Gross Profit ($)                           39478.89        30805.62        -8673.27
+Gross Loss ($)                             -9091.77         -760.83         8330.94
+Net Profit ($)                             30387.12        30044.79         -342.33
+
+Profit Factor                                  4.34           40.49 
+Expectancy ($/trade)                         349.28          910.45 
+Avg R-Multiple                                 9.01           21.02 
+
+Max Drawdown ($)                           31593.29        30287.91 
+Max Drawdown (%)                               8.1%            2.4% 
+Sharpe Ratio                                   6.52           14.56 
+Avg Hold Bars                                  17.8            25.1 
+Trades/Week                                    7.71            2.96 
+
+==========================================================================================
+SECTION 2: LRE CLASSIFICATION PERFORMANCE
+==========================================================================================
+Metric                                             Value
+-------------------------------------------------------
+True Positives (correctly rejected losses)              40
+False Positives (incorrectly rejected wins)              14
+True Negatives (correctly accepted wins)              31
+False Negatives (missed losses)                        2
+                                        
+Winner Preservation Rate (WPR)                     68.9%
+Loss Rejection Rate (LRR)                          95.2%
+                                        
+Precision                                         0.7407
+Recall                                            0.9524
+F1 Score                                          0.8333
+Balanced Accuracy                                 0.8206
+Matthews Correlation Coefficient                  0.6604
+AUC-ROC                                           0.9735
+AUC-PR (Average Precision)                        0.9757
+
+==========================================================================================
+SECTION 3: EVERY REJECTED TRADE — DETAILED ANALYSIS
+==========================================================================================
+  Trade #  1 | BUY  | stop_hunt  | Conf= 60 | PnL=$   -93.33 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=27.8) | L2=PASS | L3=PASS
+
+  Trade #  2 | SELL | pa         | Conf= 60 | PnL=$   260.75 | Hold= 85 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=16.8) | L2=PASS | L3=PASS
+
+  Trade #  3 | BUY  | ict_amd    | Conf= 60 | PnL=$  -200.00 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 5 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=37.0) | L2=PASS | L3=PASS
+
+  Trade #  4 | BUY  | ict_amd    | Conf= 60 | PnL=$  -212.06 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 8 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=32.5) | L2=PASS | L3=PASS
+
+  Trade #  5 | BUY  | ict_amd    | Conf= 60 | PnL=$  -218.35 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 12 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=32.5) | L2=PASS | L3=PASS
+
+  Trade #  6 | BUY  | stop_hunt  | Conf= 30 | PnL=$  -108.29 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 16 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=33.5) | L2=PASS | L3=PASS
+
+  Trade #  7 | SELL | pa         | Conf= 85 | PnL=$   193.57 | Hold=101 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=23.5) | L2=PASS | L3=PASS
+
+  Trade # 10 | BUY  | stop_hunt  | Conf= 60 | PnL=$  -113.60 | Hold= 10 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 12 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=34.8) | L2=PASS | L3=PASS
+
+  Trade # 12 | BUY  | pa         | Conf= 60 | PnL=$  -166.20 | Hold= 33 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 12 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=26.8) | L2=PASS | L3=PASS
+
+  Trade # 15 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -169.01 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 10 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=38.5) | L2=PASS | L3=PASS
+
+  Trade # 16 | SELL | ict_amd    | Conf= 85 | PnL=$  1361.27 | Hold=  1 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=14.5) | L2=PASS | L3=PASS
+
+  Trade # 18 | BUY  | stop_hunt  | Conf= 60 | PnL=$  -309.80 | Hold=  5 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 10 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=36.3) | L2=PASS | L3=PASS
+
+  Trade # 19 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -296.48 | Hold=  6 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 10 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=31.8) | L2=PASS | L3=PASS
+
+  Trade # 24 | BUY  | pa         | Conf= 85 | PnL=$  -389.33 | Hold= 10 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 8 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=36.3) | L2=PASS | L3=PASS
+
+  Trade # 26 | BUY  | pa         | Conf= 85 | PnL=$   -21.22 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 7 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=37.0) | L2=PASS | L3=PASS
+
+  Trade # 27 | SELL | pa         | Conf= 85 | PnL=$   374.79 | Hold=101 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=12.2) | L2=PASS | L3=PASS
+
+  Trade # 28 | BUY  | pa         | Conf= 60 | PnL=$  -188.69 | Hold=  2 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 7 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=38.5) | L2=PASS | L3=PASS
+
+  Trade # 29 | BUY  | pa         | Conf= 85 | PnL=$   100.22 | Hold= 15 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 8 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=20.8) | L2=PASS | L3=PASS
+
+  Trade # 31 | BUY  | pa         | Conf= 85 | PnL=$   -85.55 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=26.2) | L2=PASS | L3=PASS
+
+  Trade # 32 | BUY  | pa         | Conf= 85 | PnL=$  -168.87 | Hold=  6 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 2 unswept pools in 0.5-3.0 ATR; grade=HIGH_RISK (score=70.0)
+    L1=REJECT (score=21.0) | L2=PASS | L3=PASS
+
+  Trade # 34 | BUY  | pa         | Conf= 85 | PnL=$  -419.38 | Hold=  6 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: trending -> ranging (score=85.0)
+    L1=REJECT (score=30.9) | L2=PASS | L3=PASS
+
+  Trade # 35 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -320.77 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=36.1) | L2=PASS | L3=PASS
+
+  Trade # 36 | BUY  | stop_hunt  | Conf= 30 | PnL=$  -215.65 | Hold= 31 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 4 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=23.3) | L2=PASS | L3=PASS
+
+  Trade # 37 | SELL | pa         | Conf= 85 | PnL=$  -145.03 | Hold=  3 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: ranging -> volatile (score=85.0)
+    L1=REJECT (score=21.5) | L2=PASS | L3=PASS
+
+  Trade # 38 | BUY  | pa         | Conf= 85 | PnL=$  -113.15 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 5 consecutive BUY losses on EURUSD; 4 total consec losses on EURUSD; 4 global consec losses (score=90.0)
+    L1=REJECT (score=32.5) | L2=PASS | L3=PASS
+
+  Trade # 39 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -152.62 | Hold=  2 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 6 consecutive BUY losses on EURUSD; 5 total consec losses on EURUSD; 5 global consec losses (score=90.0)
+    L1=REJECT (score=32.5) | L2=PASS | L3=PASS
+
+  Trade # 40 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -200.41 | Hold= 37 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 7 consecutive BUY losses on EURUSD; 6 total consec losses on EURUSD; 6 global consec losses - HALT (score=95.0)
+    L1=REJECT (score=22.9) | L2=PASS | L3=PASS
+
+  Trade # 41 | SELL | pa         | Conf= 85 | PnL=$   738.46 | Hold= 41 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 7 total consec losses on EURUSD; 7 global consec losses - HALT (score=95.0)
+    L1=REJECT (score=25.1) | L2=PASS | L3=PASS
+
+  Trade # 42 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -228.35 | Hold=  7 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 8 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=36.3) | L2=PASS | L3=PASS
+
+  Trade # 43 | BUY  | stop_hunt  | Conf= 85 | PnL=$   170.90 | Hold=  6 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 9 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=17.8) | L2=PASS | L3=PASS
+
+  Trade # 45 | BUY  | pa         | Conf= 60 | PnL=$  -370.46 | Hold=  7 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: trending -> ranging (score=85.0)
+    L1=REJECT (score=24.0) | L2=PASS | L3=PASS
+
+  Trade # 49 | BUY  | pa         | Conf= 85 | PnL=$  -160.77 | Hold=  3 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=26.2) | L2=PASS | L3=PASS
+
+  Trade # 50 | SELL | pa         | Conf= 60 | PnL=$  -104.79 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=20.8) | L2=PASS | L3=PASS
+
+  Trade # 51 | SELL | ict_amd    | Conf= 85 | PnL=$  2787.26 | Hold=  1 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=12.2) | L2=PASS | L3=PASS
+
+  Trade # 53 | SELL | pa         | Conf= 85 | PnL=$   -43.85 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: trending -> ranging (score=85.0)
+    L1=REJECT (score=18.2) | L2=PASS | L3=PASS
+
+  Trade # 55 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -251.62 | Hold=  2 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=26.2) | L2=PASS | L3=PASS
+
+  Trade # 56 | SELL | ict_amd    | Conf= 60 | PnL=$   966.87 | Hold= 13 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=16.8) | L2=PASS | L3=PASS
+
+  Trade # 58 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -258.99 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=26.2) | L2=PASS | L3=PASS
+
+  Trade # 59 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -211.77 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=27.1) | L2=PASS | L3=PASS
+
+  Trade # 60 | BUY  | ict_amd    | Conf= 85 | PnL=$  -106.00 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=30.1) | L2=PASS | L3=PASS
+
+  Trade # 61 | SELL | pa         | Conf= 60 | PnL=$   867.65 | Hold=101 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: volatile -> trending (score=85.0)
+    L1=REJECT (score=14.5) | L2=PASS | L3=PASS
+
+  Trade # 64 | BUY  | pa         | Conf= 60 | PnL=$  -421.14 | Hold= 12 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 4 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=26.8) | L2=PASS | L3=PASS
+
+  Trade # 65 | BUY  | stop_hunt  | Conf= 85 | PnL=$  -276.19 | Hold= 26 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 5 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=22.3) | L2=PASS | L3=PASS
+
+  Trade # 66 | BUY  | pa         | Conf= 85 | PnL=$    -4.68 | Hold=  1 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 6 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=16.3) | L2=PASS | L3=PASS
+
+  Trade # 67 | BUY  | pa         | Conf= 85 | PnL=$  -230.93 | Hold=  4 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 7 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=36.3) | L2=PASS | L3=PASS
+
+  Trade # 68 | BUY  | stop_hunt  | Conf= 60 | PnL=$  -246.31 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 8 consecutive BUY losses on EURUSD; 4 total consec losses on EURUSD; 4 global consec losses (score=90.0)
+    L1=REJECT (score=38.5) | L2=PASS | L3=PASS
+
+  Trade # 69 | SELL | ict_amd    | Conf= 85 | PnL=$   362.25 | Hold=  1 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 5 total consec losses on EURUSD; 5 global consec losses (score=85.0)
+    L1=REJECT (score=22.4) | L2=PASS | L3=PASS
+
+  Trade # 71 | BUY  | stop_hunt  | Conf= 60 | PnL=$  -173.61 | Hold=  4 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 9 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=34.8) | L2=PASS | L3=PASS
+
+  Trade # 72 | BUY  | ict_amd    | Conf= 85 | PnL=$  -112.26 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 10 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=37.0) | L2=PASS | L3=PASS
+
+  Trade # 73 | BUY  | stop_hunt  | Conf= 60 | PnL=$   200.38 | Hold=  2 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 11 consecutive BUY losses on EURUSD (score=90.0)
+    L1=REJECT (score=19.3) | L2=PASS | L3=PASS
+
+  Trade # 75 | BUY  | pa         | Conf= 60 | PnL=$  -318.94 | Hold=  5 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: trending -> ranging (score=85.0)
+    L1=REJECT (score=25.5) | L2=PASS | L3=PASS
+
+  Trade # 80 | BUY  | ict_amd    | Conf= 85 | PnL=$  -115.40 | Hold=  1 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: liquidity_trap
+    Reason: liquidity_trap: 3 unswept pools in 0.5-3.0 ATR; grade=DANGEROUS (score=85.0)
+    L1=REJECT (score=26.2) | L2=PASS | L3=PASS
+
+  Trade # 82 | BUY  | stop_hunt  | Conf= 85 | PnL=$   293.58 | Hold=  9 bars
+    Outcome: WINNER | Rejection: WRONG (FP)
+    Layer: L1 | Filter: failure_cascade
+    Reason: failure_cascade: 3 consecutive BUY losses on EURUSD (score=70.0)
+    L1=REJECT (score=15.4) | L2=PASS | L3=PASS
+
+  Trade # 86 | BUY  | pa         | Conf= 85 | PnL=$  -391.77 | Hold=  6 bars
+    Outcome: LOSER | Rejection: CORRECT
+    Layer: L1 | Filter: regime_transition
+    Reason: regime_transition: Regime: trending -> ranging (score=85.0)
+    L1=REJECT (score=25.5) | L2=PASS | L3=PASS
+
+
+==========================================================================================
+SECTION 4: FILTER FEATURE IMPORTANCE
+==========================================================================================
+Filter                     Weight     AUC   Score     Win    Lose   TP   FP      Rec
+-----------------------------------------------------------------------------------------------
+feature_conflict            0.10   0.922  +29.8   12.3   42.1    0    0     KEEP
+liquidity_trap              0.15   0.920  +44.2   26.0   70.2   34    0     KEEP
+regime_transition           0.10   0.767  +36.8   33.6   70.4   27   10     KEEP
+failure_cascade             0.12   0.748  +40.7   15.2   56.0   25    8     KEEP
+entry_quality_anomaly       0.05   0.589   +5.0    9.6   14.5    0    0   REMOVE
+market_memory               0.15   0.000   +0.0    0.0    0.0    0    0   REMOVE
+crowd_positioning           0.08   0.000   +0.0    0.0    0.0    0    0   REMOVE
+structural_stability        0.12   0.000   +0.0    0.0    0.0    0    0   REMOVE
+signal_aging                0.08   0.000   +0.0    0.0    0.0    0    0   REMOVE
+momentum_structure_div      0.05   0.000   +0.0    0.0    0.0    0    0   REMOVE
+
+==========================================================================================
+SECTION 5: FILTER RECOMMENDATIONS
+==========================================================================================
+  KEEP:
+    - liquidity_trap: Strong discriminator (AUC=0.92), score_diff=44.2
+    - failure_cascade: Moderate discriminator (AUC=0.75)
+    - regime_transition: Strong discriminator (AUC=0.77), score_diff=36.8
+    - feature_conflict: Strong discriminator (AUC=0.92), score_diff=29.8
+
+  REMOVE:
+    - market_memory: Negligible discrimination (score_diff=0.0)
+    - crowd_positioning: Negligible discrimination (score_diff=0.0)
+    - structural_stability: Negligible discrimination (score_diff=0.0)
+    - signal_aging: Negligible discrimination (score_diff=0.0)
+    - entry_quality_anomaly: Negligible discrimination (score_diff=5.0)
+    - momentum_structure_div: Negligible discrimination (score_diff=0.0)
+
+
+==========================================================================================
+SECTION 6: THRESHOLD OPTIMIZATION
+==========================================================================================
+  Optimal L1 threshold: 30
+    WPR at optimal: 100.0%
+    LRR at optimal: 50.0%
+    Profit Factor at optimal: 8.29
+    Net PnL at optimal: $34717.33
+    Accepted wins: 45, Rejected losses: 21
+
+==========================================================================================
+SECTION 7: DOES THE LOSS REJECTION ENGINE ACTUALLY IMPROVE THE STRATEGY?
+==========================================================================================
+  EVIDENCE FOR IMPROVEMENT:
+    [+] PF improved from 4.34 to 40.49 (+832.5%)
+    [+] Max drawdown reduced from 8.1% to 2.4%
+    [+] Loss Rejection Rate = 95.2% (meaningful loss filtering)
+    [+] MCC = 0.660 (strong rejection quality)
+
+  EVIDENCE AGAINST IMPROVEMENT:
+    [-] Winner Preservation Rate = 68.9% (BELOW 95% requirement)
+
+  CAVEATS / LIMITATIONS:
+    [~] Net profit change is within noise ($ 30387 -> $30045)
+
+
+  SAMPLE SIZE WARNING:
+    Only 87 trades available. This is below the minimum of ~200 trades
+    typically required for statistically significant backtest conclusions.
+    All metrics should be interpreted as preliminary estimates with wide
+    confidence intervals. A 95% CI on win rate with n=87 is approximately
+    51.7% +/- 10.5 (very wide).
+
+  CONTEXT RECONSTRUCTION LIMITATION:
+    The LRE requires dec_out/analysis_out/market_out dicts. Since the existing
+    backtest does not log these intermediate structures, they were reconstructed
+    from final trade parameters using deterministic heuristics. This means the
+    filter scores are correlated with outcomes BY CONSTRUCTION, not discovered
+    from independent signal processing. The absolute metric values (PF, WPR, LRR)
+    are therefore UPPER BOUNDS on what the LRE would achieve in live trading.
+
+  CONCLUSION: The LRE FAILS the 95% Winner Preservation Rate requirement.
+  It rejects too many winning trades. The engine should NOT be deployed in
+  production without recalibration of filter thresholds or removal of
+  filters that contribute to false positives.
+
+==========================================================================================
+END OF REPORT
+==========================================================================================

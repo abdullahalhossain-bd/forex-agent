@@ -1,0 +1,10 @@
+2026-07-30 21:05:09 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Starting...
+2026-07-30 21:05:11 | INFO    | pipeline.phase2_validation |   EURUSD M15: OK (110962 rows) — 1 info notes: 1 potential broker gaps detected (>1.19% move)
+2026-07-30 21:05:11 | INFO    | pipeline.phase2_validation |   EURUSD H1: OK (27741 rows)
+2026-07-30 21:05:12 | INFO    | pipeline.phase2_validation |   EURUSD H4: OK (7565 rows)
+2026-07-30 21:05:12 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Completed in 0m 2.9s
+2026-07-30 22:13:41 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Starting...
+2026-07-30 22:13:43 | INFO    | pipeline.phase2_validation |   USDJPY M15: OK (110966 rows) — 1 info notes: 5 potential broker gaps detected (>1.59% move)
+2026-07-30 22:13:44 | INFO    | pipeline.phase2_validation |   USDJPY H1: OK (27742 rows)
+2026-07-30 22:13:44 | INFO    | pipeline.phase2_validation |   USDJPY H4: OK (7565 rows)
+2026-07-30 22:13:44 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Completed in 0m 2.8s

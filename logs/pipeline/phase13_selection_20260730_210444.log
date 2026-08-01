@@ -1,0 +1,5 @@
+2026-07-30 22:13:36 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Starting...
+2026-07-30 22:13:36 | INFO    | pipeline.phase13_selection |   EURUSD xgboost: composite_score=40.590
+2026-07-30 22:13:36 | INFO    | pipeline.phase13_selection |   EURUSD lightgbm: composite_score=40.590
+2026-07-30 22:13:36 | INFO    | pipeline.phase13_selection |   >>> EURUSD BEST: xgboost (score=40.590)
+2026-07-30 22:13:36 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Completed in 0m 0.0s

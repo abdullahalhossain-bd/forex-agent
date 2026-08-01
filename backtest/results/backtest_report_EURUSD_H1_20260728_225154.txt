@@ -1,0 +1,113 @@
+======================================================================
+  FOREX AI — COMPLETE BACKTEST REPORT
+======================================================================
+
+[RUN INFO]
+  Project Version    : 1.0.0
+  Git Commit         : N/A
+  Run Date           : 2026-07-28 23:46:35
+  Execution Time     : 3281.0s
+  Mode               : Historical Backtest
+  Broker Model       : Simulated
+  Spread             : 1.5 pips
+  Commission         : $7.0/lot
+  Slippage           : 2.0 pips
+  Symbol             : EURUSD
+  Timeframe          : H1
+  Total Bars         : 100
+  Warmup Bars        : 50
+
+======================================================================
+  EXECUTIVE SUMMARY
+======================================================================
+  Starting Balance   : $10,000.00
+  Ending Balance     : $10,000.00
+  Net Profit         : $+0.00
+  Return %           : +0.00%
+  Profit Factor      : 0.00
+  Recovery Factor    : 0.00
+  Expectancy         : 0.00R
+  Win Rate           : 0.0%
+  Loss Rate          : 0.0%
+  Sharpe Ratio       : 0.00
+  Sortino Ratio      : 0.00
+  Calmar Ratio       : 0.00
+  Max Drawdown       : 0.00% ($0.00)
+  Average Trade      : $+0.00
+  Average Win        : $+0.00 (0.0 pips)
+  Average Loss       : $+0.00 (0.0 pips)
+  Average Hold       : 0.0 bars
+  Average R:R        : 1:0.00
+  Largest Win        : $+0.00
+  Largest Loss       : $+0.00
+  Payoff Ratio       : 0.00
+  Gross Profit       : $0.00
+  Gross Loss         : $0.00
+  Max Consec Wins    : 0
+  Max Consec Losses  : 0
+  Total Trades       : 0
+    Winning          : 0
+    Losing           : 0
+  Rejected Trades    : 0
+  Skipped Bars       : 0
+  Avg Confidence     : 0.0%
+  Avg Position Size  : 0.0000 lots
+
+======================================================================
+  REJECTION REPORT
+======================================================================
+  total_bars                     50 (50.0%)
+  WAIT                           43 (43.0%)
+  permission_blocked              7 (7.0%)
+  NO_TRADE_ANALYSIS               0 (0.0%)
+  risk_rejected                   0 (0.0%)
+  engine_error                    0 (0.0%)
+  max_trades                      0 (0.0%)
+  low_confidence                  0 (0.0%)
+  news_blocked                    0 (0.0%)
+  session_blocked                 0 (0.0%)
+  correlation_blocked             0 (0.0%)
+  duplicate_blocked               0 (0.0%)
+  TOTAL                         100
+
+  Accepted           : 0
+  Rejected           : 100
+  Acceptance %       : 0.0%
+
+======================================================================
+  MONTE CARLO SIMULATION
+======================================================================
+  Simulations        : 0
+  Trades per path    : 0
+  Worst DD           : 0.0%
+  Median Return      : +0.0%
+  5th Percentile     : +0.0%
+  95th Percentile    : +0.0%
+  Risk of Ruin       : 0.0%
+  Survival Rate      : 0.0%
+
+======================================================================
+  WALK-FORWARD ANALYSIS
+======================================================================
+  Windows            : 0
+  IS P&L             : $0.00
+  OOS P&L            : $0.00
+  WFE                : 0.0%
+  Result             : FAIL
+
+======================================================================
+  AUTOMATIC WEAKNESS DETECTION
+======================================================================
+  Overall Grade      : F
+
+  [CRITICAL] Extremely Low Acceptance Rate
+      Only 0.0% of decisions result in trades (0/100)
+      Win Rate: None
+      Recommendation: Lower confidence threshold or relax permission gates
+
+  SUGGESTED IMPROVEMENTS:
+    Raise acceptance rate (currently 0.0%)
+
+======================================================================
+  END OF REPORT
+======================================================================

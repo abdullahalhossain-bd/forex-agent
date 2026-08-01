@@ -1,0 +1,9 @@
+# Prometheus config for Forex AI Trading System
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "forex-ai"
+    static_configs:
+      - targets: ["trader:9090"]
+    metrics_path: /metrics

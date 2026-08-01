@@ -1,0 +1,3 @@
+bin,n_trades,avg_confidence,actual_win_rate,calibration_error
+0.60-0.70,1,0.665,0.0,0.665
+0.70-0.80,18,0.7,0.7222,0.0222

@@ -1,0 +1,13 @@
+19:25:33 | INFO    | === BACKTEST START [smoke] ===
+19:25:33 | INFO    |   pairs=['EURUSD'], tf=H1, bars=500, window=200
+19:25:33 | INFO    |   initial_balance=$10,000.00, disabled=[]
+19:25:33 | INFO    |   [EURUSD] bundle ready: 11 engines
+19:25:33 | INFO    |   [EURUSD] 500 bars loaded, running analysis...
+19:25:33 | INFO    |   [EURUSD] bar 200/500  balance=$10,000.00  trades=0  open=0
+19:25:41 | INFO    |   [EURUSD] bar 300/500  balance=$9,197.15  trades=6  open=1
+19:25:49 | INFO    |   [EURUSD] bar 400/500  balance=$8,649.15  trades=15  open=1
+19:25:57 | INFO    |   [EURUSD] force-closing 1 open positions at end of data
+19:25:57 | INFO    | === BACKTEST END [smoke] ===
+19:25:57 | INFO    |   total trades: 23
+19:25:57 | INFO    |   final balance: $8,097.65
+19:25:57 | INFO    |   elapsed: 24.0s

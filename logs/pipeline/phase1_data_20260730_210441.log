@@ -1,0 +1,41 @@
+2026-07-30 21:04:44 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Starting...
+2026-07-30 21:05:03 | INFO    | pipeline.phase1_data | MT5 initialized successfully
+2026-07-30 21:05:03 | INFO    | pipeline.phase1_data | Account: 108647429 | Balance: 99122.39 | Server: MetaQuotes-Demo
+2026-07-30 21:05:03 | INFO    | pipeline.phase1_data |   Downloading EURUSD M15 (~110,880 candles, 5y)...
+2026-07-30 21:05:04 | INFO    | pipeline.phase1_data |   Existing data: 110,939 rows, will append new candles
+2026-07-30 21:05:04 | INFO    | pipeline.phase1_data |     Chunk: +100,000 candles (total: 100,000)
+2026-07-30 21:05:05 | INFO    | pipeline.phase1_data |     Chunk: +10,880 candles (total: 110,880)
+2026-07-30 21:05:05 | INFO    | pipeline.phase1_data |   Merged: 110,939 existing + 23 new = 110,962 total
+2026-07-30 21:05:05 | INFO    | pipeline.phase1_data |   Saved EURUSD_M15.parquet (2632.9 KB, 110,962 rows)
+2026-07-30 21:05:07 | INFO    | pipeline.phase1_data |   Downloading EURUSD H1 (~27,720 candles, 5y)...
+2026-07-30 21:05:07 | INFO    | pipeline.phase1_data |   Existing data: 27,735 rows, will append new candles
+2026-07-30 21:05:07 | INFO    | pipeline.phase1_data |     Chunk: +27,720 candles (total: 27,720)
+2026-07-30 21:05:07 | INFO    | pipeline.phase1_data |   Merged: 27,735 existing + 6 new = 27,741 total
+2026-07-30 21:05:07 | INFO    | pipeline.phase1_data |   Saved EURUSD_H1.parquet (930.6 KB, 27,741 rows)
+2026-07-30 21:05:08 | INFO    | pipeline.phase1_data |   Downloading EURUSD H4 (~7,560 candles, 5y)...
+2026-07-30 21:05:08 | INFO    | pipeline.phase1_data |   Existing data: 7,564 rows, will append new candles
+2026-07-30 21:05:09 | INFO    | pipeline.phase1_data |     Chunk: +7,560 candles (total: 7,560)
+2026-07-30 21:05:09 | INFO    | pipeline.phase1_data |   Merged: 7,564 existing + 1 new = 7,565 total
+2026-07-30 21:05:09 | INFO    | pipeline.phase1_data |   Saved EURUSD_H4.parquet (340.9 KB, 7,565 rows)
+2026-07-30 21:05:09 | INFO    | pipeline.phase1_data |   Collected data for 1/1 symbols, 146,268 total candles across 3 timeframes
+2026-07-30 21:05:09 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Completed in 0m 24.7s
+2026-07-30 22:13:37 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Starting...
+2026-07-30 22:13:37 | INFO    | pipeline.phase1_data | MT5 already connected — reusing existing session
+2026-07-30 22:13:37 | INFO    | pipeline.phase1_data |   Downloading USDJPY M15 (~110,880 candles, 5y)...
+2026-07-30 22:13:37 | INFO    | pipeline.phase1_data |   Existing data: 110,884 rows, will append new candles
+2026-07-30 22:13:38 | INFO    | pipeline.phase1_data |     Chunk: +100,000 candles (total: 100,000)
+2026-07-30 22:13:38 | INFO    | pipeline.phase1_data |     Chunk: +10,880 candles (total: 110,880)
+2026-07-30 22:13:38 | INFO    | pipeline.phase1_data |   Merged: 110,884 existing + 82 new = 110,966 total
+2026-07-30 22:13:38 | INFO    | pipeline.phase1_data |   Saved USDJPY_M15.parquet (2657.1 KB, 110,966 rows)
+2026-07-30 22:13:40 | INFO    | pipeline.phase1_data |   Downloading USDJPY H1 (~27,720 candles, 5y)...
+2026-07-30 22:13:40 | INFO    | pipeline.phase1_data |   Existing data: 27,721 rows, will append new candles
+2026-07-30 22:13:40 | INFO    | pipeline.phase1_data |     Chunk: +27,720 candles (total: 27,720)
+2026-07-30 22:13:40 | INFO    | pipeline.phase1_data |   Merged: 27,721 existing + 21 new = 27,742 total
+2026-07-30 22:13:40 | INFO    | pipeline.phase1_data |   Saved USDJPY_H1.parquet (856.8 KB, 27,742 rows)
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |   Downloading USDJPY H4 (~7,560 candles, 5y)...
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |   Existing data: 7,560 rows, will append new candles
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |     Chunk: +7,560 candles (total: 7,560)
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |   Merged: 7,560 existing + 5 new = 7,565 total
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |   Saved USDJPY_H4.parquet (275.4 KB, 7,565 rows)
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data |   Collected data for 1/1 symbols, 146,273 total candles across 3 timeframes
+2026-07-30 22:13:41 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Completed in 0m 4.2s

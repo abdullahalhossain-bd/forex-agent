@@ -1,0 +1,112 @@
+2026-07-30 21:05:15 | INFO    | pipeline.phase8_train | [Phase 8: Model Training] Starting...
+2026-07-30 21:05:15 | INFO    | pipeline.phase8_train |   Training EURUSD xgboost...
+2026-07-30 21:05:19 | INFO    | pipeline.phase8_train |     EURUSD xgboost: accuracy=0.4614 (3.4s)
+2026-07-30 21:05:19 | INFO    | pipeline.phase8_train |   Training EURUSD lightgbm...
+2026-07-30 21:05:28 | INFO    | pipeline.phase8_train |     EURUSD lightgbm: accuracy=0.4614 (8.6s, stopped at round 9/200)
+2026-07-30 21:05:28 | INFO    | pipeline.phase8_train |   Training EURUSD catboost...
+2026-07-30 21:05:31 | INFO    | pipeline.phase8_train |     EURUSD catboost: accuracy=0.4669 (2.9s, stopped at round 24/200)
+2026-07-30 21:05:31 | INFO    | pipeline.phase8_train |   Training EURUSD random_forest...
+2026-07-30 21:05:43 | INFO    | pipeline.phase8_train |     EURUSD random_forest: accuracy=0.3163 (12.2s)
+2026-07-30 21:05:50 | INFO    | pipeline.phase8_train |   Training EURUSD ppo RL (500000 timesteps)...
+2026-07-30 21:05:55 | INFO    | pipeline.phase8_train |     EURUSD ppo: RL training started (500,000 timesteps)
+2026-07-30 21:07:37 | INFO    | pipeline.phase8_train |     EURUSD ppo: 25,000/500,000 (5%) -- 1.7m elapsed, ~32.3m remaining
+2026-07-30 21:09:37 | INFO    | pipeline.phase8_train |     EURUSD ppo: 50,000/500,000 (10%) -- 3.7m elapsed, ~33.3m remaining
+2026-07-30 21:11:22 | INFO    | pipeline.phase8_train |     EURUSD ppo: 75,000/500,000 (15%) -- 5.5m elapsed, ~30.9m remaining
+2026-07-30 21:13:34 | INFO    | pipeline.phase8_train |     EURUSD ppo: 100,000/500,000 (20%) -- 7.6m elapsed, ~30.6m remaining
+2026-07-30 21:15:50 | INFO    | pipeline.phase8_train |     EURUSD ppo: 125,000/500,000 (25%) -- 9.9m elapsed, ~29.7m remaining
+2026-07-30 21:17:47 | INFO    | pipeline.phase8_train |     EURUSD ppo: 150,000/500,000 (30%) -- 11.9m elapsed, ~27.7m remaining
+2026-07-30 21:20:07 | INFO    | pipeline.phase8_train |     EURUSD ppo: 175,000/500,000 (35%) -- 14.2m elapsed, ~26.4m remaining
+2026-07-30 21:22:17 | INFO    | pipeline.phase8_train |     EURUSD ppo: 200,000/500,000 (40%) -- 16.4m elapsed, ~24.5m remaining
+2026-07-30 21:24:20 | INFO    | pipeline.phase8_train |     EURUSD ppo: 225,000/500,000 (45%) -- 18.4m elapsed, ~22.5m remaining
+2026-07-30 21:26:35 | INFO    | pipeline.phase8_train |     EURUSD ppo: 250,000/500,000 (50%) -- 20.7m elapsed, ~20.7m remaining
+2026-07-30 21:28:56 | INFO    | pipeline.phase8_train |     EURUSD ppo: 275,000/500,000 (55%) -- 23.0m elapsed, ~18.8m remaining
+2026-07-30 21:30:59 | INFO    | pipeline.phase8_train |     EURUSD ppo: 300,000/500,000 (60%) -- 25.1m elapsed, ~16.7m remaining
+2026-07-30 21:33:12 | INFO    | pipeline.phase8_train |     EURUSD ppo: 325,000/500,000 (65%) -- 27.3m elapsed, ~14.7m remaining
+2026-07-30 21:35:00 | INFO    | pipeline.phase8_train |     EURUSD ppo: 350,000/500,000 (70%) -- 29.1m elapsed, ~12.5m remaining
+2026-07-30 21:36:58 | INFO    | pipeline.phase8_train |     EURUSD ppo: 375,000/500,000 (75%) -- 31.0m elapsed, ~10.3m remaining
+2026-07-30 21:38:56 | INFO    | pipeline.phase8_train |     EURUSD ppo: 400,000/500,000 (80%) -- 33.0m elapsed, ~8.3m remaining
+2026-07-30 21:40:50 | INFO    | pipeline.phase8_train |     EURUSD ppo: 425,000/500,000 (85%) -- 34.9m elapsed, ~6.2m remaining
+2026-07-30 21:42:40 | INFO    | pipeline.phase8_train |     EURUSD ppo: 450,000/500,000 (90%) -- 36.8m elapsed, ~4.1m remaining
+2026-07-30 21:44:31 | INFO    | pipeline.phase8_train |     EURUSD ppo: 475,000/500,000 (95%) -- 38.6m elapsed, ~2.0m remaining
+2026-07-30 21:46:26 | INFO    | pipeline.phase8_train |     EURUSD ppo: 500,000/500,000 (100%) -- 40.5m elapsed, ~0.0m remaining
+2026-07-30 21:46:36 | INFO    | pipeline.phase8_train |     EURUSD ppo: saved to D:\Projects\forex\data\trained_models\EURUSD\ppo\model.zip (2445.1s)
+2026-07-30 21:46:36 | INFO    | pipeline.phase8_train |   Training EURUSD a2c RL (500000 timesteps)...
+2026-07-30 21:46:37 | INFO    | pipeline.phase8_train |     EURUSD a2c: RL training started (500,000 timesteps)
+2026-07-30 21:47:59 | INFO    | pipeline.phase8_train |     EURUSD a2c: 25,000/500,000 (5%) -- 1.4m elapsed, ~25.9m remaining
+2026-07-30 21:49:18 | INFO    | pipeline.phase8_train |     EURUSD a2c: 50,000/500,000 (10%) -- 2.7m elapsed, ~24.2m remaining
+2026-07-30 21:50:35 | INFO    | pipeline.phase8_train |     EURUSD a2c: 75,000/500,000 (15%) -- 4.0m elapsed, ~22.5m remaining
+2026-07-30 21:51:55 | INFO    | pipeline.phase8_train |     EURUSD a2c: 100,000/500,000 (20%) -- 5.3m elapsed, ~21.2m remaining
+2026-07-30 21:53:17 | INFO    | pipeline.phase8_train |     EURUSD a2c: 125,000/500,000 (25%) -- 6.7m elapsed, ~20.0m remaining
+2026-07-30 21:54:34 | INFO    | pipeline.phase8_train |     EURUSD a2c: 150,000/500,000 (30%) -- 8.0m elapsed, ~18.6m remaining
+2026-07-30 21:55:55 | INFO    | pipeline.phase8_train |     EURUSD a2c: 175,000/500,000 (35%) -- 9.3m elapsed, ~17.3m remaining
+2026-07-30 21:57:15 | INFO    | pipeline.phase8_train |     EURUSD a2c: 200,000/500,000 (40%) -- 10.6m elapsed, ~16.0m remaining
+2026-07-30 21:58:34 | INFO    | pipeline.phase8_train |     EURUSD a2c: 225,000/500,000 (45%) -- 12.0m elapsed, ~14.6m remaining
+2026-07-30 21:59:57 | INFO    | pipeline.phase8_train |     EURUSD a2c: 250,000/500,000 (50%) -- 13.3m elapsed, ~13.3m remaining
+2026-07-30 22:01:17 | INFO    | pipeline.phase8_train |     EURUSD a2c: 275,000/500,000 (55%) -- 14.7m elapsed, ~12.0m remaining
+2026-07-30 22:02:36 | INFO    | pipeline.phase8_train |     EURUSD a2c: 300,000/500,000 (60%) -- 16.0m elapsed, ~10.7m remaining
+2026-07-30 22:03:55 | INFO    | pipeline.phase8_train |     EURUSD a2c: 325,000/500,000 (65%) -- 17.3m elapsed, ~9.3m remaining
+2026-07-30 22:05:16 | INFO    | pipeline.phase8_train |     EURUSD a2c: 350,000/500,000 (70%) -- 18.6m elapsed, ~8.0m remaining
+2026-07-30 22:06:36 | INFO    | pipeline.phase8_train |     EURUSD a2c: 375,000/500,000 (75%) -- 20.0m elapsed, ~6.7m remaining
+2026-07-30 22:07:55 | INFO    | pipeline.phase8_train |     EURUSD a2c: 400,000/500,000 (80%) -- 21.3m elapsed, ~5.3m remaining
+2026-07-30 22:09:11 | INFO    | pipeline.phase8_train |     EURUSD a2c: 425,000/500,000 (85%) -- 22.6m elapsed, ~4.0m remaining
+2026-07-30 22:10:30 | INFO    | pipeline.phase8_train |     EURUSD a2c: 450,000/500,000 (90%) -- 23.9m elapsed, ~2.7m remaining
+2026-07-30 22:11:50 | INFO    | pipeline.phase8_train |     EURUSD a2c: 475,000/500,000 (95%) -- 25.2m elapsed, ~1.3m remaining
+2026-07-30 22:13:10 | INFO    | pipeline.phase8_train |     EURUSD a2c: 500,000/500,000 (100%) -- 26.6m elapsed, ~0.0m remaining
+2026-07-30 22:13:16 | INFO    | pipeline.phase8_train |     EURUSD a2c: saved to D:\Projects\forex\data\trained_models\EURUSD\a2c\model.zip (1600.2s)
+2026-07-30 22:13:16 | INFO    | pipeline.phase8_train | [Phase 8: Model Training] Completed in 68m 1.7s
+2026-07-30 22:14:07 | INFO    | pipeline.phase8_train | [Phase 8: Model Training] Starting...
+2026-07-30 22:14:07 | INFO    | pipeline.phase8_train |   Training USDJPY xgboost...
+2026-07-30 22:14:09 | INFO    | pipeline.phase8_train |     USDJPY xgboost: accuracy=0.4045 (2.1s, stopped at round 18/200)
+2026-07-30 22:14:09 | INFO    | pipeline.phase8_train |   Training USDJPY lightgbm...
+2026-07-30 22:14:10 | INFO    | pipeline.phase8_train |     USDJPY lightgbm: accuracy=0.4061 (1.4s, stopped at round 10/200)
+2026-07-30 22:14:10 | INFO    | pipeline.phase8_train |   Training USDJPY catboost...
+2026-07-30 22:14:13 | INFO    | pipeline.phase8_train |     USDJPY catboost: accuracy=0.4017 (2.5s, stopped at round 29/200)
+2026-07-30 22:14:13 | INFO    | pipeline.phase8_train |   Training USDJPY random_forest...
+2026-07-30 22:14:24 | INFO    | pipeline.phase8_train |     USDJPY random_forest: accuracy=0.3706 (11.4s)
+2026-07-30 22:14:25 | INFO    | pipeline.phase8_train |   Training USDJPY ppo RL (500000 timesteps)...
+2026-07-30 22:14:25 | INFO    | pipeline.phase8_train |     USDJPY ppo: RL training started (500,000 timesteps)
+2026-07-30 22:16:08 | INFO    | pipeline.phase8_train |     USDJPY ppo: 25,000/500,000 (5%) -- 1.7m elapsed, ~32.6m remaining
+2026-07-30 22:17:51 | INFO    | pipeline.phase8_train |     USDJPY ppo: 50,000/500,000 (10%) -- 3.4m elapsed, ~30.9m remaining
+2026-07-30 22:19:37 | INFO    | pipeline.phase8_train |     USDJPY ppo: 75,000/500,000 (15%) -- 5.2m elapsed, ~29.5m remaining
+2026-07-30 22:21:21 | INFO    | pipeline.phase8_train |     USDJPY ppo: 100,000/500,000 (20%) -- 6.9m elapsed, ~27.8m remaining
+2026-07-30 22:23:09 | INFO    | pipeline.phase8_train |     USDJPY ppo: 125,000/500,000 (25%) -- 8.7m elapsed, ~26.2m remaining
+2026-07-30 22:24:50 | INFO    | pipeline.phase8_train |     USDJPY ppo: 150,000/500,000 (30%) -- 10.4m elapsed, ~24.3m remaining
+2026-07-30 22:26:30 | INFO    | pipeline.phase8_train |     USDJPY ppo: 175,000/500,000 (35%) -- 12.1m elapsed, ~22.4m remaining
+2026-07-30 22:28:11 | INFO    | pipeline.phase8_train |     USDJPY ppo: 200,000/500,000 (40%) -- 13.8m elapsed, ~20.6m remaining
+2026-07-30 22:29:57 | INFO    | pipeline.phase8_train |     USDJPY ppo: 225,000/500,000 (45%) -- 15.5m elapsed, ~19.0m remaining
+2026-07-30 22:31:39 | INFO    | pipeline.phase8_train |     USDJPY ppo: 250,000/500,000 (50%) -- 17.2m elapsed, ~17.2m remaining
+2026-07-30 22:33:22 | INFO    | pipeline.phase8_train |     USDJPY ppo: 275,000/500,000 (55%) -- 18.9m elapsed, ~15.5m remaining
+2026-07-30 22:35:07 | INFO    | pipeline.phase8_train |     USDJPY ppo: 300,000/500,000 (60%) -- 20.7m elapsed, ~13.8m remaining
+2026-07-30 22:36:52 | INFO    | pipeline.phase8_train |     USDJPY ppo: 325,000/500,000 (65%) -- 22.5m elapsed, ~12.1m remaining
+2026-07-30 22:38:37 | INFO    | pipeline.phase8_train |     USDJPY ppo: 350,000/500,000 (70%) -- 24.2m elapsed, ~10.4m remaining
+2026-07-30 22:40:26 | INFO    | pipeline.phase8_train |     USDJPY ppo: 375,000/500,000 (75%) -- 26.0m elapsed, ~8.7m remaining
+2026-07-30 22:42:12 | INFO    | pipeline.phase8_train |     USDJPY ppo: 400,000/500,000 (80%) -- 27.8m elapsed, ~6.9m remaining
+2026-07-30 22:43:56 | INFO    | pipeline.phase8_train |     USDJPY ppo: 425,000/500,000 (85%) -- 29.5m elapsed, ~5.2m remaining
+2026-07-30 22:45:43 | INFO    | pipeline.phase8_train |     USDJPY ppo: 450,000/500,000 (90%) -- 31.3m elapsed, ~3.5m remaining
+2026-07-30 22:48:51 | INFO    | pipeline.phase8_train |     USDJPY ppo: 475,000/500,000 (95%) -- 34.4m elapsed, ~1.8m remaining
+2026-07-30 22:51:58 | INFO    | pipeline.phase8_train |     USDJPY ppo: 500,000/500,000 (100%) -- 37.6m elapsed, ~0.0m remaining
+2026-07-30 22:52:07 | INFO    | pipeline.phase8_train |     USDJPY ppo: saved to D:\Projects\forex\data\trained_models\USDJPY\ppo\model.zip (2262.2s)
+2026-07-30 22:52:07 | INFO    | pipeline.phase8_train |   Training USDJPY a2c RL (500000 timesteps)...
+2026-07-30 22:52:08 | INFO    | pipeline.phase8_train |     USDJPY a2c: RL training started (500,000 timesteps)
+2026-07-30 22:53:23 | INFO    | pipeline.phase8_train |     USDJPY a2c: 25,000/500,000 (5%) -- 1.3m elapsed, ~24.0m remaining
+2026-07-30 22:54:52 | INFO    | pipeline.phase8_train |     USDJPY a2c: 50,000/500,000 (10%) -- 2.7m elapsed, ~24.6m remaining
+2026-07-30 22:56:16 | INFO    | pipeline.phase8_train |     USDJPY a2c: 75,000/500,000 (15%) -- 4.1m elapsed, ~23.4m remaining
+2026-07-30 22:57:44 | INFO    | pipeline.phase8_train |     USDJPY a2c: 100,000/500,000 (20%) -- 5.6m elapsed, ~22.4m remaining
+2026-07-30 22:58:56 | INFO    | pipeline.phase8_train |     USDJPY a2c: 125,000/500,000 (25%) -- 6.8m elapsed, ~20.4m remaining
+2026-07-30 23:00:21 | INFO    | pipeline.phase8_train |     USDJPY a2c: 150,000/500,000 (30%) -- 8.2m elapsed, ~19.2m remaining
+2026-07-30 23:01:42 | INFO    | pipeline.phase8_train |     USDJPY a2c: 175,000/500,000 (35%) -- 9.6m elapsed, ~17.8m remaining
+2026-07-30 23:03:07 | INFO    | pipeline.phase8_train |     USDJPY a2c: 200,000/500,000 (40%) -- 11.0m elapsed, ~16.5m remaining
+2026-07-30 23:04:33 | INFO    | pipeline.phase8_train |     USDJPY a2c: 225,000/500,000 (45%) -- 12.4m elapsed, ~15.2m remaining
+2026-07-30 23:05:47 | INFO    | pipeline.phase8_train |     USDJPY a2c: 250,000/500,000 (50%) -- 13.7m elapsed, ~13.7m remaining
+2026-07-30 23:07:03 | INFO    | pipeline.phase8_train |     USDJPY a2c: 275,000/500,000 (55%) -- 14.9m elapsed, ~12.2m remaining
+2026-07-30 23:08:28 | INFO    | pipeline.phase8_train |     USDJPY a2c: 300,000/500,000 (60%) -- 16.3m elapsed, ~10.9m remaining
+2026-07-30 23:10:11 | INFO    | pipeline.phase8_train |     USDJPY a2c: 325,000/500,000 (65%) -- 18.0m elapsed, ~9.7m remaining
+2026-07-30 23:11:29 | INFO    | pipeline.phase8_train |     USDJPY a2c: 350,000/500,000 (70%) -- 19.4m elapsed, ~8.3m remaining
+2026-07-30 23:12:47 | INFO    | pipeline.phase8_train |     USDJPY a2c: 375,000/500,000 (75%) -- 20.7m elapsed, ~6.9m remaining
+2026-07-30 23:14:09 | INFO    | pipeline.phase8_train |     USDJPY a2c: 400,000/500,000 (80%) -- 22.0m elapsed, ~5.5m remaining
+2026-07-30 23:15:36 | INFO    | pipeline.phase8_train |     USDJPY a2c: 425,000/500,000 (85%) -- 23.5m elapsed, ~4.1m remaining
+2026-07-30 23:17:08 | INFO    | pipeline.phase8_train |     USDJPY a2c: 450,000/500,000 (90%) -- 25.0m elapsed, ~2.8m remaining
+2026-07-30 23:18:33 | INFO    | pipeline.phase8_train |     USDJPY a2c: 475,000/500,000 (95%) -- 26.4m elapsed, ~1.4m remaining
+2026-07-30 23:19:33 | INFO    | pipeline.phase8_train |     USDJPY a2c: 500,000/500,000 (100%) -- 27.4m elapsed, ~0.0m remaining
+2026-07-30 23:19:38 | INFO    | pipeline.phase8_train |     USDJPY a2c: saved to D:\Projects\forex\data\trained_models\USDJPY\a2c\model.zip (1650.5s)
+2026-07-30 23:19:38 | INFO    | pipeline.phase8_train | [Phase 8: Model Training] Completed in 65m 31.3s

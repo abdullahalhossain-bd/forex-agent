@@ -1,0 +1,958 @@
+# risk/trade_permission.py  —  Day 13 | Final Trade Permission Gate
+
+from utils.logger import get_logger
+
+log = get_logger("trade_permission")
+
+
+def _test_mode() -> bool:
+    """Lazy check — avoids importing config at module load (which would
+    crash unit tests on systems without a .env file)."""
+    try:
+        from config import TEST_MODE
+        return bool(TEST_MODE)
+    except Exception as e:
+        return False
+
+
+class TradePermission:
+    """
+    সব check পার হলে ALLOW, না হলে DENY।
+    RiskEngine এর পরে final gate।
+
+    Checklist:
+        1. Signal valid?
+        2. Risk approved?
+        3. News safe?
+        4. Session active?
+        5. Confluence enough?
+        6. Min R:R
+        7. SMC+Session fusion (Round-5/10)
+
+    ── Round-12 audit fix: threshold documentation ──────────────────
+    The operator's audit found a confusing contradiction:
+      - trade_permission: MIN_CONFIDENCE_PROD=40 → "45% ≥ 40% PASS"
+      - LiveRiskManager: tier 1 min_confidence=80% → "45% < 80% BLOCK"
+
+    This is NOT a bug — it's a layered defense design:
+      - trade_permission.MIN_CONFIDENCE is the FLOOR (absolute minimum
+        to even be considered). 40% means "don't reject purely on
+        confidence alone; let other gates (news, session, R:R, fusion)
+        also have a say."
+      - LiveRiskManager tier min_confidence is the CEILING per tier.
+        Tier 1 (new account) requires 80% — very conservative. Tier 3
+        (proven account) requires 55% — more permissive.
+
+    Both gates run in sequence. A trade must pass BOTH. So the effective
+    threshold is max(trade_permission.MIN_CONFIDENCE, LRM.tier.min_confidence).
+    On a fresh Tier 1 account, that's max(40, 80) = 80%.
+
+    To make this visible in the log, trade_permission now also reads the
+    LRM tier threshold and includes it in the confidence check detail.
+    """
+
+    # Day 96 bugfix: comment said 60 but the constant was left at 40 —
+    # the gate was never actually enforcing the documented production
+    # threshold, which is how single-indicator 42%-confidence trades
+    # (e.g. lone RSI oversold) kept reaching MT5.
+    MIN_CONFIDENCE_PROD  = 60  # Operator-requested floor: trade when confidence >= 60%
+    MIN_CONFIDENCE_TEST  = 10
+
+    # Co-founder fix: raised thresholds for institutional-grade entries
+    MIN_ALIGNED_FACTORS_PROD = 2
+    MIN_ALIGNED_FACTORS_TEST = 1
+    # R:R floor now comes from risk/rr_policy.py (single source of truth) —
+    # previously hardcoded here as 1.5, which conflicted with the 2.0 used by
+    # analysis/ict_amd_signal_engine.py and analysis/multi_strategy_pa_engine.py,
+    # and the Nison rule-engine spec's default_min of 2:1. Kept as class
+    # attributes (not just the policy call) so any code still reading
+    # TradePermission.MIN_RR_PROD/.MIN_RR_TEST directly keeps working.
+    MIN_RR_PROD = None   # resolved lazily below via rr_policy.get_min_rr()
+    MIN_RR_TEST = None
+    BLOCKED_SETUP_QUALITIES = {"AVOID", "INVALID"}  # Removed "POOR" - allow marginal setups
+
+    # Confidence override for LOW-quality sessions: a LOW session is
+    # normally blocked, but a sufficiently confident analysis can still
+    # justify a trade. Named constant (was a bare `55` inline) so the
+    # threshold is easy to find and change in one place. User request:
+    # confidence >= 60 should be enough to trade even in a LOW session.
+    SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60
+
+    @property
+    def MIN_CONFIDENCE(self) -> int:
+        return self.MIN_CONFIDENCE_TEST if _test_mode() else self.MIN_CONFIDENCE_PROD
+
+    @property
+    def MIN_ALIGNED_FACTORS(self) -> int:
+        return self.MIN_ALIGNED_FACTORS_TEST if _test_mode() else self.MIN_ALIGNED_FACTORS_PROD
+
+    @property
+    def MIN_RR(self) -> float:
+        from risk.rr_policy import get_min_rr
+        return get_min_rr(test_mode=_test_mode())
+
+    def check(
+        self,
+        decision_out: dict,
+        risk_out:     dict,
+        news_ctx:     dict,
+        session_ctx:  dict | None = None,
+        execution_filters: dict | None = None,
+    ) -> dict:
+
+        checks = []
+        passed = 0
+        total = 0
+
+        # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
+        # The new `execution_filters` dict (produced by AnalysisAgent)
+        # records gate verdicts WITHOUT destroying the analysis signal.
+        # We honor any gate recorded there as a hard block, and we add
+        # each one to the checks list so the operator can see WHY.
+        # This replaces the old pattern where news/session gates would
+        # overwrite `decision_out["decision"] = "NO TRADE"` at the
+        # analysis layer.
+        # ──────────────────────────────────────────────────────────────
+        conf = decision_out.get("confidence", 0)
+        if execution_filters:
+            for gate_name, gate_result in execution_filters.items():
+                blocked = isinstance(gate_result, dict) and gate_result.get("blocked")
+                if blocked and gate_name == "session" and conf >= self.MIN_CONFIDENCE:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": f"soft override at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
+                    })
+                    passed += 1
+                elif blocked:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": False,
+                        "detail": gate_result.get("reason", "blocked"),
+                    })
+                    # Don't increment passed — this is a hard block.
+                else:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": "not blocked",
+                    })
+                    passed += 1
+
+        # 1. Signal
+        sig = decision_out.get("decision", "WAIT")
+        ok  = sig in ("BUY", "SELL")
+        checks.append({"check": "Valid signal", "passed": ok, "detail": sig})
+        if ok: passed += 1
+
+        # 2. Risk approved
+        ok = risk_out.get("approved", False)
+        checks.append({
+            "check":  "Risk approved",
+            "passed": ok,
+            "detail": risk_out.get("reject_reason", "OK"),
+        })
+        if ok: passed += 1
+
+        # 3. News safe
+        # Day 97+ FIX: fail-safe (not fail-open). If news_ctx is empty/None
+        # (API failed), default to DENY — don't allow trading when we can't
+        # verify news safety. Previously defaulted to True (fail-open) which
+        # meant news API failure → trading allowed → could trade into CPI/NFP.
+        # Round-?? fix: explicit env-var bypass, same pattern as
+        # BYPASS_FUSION_GATE below. Added because the Forex Factory
+        # calendar fetch has been failing (403/timeout — scraper blocked),
+        # so news_ctx is empty on effectively every cycle and this gate
+        # was blocking 100% of trades. Fail-safe-by-default is still the
+        # right behavior when we can't verify news safety; this just gives
+        # the operator a conscious, logged way to override it while the
+        # scraper is down, instead of it silently blocking everything.
+        # Defaults to false — bypass must be turned on deliberately.
+        import os as _os_news
+        _bypass_news = _os_news.getenv("BYPASS_NEWS_GATE", "false").lower() == "true"
+        if _bypass_news:
+            ok = True
+            detail = "News system unavailable (BYPASS_NEWS_GATE=true: allowed anyway — no CPI/NFP protection)"
+        elif not news_ctx:
+            ok = False
+            detail = "News system unavailable — fail-safe block (set BYPASS_NEWS_GATE=true to override)"
+        else:
+            ok = news_ctx.get("news_trade_allowed", False)
+            detail = news_ctx.get("news_reason", "Unknown")
+        checks.append({
+            "check":  "News safe",
+            "passed": ok,
+            "detail": detail,
+        })
+        if ok: passed += 1
+
+        # ── ENTRY QUALITY: SOFT SCORING ───────────────────────────
+        # Runs BEFORE the confidence gate so penalties reduce the
+        # effective confidence.  Only extreme cases (SL/TP wrong side,
+        # averaging into losers, opposite-direction stacking) still
+        # hard-block.  All other entry-quality issues (exhaustion,
+        # indecision, small candles, chasing, etc.) become confidence
+        # penalties.  Entry quality alone NEVER rejects the trade.
+        _eq_penalty = 0
+        _eq_result = None
+        _conf_before_eq = conf
+        if risk_out.get("approved"):
+            try:
+                from risk.entry_quality_guardrails import run_all_entry_quality_checks
+                _df_eq = None
+                _ind_ctx = decision_out.get("ind_ctx", {}) or {}
+                _df_eq = decision_out.get("_df")
+                if _df_eq is None and isinstance(session_ctx, dict):
+                    _df_eq = session_ctx.get("_df")
+                _eq_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                if _df_eq is not None and len(_df_eq) > 0:
+                    _eq_result = run_all_entry_quality_checks(
+                        df=_df_eq,
+                        symbol=_eq_symbol,
+                        direction=decision_out.get("decision", "WAIT"),
+                        entry_price=float(risk_out.get("entry", 0) or 0),
+                        stop_loss=float(risk_out.get("sl_price", 0) or 0),
+                        take_profit=float(risk_out.get("tp_price", 0) or 0),
+                        ind_ctx=_ind_ctx,
+                    )
+                    _should_execute = _eq_result.get("should_execute", True)
+                    _eq_penalty = _eq_result.get("confidence_penalty", 0)
+                    _eq_report = _eq_result.get("per_check_report", [])
+                    _block_reason = _eq_result.get("block_reason")
+                    _quality_score = _eq_result.get("quality_score", 100)
+
+                    if not _should_execute:
+                        # EXTREME HARD BLOCK only (SL wrong side, TP wrong side,
+                        # averaging into losers, opposite-direction stacking)
+                        total += 1
+                        checks.append({
+                            "check":  "Entry quality guardrails",
+                            "passed": False,
+                            "detail": (
+                                f"EXTREME BLOCK: {_block_reason} "
+                                f"(quality={_quality_score}/100)"
+                            ),
+                        })
+                        log.info("[Entry Quality Report]")
+                        for _line in _eq_report:
+                            log.info(f"  {_line}")
+                        result = {
+                            "execution_allowed": False,
+                            "blocked_reason":    f"Entry quality: {_block_reason}",
+                            "failed_checks":     [
+                                {"check": "Entry quality guardrails",
+                                 "detail": f"EXTREME BLOCK: {_block_reason}"}
+                            ],
+                            "execution_action":  "NO TRADE",
+                            "allowed":       False,
+                            "passed":        passed,
+                            "total":         total,
+                            "checks":        checks,
+                            "final_action":  "NO TRADE",
+                            "entry":         risk_out.get("entry"),
+                            "sl":            risk_out.get("sl_price"),
+                            "tp":            risk_out.get("tp_price"),
+                            "lot":           risk_out.get("lot", 0),
+                            "rr":            risk_out.get("rr_ratio", 0),
+                            # Hard block happens before any confidence penalty
+                            # is applied, so pre/post are identical here.
+                            "confidence_pre_penalty":  conf,
+                            "confidence_post_penalty": conf,
+                        }
+                        log.info(
+                            f"[TradePermission] EXTREME BLOCK by entry quality: "
+                            f"{_block_reason} (quality={_quality_score}/100)"
+                        )
+                        return result
+                    else:
+                        # SOFT SCORING: apply penalty, always pass
+                        conf = max(0, conf - _eq_penalty)
+                        total += 1
+                        passed += 1
+                        _detail = f"quality={_quality_score}/100"
+                        if _eq_penalty > 0:
+                            _detail += (
+                                f", penalty=-{_eq_penalty}, "
+                                f"conf: {_conf_before_eq:.0f}% -> {conf:.0f}%"
+                            )
+                        else:
+                            _detail += ", all checks passed"
+                        checks.append({
+                            "check":  "Entry quality guardrails",
+                            "passed": True,
+                            "detail": _detail,
+                        })
+                        # Log detailed per-check report
+                        log.info("[Entry Quality Report]")
+                        for _line in _eq_report:
+                            log.info(f"  {_line}")
+                        if _eq_penalty > 0:
+                            log.info(f"  {'─' * 30}")
+                            log.info(f"  Total Penalty:     -{_eq_penalty}")
+                            log.info(f"  Confidence Before: {_conf_before_eq:.0f}")
+                            log.info(f"  Confidence After:  {conf:.0f}")
+                        else:
+                            log.info("  All checks passed - no penalty")
+                else:
+                    # BUGFIX: this branch used to be just a comment
+                    # ("If _df is None, skip guardrails") with NO code —
+                    # no checks.append(), no log line, no counter bump.
+                    # That meant whenever _df_eq was missing/empty, the
+                    # entry-quality penalty silently stayed at 0 with
+                    # zero trace anywhere: confidence_pre_penalty and
+                    # confidence_post_penalty would always be identical
+                    # and execution.log would show nothing wrong. Now
+                    # this is logged and recorded so a run of "0 delta"
+                    # is immediately diagnosable instead of looking like
+                    # the penalty step silently doesn't fire.
+                    _eq_skip_reason = (
+                        "no OHLCV data attached (decision_out['_df'] and "
+                        "session_ctx['_df'] both missing/empty)"
+                    )
+                    log.warning(
+                        f"[TradePermission] Entry quality guardrails SKIPPED — "
+                        f"{_eq_skip_reason}. Confidence penalty will be 0 this cycle."
+                    )
+                    checks.append({
+                        "check":  "Entry quality guardrails",
+                        "passed": True,
+                        "detail": f"SKIPPED — {_eq_skip_reason} (no penalty applied)",
+                    })
+            except ImportError:
+                log.debug("[TradePermission] entry_quality_guardrails not available - skipping")
+                checks.append({
+                    "check":  "Entry quality guardrails",
+                    "passed": True,
+                    "detail": "SKIPPED — entry_quality_guardrails module not importable",
+                })
+            except Exception as _eq_e:
+                # BUGFIX: was a bare log.warning(str(e)) with no traceback
+                # and no checks entry — an exception here (e.g. a shape/
+                # dtype mismatch on real broker data) was completely
+                # invisible downstream: penalty stayed 0, confidence_pre
+                # /post_penalty looked identical, and nothing in
+                # execution.log or checks[] hinted an error occurred.
+                log.warning(
+                    "[TradePermission] Entry quality check error (non-fatal) — "
+                    "penalty NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Entry quality guardrails",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_eq_e} (no penalty applied)",
+                })
+        # ── END ENTRY QUALITY ──────────────────────────────────────
+
+        # ── CONFIRMATION BIAS DEFENSE (wired in — was orphaned code,
+        # 0 importers per core/obsolete.py audit 2026-07-22) ─────────
+        # Blocks a trade when the disconfirming evidence (RSI extreme
+        # against direction, MACD cross against direction, trend/bias
+        # against direction) outweighs the confirming evidence — i.e.
+        # the signal looks right on its own indicator but the broader
+        # picture disagrees. This is a HARD block per the module's own
+        # design (>= 3 disconfirming factors = BLOCKED), same severity
+        # tier as the entry-quality EXTREME BLOCK above.
+        if risk_out.get("approved"):
+            try:
+                from risk.confirmation_bias_defense import check_disconfirming_evidence
+                _cb_ind_ctx = decision_out.get("ind_ctx", {}) or {}
+                _cb_result = check_disconfirming_evidence(
+                    signal=decision_out.get("decision", "WAIT"),
+                    ind_ctx=_cb_ind_ctx,
+                    market_bias=decision_out.get("market_bias"),
+                    mtf_bias=decision_out.get("mtf_bias"),
+                )
+                total += 1
+                if _cb_result.blocked:
+                    checks.append({
+                        "check":  "Confirmation bias defense",
+                        "passed": False,
+                        "detail": _cb_result.reason,
+                    })
+                    log.info(
+                        f"[TradePermission] BLOCKED by confirmation bias defense: "
+                        f"{_cb_result.reason} — disconfirming: {_cb_result.disconfirming_factors}"
+                    )
+                    result = {
+                        "execution_allowed": False,
+                        "blocked_reason":    f"Confirmation bias: {_cb_result.reason}",
+                        "failed_checks":     [
+                            {"check": "Confirmation bias defense", "detail": _cb_result.reason}
+                        ],
+                        "execution_action":  "NO TRADE",
+                        "allowed":       False,
+                        "passed":        passed,
+                        "total":         total,
+                        "checks":        checks,
+                        "final_action":  "NO TRADE",
+                        "entry":         risk_out.get("entry"),
+                        "sl":            risk_out.get("sl_price"),
+                        "tp":            risk_out.get("tp_price"),
+                        "lot":           risk_out.get("lot", 0),
+                        "rr":            risk_out.get("rr_ratio", 0),
+                        "confidence_pre_penalty":  conf,
+                        "confidence_post_penalty": conf,
+                    }
+                    return result
+                else:
+                    passed += 1
+                    checks.append({
+                        "check":  "Confirmation bias defense",
+                        "passed": True,
+                        "detail": _cb_result.reason,
+                    })
+            except ImportError:
+                log.debug("[TradePermission] confirmation_bias_defense not available - skipping")
+                checks.append({
+                    "check":  "Confirmation bias defense",
+                    "passed": True,
+                    "detail": "SKIPPED — confirmation_bias_defense module not importable",
+                })
+            except Exception as _cb_e:
+                log.warning(
+                    "[TradePermission] Confirmation bias check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Confirmation bias defense",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_cb_e}",
+                })
+        # ── END CONFIRMATION BIAS DEFENSE ──────────────────────────
+
+        # ── REVENGE TRADING DETECTOR (wired in — was orphaned code,
+        # 0 importers per core/obsolete.py audit 2026-07-22; the audit
+        # also flagged that someone had edited this file after marking
+        # it dead, which is why it needed a human decision rather than
+        # deletion) ──────────────────────────────────────────────────
+        # Looks at the last 10 closed trades for this pair. HIGH/MEDIUM
+        # severity (tight loss cooldown, too many trades/losses in the
+        # last hour, or a lot-size jump right after a loss) hard-blocks
+        # the trade. LOW severity is logged as a soft warning only —
+        # not blocked — since a single mild flag shouldn't reject an
+        # otherwise-good setup.
+        if risk_out.get("approved"):
+            try:
+                from risk.revenge_trading_detector import check_revenge_trading
+                from database.db import TraderDB
+                _rt_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                _rt_hist = TraderDB().get_trade_history(pair=_rt_symbol, limit=10)
+                _rt_recent = (
+                    _rt_hist.to_dict("records")
+                    if _rt_hist is not None and len(_rt_hist) else []
+                )
+                _rt_proposed = {"lot": risk_out.get("lot", 0)}
+                _rt_result = check_revenge_trading(_rt_recent, _rt_proposed)
+                total += 1
+                if _rt_result.is_revenge and _rt_result.severity in ("HIGH", "MEDIUM"):
+                    _rt_detail = (
+                        f"{_rt_result.severity}: {'; '.join(_rt_result.reasons)} "
+                        f"(cooldown {_rt_result.recommended_cooldown_minutes}m)"
+                    )
+                    checks.append({
+                        "check":  "Revenge trading detector",
+                        "passed": False,
+                        "detail": _rt_detail,
+                    })
+                    log.info(f"[TradePermission] BLOCKED by revenge trading detector: {_rt_detail}")
+                    result = {
+                        "execution_allowed": False,
+                        "blocked_reason":    f"Revenge trading: {_rt_detail}",
+                        "failed_checks":     [
+                            {"check": "Revenge trading detector", "detail": _rt_detail}
+                        ],
+                        "execution_action":  "NO TRADE",
+                        "allowed":       False,
+                        "passed":        passed,
+                        "total":         total,
+                        "checks":        checks,
+                        "final_action":  "NO TRADE",
+                        "entry":         risk_out.get("entry"),
+                        "sl":            risk_out.get("sl_price"),
+                        "tp":            risk_out.get("tp_price"),
+                        "lot":           risk_out.get("lot", 0),
+                        "rr":            risk_out.get("rr_ratio", 0),
+                        "confidence_pre_penalty":  conf,
+                        "confidence_post_penalty": conf,
+                    }
+                    return result
+                else:
+                    passed += 1
+                    _rt_detail = (
+                        f"LOW/none: {'; '.join(_rt_result.reasons)}"
+                        if _rt_result.reasons else "no revenge pattern detected"
+                    )
+                    checks.append({
+                        "check":  "Revenge trading detector",
+                        "passed": True,
+                        "detail": _rt_detail,
+                    })
+            except ImportError:
+                log.debug("[TradePermission] revenge_trading_detector not available - skipping")
+                checks.append({
+                    "check":  "Revenge trading detector",
+                    "passed": True,
+                    "detail": "SKIPPED — revenge_trading_detector module not importable",
+                })
+            except Exception as _rt_e:
+                log.warning(
+                    "[TradePermission] Revenge trading check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Revenge trading detector",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_rt_e}",
+                })
+        # ── END REVENGE TRADING DETECTOR ───────────────────────────
+
+        # ── COST-AWARE EXPECTED-VALUE GATE (book_guardrails.py) ─────
+        # 2026-07-24: book_guardrails.check_cost_aware_ev() existed in the
+        # repo but was never imported/called anywhere (0 importers — audit
+        # confirmed). Its other two guardrails (correlation, anti-revenge)
+        # are redundant with correlation_manager.py / streak_tracker.py,
+        # which ARE wired — so only this one is being added here. This is
+        # an ACTUAL blocking gate (unlike the advisory scoring below),
+        # because a trade whose expected profit doesn't clear spread +
+        # commission + slippage is a losing trade by construction, not a
+        # matter of opinion. It matters most on a small/cent account where
+        # fixed per-trade costs are a large fraction of the account, so a
+        # marginal-edge signal that would be a rounding error on a $10k
+        # account can be a meaningful, recurring drag on a $5 one.
+        if risk_out.get("approved"):
+            try:
+                from risk.book_guardrails import check_cost_aware_ev
+                from core.constants import get_pip_size
+
+                _ev_symbol = str(
+                    decision_out.get("_symbol", "") or risk_out.get("symbol", "")
+                ).upper()
+                _ev_pip_size = get_pip_size(_ev_symbol) or 0.0001
+                _ev_entry = float(risk_out.get("entry", 0) or 0)
+                _ev_sl = float(risk_out.get("sl_price", 0) or 0)
+                _ev_tp = float(risk_out.get("tp_price", 0) or 0)
+                _ev_sl_pips = abs(_ev_entry - _ev_sl) / _ev_pip_size if _ev_sl else 20.0
+                _ev_tp_pips = abs(_ev_tp - _ev_entry) / _ev_pip_size if _ev_tp else 40.0
+
+                # Win probability proxy: decision confidence (0-100) → 0-1.
+                # This is an approximation, not a calibrated probability —
+                # same limitation the Kelly calculator already has
+                # elsewhere in this codebase (see kelly_calculator.py).
+                _ev_confidence = float(decision_out.get("confidence", 50) or 50)
+                _ev_win_prob = max(0.0, min(1.0, _ev_confidence / 100.0))
+
+                _ev_spread = float(
+                    (session_ctx or {}).get("spread_pips", 0)
+                    or risk_out.get("spread_pips", 0) or 0
+                )
+                _ev_kwargs = dict(
+                    expected_pnl_pips=None,  # computed from win_prob + SL/TP inside
+                    pair=_ev_symbol or "EURUSD",
+                    win_probability=_ev_win_prob,
+                    sl_pips=_ev_sl_pips,
+                    tp_pips=_ev_tp_pips,
+                )
+                if _ev_spread > 0:
+                    _ev_kwargs["spread_pips"] = _ev_spread
+                # else: let check_cost_aware_ev fall back to its own
+                # DEFAULT_SPREAD_PIPS lookup for the symbol.
+
+                _ev_result = check_cost_aware_ev(**_ev_kwargs)
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": _ev_result.passed,
+                    "detail": _ev_result.reason,
+                })
+            except ImportError:
+                log.debug("[TradePermission] book_guardrails not available - skipping EV gate")
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": True,
+                    "detail": "SKIPPED — book_guardrails module not importable",
+                })
+            except Exception as _ev_e:
+                # Fail-open (non-fatal), matching the pattern every other
+                # optional gate in this function uses (revenge trading,
+                # entry_quality, etc.) — a bug in an advisory-adjacent
+                # module should degrade to "not applied this cycle", not
+                # halt trading entirely.
+                log.warning(
+                    "[TradePermission] Cost-aware EV check error (non-fatal) — "
+                    "check NOT applied this cycle", exc_info=True,
+                )
+                checks.append({
+                    "check":  "Cost-aware EV gate (book_guardrails)",
+                    "passed": True,
+                    "detail": f"SKIPPED — error during check: {_ev_e}",
+                })
+        # ── END COST-AWARE EV GATE ──────────────────────────────────
+
+        # ── ADVISORY SCORING: entry_score.py + institutional_entry_
+        # framework.py (wired in — were orphaned code, 0 importers per
+        # core/obsolete.py audit 2026-07-22) ───────────────────────────
+        # These are LOG-ONLY. They never block the trade and never touch
+        # `conf`. Reason: their scoring (R:R, S/R location, ATR band,
+        # trend/momentum) already overlaps heavily with the ACTIVE
+        # entry_quality_guardrails + risk_engine gates above — making
+        # them a second hard-block gate would just double-penalize the
+        # same signals under a different name. Instead they run purely
+        # as a second opinion in the log/dashboard so the operator can
+        # compare "did entry_quality pass this AND would the 100/200-pt
+        # scorer also have called it a good trade?" without changing
+        # execution behavior. If the two consistently disagree in
+        # practice, that's a signal worth promoting one of them to an
+        # actual gate later — but that's a human decision, not this fix.
+        if risk_out.get("approved"):
+            try:
+                from risk.entry_score import compute_entry_score
+                from risk.institutional_entry_framework import evaluate_institutional_entry
+                _adv_direction = decision_out.get("decision", "WAIT")
+                _adv_df = decision_out.get("_df")
+                _adv_ind = decision_out.get("ind_ctx", {}) or {}
+                _adv_entry = float(risk_out.get("entry", 0) or 0)
+                _adv_sl = float(risk_out.get("sl_price", 0) or 0)
+                _adv_tp = float(risk_out.get("tp_price", 0) or 0)
+                _adv_atr = float(_adv_ind.get("atr", 0.001) or 0.001)
+                _adv_spread = float(
+                    (session_ctx or {}).get("spread_pips", 1.0)
+                    or risk_out.get("spread_pips", 1.0) or 1.0
+                )
+                _adv_regime = decision_out.get("regime", {}) or {}
+                _adv_mtf = decision_out.get("mtf_bias")
+                _adv_sr = decision_out.get("sr_ctx", {}) or {}
+                _adv_structure = decision_out.get("structure_ctx", {}) or {}
+                _adv_smc = decision_out.get("smc_ctx", {}) or {}
+                _adv_liq = decision_out.get("liquidity_ctx", {}) or {}
+                _adv_revenge_ctx = {
+                    "is_revenge": bool(locals().get("_rt_result") and _rt_result.is_revenge
+                                       and _rt_result.severity in ("HIGH", "MEDIUM"))
+                }
+
+                _es_result = compute_entry_score(
+                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
+                    mtf_bias=_adv_mtf, direction=_adv_direction, entry=_adv_entry,
+                    sl=_adv_sl, tp=_adv_tp, atr=_adv_atr, spread_pips=_adv_spread,
+                    news_ctx=news_ctx, structure_ctx=_adv_structure,
+                )
+                _ie_result = evaluate_institutional_entry(
+                    direction=_adv_direction, entry=_adv_entry, sl=_adv_sl, tp=_adv_tp,
+                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
+                    mtf_bias=_adv_mtf, structure_ctx=_adv_structure, smc_ctx=_adv_smc,
+                    session_ctx=session_ctx or {}, news_ctx=news_ctx,
+                    liquidity_ctx=_adv_liq, spread_pips=_adv_spread,
+                    revenge_ctx=_adv_revenge_ctx,
+                )
+                checks.append({
+                    "check":  "Advisory scoring (entry_score / institutional)",
+                    "passed": True,
+                    "detail": (
+                        f"entry_score={_es_result.score}/100 [{_es_result.recommendation}] | "
+                        f"institutional={_ie_result.score}/{_ie_result.max_score} "
+                        f"[{_ie_result.trade_quality or _ie_result.hard_block}]"
+                    ),
+                })
+                log.info(
+                    f"[Advisory] entry_score={_es_result.score}/100 "
+                    f"({_es_result.recommendation}) | "
+                    f"institutional={_ie_result.score}/{_ie_result.max_score} "
+                    f"({_ie_result.trade_quality or ('hard_block: ' + _ie_result.hard_block)}) "
+                    f"— informational only, not gating"
+                )
+            except ImportError:
+                log.debug("[TradePermission] advisory scorers not available - skipping")
+            except Exception as _adv_e:
+                log.debug(f"[TradePermission] Advisory scoring error (non-fatal, log-only feature): {_adv_e}")
+        # ── END ADVISORY SCORING ───────────────────────────────────
+
+        # 4. Confidence
+        ok   = conf >= self.MIN_CONFIDENCE
+        checks.append({
+            "check":  "Min confidence",
+            "passed": ok,
+            "detail": f"{conf}% (min {self.MIN_CONFIDENCE}%)",
+        })
+        if ok: passed += 1
+
+        # Log-transparency fix: capture the EXACT value compared against
+        # MIN_CONFIDENCE above (post entry-quality-penalty), separately from
+        # the raw analysis confidence (pre-penalty). Downstream logging
+        # (execution.log) must report both so "Confidence: 73%" next to a
+        # failed "Min confidence" check never looks like a phantom bug when
+        # the real effective value (e.g. 52%) is what actually got compared.
+        _confidence_pre_penalty  = decision_out.get("confidence", 0)
+        _confidence_post_penalty = conf
+
+        # 5. Session quality (optional)
+        # In TEST_MODE: session quality is just a logged warning, NOT a
+        # trade blocker. This lets the system place trades during off-hours
+        # (Sydney/Tokyo only) so you can verify MT5 execution end-to-end.
+        # In production: LOW quality sessions are normally blocked, but
+        # high-confidence analysis may still justify a trade.
+        if session_ctx:
+            # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
+            # "quality" key at all — it emits "session_grade" (values
+            # A+/A/B/C, from calculate_session_confidence()). Reading
+            # session_ctx.get("quality", "LOW") therefore ALWAYS fell
+            # back to the "LOW" default on every single trade, no matter
+            # how good the actual session setup was (even an A+ graded
+            # session read as LOW here) — forcing every trade through
+            # the strict low-quality confidence override gate below.
+            # Fix: read the real "quality" key if a caller ever sets one
+            # (forward-compatible), otherwise derive it from the actual
+            # session_grade the analyzer produces.
+            quality = session_ctx.get("quality")
+            if quality is None:
+                _grade = session_ctx.get("session_grade", "C")
+                quality = {"A+": "HIGH", "A": "HIGH", "B": "MEDIUM", "C": "LOW"}.get(_grade, "LOW")
+            conf = decision_out.get("confidence", 0)
+            if _test_mode():
+                ok = True   # always pass in test mode
+                detail = f"{quality} (TEST_MODE: allowed)"
+            else:
+                ok = quality in ("HIGH", "MEDIUM")
+                if not ok and quality == "LOW":
+                    ok = conf >= self.SESSION_LOW_QUALITY_MIN_CONFIDENCE
+                    detail = (
+                        f"{quality} (high-confidence override: {conf}%)"
+                        if ok else quality
+                    )
+                else:
+                    detail = quality
+            checks.append({
+                "check":  "Session quality",
+                "passed": ok,
+                "detail": detail,
+            })
+            if ok: passed += 1
+            total += 5
+        else:
+            total += 4
+
+        # ARCHITECTURAL FIX: account for execution_filters checks already added
+        # at the top of this method. Each execution filter that was checked
+        # adds 1 to the total denominator.
+        if execution_filters:
+            total += len(execution_filters)
+
+        # Co-founder fix: clearer log that shows WHY the gate failed
+        aligned = decision_out.get("aligned_factors", 0)
+        setup_q = decision_out.get("setup_quality", "UNKNOWN")
+        raw_setup_q = decision_out.get("raw_setup_quality", "")
+        ok_aligned = aligned >= self.MIN_ALIGNED_FACTORS
+        ok_quality = setup_q not in self.BLOCKED_SETUP_QUALITIES
+        _reasons = []
+        if not ok_aligned:
+            _reasons.append(f"factors {aligned}<{self.MIN_ALIGNED_FACTORS}")
+        if not ok_quality:
+            _reasons.append(f"quality={setup_q}")
+        # Transparency fix: setup_quality gets forced to AVOID whenever ANY gate
+        # fails (e.g. factor count), which hides what the scorer's real grade was.
+        # Show the real grade alongside it when they differ, so "AVOID" doesn't
+        # get misread as "the setup itself was graded poorly".
+        _quality_display = (
+            f"{setup_q} (real grade: {raw_setup_q})"
+            if raw_setup_q and raw_setup_q != setup_q
+            else setup_q
+        )
+        if conf >= self.MIN_CONFIDENCE and (not ok_aligned or not ok_quality):
+            _detail = (
+                f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
+                f" — soft override at {conf:.0f}% confidence"
+            )
+            _passed = True
+        else:
+            _detail = (
+                f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
+                + (f" — BLOCKED: {', '.join(_reasons)}" if _reasons else " — OK")
+            )
+            _passed = ok_aligned and ok_quality
+        checks.append({
+            "check":  "Confluence quality",
+            "passed": _passed,
+            "detail": _detail,
+        })
+        if _passed: passed += 1
+        total += 1
+
+        # Day 97+ Book rule: Min R:R
+        if risk_out.get("approved", False):
+            rr = risk_out.get("rr_ratio", 0)
+            ok_rr = rr >= self.MIN_RR
+            checks.append({
+                "check":  "Min R:R",
+                "passed": ok_rr,
+                "detail": f"1:{rr} (min 1:{self.MIN_RR})",
+            })
+            if ok_rr: passed += 1
+            total += 1
+        else:
+            # RiskEngine already rejected this trade upstream (see "Risk
+            # approved" check above) for a reason unrelated to R:R — its
+            # rr_ratio is a zeroed placeholder, not a real measurement,
+            # because SL/TP were never computed for a trade that was
+            # already dead. Don't evaluate/log it as a distinct R:R
+            # failure; that just duplicates and mislabels the real reason
+            # already captured by "Risk approved" above.
+            checks.append({
+                "check":  "Min R:R",
+                "passed": True,
+                "detail": f"N/A — RiskEngine already rejected ({risk_out.get('reject_reason', 'unknown')})",
+            })
+            passed += 1
+            total += 1
+
+        # ── Round-5 audit fix: SMC + Session Fusion gate ──────────────
+        # The session_smc_fusion() in analysis/session_analyzer.py
+        # produces a `fusion_allowed` flag and a `fusion_score` (0-100).
+        # When fusion is NOT allowed, it means SMC score is below the
+        # session's required minimum, OR BOS / Order Block is missing
+        # for that session — i.e. the structural setup doesn't justify
+        # a trade in this session. Previously this was advisory only;
+        # the trade could still go through if all other gates passed.
+        #
+        # Now: when `session_ctx.fusion.fusion_allowed == False`, the
+        # trade is DENIED. The fusion_score is included in the detail
+        # string so the operator can see how close it was.
+        #
+        # Round-10 audit fix: REMOVED the TEST_MODE bypass. The operator's
+        # audit found that live trading was running with TEST_MODE=true
+        # (set during initial development), which silently bypassed this
+        # gate. SMC+Session fusion is a STRUCTURAL risk gate — it should
+        # NOT be bypassed even in test mode. If you genuinely want to
+        # test MT5 execution without SMC alignment, set the new
+        # BYPASS_FUSION_GATE env var instead (defaults to false).
+        if session_ctx and isinstance(session_ctx.get("fusion"), dict):
+            fusion = session_ctx["fusion"]
+            fusion_allowed = fusion.get("fusion_allowed", True)
+            fusion_score = fusion.get("fusion_score", 0)
+            fusion_grade = fusion.get("fusion_grade", "?")
+            issues = fusion.get("issues", []) or []
+
+            # Round-10: explicit env-var bypass (NOT tied to TEST_MODE)
+            import os as _os
+            _bypass_fusion = _os.getenv("BYPASS_FUSION_GATE", "false").lower() == "true"
+            if _bypass_fusion:
+                ok_fusion = True
+                detail = (
+                    f"score={fusion_score}/100 [{fusion_grade}] "
+                    f"(BYPASS_FUSION_GATE=true: allowed even if blocked)"
+                )
+            else:
+                ok_fusion = bool(fusion_allowed)
+                if not ok_fusion:
+                    issues_str = "; ".join(issues[:2]) if issues else "no detail"
+                    detail = (
+                        f"BLOCKED score={fusion_score}/100 [{fusion_grade}] "
+                        f"— {issues_str}"
+                    )
+                else:
+                    detail = f"score={fusion_score}/100 [{fusion_grade}]"
+            checks.append({
+                "check":  "SMC+Session fusion",
+                "passed": ok_fusion,
+                "detail": detail,
+            })
+            if ok_fusion: passed += 1
+            total += 1
+
+        allowed = passed == total   # সব check pass করতে হবে
+
+        # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
+        # Previously: `final_action = decision_out.get("decision") if allowed else "NO TRADE"`
+        # This ECHOED the analysis-layer decision into the permission result,
+        # coupling execution-layer verdict with analysis-layer verdict. When
+        # downstream consumers (trader.py L1397-1406) read `perm_out["final_action"]`
+        # and overwrote `dec_out["decision"]` with it, the analysis verdict
+        # was DESTROYED by an execution-layer gate.
+        #
+        # Now: `final_action` (and the new `execution_action`) is purely an
+        # EXECUTION verdict — BUY/SELL only if execution_allowed, else NO TRADE.
+        # It NEVER echoes the analysis-layer decision. The analysis verdict
+        # is preserved untouched in `dec_out["decision"]` by the caller.
+        # ──────────────────────────────────────────────────────────────
+        execution_action = decision_out.get("decision") if allowed else "NO TRADE"
+        # The new canonical fields (per institutional spec):
+        execution_allowed = allowed
+        if allowed:
+            blocked_reason = None
+        else:
+            _failed = next((c for c in reversed(checks) if not c.get("passed", True)), None)
+            blocked_reason = _failed.get("detail") if _failed else "Multiple checks failed"
+        failed_checks = [
+            {"check": c.get("check", "?"), "detail": c.get("detail", "")}
+            for c in checks if not c.get("passed", True)
+        ]
+
+        result = {
+            # New canonical fields (institutional spec)
+            "execution_allowed":  execution_allowed,
+            "blocked_reason":     blocked_reason,
+            "failed_checks":      failed_checks,
+            "execution_action":   execution_action,
+            # Legacy fields (kept for backward compat — many consumers read these)
+            "allowed":            allowed,
+            "passed":             passed,
+            "total":              total,
+            "checks":             checks,
+            "final_action":       execution_action,  # alias of execution_action
+            "entry":              risk_out.get("entry"),
+            "sl":                 risk_out.get("sl_price"),
+            "tp":                 risk_out.get("tp_price"),
+            "lot":                risk_out.get("lot", 0),
+            "rr":                 risk_out.get("rr_ratio", 0),
+            # Log-transparency fix: expose both confidence values explicitly
+            # so execution.log never shows the pre-penalty number next to a
+            # "Min confidence" failure that was actually decided on the
+            # post-penalty number (see risk/trade_permission.py check()).
+            "confidence_pre_penalty":  _confidence_pre_penalty,
+            "confidence_post_penalty": _confidence_post_penalty,
+            # NEW (pullback-limit-order routing, 2026-07-24): expose the
+            # full entry-quality result so ExecutionRouter can see WHICH
+            # specific flags failed (e.g. chasing_filter / atr_extension)
+            # and route overextended entries to a pullback limit order
+            # instead of a market order. Previously this data died inside
+            # this function — only a folded confidence penalty escaped,
+            # so execution had no way to know a signal was a "good
+            # direction, bad timing" chase.
+            "entry_quality_detail": _eq_result,
+        }
+
+        # ── INSTITUTIONAL LOG FORMAT ────────────────────────────────
+        # Separates the ANALYSIS verdict from the EXECUTION verdict so the
+        # operator can see "BUY 79% (analysis) → BLOCKED (news)" instead of
+        # the misleading "WAIT 0%" that the old pipeline produced.
+        _analysis_signal = decision_out.get("decision", "WAIT")
+        _analysis_conf   = decision_out.get("confidence", 0)
+        if allowed:
+            log.info(
+                f"[TradePermission] ALLOWED "
+                f"({passed}/{total} checks passed) | "
+                f"Analysis: {_analysis_signal} {_analysis_conf:.0f}% | "
+                f"Execution: {execution_action} | "
+                f"Confidence floor={self.MIN_CONFIDENCE}%"
+            )
+        else:
+            log.info(
+                f"[TradePermission] BLOCKED "
+                f"({passed}/{total} checks passed) | "
+                f"Analysis: {_analysis_signal} {_analysis_conf:.0f}% | "
+                f"Execution: BLOCKED | Reason: {blocked_reason}"
+            )
+        return result
+
+    def print_summary(self, result: dict) -> None:
+        bar  = "═" * 44
+        icon = "✅" if result["allowed"] else "⛔"
+        log.info(bar)
+        log.info(f"  {icon}  TRADE PERMISSION  ({result['passed']}/{result['total']})")
+        log.info(bar)
+        for c in result["checks"]:
+            tick = "✓" if c["passed"] else "✗"
+            log.info(f"  {tick}  {c['check']:<22} {c['detail']}")
+        log.info(f"  ──")
+        log.info(f"  Final action : {result['final_action']}")
+        if result["allowed"]:
+            log.info(f"  Entry        : {result['entry']}")
+            log.info(f"  SL / TP      : {result['sl']} / {result['tp']}")
+            log.info(f"  Lot          : {result['lot']}   R:R 1:{result['rr']}")
+        log.info(bar)

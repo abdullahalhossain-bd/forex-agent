@@ -1,0 +1,26 @@
+2026-07-30 22:13:28 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Starting...
+2026-07-30 22:13:28 | INFO    | pipeline.phase11_backtest |   EURUSD xgboost: PnL=$0.00 Sharpe=0.00 WR=0.0%
+2026-07-30 22:13:28 | INFO    | pipeline.phase11_backtest |   EURUSD lightgbm: PnL=$0.00 Sharpe=0.00 WR=0.0%
+2026-07-30 22:13:28 | WARNING | pipeline.phase11_backtest |   EURUSD catboost: backtest failed -- 'float' object is not subscriptable
+2026-07-30 22:13:28 | DEBUG   | pipeline.phase11_backtest | Traceback (most recent call last):
+  File "D:\Projects\forex\ml\pipeline\phase11_backtest.py", line 67, in run_backtests
+    metrics = _calculate_backtest_metrics(
+        test_df, predictions, symbol, config
+    )
+  File "D:\Projects\forex\ml\pipeline\phase11_backtest.py", line 167, in _calculate_backtest_metrics
+    avg_rr = np.mean([t["pips"] for t in wins]) / abs(np.mean([t["pips"] for t in losses])) if wins and losses else 0
+                      ~^^^^^^^^
+TypeError: 'float' object is not subscriptable
+
+2026-07-30 22:13:29 | WARNING | pipeline.phase11_backtest |   EURUSD random_forest: backtest failed -- 'float' object is not subscriptable
+2026-07-30 22:13:29 | DEBUG   | pipeline.phase11_backtest | Traceback (most recent call last):
+  File "D:\Projects\forex\ml\pipeline\phase11_backtest.py", line 67, in run_backtests
+    metrics = _calculate_backtest_metrics(
+        test_df, predictions, symbol, config
+    )
+  File "D:\Projects\forex\ml\pipeline\phase11_backtest.py", line 167, in _calculate_backtest_metrics
+    avg_rr = np.mean([t["pips"] for t in wins]) / abs(np.mean([t["pips"] for t in losses])) if wins and losses else 0
+                      ~^^^^^^^^
+TypeError: 'float' object is not subscriptable
+
+2026-07-30 22:13:29 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Completed in 0m 0.7s

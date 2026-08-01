@@ -1,0 +1,2662 @@
+{
+  "generated_at": "2026-07-27T19:41:16.415975+00:00",
+  "data_dir": "/home/z/my-project/download/forex-agent/data",
+  "total_files": 144,
+  "total_rows": 1526198,
+  "num_symbols": 48,
+  "num_timeframes": 3,
+  "symbols": [
+    "AUDCAD",
+    "AUDCHF",
+    "AUDJPY",
+    "AUDNZD",
+    "AUDSGD",
+    "AUDUSD",
+    "CADCHF",
+    "CADJPY",
+    "CHFJPY",
+    "EURAUD",
+    "EURCAD",
+    "EURCHF",
+    "EURGBP",
+    "EURJPY",
+    "EURNOK",
+    "EURNZD",
+    "EURSEK",
+    "EURUSD",
+    "GBPAUD",
+    "GBPCAD",
+    "GBPCHF",
+    "GBPJPY",
+    "GBPNOK",
+    "GBPNZD",
+    "GBPSEK",
+    "GBPUSD",
+    "HKDJPY",
+    "MXNJPY",
+    "NZDCAD",
+    "NZDCHF",
+    "NZDJPY",
+    "NZDSGD",
+    "NZDUSD",
+    "SGDJPY",
+    "USDCAD",
+    "USDCHF",
+    "USDCNH",
+    "USDHKD",
+    "USDJPY",
+    "USDMXN",
+    "USDSGD",
+    "USDTHB",
+    "USDTRY",
+    "USDZAR",
+    "XAGUSD",
+    "XAUUSD",
+    "XPDUSD",
+    "XPTUSD"
+  ],
+  "timeframes": [
+    "H1",
+    "H4",
+    "M15"
+  ],
+  "years_covered": [
+    2025,
+    2026
+  ],
+  "total_missing_values": 0,
+  "total_duplicate_timestamps": 0,
+  "total_gaps": 643870,
+  "corrupted_files": [],
+  "files": [
+    {
+      "file": "AUDCAD_H1.csv",
+      "symbol": "AUDCAD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "AUDCAD_H4.csv",
+      "symbol": "AUDCAD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDCAD_M15.csv",
+      "symbol": "AUDCAD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "AUDCHF_H1.csv",
+      "symbol": "AUDCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "AUDCHF_H4.csv",
+      "symbol": "AUDCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDCHF_M15.csv",
+      "symbol": "AUDCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "AUDJPY_H1.csv",
+      "symbol": "AUDJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "AUDJPY_H4.csv",
+      "symbol": "AUDJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDJPY_M15.csv",
+      "symbol": "AUDJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "AUDNZD_H1.csv",
+      "symbol": "AUDNZD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "AUDNZD_H4.csv",
+      "symbol": "AUDNZD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDNZD_M15.csv",
+      "symbol": "AUDNZD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "AUDSGD_H1.csv",
+      "symbol": "AUDSGD",
+      "timeframe": "H1",
+      "rows": 5220,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2254,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-09-16T09:00:00+00:00",
+      "end": "2026-07-24T18:00:00+00:00"
+    },
+    {
+      "file": "AUDSGD_H4.csv",
+      "symbol": "AUDSGD",
+      "timeframe": "H4",
+      "rows": 1329,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 540,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-09-16T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDSGD_M15.csv",
+      "symbol": "AUDSGD",
+      "timeframe": "M15",
+      "rows": 20872,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 9022,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-09-16T09:30:00+00:00",
+      "end": "2026-07-24T18:45:00+00:00"
+    },
+    {
+      "file": "AUDUSD_H1.csv",
+      "symbol": "AUDUSD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "AUDUSD_H4.csv",
+      "symbol": "AUDUSD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "AUDUSD_M15.csv",
+      "symbol": "AUDUSD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "CADCHF_H1.csv",
+      "symbol": "CADCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "CADCHF_H4.csv",
+      "symbol": "CADCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "CADCHF_M15.csv",
+      "symbol": "CADCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "CADJPY_H1.csv",
+      "symbol": "CADJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "CADJPY_H4.csv",
+      "symbol": "CADJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "CADJPY_M15.csv",
+      "symbol": "CADJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "CHFJPY_H1.csv",
+      "symbol": "CHFJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "CHFJPY_H4.csv",
+      "symbol": "CHFJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "CHFJPY_M15.csv",
+      "symbol": "CHFJPY",
+      "timeframe": "M15",
+      "rows": 24754,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10248,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURAUD_H1.csv",
+      "symbol": "EURAUD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURAUD_H4.csv",
+      "symbol": "EURAUD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURAUD_M15.csv",
+      "symbol": "EURAUD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURCAD_H1.csv",
+      "symbol": "EURCAD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURCAD_H4.csv",
+      "symbol": "EURCAD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURCAD_M15.csv",
+      "symbol": "EURCAD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURCHF_H1.csv",
+      "symbol": "EURCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURCHF_H4.csv",
+      "symbol": "EURCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURCHF_M15.csv",
+      "symbol": "EURCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURGBP_H1.csv",
+      "symbol": "EURGBP",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURGBP_H4.csv",
+      "symbol": "EURGBP",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURGBP_M15.csv",
+      "symbol": "EURGBP",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURJPY_H1.csv",
+      "symbol": "EURJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURJPY_H4.csv",
+      "symbol": "EURJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURJPY_M15.csv",
+      "symbol": "EURJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURNOK_H1.csv",
+      "symbol": "EURNOK",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURNOK_H4.csv",
+      "symbol": "EURNOK",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURNOK_M15.csv",
+      "symbol": "EURNOK",
+      "timeframe": "M15",
+      "rows": 24776,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10226,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURNZD_H1.csv",
+      "symbol": "EURNZD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURNZD_H4.csv",
+      "symbol": "EURNZD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURNZD_M15.csv",
+      "symbol": "EURNZD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURSEK_H1.csv",
+      "symbol": "EURSEK",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURSEK_H4.csv",
+      "symbol": "EURSEK",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURSEK_M15.csv",
+      "symbol": "EURSEK",
+      "timeframe": "M15",
+      "rows": 24777,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10225,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "EURUSD_H1.csv",
+      "symbol": "EURUSD",
+      "timeframe": "H1",
+      "rows": 6197,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2553,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "EURUSD_H4.csv",
+      "symbol": "EURUSD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "EURUSD_M15.csv",
+      "symbol": "EURUSD",
+      "timeframe": "M15",
+      "rows": 24780,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10222,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPAUD_H1.csv",
+      "symbol": "GBPAUD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPAUD_H4.csv",
+      "symbol": "GBPAUD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPAUD_M15.csv",
+      "symbol": "GBPAUD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPCAD_H1.csv",
+      "symbol": "GBPCAD",
+      "timeframe": "H1",
+      "rows": 6195,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2555,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPCAD_H4.csv",
+      "symbol": "GBPCAD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPCAD_M15.csv",
+      "symbol": "GBPCAD",
+      "timeframe": "M15",
+      "rows": 24773,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10229,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPCHF_H1.csv",
+      "symbol": "GBPCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPCHF_H4.csv",
+      "symbol": "GBPCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPCHF_M15.csv",
+      "symbol": "GBPCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPJPY_H1.csv",
+      "symbol": "GBPJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPJPY_H4.csv",
+      "symbol": "GBPJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPJPY_M15.csv",
+      "symbol": "GBPJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPNOK_H1.csv",
+      "symbol": "GBPNOK",
+      "timeframe": "H1",
+      "rows": 6195,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2555,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPNOK_H4.csv",
+      "symbol": "GBPNOK",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPNOK_M15.csv",
+      "symbol": "GBPNOK",
+      "timeframe": "M15",
+      "rows": 24773,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10229,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPNZD_H1.csv",
+      "symbol": "GBPNZD",
+      "timeframe": "H1",
+      "rows": 6149,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2601,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPNZD_H4.csv",
+      "symbol": "GBPNZD",
+      "timeframe": "H4",
+      "rows": 1540,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 647,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPNZD_M15.csv",
+      "symbol": "GBPNZD",
+      "timeframe": "M15",
+      "rows": 24588,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10414,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPSEK_H1.csv",
+      "symbol": "GBPSEK",
+      "timeframe": "H1",
+      "rows": 6195,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2555,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPSEK_H4.csv",
+      "symbol": "GBPSEK",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPSEK_M15.csv",
+      "symbol": "GBPSEK",
+      "timeframe": "M15",
+      "rows": 24770,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10232,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "GBPUSD_H1.csv",
+      "symbol": "GBPUSD",
+      "timeframe": "H1",
+      "rows": 6195,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2555,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "GBPUSD_H4.csv",
+      "symbol": "GBPUSD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "GBPUSD_M15.csv",
+      "symbol": "GBPUSD",
+      "timeframe": "M15",
+      "rows": 24776,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10226,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "HKDJPY_H1.csv",
+      "symbol": "HKDJPY",
+      "timeframe": "H1",
+      "rows": 6076,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2672,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T18:00:00+00:00"
+    },
+    {
+      "file": "HKDJPY_H4.csv",
+      "symbol": "HKDJPY",
+      "timeframe": "H4",
+      "rows": 1549,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 638,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "HKDJPY_M15.csv",
+      "symbol": "HKDJPY",
+      "timeframe": "M15",
+      "rows": 24290,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10704,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T18:45:00+00:00"
+    },
+    {
+      "file": "MXNJPY_H1.csv",
+      "symbol": "MXNJPY",
+      "timeframe": "H1",
+      "rows": 1894,
+      "years": [
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 1473,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2026-03-06T12:00:00+00:00",
+      "end": "2026-07-24T18:00:00+00:00"
+    },
+    {
+      "file": "MXNJPY_H4.csv",
+      "symbol": "MXNJPY",
+      "timeframe": "H4",
+      "rows": 483,
+      "years": [
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 360,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2026-03-06T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "MXNJPY_M15.csv",
+      "symbol": "MXNJPY",
+      "timeframe": "M15",
+      "rows": 7571,
+      "years": [
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 5896,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2026-03-06T12:15:00+00:00",
+      "end": "2026-07-24T18:45:00+00:00"
+    },
+    {
+      "file": "NZDCAD_H1.csv",
+      "symbol": "NZDCAD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "NZDCAD_H4.csv",
+      "symbol": "NZDCAD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "NZDCAD_M15.csv",
+      "symbol": "NZDCAD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "NZDCHF_H1.csv",
+      "symbol": "NZDCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "NZDCHF_H4.csv",
+      "symbol": "NZDCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "NZDCHF_M15.csv",
+      "symbol": "NZDCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "NZDJPY_H1.csv",
+      "symbol": "NZDJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "NZDJPY_H4.csv",
+      "symbol": "NZDJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "NZDJPY_M15.csv",
+      "symbol": "NZDJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "NZDSGD_H1.csv",
+      "symbol": "NZDSGD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "NZDSGD_H4.csv",
+      "symbol": "NZDSGD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "NZDSGD_M15.csv",
+      "symbol": "NZDSGD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "NZDUSD_H1.csv",
+      "symbol": "NZDUSD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "NZDUSD_H4.csv",
+      "symbol": "NZDUSD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "NZDUSD_M15.csv",
+      "symbol": "NZDUSD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "SGDJPY_H1.csv",
+      "symbol": "SGDJPY",
+      "timeframe": "H1",
+      "rows": 6198,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2552,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "SGDJPY_H4.csv",
+      "symbol": "SGDJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "SGDJPY_M15.csv",
+      "symbol": "SGDJPY",
+      "timeframe": "M15",
+      "rows": 24783,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10219,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDCAD_H1.csv",
+      "symbol": "USDCAD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDCAD_H4.csv",
+      "symbol": "USDCAD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDCAD_M15.csv",
+      "symbol": "USDCAD",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDCHF_H1.csv",
+      "symbol": "USDCHF",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDCHF_H4.csv",
+      "symbol": "USDCHF",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDCHF_M15.csv",
+      "symbol": "USDCHF",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDCNH_H1.csv",
+      "symbol": "USDCNH",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDCNH_H4.csv",
+      "symbol": "USDCNH",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDCNH_M15.csv",
+      "symbol": "USDCNH",
+      "timeframe": "M15",
+      "rows": 24777,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10225,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDHKD_H1.csv",
+      "symbol": "USDHKD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDHKD_H4.csv",
+      "symbol": "USDHKD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDHKD_M15.csv",
+      "symbol": "USDHKD",
+      "timeframe": "M15",
+      "rows": 24780,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10222,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDJPY_H1.csv",
+      "symbol": "USDJPY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDJPY_H4.csv",
+      "symbol": "USDJPY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDJPY_M15.csv",
+      "symbol": "USDJPY",
+      "timeframe": "M15",
+      "rows": 24781,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10221,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDMXN_H1.csv",
+      "symbol": "USDMXN",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDMXN_H4.csv",
+      "symbol": "USDMXN",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDMXN_M15.csv",
+      "symbol": "USDMXN",
+      "timeframe": "M15",
+      "rows": 24777,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10225,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDSGD_H1.csv",
+      "symbol": "USDSGD",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDSGD_H4.csv",
+      "symbol": "USDSGD",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDSGD_M15.csv",
+      "symbol": "USDSGD",
+      "timeframe": "M15",
+      "rows": 24780,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10222,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDTHB_H1.csv",
+      "symbol": "USDTHB",
+      "timeframe": "H1",
+      "rows": 6094,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2654,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T18:00:00+00:00"
+    },
+    {
+      "file": "USDTHB_H4.csv",
+      "symbol": "USDTHB",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDTHB_M15.csv",
+      "symbol": "USDTHB",
+      "timeframe": "M15",
+      "rows": 24366,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10628,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T18:45:00+00:00"
+    },
+    {
+      "file": "USDTRY_H1.csv",
+      "symbol": "USDTRY",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDTRY_H4.csv",
+      "symbol": "USDTRY",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDTRY_M15.csv",
+      "symbol": "USDTRY",
+      "timeframe": "M15",
+      "rows": 24777,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10225,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "USDZAR_H1.csv",
+      "symbol": "USDZAR",
+      "timeframe": "H1",
+      "rows": 6196,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2554,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T20:00:00+00:00"
+    },
+    {
+      "file": "USDZAR_H4.csv",
+      "symbol": "USDZAR",
+      "timeframe": "H4",
+      "rows": 1551,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 636,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "USDZAR_M15.csv",
+      "symbol": "USDZAR",
+      "timeframe": "M15",
+      "rows": 24777,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 10225,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T20:45:00+00:00"
+    },
+    {
+      "file": "XAGUSD_H1.csv",
+      "symbol": "XAGUSD",
+      "timeframe": "H1",
+      "rows": 5980,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2769,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T19:00:00+00:00"
+    },
+    {
+      "file": "XAGUSD_H4.csv",
+      "symbol": "XAGUSD",
+      "timeframe": "H4",
+      "rows": 1549,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 638,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "XAGUSD_M15.csv",
+      "symbol": "XAGUSD",
+      "timeframe": "M15",
+      "rows": 23896,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 11102,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T19:45:00+00:00"
+    },
+    {
+      "file": "XAUUSD_H1.csv",
+      "symbol": "XAUUSD",
+      "timeframe": "H1",
+      "rows": 5819,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2930,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T19:00:00+00:00"
+    },
+    {
+      "file": "XAUUSD_H4.csv",
+      "symbol": "XAUUSD",
+      "timeframe": "H4",
+      "rows": 1545,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 642,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "XAUUSD_M15.csv",
+      "symbol": "XAUUSD",
+      "timeframe": "M15",
+      "rows": 23238,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 11760,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T19:45:00+00:00"
+    },
+    {
+      "file": "XPDUSD_H1.csv",
+      "symbol": "XPDUSD",
+      "timeframe": "H1",
+      "rows": 5897,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2852,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T19:00:00+00:00"
+    },
+    {
+      "file": "XPDUSD_H4.csv",
+      "symbol": "XPDUSD",
+      "timeframe": "H4",
+      "rows": 1556,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 631,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "XPDUSD_M15.csv",
+      "symbol": "XPDUSD",
+      "timeframe": "M15",
+      "rows": 23565,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 11433,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T19:45:00+00:00"
+    },
+    {
+      "file": "XPTUSD_H1.csv",
+      "symbol": "XPTUSD",
+      "timeframe": "H1",
+      "rows": 5909,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 2840,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T07:00:00+00:00",
+      "end": "2026-07-24T19:00:00+00:00"
+    },
+    {
+      "file": "XPTUSD_H4.csv",
+      "symbol": "XPTUSD",
+      "timeframe": "H4",
+      "rows": 1556,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 631,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T09:00:00+00:00",
+      "end": "2026-07-24T17:00:00+00:00"
+    },
+    {
+      "file": "XPTUSD_M15.csv",
+      "symbol": "XPTUSD",
+      "timeframe": "M15",
+      "rows": 23610,
+      "years": [
+        2025,
+        2026
+      ],
+      "missing_values": 0,
+      "duplicate_timestamps": 0,
+      "gaps": 11388,
+      "has_spread": true,
+      "has_volume": true,
+      "status": "ok",
+      "start": "2025-07-25T06:30:00+00:00",
+      "end": "2026-07-24T19:45:00+00:00"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+trade_id,bar_index,chart_time,symbol,timeframe,direction,entry_price,exit_price,sl_price,tp_price,lot_size,pnl_pips,pnl_usd,exit_reason,hold_bars,hold_time_str,commission_usd,slippage_pips,confidence,strategy,rejection_reason,regime,session,trend,rsi,adx,atr,market_structure,structure_bias
+5,54,2026-07-24 22:00:00,EURUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,63.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+6,55,2026-07-24 23:00:00,EURUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,61.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+12,61,2026-07-27 05:00:00,EURUSD,H1,BUY,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,65,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+13,62,2026-07-27 06:00:00,EURUSD,H1,BUY,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,66,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+26,75,2026-07-27 19:00:00,EURUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,62.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+30,79,2026-07-27 23:00:00,EURUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,60.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
+46,95,2026-07-28 15:00:00,EURUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,50,,Permission: permission_blocked,,,,0.0,0.0,0.0,,

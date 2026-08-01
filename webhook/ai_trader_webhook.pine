@@ -1,0 +1,58 @@
+// tradingview/ai_trader_webhook.pine  —  Day 32 | Webhook Alert Source
+// ============================================================
+// এই script TradingView চার্টে লাগাও (Pine Editor → New Indicator →
+// এই কোড পেস্ট করো → Add to Chart)। এটা trade signal বানায় না —
+// শুধু candle data পাঠায় তোমার AI backend-কে, যেটা rule engine +
+// LLM দিয়ে আসল decision নেবে। TradingView এখানে শুধু DATA SOURCE,
+// DECISION MAKER না — সেটা ইচ্ছাকৃত, কারণ Pine Script-এ তোমার পুরো
+// Python rule engine/LLM logic চালানো যায় না।
+// ============================================================
+
+//@version=5
+indicator("AI Trader — Webhook Feed", overlay=true)
+
+// ── Settings ─────────────────────────────────────────────
+sendEveryBar = input.bool(false, "Send on every closed bar (নাহলে শুধু RSI/EMA cross-এ পাঠাবে)")
+rsiLen       = input.int(14, "RSI length")
+emaFastLen   = input.int(9, "EMA fast")
+emaSlowLen   = input.int(20, "EMA slow")
+
+// ── Indicators (rule engine context সমৃদ্ধ করার জন্য — চূড়ান্ত decision Python-এ হবে) ──
+rsiVal   = ta.rsi(close, rsiLen)
+emaFast  = ta.ema(close, emaFastLen)
+emaSlow  = ta.ema(close, emaSlowLen)
+atrVal   = ta.atr(14)
+
+bullCross = ta.crossover(emaFast, emaSlow)
+bearCross = ta.crossunder(emaFast, emaSlow)
+
+// ── JSON payload বানানো (alert message-এ যাবে) ────────────
+// {{ticker}}, {{close}}, {{time}} ইত্যাদি TradingView-এর built-in
+// placeholder — webhook পাঠানোর সময় actual value দিয়ে replace হয়।
+jsonMsg = '{"symbol":"' + syminfo.ticker +
+   '","timeframe":"' + timeframe.period +
+   '","time":"' + str.tostring(time) +
+   '","close":' + str.tostring(close) +
+   ',"open":' + str.tostring(open) +
+   ',"high":' + str.tostring(high) +
+   ',"low":' + str.tostring(low) +
+   ',"rsi":' + str.tostring(rsiVal, "#.##") +
+   ',"ema_fast":' + str.tostring(emaFast, "#.#####") +
+   ',"ema_slow":' + str.tostring(emaSlow, "#.#####") +
+   ',"atr":' + str.tostring(atrVal, "#.#####") +
+   ',"event":"' + (bullCross ? "EMA_BULL_CROSS" : bearCross ? "EMA_BEAR_CROSS" : "BAR_CLOSE") +
+   '"}'
+
+// ── Alert conditions ────────────────────────────────────────
+// Condition 1: EMA cross হলে (গুরুত্বপূর্ণ মুহূর্ত)
+alertcondition(bullCross or bearCross, title="AI Trader — EMA Cross", message=jsonMsg)
+
+// Condition 2: প্রতি closed bar-এ (চাইলে চালু করো — বেশি data, বেশি webhook calls)
+if sendEveryBar and barstate.isconfirmed
+    alert(jsonMsg, alert.freq_once_per_bar_close)
+
+// ── Chart-এ visual marker (sanity check করার জন্য) ──────────
+plot(emaFast, "EMA fast", color=color.blue)
+plot(emaSlow, "EMA slow", color=color.orange)
+plotshape(bullCross, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(bearCross, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)

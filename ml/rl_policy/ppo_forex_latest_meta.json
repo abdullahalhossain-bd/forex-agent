@@ -1,0 +1,6 @@
+{
+  "episodes": 25,
+  "win_rate": 0.2,
+  "avg_reward": 0.02,
+  "total_timesteps": 125000
+}

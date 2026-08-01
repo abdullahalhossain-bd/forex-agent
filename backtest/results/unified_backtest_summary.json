@@ -1,0 +1,22 @@
+{
+  "EURUSD": {
+    "symbol": "EURUSD",
+    "timeframe": "M15",
+    "trades": 1,
+    "win_rate": 0.0,
+    "profit_factor": 0.0,
+    "total_pnl_usd": -14.96,
+    "max_drawdown_pct": 0.02,
+    "sharpe": 0.0,
+    "sortino": 0.0,
+    "rejection_stats": {
+      "WAIT": 44,
+      "NO_TRADE_ANALYSIS": 0,
+      "risk_rejected": 0,
+      "permission_blocked": 5,
+      "engine_error": 0,
+      "max_trades": 0,
+      "total_bars": 50
+    }
+  }
+}

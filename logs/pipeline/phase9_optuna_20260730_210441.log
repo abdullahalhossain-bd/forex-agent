@@ -1,0 +1,5 @@
+2026-07-30 22:13:17 | WARNING | pipeline.phase9_optuna | Optuna not installed — skipping hyperparameter optimization
+2026-07-30 22:13:17 | INFO    | pipeline.phase9_optuna | Install with: pip install optuna
+2026-07-30 23:19:39 | INFO    | pipeline.phase9_optuna | [Phase 9: Hyperparameter Optimization] Starting...
+2026-07-30 23:24:43 | INFO    | pipeline.phase9_optuna |   USDJPY xgboost: best score=0.3998
+2026-07-30 23:24:43 | INFO    | pipeline.phase9_optuna | [Phase 9: Hyperparameter Optimization] Completed in 5m 3.4s
