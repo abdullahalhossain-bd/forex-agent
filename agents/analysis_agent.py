@@ -62,7 +62,6 @@ from ai.ai_analyst import AIAnalyst
 from agents.master_analyst import MasterAnalyst
 from strategy.signal_engine import SignalEngine
 from utils.logger import get_logger
-from core.constants import is_backtest_mode
 
 log = get_logger("analysis_agent")
 
@@ -200,11 +199,31 @@ class AnalysisAgent:
         # compute_fusion=False — SMC data not available yet; fusion will be
         # computed in the second analyze() call at line ~520 after SMC runs.
         # This avoids the misleading "Fusion: ❌ (0/100)" log line.
+        # Backtest-parity fix: without an explicit `dt`, SessionAnalyzer
+        # defaults to datetime.now(timezone.utc) — REAL wall-clock time —
+        # even when this bar is a historical replay bar from years ago.
+        # That made every unified_engine backtest run silently inherit
+        # whatever DEAD_ZONE/session happens to be active on the machine
+        # RIGHT NOW, blocking 100% of trades if the backtest happened to
+        # run during a live dead-zone hour, regardless of the actual
+        # historical hour being replayed. Use the current bar's own
+        # timestamp (last index of the OHLC frame built for this bar)
+        # when available; falls back to live "now" otherwise, so
+        # live/demo/real behavior is unchanged.
+        _bar_dt = None
+        try:
+            _df = market_output.get("df")
+            if _df is not None and len(_df) > 0:
+                _bar_dt = _df.index[-1].to_pydatetime()
+        except Exception:
+            _bar_dt = None
+
         session_result = self.session_analyzer.analyze(
             pair           = symbol,
             smc_ctx        = {},
             signal         = "NO TRADE",
             signal_conf    = 0,
+            dt             = _bar_dt,
             compute_fusion = False,
         )
         session_ctx = self.session_analyzer.get_ai_context(session_result)
@@ -331,13 +350,16 @@ class AnalysisAgent:
         master_decision_ctx = {}
 
         # ── 1. Candlestick Patterns ───────────────────────────
-        # Round-10 audit fix: mark df with a cache flag so downstream
-        # modules (e.g. smc_engine.py) can skip redundant detection.
+        # DISABLED (WR <40%): PatternDetector scoring neutralized.
+        # run_full_detection() still runs to annotate df columns consumed
+        # by downstream modules (smc_engine, etc.), but pat_ctx is set
+        # empty so PatternDetector never contributes bull/bear score in
+        # SignalEngine.generate().
         detector = PatternDetector()
         df       = detector.run_full_detection(df)
         df.attrs["_smc_patterns_detected"] = True  # Round-10 dedup flag
         detector.get_latest_patterns(df, lookback=5)
-        pat_ctx  = detector.get_ai_pattern_context(df)
+        pat_ctx  = {}  # DISABLED: patterns WR <40% — prevents scoring influence
 
         # ── 2. Support & Resistance ───────────────────────────
         sr      = SupportResistance()
@@ -439,31 +461,19 @@ class AnalysisAgent:
         except Exception as e:
             log.warning(f"[AnalysisAgent] Advanced Patterns error: {e}")
 
-        # ── 4. Fibonacci Engine ──────────────────────────────
+        # ── 4. Fibonacci Engine — DISABLED 2026-07-31 ──────────
+        # Win-rate audit measured fibonacci at 35.9% WR, below the 40%
+        # retention bar. Engine is no longer called. fib_ctx stays empty
+        # so SignalEngine and MarketBiasEngine cannot use it for scoring.
         fib_ctx    = {}
         fib_result = {}
-        try:
-            fib_engine = FibonacciEngine(timeframe=timeframe)
-            fib_result = fib_engine.analyze(df, sr_ctx=sr_ctx, ind_ctx=ind_ctx)
-            fib_engine.print_summary(fib_result)
-            fib_ctx    = fib_engine.get_ai_context(fib_result)
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Fibonacci Engine error: {e}")
 
-        # ── 5. Market Bias ────────────────────────────────────
-        # Day 133 fix: fib_ctx was already computed above (step 4) and
-        # passed to SignalEngine below, but NOT to MarketBiasEngine —
-        # even after the Day 101+ fix added the fib_ctx parameter to
-        # MarketBiasEngine.analyze(), this call site was never updated
-        # to actually pass it. Production logs kept showing SignalEngine
-        # correctly counting a Fib GOLDEN_ZONE BUY signal (bull score +4)
-        # while MarketBiasEngine, looking at the same market state, never
-        # saw it at all (Fib entry simply absent from its breakdown) —
-        # because it was still being called with the old 4-argument form.
-        bias_engine = MarketBiasEngine()
-        bias_result = bias_engine.analyze(ind_ctx, pat_ctx, sr_ctx, mtf_bias, fib_ctx)
-        bias_engine.print_summary(bias_result)
-        bias_ctx    = bias_engine.get_ai_context(bias_result)
+        # ── 5. Market Bias — DISABLED 2026-07-31 ─────────────────
+        # Win-rate audit measured market_bias at WR <40%. Engine no longer
+        # called. bias_ctx stays empty so it cannot influence downstream
+        # confidence or signal direction.
+        bias_result = {}
+        bias_ctx    = {}
 
         # ── 6. Rule-based Signal ──────────────────────────────
         # 17-module integration pass: pull in votes from the
@@ -558,43 +568,24 @@ class AnalysisAgent:
         # the crude yfinance 1-day-change proxy it used to get. Kept as
         # its own try/except so a currency-strength failure can never
         # take down the sentiment step — falls back to the old proxy.
-        # BACKTEST LEAKAGE FIX: CurrencyStrengthEngine fetches 28 live MT5
-        # cross-pair candles — no historical point-in-time data available.
-        # During backtest, return empty and log the divergence.
         currency_strength_result = {}
         currency_strength_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: currency_strength skipped (requires live MT5 28-pair fetch)")
-        else:
-            try:
-                currency_strength_result = self.currency_strength_engine.analyze()
-                self.currency_strength_engine.print_summary(currency_strength_result)
-                currency_strength_ctx = self.currency_strength_engine.get_ai_context(
-                    currency_strength_result
-                )
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] Currency Strength Engine error: {e}")
+        try:
+            currency_strength_result = self.currency_strength_engine.analyze()
+            self.currency_strength_engine.print_summary(currency_strength_result)
+            currency_strength_ctx = self.currency_strength_engine.get_ai_context(
+                currency_strength_result
+            )
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Currency Strength Engine error: {e}")
 
         # ── 7. Sentiment Engine ─────────────────────────────
-        # BACKTEST LEAKAGE FIX: SentimentDataProvider.get_all() fetches
-        # live yfinance, Fear&Greed, DXY, currency strength — no historical
-        # point-in-time data. During backtest, use neutral fallback values.
         sentiment_ctx    = {}
         sentiment_result = {}
         conflict_result  = {}
-        _BT = is_backtest_mode()
         try:
-            if _BT:
-                log.info("[AnalysisAgent] BACKTEST: SentimentDataProvider skipped (live yfinance/F&G/DXY fetch)")
-                sent_data = {
-                    "pair": symbol, "retail_long_pct": 50.0,
-                    "fg_index": 50, "dxy_trend": "NEUTRAL",
-                    "dxy_change_pct": 0.0, "currency_strengths": {},
-                    "sentiment_source": "backtest_neutral",
-                }
-            else:
-                sent_provider    = self.sentiment_data_provider
-                sent_data        = sent_provider.get_all(symbol)
+            sent_provider    = self.sentiment_data_provider
+            sent_data        = sent_provider.get_all(symbol)
             sent_provider.print_summary(sent_data)
 
             # Prefer the Day-64 MT5 multi-timeframe matrix (28 cross pairs,
@@ -771,30 +762,25 @@ class AnalysisAgent:
         # Real-time financial news from Bloomberg/Reuters/etc via
         # NewsAPI.org. Adds breaking-news sentiment to complement
         # the scheduled-event awareness from Forex Factory scraper.
-        # BACKTEST LEAKAGE FIX: NewsAPI fetches live headlines — no
-        # historical archive. Skipped during backtest.
         news_api_result = {}
         news_api_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: NewsAPI skipped (live headlines)")
-        else:
-            try:
-                news_api_provider = get_news_api_provider()
-                if news_api_provider.available:
-                    news_api_result = news_api_provider.fetch_headlines_for_pair(symbol)
-                    news_api_provider.print_summary(news_api_result)
-                    news_api_ctx    = news_api_provider.get_ai_context(news_api_result)
-                    # If news sentiment is very bearish, surface it as a warning
-                    if news_api_result.get("news_score", 0) < -40:
-                        log.warning(
-                            f"[AnalysisAgent] Day 92 NewsAPI: strong bearish sentiment "
-                            f"on {symbol} (score={news_api_result['news_score']}) — "
-                            f"AI should be cautious on longs"
-                        )
-                else:
-                    log.debug("[AnalysisAgent] NewsAPI key not set — skipping")
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] NewsAPI provider error: {e}")
+        try:
+            news_api_provider = get_news_api_provider()
+            if news_api_provider.available:
+                news_api_result = news_api_provider.fetch_headlines_for_pair(symbol)
+                news_api_provider.print_summary(news_api_result)
+                news_api_ctx    = news_api_provider.get_ai_context(news_api_result)
+                # If news sentiment is very bearish, surface it as a warning
+                if news_api_result.get("news_score", 0) < -40:
+                    log.warning(
+                        f"[AnalysisAgent] Day 92 NewsAPI: strong bearish sentiment "
+                        f"on {symbol} (score={news_api_result['news_score']}) — "
+                        f"AI should be cautious on longs"
+                    )
+            else:
+                log.debug("[AnalysisAgent] NewsAPI key not set — skipping")
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] NewsAPI provider error: {e}")
 
         # ── Day 63: Re-run Session with SMC context ───────────
         session_result = self.session_analyzer.analyze(
@@ -807,25 +793,19 @@ class AnalysisAgent:
         self.session_analyzer.print_summary(session_result)
 
         # ── 8.5 Intermarket / Global Macro Analysis (Day 65) ─
-        # BACKTEST LEAKAGE FIX: IntermarketEngine's CorrelationEngine
-        # branch fetches live MT5 data. MacroDataProvider has its own guard.
-        # During backtest, skip entirely.
         intermarket_result = {}
         intermarket_ctx    = {}
         macro_fusion        = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: IntermarketEngine skipped (live correlation via MT5)")
-        else:
-            try:
-                intermarket_result = self.intermarket_engine.analyze(symbol)
-                self.intermarket_engine.print_summary(intermarket_result)
-                intermarket_ctx = self.intermarket_engine.get_ai_context(intermarket_result)
+        try:
+            intermarket_result = self.intermarket_engine.analyze(symbol)
+            self.intermarket_engine.print_summary(intermarket_result)
+            intermarket_ctx = self.intermarket_engine.get_ai_context(intermarket_result)
 
-                macro_fusion = self.intermarket_engine.fuse_with_smc(
-                    intermarket_result, smc_ctx=smc_ctx, session_ctx=session_ctx
-                )
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] Intermarket Engine error: {e}")
+            macro_fusion = self.intermarket_engine.fuse_with_smc(
+                intermarket_result, smc_ctx=smc_ctx, session_ctx=session_ctx
+            )
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Intermarket Engine error: {e}")
 
         # ── 8.95 MTF Structure (Day 88) — Internal vs External ──
         # Uses df as the "internal" timeframe. The external (HTF) tier is
@@ -835,21 +815,16 @@ class AnalysisAgent:
         mtf_structure_result = {}
         mtf_structure_ctx    = {}
         try:
-            # BACKTEST LEAKAGE FIX: _h4_fetcher hits live MT5.
-            # During backtest, skip H4 fetch — MTF engine uses internal df only.
             df_h4 = None
-            if is_backtest_mode():
-                log.info("[AnalysisAgent] BACKTEST: H4 MT5 fetch skipped for MTF structure")
-            else:
-                try:
-                    df_h4 = self._h4_fetcher.fetch_ohlcv(symbol, "H4", limit=150)
-                    if df_h4 is None or len(df_h4) <= 10:
-                        df_h4 = None
-                    else:
-                        log.debug(f"[AnalysisAgent] MTF H4 fetched: {len(df_h4)} candles")
-                except Exception as _h4_err:
-                    log.debug(f"[AnalysisAgent] H4 fetch for MTF failed: {_h4_err}")
+            try:
+                df_h4 = self._h4_fetcher.fetch_ohlcv(symbol, "H4", limit=150)
+                if df_h4 is None or len(df_h4) <= 10:
                     df_h4 = None
+                else:
+                    log.debug(f"[AnalysisAgent] MTF H4 fetched: {len(df_h4)} candles")
+            except Exception as _h4_err:
+                log.debug(f"[AnalysisAgent] H4 fetch for MTF failed: {_h4_err}")
+                df_h4 = None
 
             mtf_structure_result = self.mtf_structure_eng.analyze(
                 df_external=df_h4,   # H4 data (None = fallback to internal approximation)
@@ -895,21 +870,16 @@ class AnalysisAgent:
         # ── 8.87 FRED Macro Data (Day 94 — central bank data) ─────
         # CPI, Unemployment, Treasury Yields, Fed Funds Rate, VIX.
         # Free unlimited API from St. Louis Fed.
-        # BACKTEST LEAKAGE FIX: FRED API fetches live macro data (CPI,
-        # yields, Fed funds) — no historical point-in-time archive.
         fred_result = {}
         fred_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: FRED macro data skipped (live St.Louis Fed API)")
-        else:
-            try:
-                fred = get_fred_api()
-                if fred.available:
-                    fred_result = fred.get_macro_snapshot()
+        try:
+            fred = get_fred_api()
+            if fred.available:
+                fred_result = fred.get_macro_snapshot()
                 fred.print_summary(fred_result)
                 fred_ctx = fred.get_ai_context(fred_result)
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] FRED macro data error: {e}")
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] FRED macro data error: {e}")
 
         # ── 8.92 Retail Sentiment (Day 94/95 — OANDA → Myfxbook → synthetic) ──
         # Contrarian indicator: when 80%+ retail is long, smart money is short.
@@ -974,66 +944,51 @@ class AnalysisAgent:
 
         # ── 8.96 Institutional Flow (Day 96 — COT + displacement) ──
         # Detects institutional direction vs retail → divergence signal.
-        # BACKTEST LEAKAGE FIX: InstitutionalFlowEngine fetches live COT
-        # data from CFTC website — no historical point-in-time COT archive.
         institutional_result = {}
         institutional_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: InstitutionalFlow (COT) skipped (live CFTC website fetch)")
-        else:
-            try:
-                inst_engine = self.institutional_flow_engine
-                retail_long = retail_sentiment_result.get("long_pct", 50.0)
-                institutional_result = inst_engine.analyze(symbol, retail_long_pct=retail_long, df=df)
-                inst_engine.print_summary(institutional_result)
-                institutional_ctx = inst_engine.get_ai_context(institutional_result)
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] Institutional flow error: {e}")
+        try:
+            inst_engine = self.institutional_flow_engine
+            retail_long = retail_sentiment_result.get("long_pct", 50.0)
+            institutional_result = inst_engine.analyze(symbol, retail_long_pct=retail_long, df=df)
+            inst_engine.print_summary(institutional_result)
+            institutional_ctx = inst_engine.get_ai_context(institutional_result)
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Institutional flow error: {e}")
 
         # ── 8.97 Economic Surprise Index (Day 96) ───────────────────
         # Actual vs Forecast comparison → detects market-moving surprises.
-        # BACKTEST LEAKAGE FIX: EconomicSurpriseEngine fetches live
-        # actual-vs-forecast data — no historical replay available.
         surprise_result = {}
         surprise_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: EconomicSurprise skipped (live actual-vs-forecast fetch)")
-        else:
-            try:
-                surprise_engine = EconomicSurpriseEngine()
-                currency = symbol[:3] if len(symbol) >= 3 else "USD"
-                surprise_result = surprise_engine.analyze(currency)
-                if surprise_result.get("event_count", 0) > 0:
-                    surprise_engine.print_summary(surprise_result)
-                surprise_ctx = surprise_engine.get_ai_context(surprise_result)
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] Economic surprise error: {e}")
+        try:
+            surprise_engine = EconomicSurpriseEngine()
+            currency = symbol[:3] if len(symbol) >= 3 else "USD"
+            surprise_result = surprise_engine.analyze(currency)
+            if surprise_result.get("event_count", 0) > 0:
+                surprise_engine.print_summary(surprise_result)
+            surprise_ctx = surprise_engine.get_ai_context(surprise_result)
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Economic surprise error: {e}")
 
         # ── 8.975 Microstructure Engine (Day 97 — MT5 tick analysis) ──
         # Tick speed + spread expansion + volume burst + price acceleration.
         # Detects liquidity events → AI should avoid entry.
-        # BACKTEST LEAKAGE FIX: MicrostructureEngine calls MT5
-        # copy_ticks_range() — live tick data, not historical.
         microstructure_result = {}
         microstructure_ctx    = {}
-        if is_backtest_mode():
-            log.info("[AnalysisAgent] BACKTEST: Microstructure skipped (live MT5 tick fetch)")
-        else:
-            try:
-                micro_engine = get_microstructure_engine()
-                microstructure_result = micro_engine.analyze(symbol)
-                micro_engine.print_summary(microstructure_result)
-                microstructure_ctx = micro_engine.get_ai_context(microstructure_result)
-                # Liquidity event → surface as warning
-                if microstructure_result.get("liquidity_event"):
-                    log.warning(
-                        f"[AnalysisAgent] Day 97 Microstructure: LIQUIDITY EVENT on {symbol} "
-                        f"(spread={microstructure_result.get('spread_state')}, "
-                        f"ticks={microstructure_result.get('tick_speed_state')}) — "
-                        f"recommendation={microstructure_result.get('recommendation')}"
-                    )
-            except Exception as e:
-                log.warning(f"[AnalysisAgent] Microstructure error: {e}")
+        try:
+            micro_engine = get_microstructure_engine()
+            microstructure_result = micro_engine.analyze(symbol)
+            micro_engine.print_summary(microstructure_result)
+            microstructure_ctx = micro_engine.get_ai_context(microstructure_result)
+            # Liquidity event → surface as warning
+            if microstructure_result.get("liquidity_event"):
+                log.warning(
+                    f"[AnalysisAgent] Day 97 Microstructure: LIQUIDITY EVENT on {symbol} "
+                    f"(spread={microstructure_result.get('spread_state')}, "
+                    f"ticks={microstructure_result.get('tick_speed_state')}) — "
+                    f"recommendation={microstructure_result.get('recommendation')}"
+                )
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Microstructure error: {e}")
 
         # ── 8.978 Network Monitor (Day 97 — latency check) ──────────
         # Checks internet ping + MT5 ping. If latency > 500ms →
@@ -2198,7 +2153,14 @@ class AnalysisAgent:
 
             unified_engine = UnifiedSignalEngine(timeframe=tf_for_engine)
             unified_signal_ctx = unified_engine.analyze(
-                df, symbol=symbol, lower_tf_df=None  # lower TF not always available
+                df, symbol=symbol, lower_tf_df=None,  # lower TF not always available
+                # df_h4 reuses the H4 fetch already done above for MTF
+                # Structure (line ~820) — None in this sandbox/backtest
+                # (no live MT5), which correctly skips just the H4-trend
+                # leg of the stop-hunt filter (session + no-Wednesday
+                # still apply). Activates automatically once real H4 data
+                # is available (live trading).
+                df_h4=df_h4 if df_h4 is not None and len(df_h4) >= 55 else None,
             )
             consensus = unified_signal_ctx.get("consensus", {})
             log.info(
@@ -2230,6 +2192,44 @@ class AnalysisAgent:
                 f"score={adaptive_decision.get('score', 0):.2f} "
                 f"source={adaptive_decision.get('source', 'N/A')}"
             )
+
+            # 2026-08-02 (Abdullah audit) — WIRING FIX: adaptive_decision
+            # was computed every cycle, logged, and stored in
+            # unified_signal_ctx — but never actually consumed anywhere.
+            # final_signal never read it. The whole point of this engine
+            # ("any strategy can trade solo", per the comment above) never
+            # happened in practice; only the master/rule-based pipeline
+            # above (which requires broader agreement) could ever set
+            # final_signal. Only fill in when nothing upstream already
+            # found a trade (final_signal is WAIT/NO TRADE) — this is
+            # additive, not an override of an active signal.
+            if final_signal not in ("BUY", "SELL") and adaptive_decision.get("action") in ("BUY", "SELL"):
+                final_signal = adaptive_decision["action"]
+                _agreeing = adaptive_decision.get("agreeing_strategies", []) or []
+                _disagreeing = adaptive_decision.get("disagreeing_strategies", []) or []
+                # Fast-path flag: a CLEAN solo stop_hunt signal (the one
+                # strategy with an out-of-sample-validated edge — see
+                # backtest/per_strategy_tester.py::_test_stop_hunt, 76-80%
+                # / 65-70% win rate — and the session/no-Wednesday/H4-trend
+                # filter already applied above before this signal could
+                # even reach agreeing_strategies) with nothing disagreeing.
+                # trade_permission.py uses this to skip the two gates that
+                # were never validated for a standalone strategy
+                # (Confluence quality's "≥2 factors" and SMC+Session
+                # fusion) — those gates exist to judge a BLEND of several
+                # engines, and applying them to a single already-filtered
+                # strategy's signal was diluting a proven edge rather than
+                # protecting anything.
+                unified_signal_ctx["fast_path"] = (
+                    _agreeing == ["stop_hunt"] and not _disagreeing
+                )
+                unified_signal_ctx["fast_path_source"] = "stop_hunt_solo" if unified_signal_ctx["fast_path"] else None
+                log.info(
+                    f"[AnalysisAgent] Adaptive Decision FILLED final_signal "
+                    f"(was WAIT/NO TRADE) -> {final_signal} | "
+                    f"fast_path={unified_signal_ctx['fast_path']} | "
+                    f"agreeing={_agreeing} disagreeing={_disagreeing}"
+                )
         except Exception as e:
             log.warning(f"[AnalysisAgent] Adaptive Decision Engine failed: {e}")
             unified_signal_ctx["adaptive_decision"] = {
@@ -2318,11 +2318,24 @@ class AnalysisAgent:
         # name itself says "trade_permission" — it was clearly designed
         # to gate. But nothing downstream read it (CONSUMPTION-MAP §4
         # row 5). Now: hard-block when mtf_trade_permission == "NO_TRADE".
+        #
+        # 2026-08-02 (Abdullah audit) — NOISE FIX: diagnostic run on a
+        # 350-bar sample showed this filter blocking 34% of ALL BUY/SELL
+        # signals, every single one with combined_bias='?'. That's because
+        # df_h4 above is None whenever the external H4 fetch fails/is
+        # unavailable (e.g. no live MT5/API access), so MTFStructureEngine
+        # falls back to a low-information "internal approximation" that
+        # defaults to NO_TRADE/'?' bias — not a genuine HTF/LTF structural
+        # conflict, just "I don't have enough data to have an opinion".
+        # Hard-blocking on that is blocking based on a data gap, not a
+        # real signal. Only apply this hard block when real external H4
+        # data was actually available (df_h4 is not None) — the fallback
+        # verdict remains visible in execution_filters as advisory only.
         try:
             if isinstance(mtf_structure_ctx, dict):
                 _mtf_perm = mtf_structure_ctx.get("mtf_trade_permission")
                 _mtf_conflict = mtf_structure_ctx.get("mtf_conflict", False)
-                if _mtf_perm == "NO_TRADE":
+                if _mtf_perm == "NO_TRADE" and df_h4 is not None:
                     execution_filters["mtf_structure_no_trade"] = {
                         "blocked": True,
                         "reason": (
@@ -2335,6 +2348,11 @@ class AnalysisAgent:
                         f"[AnalysisAgent] Execution filter: MTF structure NO_TRADE "
                         f"on {symbol} — analysis verdict {final_signal} PRESERVED, "
                         f"will be hard-blocked by TradePermission"
+                    )
+                elif _mtf_perm == "NO_TRADE":
+                    log.debug(
+                        f"[AnalysisAgent] MTF structure NO_TRADE on {symbol} but no "
+                        f"real H4 data available — treating as advisory only, not blocking"
                     )
         except Exception as _e_mtf:
             log.debug(f"[AnalysisAgent] MTF structure gate wiring failed: {_e_mtf}")
@@ -2431,4 +2449,9 @@ class AnalysisAgent:
             "execution_filters": execution_filters,
             # Day 100+ — Unified Signal Engine (5-engine consensus)
             "unified_signal":    unified_signal_ctx,
+            # 2026-08-02: expose the H4 frame already fetched above (MTF
+            # Structure section) so core/trader.py's Stop Hunt Direct Lane
+            # can reuse it for the H4-trend-agreement filter without a
+            # second fetch. None in this sandbox/backtest (no live MT5).
+            "df_h4":             df_h4 if df_h4 is not None and len(df_h4) > 0 else None,
         }

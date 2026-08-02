@@ -1,0 +1,26 @@
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   INSTITUTIONAL HISTORICAL TRAINING PIPELINE
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   Symbols (1): ['EURUSD']
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   Timeframes: ['M15']
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   Primary TF: M15
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   Supervised models: ['xgboost', 'lightgbm', 'catboost', 'random_forest']
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   RL algorithms: []
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical |   Resume from phase: 1
+2026-08-02 18:15:42 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:15:43 | WARNING | pipeline.train_historical | Phase 1: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:49 | WARNING | pipeline.train_historical | Phase 2: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:52 | WARNING | pipeline.train_historical | Phase 3: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:52 | WARNING | pipeline.train_historical | Phase 4: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:53 | WARNING | pipeline.train_historical | Phase 5: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:53 | WARNING | pipeline.train_historical | Phase 6: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:15:53 | WARNING | pipeline.train_historical | Phase 8: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:16:30 | WARNING | pipeline.train_historical | Phase 10: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:16:47 | WARNING | pipeline.train_historical | Phase 11: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:16:48 | WARNING | pipeline.train_historical | Phase 12: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:17:01 | WARNING | pipeline.train_historical | Phase 13: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:17:01 | WARNING | pipeline.train_historical | Phase 14: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:17:01 | WARNING | pipeline.train_historical | Phase 15: checkpoint exists but doesn't cover 1 newly requested symbol(s) (e.g. ['EURUSD']) -- forcing re-run
+2026-08-02 18:17:09 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:17:09 | INFO    | pipeline.train_historical |   PIPELINE COMPLETE — 1m 27s
+2026-08-02 18:17:09 | INFO    | pipeline.train_historical |   EURUSD: xgboost (score=40.6)
+2026-08-02 18:17:09 | INFO    | pipeline.train_historical | ============================================================

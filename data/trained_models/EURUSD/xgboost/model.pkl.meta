@@ -1,0 +1,8 @@
+{
+  "hash": "fc45a10ee5c1ffc92b1bd0e26e49eb3ccc8d80ac258c08667d2fc93c99fb2622",
+  "saved_at": "2026-08-02T19:34:04.467418+00:00",
+  "metadata": {
+    "model_type": "xgboost",
+    "symbol": "EURUSD"
+  }
+}

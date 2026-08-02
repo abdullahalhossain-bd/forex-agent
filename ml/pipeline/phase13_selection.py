@@ -59,7 +59,18 @@ def _composite_score(metrics: Dict, wf_results: List[Dict], weights=None) -> flo
             "profit": 0.25, "drawdown": 0.20, "sharpe": 0.15,
             "consistency": 0.15, "win_rate": 0.10, "generalization": 0.15,
         }
-    
+
+    # BUG FIX: a model that takes ZERO trades trivially has 0% drawdown
+    # (nothing ever moved the balance) and no sharpe/consistency data to
+    # measure -- the old code scored those as dd_score=100 (rewarded!)
+    # and sharpe_score/consistency_score=50 (neutral defaults), which
+    # combined into a deceptively middling ~40/100 that could out-rank
+    # a model that actually traded with a real (if imperfect) edge.
+    # "Never traded" hasn't demonstrated anything and must not be
+    # competitive with models that did.
+    if metrics.get("total_trades", 0) == 0:
+        return 5.0
+
     # Normalize each component to 0-100
     profit_score = min(100, max(0, metrics.get("net_profit", 0) / 100 * 10))
     

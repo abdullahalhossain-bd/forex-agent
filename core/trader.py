@@ -137,18 +137,6 @@ except Exception as e:
     final_decision_gate = None
     print(f"[WARN] orphan_consumers unavailable: {e}")
 
-# ── Loss Rejection Engine (3-Layer Meta Labeling) ──────────────
-# Institutional-grade filter that blocks losing trades while preserving
-# winning trades. Injected between signal scoring and risk engine.
-# Starts in SHADOW MODE (logs rejections but doesn't block).
-try:
-    from core.loss_rejection_engine import LossRejectionEngine
-    _LRE_AVAILABLE = True
-except Exception as _lre_e:
-    _LRE_AVAILABLE = False
-    LossRejectionEngine = None
-    print(f"[WARN] Loss Rejection Engine unavailable: {_lre_e}")
-
 log = get_logger("ai_trader")
 
 
@@ -312,16 +300,6 @@ class AITrader:
             )
         from core.execution_adapter import MT5ExecutionAdapter
         self._execution_adapter = MT5ExecutionAdapter(self._router)
-
-        # ── Loss Rejection Engine (3-Layer Meta Labeling) ──────────────
-        # One instance per AITrader. Starts in SHADOW MODE.
-        self._lre = None
-        if _LRE_AVAILABLE:
-            try:
-                self._lre = LossRejectionEngine()
-                log.info("[LRE] Initialized for %s (shadow_mode=True by default)", self.symbol)
-            except Exception as _lre_init_e:
-                log.warning("[LRE] Init failed (non-fatal): %s", _lre_init_e)
 
         # Round-22 audit fix (B1): wire PositionManager for active trade
         # management (trailing stop, breakeven, partial close, Friday close).
@@ -1025,42 +1003,52 @@ class AITrader:
             except Exception as _oc_e:
                 log.warning(f"[Trader] apply_signal_scoring failed (non-fatal): {_oc_e}")
 
-        # ── Loss Rejection Engine (3-Layer Meta Labeling) ──────────────
-        # Institutional-grade filter: blocks losing trades while preserving
-        # 95%+ winners. Runs AFTER signal scoring, BEFORE risk engine.
-        # SHADOW MODE by default (LRE_SHADOW_MODE=1): logs rejections
-        # but does NOT block. Set LRE_SHADOW_MODE=0 to go live-blocking.
-        if self._lre is not None:
-            try:
-                _lre_result = self._lre.evaluate(
-                    dec_out, analysis_out, market_out,
-                    symbol=self.symbol,
-                )
-                if _lre_result.blocked:
-                    dec_out["decision"] = "NO TRADE"
-                    dec_out["_lre_blocked"] = True
-                    dec_out["_lre_reason"] = _lre_result.reason
-                    dec_out["_lre_composite"] = _lre_result.composite_verdict
-                    log.info(
-                        f"[LRE] BLOCKED {self.symbol} | {_lre_result.reason} | "
-                        f"L1={_lre_result.l1.verdict if _lre_result.l1 else 'N/A'} "
-                        f"L2={_lre_result.l2.verdict if _lre_result.l2 else 'N/A'} "
-                        f"L3={_lre_result.l3.verdict if _lre_result.l3 else 'N/A'} | "
-                        f"{round(_lre_result.processing_time_ms, 1)}ms"
-                    )
-                elif _lre_result.composite_verdict == "WARN":
-                    dec_out["_lre_warned"] = True
-                    dec_out["_lre_reason"] = _lre_result.reason
-                if debugger:
-                    debugger.record(
-                        "lre",
-                        "BLOCK" if _lre_result.blocked else ("WARN" if _lre_result.composite_verdict == "WARN" else "PASS"),
-                        _lre_result.reason,
-                    )
-            except Exception as _lre_e:
-                log.warning(f"[Trader] LRE evaluation failed (non-fatal): {_lre_e}")
-
         log.info("[5/9] Risk Engine...")
+
+        # ── Stop Hunt Direct Lane (2026-08-02, Abdullah audit) ──────────
+        # per_strategy_tester.py validated a real out-of-sample edge
+        # (76.4%->80.4% / 65.5%->69.5%, two independent 15-pair sets) for
+        # the RAW StopHuntSignalEngine signal with exactly 3 filters
+        # (session, no-Wednesday, H4 trend agreement) — evaluated on its
+        # own, NOT blended with 4 other engines and run through ~10
+        # generic consensus-judging gates. Wiring it into the blend
+        # (fast_path, above) didn't reproduce the edge because a "solo"
+        # stop_hunt signal essentially never reaches the blend unmixed.
+        # This lane bypasses the blend entirely: only fires when the
+        # blended pipeline found nothing (WAIT/NO TRADE), uses the
+        # strategy's OWN entry/SL/TP (see analysis/stop_hunt_direct_lane.py
+        # — identical logic to the validated tester), and is tagged so
+        # trade_permission.py can skip the blend-only gates for it.
+        if dec_out.get("decision") not in ("BUY", "SELL"):
+            try:
+                from analysis.stop_hunt_direct_lane import get_stop_hunt_direct_signal
+                _sh_df = market_out.get("df")
+                _sh_df_h4 = analysis_out.get("df_h4")
+                if _sh_df is not None and len(_sh_df) >= 20:
+                    _sh_sig = get_stop_hunt_direct_signal(
+                        _sh_df, symbol=self.symbol, df_h4=_sh_df_h4)
+                    if _sh_sig:
+                        entry = _sh_sig["entry"]
+                        dec_out["decision"] = _sh_sig["action"]
+                        dec_out["entry"] = _sh_sig["entry"]
+                        dec_out["sl"] = _sh_sig["stop_loss"]
+                        dec_out["tp"] = _sh_sig["take_profit"]
+                        dec_out["direct_lane"] = "stop_hunt"
+                        dec_out["reasons"] = (dec_out.get("reasons") or []) + [
+                            f"Stop Hunt Direct Lane: {_sh_sig['reason']} "
+                            f"(confidence={_sh_sig['confidence']})"
+                        ]
+                        log.info(
+                            f"[Trader] Stop Hunt Direct Lane FIRED: "
+                            f"{_sh_sig['action']} @ {_sh_sig['entry']:.5f} "
+                            f"SL={_sh_sig['stop_loss']:.5f} TP={_sh_sig['take_profit']:.5f}"
+                        )
+                        if debugger:
+                            debugger.record("stop_hunt_direct_lane", _sh_sig["action"],
+                                             "validated standalone signal, blend was WAIT")
+            except Exception as _e_shdl:
+                log.debug(f"[Trader] Stop Hunt Direct Lane check failed (non-fatal): {_e_shdl}")
+
         # Day 81+ hotfix (Day 90 bugfix): sync live open positions into
         # RiskEngine so the correlation check uses authoritative PaperTrader
         # state instead of potentially-stale daily_risk.json open_pairs list.
@@ -1224,6 +1212,34 @@ class AITrader:
         dec_out["structure_ctx"] = analysis_out.get("structure_ctx", {})
         dec_out["smc_ctx"] = analysis_out.get("smc_ctx", {})
         dec_out["liquidity_ctx"] = analysis_out.get("liquidity_ctx", {})
+        # 2026-08-02 (Abdullah audit): market_out["regime"] comes straight
+        # from MarketRegimeDetector.detect() on real historical price data
+        # (no live-API dependency, unlike mtf_bias above) — used by the new
+        # trend-alignment hard gate in trade_permission.py. Was previously
+        # never threaded into dec_out at all, so trade_permission's
+        # `decision_out.get("regime", {})` always silently read {}.
+        dec_out["regime"] = market_out.get("regime", {})
+        # 2026-08-02 (Abdullah audit): the revenge-trading detector inside
+        # trade_permission.py hardcodes `TraderDB()` with no db_path, which
+        # ALWAYS points at the live database/trader.db — even during a
+        # backtest run, which uses its own isolated TraderDB(db_path=...)
+        # (see backtest/unified_engine.py's _make_backtest_trader). That
+        # means the detector's `get_trade_history()` call during backtest
+        # was reading the live account's history (usually empty/irrelevant)
+        # instead of the backtest's own trades, so clustered/correlated
+        # entries within the SAME backtest run were never caught. self._db
+        # is already correctly wired to the right DB for both live and
+        # backtest (see the TraderDB injection fix above in __init__) —
+        # just needs to be threaded through like sr_ctx/regime above.
+        dec_out["_db"] = self._db
+        # 2026-08-02 (Abdullah audit): fast_path flag set by the
+        # adaptive_decision wiring fix in analysis_agent.py — True only
+        # for a clean solo stop_hunt signal (validated 76-80%/65-70%
+        # out-of-sample edge, see backtest/per_strategy_tester.py). Used
+        # by trade_permission.py to skip the blend-only gates (Confluence
+        # quality, SMC+Session fusion) that were never validated for a
+        # standalone strategy and were diluting this one's proven edge.
+        dec_out["fast_path"] = (analysis_out.get("unified_signal", {}) or {}).get("fast_path", False)
 
         # ── Phase 25 follow-up: advanced risk gates ─────────────────────
         # Runs AFTER RiskEngine + Day76 Sizer, BEFORE TradePermission.
@@ -1871,6 +1887,31 @@ class AITrader:
                 log.debug(f"[Trader] Data staleness check skipped (non-fatal): {e}")
 
             try:
+                # ── L-1 FIX: Fast path — MarketAgent already stripped the
+                # forming bar, so if forming_bar_df is present, the bar
+                # is DEFINITELY still forming. Skip the expensive
+                # get_last_closed_bar_time walk entirely. ──
+                if market_out.get("forming_bar_df") is not None:
+                    log.debug(
+                        f"[Trader] {self.symbol} candle still forming "
+                        f"(fast path: MarketAgent pre-stripped) — skipping"
+                    )
+                    try:
+                        from core.trade_decision_log import log_decision
+                        log_decision(symbol=self.symbol, signal="NO TRADE",
+                                     reject_stage="candle_not_closed",
+                                     reject_reason="Forming bar pre-stripped by MarketAgent")
+                    except Exception:
+                        pass
+                    result = self._monitor_only_result(
+                        price=latest_price, candle_time=candle_time,
+                        session_ctx=session_ctx, elapsed=round(time.time() - t0, 1),
+                        closed_trades=closed_processed,
+                    )
+                    result["reject_reason"] = "Candle not closed: forming bar pre-stripped"
+                    self._print_final(result)
+                    return result
+
                 from core.production_hardening import (
                     is_candle_closed,
                     get_last_closed_bar_time,

@@ -1,0 +1,16 @@
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   INSTITUTIONAL HISTORICAL TRAINING PIPELINE
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   Symbols (1): ['EURUSD']
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   Timeframes: ['M15']
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   Primary TF: M15
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   Supervised models: ['xgboost', 'lightgbm', 'catboost', 'random_forest']
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   RL algorithms: []
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical |   Resume from phase: 1
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical | [SKIP] Phase 1: Data Collection (resume or checkpoint)
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical | [SKIP] Phase 2: Data Validation (resume or checkpoint)
+2026-08-02 18:42:26 | INFO    | pipeline.train_historical | [SKIP] Phase 3: Feature Engineering (resume or checkpoint) -- reloaded 1 symbols from cache
+2026-08-02 18:43:21 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:43:21 | INFO    | pipeline.train_historical |   PIPELINE COMPLETE — 0m 56s
+2026-08-02 18:43:21 | INFO    | pipeline.train_historical |   EURUSD: random_forest (score=49.4)
+2026-08-02 18:43:21 | INFO    | pipeline.train_historical | ============================================================

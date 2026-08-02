@@ -63,23 +63,34 @@ def _phase_checkpoint_path(phase_num: int) -> Path:
 
 def _is_phase_done(phase_num: int, config: PipelineConfig) -> bool:
     """A phase counts as done only if its marker exists AND was recorded as
-    covering (at least) every symbol currently requested. Without this check,
-    a marker written by an earlier run with a smaller symbol list (e.g. the
-    old 6-pair default) would silently skip the phase for newly added
-    symbols, even though they were never processed."""
+    covering (at least) every symbol currently requested, for the SAME
+    primary timeframe. Without the symbol check, a marker written by an
+    earlier run with a smaller symbol list would silently skip newly added
+    symbols. Without the timeframe check (BUG FIX), a marker written by an
+    M15 run made a later `--timeframes H1` run skip Phase 1-3 entirely and
+    silently keep training on the old M15 feature cache -- every phase
+    from 4 onward would then produce identical numbers to the M15 run
+    regardless of which timeframe was requested."""
     marker = _phase_checkpoint_path(phase_num)
     if not marker.exists():
         return False
     try:
         import json
-        recorded = set(json.loads(marker.read_text()).get("symbols", []))
+        recorded = json.loads(marker.read_text())
+        recorded_symbols = set(recorded.get("symbols", []))
+        recorded_tf = recorded.get("primary_timeframe")
     except Exception:
         return False  # can't verify coverage -- safer to re-run than assume done
-    missing = set(config.symbols) - recorded
+    missing = set(config.symbols) - recorded_symbols
     if missing:
         log.warning(f"Phase {phase_num}: checkpoint exists but doesn't cover "
                     f"{len(missing)} newly requested symbol(s) "
                     f"(e.g. {sorted(missing)[:5]}) -- forcing re-run")
+        return False
+    if recorded_tf != config.primary_timeframe:
+        log.warning(f"Phase {phase_num}: checkpoint was recorded for timeframe "
+                    f"'{recorded_tf}' (or an older marker with no timeframe info), "
+                    f"but '{config.primary_timeframe}' was requested -- forcing re-run")
         return False
     return True
 
@@ -90,6 +101,7 @@ def _mark_phase_done(phase_num: int, config: PipelineConfig) -> None:
     _phase_checkpoint_path(phase_num).write_text(json.dumps({
         "completed_at": time.time(),
         "symbols": list(config.symbols),
+        "primary_timeframe": config.primary_timeframe,
     }))
 
 
@@ -179,6 +191,13 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             config.symbols = [s.strip() for s in args.symbols.split(",")]
         if args.timeframes:
             config.timeframes = [t.strip() for t in args.timeframes.split(",")]
+            # BUG FIX: primary_timeframe (used by phases 3+ for features,
+            # labels, training, backtesting -- everything past raw data
+            # collection) defaulted to "M15" and was never updated from
+            # this flag. Passing --timeframes H1 silently kept training
+            # on M15 the whole time (identical results to a M15 run were
+            # the tell). Use the first requested timeframe as primary.
+            config.primary_timeframe = config.timeframes[0]
         if args.resume:
             config.resume_from_phase = args.resume
         if args.timesteps:
@@ -294,7 +313,16 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
                         "-- but no cached features could be reloaded!")
     
     # ── Phase 4: Label Generation ─────────────────────────────
-    if not pipeline_failed and featured_data and _should_run(4):
+    # BUG FIX: phases 4/5/6 (unlike phase 3) never persist their output to
+    # disk, so there's nothing to reload when a checkpoint says "already
+    # done" -- skipping them silently left `featured_data` without
+    # labels/regime columns and `datasets` empty, which cascaded into
+    # "Phase 8: SKIPPED (no datasets from Phase 6)" on every resumed run.
+    # Each phase is <1s (see pipeline timing logs), so there's no real
+    # cost to always re-running them when input data is available --
+    # that's simpler and safer than trying to build a checkpoint-reload
+    # path for state that was never cached.
+    if not pipeline_failed and featured_data:
         try:
             featured_data = generate_labels(featured_data, config)
             log_phase("phase4_labels", "OK")
@@ -304,7 +332,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase4_labels", "FAILED", error=str(e))
     
     # ── Phase 5: Regime Detection ─────────────────────────────
-    if not pipeline_failed and featured_data and _should_run(5):
+    if not pipeline_failed and featured_data:
         try:
             featured_data = detect_regimes(featured_data, config)
             log_phase("phase5_regime", "OK")
@@ -314,7 +342,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase5_regime", "FAILED", error=str(e))
     
     # ── Phase 6: Dataset Creation ─────────────────────────────
-    if not pipeline_failed and featured_data and _should_run(6):
+    if not pipeline_failed and featured_data:
         try:
             datasets = create_datasets(featured_data, config)
             if not datasets:
@@ -334,7 +362,17 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
     _mark_phase_done(7, config)
     
     # ── Phase 8: Model Training ───────────────────────────────
-    if not pipeline_failed and datasets and _should_run(8):
+    # BUG FIX: same class of bug as phases 4/5/6 above -- phases 8-15
+    # only exist as in-memory variables (training_results, wf_results,
+    # backtest_results, best_models, ...) for the lifetime of a single
+    # `run_pipeline()` process. A checkpoint marker saying "phase 8 is
+    # done" from a PREVIOUS run/process has nothing to reload from --
+    # skipping based on it here silently left every downstream phase
+    # (9-15) with empty inputs, and did so with NO log message (unlike
+    # phase 6, which at least logged a warning), making it invisible.
+    # `_mark_phase_done()` calls are kept below purely as an audit trail
+    # in the run log -- they no longer gate whether a phase executes.
+    if not pipeline_failed and datasets:
         try:
             training_results = train_all_models(datasets, config)
             if training_results:
@@ -350,7 +388,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
         log.warning("Phase 8: SKIPPED (no datasets from Phase 6)")
     
     # ── Phase 9: Hyperparameter Optimization ──────────────────
-    if not pipeline_failed and datasets and config.optuna_trials > 0 and _should_run(9):
+    if not pipeline_failed and datasets and config.optuna_trials > 0:
         try:
             optuna_results = optimize_hyperparams(datasets, config)
             log_phase("phase9_optuna", "OK", {"symbols_optimized": len(optuna_results)})
@@ -363,7 +401,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log.info("[SKIP] Phase 9: Hyperparameter Optimization (--no-optuna or no data)")
     
     # ── Phase 10: Walk-Forward Validation ─────────────────────
-    if not pipeline_failed and datasets and _should_run(10):
+    if not pipeline_failed and datasets:
         try:
             wf_results = walk_forward_validation(datasets, config)
             log_phase("phase10_walkforward", "OK", {"symbols_validated": len(wf_results)})
@@ -373,7 +411,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase10_walkforward", "FAILED", error=str(e))
     
     # ── Phase 11: Backtesting ─────────────────────────────────
-    if not pipeline_failed and datasets and _should_run(11):
+    if not pipeline_failed and datasets:
         try:
             backtest_results = run_backtests(datasets, config)
             log_phase("phase11_backtest", "OK", {"symbols_backtested": len(backtest_results)})
@@ -383,7 +421,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase11_backtest", "FAILED", error=str(e))
     
     # ── Phase 12: Stress Testing ──────────────────────────────
-    if not pipeline_failed and datasets and _should_run(12):
+    if not pipeline_failed and datasets:
         try:
             stress_results = run_stress_tests(datasets, config)
             log_phase("phase12_stress", "OK")
@@ -393,7 +431,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase12_stress", "SKIPPED", error=str(e))
     
     # ── Phase 13: Model Selection ─────────────────────────────
-    if not pipeline_failed and _should_run(13):
+    if not pipeline_failed:
         try:
             best_models = select_best_models(backtest_results, wf_results, config)
             if best_models:
@@ -407,7 +445,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase13_selection", "FAILED", error=str(e))
     
     # ── Phase 14: Save Production Artifacts ───────────────────
-    if not pipeline_failed and datasets and best_models and _should_run(14):
+    if not pipeline_failed and datasets and best_models:
         try:
             artifacts = save_production_artifacts(datasets, best_models, config)
             log_phase("phase14_save", "OK")
@@ -417,7 +455,7 @@ def run_pipeline(config: Optional[PipelineConfig] = None, args=None) -> Dict:
             log_phase("phase14_save", "FAILED", error=str(e))
     
     # ── Phase 15: Auto Retrain Check ──────────────────────────
-    if not pipeline_failed and datasets and best_models and _should_run(15):
+    if not pipeline_failed and datasets and best_models:
         try:
             retrain_results = check_and_retrain(datasets, best_models, config)
             log_phase("phase15_retrain", "OK")
@@ -493,6 +531,7 @@ def run_pipeline_per_symbol(args=None) -> Dict:
             base_config.symbols = [s.strip() for s in args.symbols.split(",")]
         if args.timeframes:
             base_config.timeframes = [t.strip() for t in args.timeframes.split(",")]
+            base_config.primary_timeframe = base_config.timeframes[0]  # see BUG FIX note above
         if args.resume:
             base_config.resume_from_phase = args.resume
         if args.timesteps:

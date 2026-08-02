@@ -164,7 +164,18 @@ def _calculate_backtest_metrics(df: pd.DataFrame, predictions, symbol: str, conf
     dd = (peak_arr - eq) / peak_arr
     max_dd = float(dd.max()) * 100 if len(dd) > 0 else 0
     
-    avg_rr = np.mean([t["pips"] for t in wins]) / abs(np.mean([t["pips"] for t in losses])) if wins and losses else 0
+    winning_trades = [t for t in trades if t["pnl"] > 0]
+    losing_trades = [t for t in trades if t["pnl"] < 0]
+    # BUG FIX: `wins`/`losses` above (line 141-142) are plain PnL-float
+    # lists, not trade dicts -- `t["pips"]` on a float crashes with
+    # "'float' object is not subscriptable". This only fired whenever a
+    # model actually predicted BOTH some winning AND some losing trades
+    # (catboost, random_forest); xgboost/lightgbm predicted HOLD almost
+    # exclusively so `trades` was empty and this line was never reached,
+    # silently masking the bug behind a "PnL=$0.00" result instead.
+    avg_rr = (np.mean([t["pips"] for t in winning_trades]) /
+              abs(np.mean([t["pips"] for t in losing_trades]))
+              if winning_trades and losing_trades else 0)
     expectancy = net_profit / len(trades) if trades else 0
     recovery_factor = net_profit / (max_dd * config.initial_balance / 100) if max_dd > 0 else 0
     

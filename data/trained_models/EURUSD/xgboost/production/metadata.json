@@ -1,0 +1,75 @@
+{
+  "symbol": "EURUSD",
+  "model_type": "xgboost",
+  "composite_score": 40.59,
+  "backtest_metrics": {
+    "net_profit": 0,
+    "profit_factor": Infinity,
+    "sharpe_ratio": 0,
+    "sortino_ratio": 0,
+    "max_drawdown_pct": 0.0,
+    "win_rate": 0,
+    "total_trades": 0,
+    "avg_rr_ratio": 0,
+    "expectancy": 0,
+    "recovery_factor": 0,
+    "avg_holding_candles": 0,
+    "final_balance": 10000.0
+  },
+  "pipeline_config": {
+    "symbols": [
+      "EURUSD"
+    ],
+    "timeframes": [
+      "M15"
+    ],
+    "primary_timeframe": "M15",
+    "history_years": 5,
+    "data_format": "parquet",
+    "train_pct": 0.7,
+    "val_pct": 0.15,
+    "feature_sets": [
+      "trend",
+      "momentum",
+      "volume",
+      "volatility",
+      "market_structure",
+      "session",
+      "time"
+    ],
+    "label_horizons": [
+      5,
+      10,
+      20,
+      50
+    ],
+    "supervised_models": [
+      "xgboost",
+      "lightgbm",
+      "catboost",
+      "random_forest"
+    ],
+    "rl_algorithms": [],
+    "optuna_trials": 0,
+    "optuna_early_stopping": 10,
+    "walk_forward_folds": 5,
+    "walk_forward_train_pct": 0.7,
+    "walk_forward_min_test_size": 50,
+    "rl_timesteps": 500000,
+    "rl_eval_episodes": 20,
+    "initial_balance": 10000.0,
+    "risk_per_trade": 0.01,
+    "max_spread_pips": 5.0,
+    "slippage_pips": 0.5,
+    "monte_carlo_sims": 1000,
+    "num_workers": 4,
+    "use_gpu": true,
+    "cache_datasets": true,
+    "resume_from_phase": 1,
+    "log_level": "INFO",
+    "tensorboard_dir": null
+  },
+  "saved_at": "2026-08-02T12:17:01+00:00",
+  "n_features": 72,
+  "training_hash": "77639_2022-02-10 21:15:00+00:00_2025-03-27 10:00:00+00:00"
+}

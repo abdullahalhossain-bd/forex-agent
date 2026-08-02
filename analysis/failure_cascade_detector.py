@@ -71,27 +71,42 @@ _DIR_MAP = {"UP": "BULLISH", "DOWN": "BEARISH"}
 class CascadeSignature:
     direction: str          # BULLISH | BEARISH
     stages_present: tuple   # subset of STAGE_ORDER, in actual chronological order
-    gap_buckets: tuple      # "TIGHT" (<=10 bars) | "WIDE" (>10) between consecutive stages
+    gap_buckets: tuple      # "TIGHT" (<5 bars) | "NORMAL" (5-15) | "WIDE" (>15) between consecutive stages
     bars_since_last_stage: int  # staleness of the cascade as of the current bar
 
     def key(self) -> str:
-        """Canonical bucket key used to look up empirical calibration stats."""
+        """Canonical (exact) bucket key used to look up empirical calibration stats."""
         stages = ">".join(self.stages_present) if self.stages_present else "NONE"
         gaps = "-".join(self.gap_buckets) if self.gap_buckets else "NONE"
         return f"{self.direction}|{stages}|{gaps}"
 
+    def coarse_key(self) -> str:
+        """
+        Round-15: the exact key() space is combinatorially too large
+        (4 stages x orderings x 3 gap buckets per pair) to ever collect
+        n>=MIN_SAMPLES_FOR_TRUST samples for most buckets — measured:
+        even after calibrating 33 real pairs of H1 history, almost every
+        exact signature seen in a fresh backtest had 0-3 samples.
+        This coarser key collapses to (direction, stage COUNT, dominant
+        gap category) — a few dozen possible buckets instead of
+        thousands — so real samples actually accumulate. Used as a
+        fallback when the exact key isn't trusted yet.
+        """
+        n_stages = len(self.stages_present)
+        if self.gap_buckets:
+            from collections import Counter
+            dominant_gap = Counter(self.gap_buckets).most_common(1)[0][0]
+        else:
+            dominant_gap = "NONE"
+        return f"{self.direction}|STAGES={n_stages}|DOMINANT_GAP={dominant_gap}"
+
 
 def _gap_bucket(bars: int) -> str:
-    """
-    Coarsened to 2 states (was 3: TIGHT/NORMAL/WIDE) to reduce the
-    signature key space. With 4 possible stages, gap_buckets can have up
-    to 3 entries -- at 3 states that's 3^3=27 combinations per stage
-    ordering; at 2 states it's 2^3=8. Calibration runs showed this
-    mattered in practice: trust ratio (n>=MIN_SAMPLES_FOR_TRUST) was only
-    2.6-6.6% across EURUSD/GBPUSD/USDJPY/XAUUSD with the 3-state scheme.
-    Threshold (10 bars) is the midpoint of the old NORMAL band (5-15).
-    """
-    return "TIGHT" if bars <= 10 else "WIDE"
+    if bars < 5:
+        return "TIGHT"
+    if bars <= 15:
+        return "NORMAL"
+    return "WIDE"
 
 
 def extract_cascade_signature(
@@ -209,6 +224,20 @@ def score_cascade(signature: CascadeSignature, stats_path: str = DEFAULT_STATS_P
             "n_samples": bucket["n_samples"],
             "calibrated": True,
             "heuristic_flag": None,
+            "bucket_level": "exact",
+        }
+
+    # Round-15: exact bucket not trusted (or absent) — try the coarser
+    # (direction, stage-count, dominant-gap) bucket before falling back
+    # to the heuristic. See CascadeSignature.coarse_key().
+    coarse_bucket = stats.get(signature.coarse_key())
+    if coarse_bucket and coarse_bucket.get("n_samples", 0) >= MIN_SAMPLES_FOR_TRUST:
+        return {
+            "fail_rate": coarse_bucket["fail_rate"],
+            "n_samples": coarse_bucket["n_samples"],
+            "calibrated": True,
+            "heuristic_flag": None,
+            "bucket_level": "coarse",
         }
 
     # --- Provisional heuristic only (NOT a validated statistic). Never used
@@ -226,6 +255,7 @@ def score_cascade(signature: CascadeSignature, stats_path: str = DEFAULT_STATS_P
         "n_samples": bucket.get("n_samples", 0) if bucket else 0,
         "calibrated": False,
         "heuristic_flag": heuristic_flag,
+        "bucket_level": None,
     }
 
 
@@ -261,6 +291,8 @@ def check_failure_cascade(
     result = score_cascade(sig, stats_path=stats_path)
 
     if result["calibrated"]:
+        # Threshold is a placeholder — review the actual fail_rate
+        # distribution across buckets after calibration before trusting 0.5.
         passed = result["fail_rate"] < 0.5
         reason = (
             f"Cascade {sig.key()} has empirical fail rate "

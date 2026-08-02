@@ -158,8 +158,19 @@ class EnhancedTradingEnv(gym.Env):
         if equity > self.peak_balance:
             self.peak_balance = equity
         
+        # BUG FIX (consistency with ml/rl_environment.py): terminate on
+        # severe drawdown instead of letting a blown account ride out the
+        # rest of the episode. Mirrors a real broker margin call and keeps
+        # the reward signal from being dominated by an already-decided,
+        # deeply-negative-equity episode. Closed at THIS bar's price
+        # (before current_step advances) so the exit isn't priced off the
+        # next candle.
+        bankrupt = equity <= self.initial_balance * 0.2
+        if bankrupt and self.position is not None:
+            pnl += self._close_position("margin_call")
+
         self.current_step += 1
-        terminated = self.current_step >= len(self.df) - 1
+        terminated = (self.current_step >= len(self.df) - 1) or bankrupt
         truncated = False
         
         return self._get_obs(), float(reward), terminated, truncated, self._get_info()

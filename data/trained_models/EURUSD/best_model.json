@@ -1,0 +1,24 @@
+{
+  "best_model": "random_forest",
+  "score": 58.98,
+  "all_scores": {
+    "xgboost": 51.08,
+    "lightgbm": 44.03,
+    "catboost": 48.15,
+    "random_forest": 58.98
+  },
+  "best_metrics": {
+    "net_profit": 457.5,
+    "profit_factor": 1.03,
+    "sharpe_ratio": 1.36,
+    "sortino_ratio": 1.76,
+    "max_drawdown_pct": 9.61,
+    "win_rate": 51.5,
+    "total_trades": 4159,
+    "avg_rr_ratio": 0.96,
+    "expectancy": 0.11,
+    "recovery_factor": 0.48,
+    "avg_holding_candles": 1.0,
+    "final_balance": 10457.5
+  }
+}

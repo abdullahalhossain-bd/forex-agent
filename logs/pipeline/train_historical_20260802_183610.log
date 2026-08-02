@@ -1,0 +1,17 @@
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   INSTITUTIONAL HISTORICAL TRAINING PIPELINE
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   Symbols (1): ['EURUSD']
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   Timeframes: ['M15']
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   Primary TF: M15
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   Supervised models: ['xgboost', 'lightgbm', 'catboost', 'random_forest']
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   RL algorithms: []
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical |   Resume from phase: 1
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical | [SKIP] Phase 1: Data Collection (resume or checkpoint)
+2026-08-02 18:36:36 | INFO    | pipeline.train_historical | [SKIP] Phase 2: Data Validation (resume or checkpoint)
+2026-08-02 18:36:37 | INFO    | pipeline.train_historical | [SKIP] Phase 3: Feature Engineering (resume or checkpoint) -- reloaded 1 symbols from cache
+2026-08-02 18:36:37 | WARNING | pipeline.train_historical | Phase 8: SKIPPED (no datasets from Phase 6)
+2026-08-02 18:36:45 | INFO    | pipeline.train_historical | ============================================================
+2026-08-02 18:36:45 | INFO    | pipeline.train_historical |   PIPELINE COMPLETE — 0m 9s
+2026-08-02 18:36:45 | WARNING | pipeline.train_historical |   Pipeline finished but produced no outputs — check phase 1-3 logs
+2026-08-02 18:36:45 | INFO    | pipeline.train_historical | ============================================================

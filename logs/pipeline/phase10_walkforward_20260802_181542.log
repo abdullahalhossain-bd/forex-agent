@@ -1,0 +1,8 @@
+2026-08-02 18:16:30 | INFO    | pipeline.phase10_walkforward | [Phase 10: Walk-Forward Validation] Starting...
+2026-08-02 18:16:33 | INFO    | pipeline.phase10_walkforward |   EURUSD fold 1: acc=0.3313 f1=0.3131
+2026-08-02 18:16:36 | INFO    | pipeline.phase10_walkforward |   EURUSD fold 2: acc=0.3160 f1=0.2656
+2026-08-02 18:16:39 | INFO    | pipeline.phase10_walkforward |   EURUSD fold 3: acc=0.4390 f1=0.3507
+2026-08-02 18:16:43 | INFO    | pipeline.phase10_walkforward |   EURUSD fold 4: acc=0.3901 f1=0.3721
+2026-08-02 18:16:47 | INFO    | pipeline.phase10_walkforward |   EURUSD fold 5: acc=0.3863 f1=0.3488
+2026-08-02 18:16:47 | INFO    | pipeline.phase10_walkforward |   EURUSD WF avg: acc=0.3725 f1=0.3301 (5 folds)
+2026-08-02 18:16:47 | INFO    | pipeline.phase10_walkforward | [Phase 10: Walk-Forward Validation] Completed in 0m 16.9s

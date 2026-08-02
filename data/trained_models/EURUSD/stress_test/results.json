@@ -1,0 +1,37 @@
+{
+  "monte_carlo": {
+    "n_simulations": 1000,
+    "mean_final_balance": 9955.36,
+    "std_final_balance": 500.12,
+    "pnl_5pct": -886.68,
+    "pnl_95pct": 799.23,
+    "prob_profitable": 44.7,
+    "max_dd_95pct": 11.0,
+    "max_dd_mean": 6.1
+  },
+  "spread_stress": {
+    "normal_pnl": -36.81,
+    "2x_spread_pnl": -18.4,
+    "5x_spread_pnl": -0.0,
+    "survives_2x": "False",
+    "survives_5x": "False"
+  },
+  "slippage_stress": {
+    "1pip": {
+      "pnl": -36.44,
+      "survives": "False"
+    },
+    "2pip": {
+      "pnl": -35.7,
+      "survives": "False"
+    },
+    "5pip": {
+      "pnl": -33.13,
+      "survives": "False"
+    },
+    "10pip": {
+      "pnl": -27.61,
+      "survives": "False"
+    }
+  }
+}

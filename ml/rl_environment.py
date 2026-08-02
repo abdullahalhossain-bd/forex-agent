@@ -153,6 +153,7 @@ class ForexTradingEnv(gym.Env):
         self.position = Position()
         self.trades_today = 0
         self.current_day = None
+        self.closed_trades: list = []
         self.total_trades = 0
         self.total_wins = 0
         self.total_losses = 0
@@ -322,6 +323,18 @@ class ForexTradingEnv(gym.Env):
         else:
             self.total_losses += 1
 
+        # ENHANCEMENT: record a lightweight trade-history entry (previously
+        # only aggregate win/loss counters existed — no way to compute
+        # win rate, drawdown, or profit factor from a trade list after an
+        # episode). Additive only; doesn't change existing behavior.
+        if not hasattr(self, "closed_trades"):
+            self.closed_trades = []
+        self.closed_trades.append({
+            "step": self.current_step, "direction": self.position.direction,
+            "entry": self.position.entry, "exit": close_price,
+            "pnl_usd": pnl, "lot": self.position.lot, "reason": reason,
+        })
+
         log.debug(f"[RL Env] CLOSE {self.position.direction} @ {close_price:.5f} PnL=${pnl:.2f} ({reason})")
         self.position = Position()
         return pnl
@@ -357,6 +370,13 @@ class ForexTradingEnv(gym.Env):
             self.total_wins += 1
         else:
             self.total_losses += 1
+        if not hasattr(self, "closed_trades"):
+            self.closed_trades = []
+        self.closed_trades.append({
+            "step": self.current_step, "direction": self.position.direction,
+            "entry": self.position.entry, "exit": price,
+            "pnl_usd": pnl, "lot": self.position.lot, "reason": reason,
+        })
         log.debug(f"[RL Env] CLOSE {self.position.direction} @ {price:.5f} PnL=${pnl:.2f} ({reason})")
         self.position = Position()
         return pnl

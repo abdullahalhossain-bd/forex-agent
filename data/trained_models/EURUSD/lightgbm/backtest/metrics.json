@@ -1,0 +1,14 @@
+{
+  "net_profit": -76.1,
+  "profit_factor": 1.0,
+  "sharpe_ratio": -0.23,
+  "sortino_ratio": -0.29,
+  "max_drawdown_pct": 10.27,
+  "win_rate": 51.2,
+  "total_trades": 4164,
+  "avg_rr_ratio": 0.94,
+  "expectancy": -0.02,
+  "recovery_factor": -0.07,
+  "avg_holding_candles": 1.0,
+  "final_balance": 9923.9
+}

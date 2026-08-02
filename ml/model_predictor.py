@@ -137,6 +137,70 @@ class ModelPredictor:
             """)
             c.commit()
 
+    def _predict_institutional(self, pair: str, timeframe: str,
+                                df_recent: pd.DataFrame) -> Optional[Dict[str, Any]]:
+        """Fallback prediction using a model trained by ml/train_historical.py
+        (data/trained_models/{pair}/{model_type}/production/). Returns None
+        if no such model exists or prediction fails for any reason — caller
+        falls through to the normal NOT_READY path, never raises.
+        """
+        try:
+            from ml.institutional_feature_adapter import build_institutional_features
+            import pickle
+
+            prod_glob = list((_PROJECT_ROOT / "data" / "trained_models" / pair).glob("*/production/metadata.json"))
+            if not prod_glob:
+                return None
+            meta_path = prod_glob[0]  # phase13_selection saves exactly one production/ dir (the winner)
+            model_type = meta_path.parent.parent.name
+            model_dir = meta_path.parent.parent
+
+            from utils.safe_pickle import safe_pickle_load
+            model = safe_pickle_load(str(model_dir / "model.pkl"))
+
+            feature_list = json.loads((model_dir / "feature_list.json").read_text(encoding="utf-8"))
+            with (model_dir / "normalizer.pkl").open("rb") as f:
+                normalizer = pickle.load(f)
+            means, stds = normalizer["means"], normalizer["stds"]
+
+            feats = build_institutional_features(df_recent)
+            if feats is None:
+                return None
+
+            # Align to training's exact feature order; missing -> 0 (rare —
+            # only if a warm-up-sensitive indicator was still NaN)
+            row = [(feats.get(c, 0.0) - means.get(c, 0.0)) / (stds.get(c, 1.0) or 1.0)
+                   for c in feature_list]
+            X = pd.DataFrame([row], columns=feature_list)
+
+            pred = int(model.predict(X)[0])
+            proba = None
+            if hasattr(model, "predict_proba"):
+                try:
+                    proba = model.predict_proba(X)[0]
+                except Exception:
+                    proba = None
+
+            label = {0: "WAIT", 1: "BUY", 2: "SELL"}.get(pred, "WAIT")
+            confidence = float(max(proba)) if proba is not None else 0.55
+
+            log.info(f"[Predictor] {pair} {timeframe}: institutional fallback ({model_type}) -> {label}")
+            return {
+                "prediction": label,
+                "probability": round(confidence, 3),
+                "model_agreement": "1/1",
+                "per_model": {model_type: {"prediction": label, "probability": confidence}},
+                "important_features": [],
+                "models_used": 1,
+                "ml_available": True,
+                "ml_unavailable_reason": None,
+                "source": "institutional_pipeline",
+                "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            }
+        except Exception as e:
+            log.debug(f"[Predictor] institutional fallback failed for {pair} {timeframe}: {e}")
+            return None
+
     def _load_models(self, pair: str, timeframe: str) -> Dict[str, Any]:
         """Load all available models for a pair (cached).
 
@@ -294,8 +358,19 @@ class ModelPredictor:
         features: Dict[str, float],
         pair: str,
         timeframe: str = "15m",
+        df_recent: Optional[pd.DataFrame] = None,
     ) -> Dict[str, Any]:
         """Run ensemble prediction on a single feature vector.
+
+        Args:
+            df_recent: OPTIONAL, backward-compatible. Recent OHLCV history
+                (>= ~220 bars) for `pair`/`timeframe`. If the usual
+                memory/ml_models path has no model AND this is provided,
+                falls back to a model trained by ml/train_historical.py
+                (saved under data/trained_models/) — see
+                ml/institutional_feature_adapter.py. Existing callers that
+                don't pass this get byte-for-byte the same behavior as
+                before.
 
         Returns:
             {
@@ -332,6 +407,18 @@ class ModelPredictor:
 
         # Load models
         models = self._load_models(pair, timeframe)
+
+        # ADDITIVE FALLBACK (audit fix — "duplicate pipeline" finding):
+        # memory/ml_models/ has nothing for this pair, but a model may
+        # exist under data/trained_models/ (trained by
+        # ml/train_historical.py, a different feature schema). Only
+        # attempted when the caller opted in by passing df_recent — no
+        # existing caller's behavior changes.
+        if not models and df_recent is not None:
+            inst_result = self._predict_institutional(pair, timeframe, df_recent)
+            if inst_result is not None:
+                return inst_result
+
         if not models:
             # Co-founder fix: log at WARNING level (was debug) so the
             # operator can see WHY models aren't loading.
@@ -505,7 +592,14 @@ class ModelPredictor:
                 else:
                     model_X = X
                 if model_type == "lstm":
-                    # LSTM needs 3D input
+                    # LSTM needs 3D input — CRITICAL: skip if any NaN
+                    if model_X.isna().any().any():
+                        log.warning(
+                            "[ModelPredictor] NaN in features for LSTM model '%s' — "
+                            "skipping (NaN causes undefined LSTM output)", model_name,
+                        )
+                        result["per_model"][model_type] = {"probability": 0.5, "signal": "WAIT", "reason": "NaN features"}
+                        continue
                     n_features = model_X.shape[1]
                     X_3d = model_X.values.reshape(1, 1, n_features)
                     proba = float(model.predict(X_3d, verbose=0).ravel()[0])

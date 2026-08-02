@@ -1,0 +1,142 @@
+{
+  "phases": {
+    "phase4_labels": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:16+00:00"
+    },
+    "phase5_regime": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:16+00:00"
+    },
+    "phase6_dataset": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:16+00:00",
+      "metrics": {
+        "symbols_split": 1
+      }
+    },
+    "phase7_rl_env": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:16+00:00"
+    },
+    "phase8_train": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:33+00:00",
+      "metrics": {
+        "symbols_trained": 1
+      }
+    },
+    "phase10_walkforward": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:42+00:00",
+      "metrics": {
+        "symbols_validated": 1
+      }
+    },
+    "phase11_backtest": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:43+00:00",
+      "metrics": {
+        "symbols_backtested": 1
+      }
+    },
+    "phase12_stress": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:48+00:00"
+    },
+    "phase13_selection": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:48+00:00",
+      "metrics": {
+        "best_models": [
+          "EURUSD"
+        ]
+      }
+    },
+    "phase14_save": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:48+00:00"
+    },
+    "phase15_retrain": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:48+00:00"
+    },
+    "phase16_logging": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:54+00:00",
+      "metrics": {
+        "ram_used_gb": 7.73,
+        "ram_pct": 94.4
+      }
+    },
+    "phase17_dashboard": {
+      "status": "OK",
+      "timestamp": "2026-08-02T17:11:54+00:00",
+      "metrics": {
+        "path": "D:\\Projects\\forex\\logs\\pipeline\\dashboard.html"
+      }
+    }
+  },
+  "system": {
+    "python_version": "3.13.5",
+    "platform": "win32",
+    "cpu_count": 8,
+    "ram_gb": 8.2,
+    "pid": 9736
+  },
+  "started_at": "2026-08-02T17:11:16+00:00",
+  "completed_at": "2026-08-02T17:11:54+00:00",
+  "config": {
+    "symbols": [
+      "EURUSD"
+    ],
+    "timeframes": [
+      "H1"
+    ],
+    "primary_timeframe": "M15",
+    "history_years": 5,
+    "data_format": "parquet",
+    "train_pct": 0.7,
+    "val_pct": 0.15,
+    "feature_sets": [
+      "trend",
+      "momentum",
+      "volume",
+      "volatility",
+      "market_structure",
+      "session",
+      "time"
+    ],
+    "label_horizons": [
+      5,
+      10,
+      20,
+      50
+    ],
+    "supervised_models": [
+      "xgboost",
+      "lightgbm",
+      "catboost",
+      "random_forest"
+    ],
+    "rl_algorithms": [],
+    "optuna_trials": 0,
+    "optuna_early_stopping": 10,
+    "walk_forward_folds": 5,
+    "walk_forward_train_pct": 0.7,
+    "walk_forward_min_test_size": 50,
+    "rl_timesteps": 500000,
+    "rl_eval_episodes": 20,
+    "initial_balance": 10000.0,
+    "risk_per_trade": 0.01,
+    "max_spread_pips": 5.0,
+    "slippage_pips": 0.5,
+    "monte_carlo_sims": 1000,
+    "num_workers": 4,
+    "use_gpu": true,
+    "cache_datasets": true,
+    "resume_from_phase": 1,
+    "log_level": "INFO",
+    "tensorboard_dir": null
+  }
+}

@@ -145,6 +145,142 @@ class TradePermission:
         checks.append({"check": "Valid signal", "passed": ok, "detail": sig})
         if ok: passed += 1
 
+        # 1b. S/R ALIGNMENT GATE (added 2026-08-02, Abdullah audit)
+        # Backtest evidence: SELL trades entered within 5-55 pips of a
+        # SUPPORT zone (closer to support than resistance), and the one BUY
+        # trade entered near a RESISTANCE zone instead of support — both
+        # backwards relative to normal S/R entry logic — accounted for 5/9
+        # losing trades in a 350-bar EURUSD H1 sample. sr_ctx's
+        # dist_to_support_pips / dist_to_resistance_pips were already
+        # computed and fed into the (log-only) institutional_entry_framework
+        # advisory below, but never used as an actual block. This makes the
+        # SELL-at-support / BUY-at-resistance mismatch a hard gate.
+        # Fails open (not blocked) if sr_ctx data is unavailable — only
+        # block when there's positive evidence of misalignment.
+        if ok and not decision_out.get("direct_lane"):
+            dist_sup = sr_ctx.get("dist_to_support_pips")
+            dist_res = sr_ctx.get("dist_to_resistance_pips")
+            sr_ok = True
+            sr_detail = "no S/R zone data — not evaluated"
+            if dist_sup is not None and dist_res is not None:
+                if sig == "SELL" and dist_sup < dist_res:
+                    sr_ok = False
+                    sr_detail = (f"SELL is {dist_sup:.1f} pips from support vs "
+                                 f"{dist_res:.1f} pips from resistance — closer "
+                                 f"to support, wrong side for a SELL")
+                elif sig == "BUY" and dist_res < dist_sup:
+                    sr_ok = False
+                    sr_detail = (f"BUY is {dist_res:.1f} pips from resistance vs "
+                                 f"{dist_sup:.1f} pips from support — closer to "
+                                 f"resistance, wrong side for a BUY")
+                else:
+                    sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
+                                 f"dist_to_resistance={dist_res:.1f}p")
+            checks.append({
+                "check":  "S/R zone alignment",
+                "passed": sr_ok,
+                "detail": sr_detail,
+            })
+            if sr_ok: passed += 1
+            total += 1
+
+        # 1c. TREND ALIGNMENT GATE (added 2026-08-02, Abdullah audit)
+        # Backtest evidence: after the S/R alignment gate (1b) above, the
+        # remaining SELL trades were correctly positioned near resistance
+        # zones but STILL lost 100% of the time, because the underlying
+        # market regime for the whole test window was a choppy uptrend —
+        # every SELL was a counter-trend fade into a breakout that kept
+        # going. sr_ctx alone can't see this; it only looks at local zones.
+        # market_out["regime"] (MarketRegimeDetector, real historical OHLC,
+        # no live-API dependency) gives regime + direction + strength
+        # directly. Block SELL when regime is TRENDING+BULLISH (STRONG or
+        # MODERATE), and BUY when TRENDING+BEARISH — i.e. don't fade a
+        # confirmed trend. Fails open if regime data is unavailable/
+        # NEUTRAL/RANGING — we only block on positive evidence of a
+        # trend running against the signal.
+        if ok and not decision_out.get("direct_lane"):
+            regime = decision_out.get("regime", {}) or {}
+            r_regime = str(regime.get("regime", "")).upper()
+            r_direction = str(regime.get("direction", "")).upper()
+            r_strength = str(regime.get("strength", "")).upper()
+            trend_ok = True
+            trend_detail = "no regime data — not evaluated"
+            if r_regime and r_direction:
+                is_trending = r_regime == "TRENDING" and r_strength in ("STRONG", "MODERATE")
+                if is_trending:
+                    if sig == "SELL" and r_direction == "BULLISH":
+                        trend_ok = False
+                        trend_detail = (f"SELL against a {r_strength} BULLISH trending "
+                                         f"regime — counter-trend fade, blocked")
+                    elif sig == "BUY" and r_direction == "BEARISH":
+                        trend_ok = False
+                        trend_detail = (f"BUY against a {r_strength} BEARISH trending "
+                                         f"regime — counter-trend fade, blocked")
+                    else:
+                        trend_detail = f"aligned: regime={r_regime}/{r_direction}/{r_strength}"
+                else:
+                    trend_detail = f"not trending: regime={r_regime}/{r_direction}/{r_strength}"
+            checks.append({
+                "check":  "Trend alignment (regime)",
+                "passed": trend_ok,
+                "detail": trend_detail,
+            })
+            if trend_ok: passed += 1
+            total += 1
+
+        # 1d. ZONE COOLDOWN / DUPLICATE-ENTRY GATE (added 2026-08-02,
+        # Abdullah audit). Both the training-window backtest (3 SELL trades
+        # within 2 hours, same ~1.163 zone, Aug 7) and the out-of-sample
+        # backtest (3 BUY trades within 2 hours, same ~1.183 zone, Feb 4)
+        # showed the SAME failure mode regardless of direction: several
+        # concurrently-OPEN positions piling into the same price zone in
+        # the same direction, all failing together. The existing revenge-
+        # trading detector (1e below) only looks at CLOSED trade history,
+        # so it can't see this — these positions were all still open when
+        # the next one was taken. This gate tracks recently-opened entries
+        # in-memory (per TradePermission instance — one per trader/backtest
+        # run) and blocks a new same-direction entry within
+        # ZONE_COOLDOWN_HOURS and ZONE_COOLDOWN_PIPS of one already taken.
+        if not hasattr(self, "_recent_entries"):
+            self._recent_entries = []  # list of dicts: symbol, direction, price, time
+        ZONE_COOLDOWN_HOURS = 4
+        ZONE_COOLDOWN_PIPS = 30
+        if ok:
+            _zc_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+            _zc_entry = float(risk_out.get("entry", 0) or decision_out.get("entry", 0) or 0)
+            _zc_df = decision_out.get("_df")
+            _zc_now = None
+            try:
+                if _zc_df is not None and len(_zc_df) > 0:
+                    _zc_now = _zc_df.index[-1].to_pydatetime()
+            except Exception:
+                _zc_now = None
+            if _zc_now is None:
+                from datetime import datetime as _dt, timezone as _tz
+                _zc_now = _dt.now(_tz.utc)
+            from analysis.support_resistance import SupportResistance as _SR_pip
+            _zc_pip_value = _SR_pip()._resolve_pip_value(_zc_symbol) if _zc_entry else 0.0001
+            zone_ok = True
+            zone_detail = "no recent nearby entry"
+            for _e in self._recent_entries:
+                if _e["symbol"] != _zc_symbol or _e["direction"] != sig or _zc_entry <= 0:
+                    continue
+                hrs = abs((_zc_now - _e["time"]).total_seconds()) / 3600.0
+                pips = abs(_zc_entry - _e["price"]) / _zc_pip_value
+                if hrs <= ZONE_COOLDOWN_HOURS and pips <= ZONE_COOLDOWN_PIPS:
+                    zone_ok = False
+                    zone_detail = (f"{sig} {pips:.1f} pips from a {sig} entry taken "
+                                    f"{hrs:.1f}h ago — within cooldown "
+                                    f"({ZONE_COOLDOWN_HOURS}h / {ZONE_COOLDOWN_PIPS} pips)")
+                    break
+            checks.append({
+                "check":  "Zone cooldown (duplicate entry)",
+                "passed": zone_ok,
+                "detail": zone_detail,
+            })
+            if zone_ok: passed += 1
+            total += 1
+
         # 2. Risk approved
         ok = risk_out.get("approved", False)
         checks.append({
@@ -436,7 +572,11 @@ class TradePermission:
                 from risk.revenge_trading_detector import check_revenge_trading
                 from database.db import TraderDB
                 _rt_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
-                _rt_hist = TraderDB().get_trade_history(pair=_rt_symbol, limit=10)
+                # 2026-08-02 fix: use the caller's own DB instance (correct
+                # for backtest — isolated file — and live) instead of always
+                # instantiating a fresh TraderDB() pointed at the live DB.
+                _rt_db = decision_out.get("_db") or TraderDB()
+                _rt_hist = _rt_db.get_trade_history(pair=_rt_symbol, limit=10)
                 _rt_recent = (
                     _rt_hist.to_dict("records")
                     if _rt_hist is not None and len(_rt_hist) else []
@@ -666,10 +806,19 @@ class TradePermission:
 
         # 4. Confidence
         ok   = conf >= self.MIN_CONFIDENCE
+        _conf_detail = f"{conf}% (min {self.MIN_CONFIDENCE}%)"
+        if not ok and decision_out.get("direct_lane"):
+            # 2026-08-02: Stop Hunt Direct Lane signals carry the BLENDED
+            # pipeline's stale confidence (it was WAIT before this lane
+            # overrode decision/entry/sl/tp) — not comparable to this
+            # threshold, and the validated tester never gated on
+            # confidence at all. See analysis/stop_hunt_direct_lane.py.
+            ok = True
+            _conf_detail += f" — bypassed: direct_lane={decision_out['direct_lane']}"
         checks.append({
             "check":  "Min confidence",
             "passed": ok,
-            "detail": f"{conf}% (min {self.MIN_CONFIDENCE}%)",
+            "detail": _conf_detail,
         })
         if ok: passed += 1
 
@@ -758,6 +907,17 @@ class TradePermission:
             _detail = (
                 f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
                 f" — soft override at {conf:.0f}% confidence"
+            )
+            _passed = True
+        elif decision_out.get("fast_path") or decision_out.get("direct_lane"):
+            # 2026-08-02 (Abdullah audit): this check exists to judge a
+            # BLEND of several strategies' agreement — it was never
+            # validated for (and was diluting) a standalone, already-
+            # filtered strategy signal like solo stop_hunt. See fast_path
+            # wiring in agents/analysis_agent.py / core/trader.py.
+            _detail = (
+                f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
+                f" — bypassed: fast_path (validated standalone strategy)"
             )
             _passed = True
         else:
@@ -856,6 +1016,28 @@ class TradePermission:
             total += 1
 
         allowed = passed == total   # সব check pass করতে হবে
+
+        # Record this entry for the zone-cooldown gate (1d above) if it's
+        # actually going through — only then does it matter for future
+        # duplicate/cluster detection. Cap the list so it doesn't grow
+        # unbounded over a long backtest/live run.
+        if allowed and sig in ("BUY", "SELL"):
+            try:
+                _zc_symbol2 = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                _zc_entry2 = float(risk_out.get("entry", 0) or decision_out.get("entry", 0) or 0)
+                _zc_df2 = decision_out.get("_df")
+                _zc_now2 = _zc_df2.index[-1].to_pydatetime() if _zc_df2 is not None and len(_zc_df2) > 0 else None
+                if _zc_now2 is None:
+                    from datetime import datetime as _dt2, timezone as _tz2
+                    _zc_now2 = _dt2.now(_tz2.utc)
+                if _zc_entry2 > 0:
+                    self._recent_entries.append({
+                        "symbol": _zc_symbol2, "direction": sig,
+                        "price": _zc_entry2, "time": _zc_now2,
+                    })
+                    self._recent_entries = self._recent_entries[-50:]
+            except Exception:
+                pass
 
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
         # Previously: `final_action = decision_out.get("decision") if allowed else "NO TRADE"`
