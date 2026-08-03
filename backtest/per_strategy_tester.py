@@ -1116,7 +1116,7 @@ class PerStrategyTester:
         for i in range(start, len(df) - 5):
             try:
                 window = df.iloc[max(0, i-100):i+1]
-                sig = engine.analyze(window)
+                sig = engine.analyze(window, symbol=pair)
                 if sig is None:
                     continue
                 signal = sig.get("signal", {})

@@ -114,6 +114,42 @@ def _find_data_file(pair: str, timeframe: str, quick: bool) -> Optional[Path]:
 # Set by the CLI --bars flag to allow fast testing without modifying cache files.
 _MAX_BARS_OVERRIDE: Optional[int] = None
 
+# Raw H4 CSVs (data/{PAIR}_H4.csv) exist for every pair and are used live to
+# feed the H4 trend-agreement filter inside stop_hunt (see
+# agents/analysis_agent.py's "P1 parity fix" comment + per_strategy_tester's
+# _test_stop_hunt(df_h4=...)). run_actual_backtest.py previously never loaded
+# this file, so df_h4 was always None here and the filter was silently
+# skipped for every backtested stop_hunt trade — degrading fidelity for the
+# one strategy this refresh exists to validate. Loaded once per pair, cached.
+_H4_CACHE: Dict[str, pd.DataFrame] = {}
+
+
+def _load_h4(pair: str) -> Optional[pd.DataFrame]:
+    """Load full H4 OHLCV for `pair` from data/{pair}_H4.csv, cached per pair."""
+    if pair in _H4_CACHE:
+        return _H4_CACHE[pair]
+    csv_path = PROJECT_ROOT / "data" / f"{pair}_H4.csv"
+    if not csv_path.exists():
+        log.warning(f"No H4 CSV for {pair} at {csv_path} — stop_hunt H4 filter will be skipped for this pair.")
+        _H4_CACHE[pair] = None
+        return None
+    df_h4 = pd.read_csv(csv_path)
+    df_h4.columns = [str(c).lower().strip() for c in df_h4.columns]
+    if "datetime_utc" in df_h4.columns:
+        df_h4 = df_h4.rename(columns={"datetime_utc": "time"})
+    if "tick_volume" in df_h4.columns:
+        df_h4 = df_h4.rename(columns={"tick_volume": "volume"})
+    df_h4["time"] = pd.to_datetime(df_h4["time"], utc=True, errors="coerce")
+    df_h4 = df_h4.dropna(subset=["time"]).drop_duplicates(subset=["time"]).sort_values("time")
+    df_h4 = df_h4.set_index("time")
+    for c in ["open", "high", "low", "close", "volume"]:
+        if c not in df_h4.columns:
+            df_h4[c] = 0.0
+        df_h4[c] = pd.to_numeric(df_h4[c], errors="coerce")
+    df_h4 = df_h4.dropna(subset=["open", "high", "low", "close"])
+    _H4_CACHE[pair] = df_h4
+    return df_h4
+
 
 def _load_ohlcv(pair: str, timeframe: str, data_file: Path) -> pd.DataFrame:
     """Load parquet into the df format PerStrategyTester expects."""
@@ -293,7 +329,8 @@ def run_backtest(
                     log.warning(f"  Only {len(df)} bars for {pair} {tf} — too few, skipping.")
                     continue
 
-                results = tester.run_all(df, pair=pair, timeframe=tf)
+                df_h4 = _load_h4(pair)
+                results = tester.run_all(df, pair=pair, timeframe=tf, df_h4=df_h4)
                 elapsed = time.time() - t0
                 log.info(f"  Done in {elapsed:.1f}s — {len(df)} bars, "
                          f"{sum(r.n_trades for r in results['strategies'].values())} trades total")
