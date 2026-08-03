@@ -1,0 +1,11 @@
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Starting...
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data | MT5 initialized successfully
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data | Account: 108647429 | Balance: 99122.39 | Server: MetaQuotes-Demo
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |   Downloading EURUSD D1 (~1,260 candles, 5y)...
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |   Existing data: 1,260 rows, will append new candles
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |     Chunk: +1,260 candles (total: 1,260)
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |   Merged: 1,260 existing + 2 new = 1,262 total
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |   Saved EURUSD_D1.parquet (67.3 KB, 1,262 rows)
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data | MT5 connection closed
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data |   Collected data for 1/1 symbols, 1,262 total candles across 1 timeframes
+2026-08-03 01:56:32 | INFO    | pipeline.phase1_data | [Phase 1: Data Collection] Completed in 0m 0.3s

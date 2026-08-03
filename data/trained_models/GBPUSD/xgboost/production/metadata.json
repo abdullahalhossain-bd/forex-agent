@@ -1,0 +1,75 @@
+{
+  "symbol": "GBPUSD",
+  "model_type": "xgboost",
+  "composite_score": 35.37,
+  "backtest_metrics": {
+    "net_profit": -646.9,
+    "profit_factor": 0.89,
+    "sharpe_ratio": -6.95,
+    "sortino_ratio": -10.78,
+    "max_drawdown_pct": 15.49,
+    "win_rate": 50.0,
+    "total_trades": 188,
+    "avg_rr_ratio": 0.89,
+    "expectancy": -3.44,
+    "recovery_factor": -0.42,
+    "avg_holding_candles": 1.0,
+    "final_balance": 9353.1
+  },
+  "pipeline_config": {
+    "symbols": [
+      "GBPUSD"
+    ],
+    "timeframes": [
+      "D1"
+    ],
+    "primary_timeframe": "D1",
+    "history_years": 5,
+    "data_format": "parquet",
+    "train_pct": 0.7,
+    "val_pct": 0.15,
+    "feature_sets": [
+      "trend",
+      "momentum",
+      "volume",
+      "volatility",
+      "market_structure",
+      "session",
+      "time"
+    ],
+    "label_horizons": [
+      5,
+      10,
+      20,
+      50
+    ],
+    "supervised_models": [
+      "xgboost",
+      "lightgbm",
+      "catboost",
+      "random_forest"
+    ],
+    "rl_algorithms": [],
+    "optuna_trials": 0,
+    "optuna_early_stopping": 10,
+    "walk_forward_folds": 5,
+    "walk_forward_train_pct": 0.7,
+    "walk_forward_min_test_size": 50,
+    "rl_timesteps": 500000,
+    "rl_eval_episodes": 20,
+    "initial_balance": 10000.0,
+    "risk_per_trade": 0.01,
+    "max_spread_pips": 5.0,
+    "slippage_pips": 0.5,
+    "monte_carlo_sims": 1000,
+    "num_workers": 4,
+    "use_gpu": true,
+    "cache_datasets": true,
+    "resume_from_phase": 1,
+    "log_level": "INFO",
+    "tensorboard_dir": null
+  },
+  "saved_at": "2026-08-02T19:56:59+00:00",
+  "n_features": 72,
+  "training_hash": "883_2021-09-24 00:00:00+00:00_2025-02-13 00:00:00+00:00"
+}

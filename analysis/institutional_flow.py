@@ -105,6 +105,21 @@ class InstitutionalFlowEngine:
         data. On fetch/parse failure, it falls back to the synthetic
         large-candle proxy (if `df` is supplied) or flat NEUTRAL.
         """
+        # P1 perf fix (2026-08-03, parity investigation): skip the CFTC
+        # COT scrape in backtest mode. _fetch_cot_data() →
+        # _fetch_cot_from_cftc() does an HTTPS GET to cftc.gov with a
+        # 15s timeout per call. In backtest mode this returns TODAY's
+        # COT report misapplied to a historical bar — a parity bug as
+        # well as a perf bug. If `df` is available, fall through to the
+        # synthetic large-candle proxy (which is purely computational,
+        # no network) so the module still produces a meaningful signal
+        # from the historical OHLCV. If no df, return flat NEUTRAL.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            if df is not None:
+                return self._build_synthetic_result(pair, df, retail_long_pct)
+            return self._fallback_result(pair, "backtest mode — COT fetch skipped, no df for synthetic")
+
         # Try COT data first
         cot_data = self._fetch_cot_data(pair)
 

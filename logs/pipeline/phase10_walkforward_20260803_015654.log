@@ -1,0 +1,8 @@
+2026-08-03 01:56:58 | INFO    | pipeline.phase10_walkforward | [Phase 10: Walk-Forward Validation] Starting...
+2026-08-03 01:56:58 | INFO    | pipeline.phase10_walkforward |   GBPUSD fold 1: acc=0.5690 f1=0.5289
+2026-08-03 01:56:58 | INFO    | pipeline.phase10_walkforward |   GBPUSD fold 2: acc=0.4281 f1=0.2142
+2026-08-03 01:56:58 | INFO    | pipeline.phase10_walkforward |   GBPUSD fold 3: acc=0.4395 f1=0.2331
+2026-08-03 01:56:58 | INFO    | pipeline.phase10_walkforward |   GBPUSD fold 4: acc=0.4796 f1=0.2367
+2026-08-03 01:56:59 | INFO    | pipeline.phase10_walkforward |   GBPUSD fold 5: acc=0.4831 f1=0.2452
+2026-08-03 01:56:59 | INFO    | pipeline.phase10_walkforward |   GBPUSD WF avg: acc=0.4799 f1=0.2916 (5 folds)
+2026-08-03 01:56:59 | INFO    | pipeline.phase10_walkforward | [Phase 10: Walk-Forward Validation] Completed in 0m 0.8s

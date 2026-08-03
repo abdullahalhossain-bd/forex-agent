@@ -1047,7 +1047,15 @@ class AITrader:
                             debugger.record("stop_hunt_direct_lane", _sh_sig["action"],
                                              "validated standalone signal, blend was WAIT")
             except Exception as _e_shdl:
-                log.debug(f"[Trader] Stop Hunt Direct Lane check failed (non-fatal): {_e_shdl}")
+                # P1 audit fix (2026-08-03, performance + parity investigation):
+                # this used to be log.debug which silently swallowed the
+                # ModuleNotFoundError when analysis/stop_hunt_direct_lane.py
+                # was missing. Promoted to WARNING permanently — silent
+                # import-failure swallowing is how the original parity bug
+                # went undiagnosed for weeks. Do NOT downgrade back to debug.
+                log.warning(
+                    f"[Trader] Stop Hunt Direct Lane check failed (non-fatal): {_e_shdl}"
+                )
 
         # Day 81+ hotfix (Day 90 bugfix): sync live open positions into
         # RiskEngine so the correlation check uses authoritative PaperTrader

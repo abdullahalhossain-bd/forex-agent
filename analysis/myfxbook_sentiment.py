@@ -160,6 +160,25 @@ class MyfxbookSentiment:
         Returns: dict with long_pct, short_pct, contrarian_signal, etc.
                  Falls back to neutral if scrape fails.
         """
+        # P1 perf fix (2026-08-03, parity investigation): skip the Myfxbook
+        # scrape entirely in backtest mode — a historical bar has no "today's
+        # retail positioning" to fetch, and the scrape (HTTPS GET +
+        # BeautifulSoup parse of myfxbook.com/outlook) was costing ~1-2s per
+        # bar per pair. Mirrors the backtest short-circuit pattern already
+        # used in retail_sentiment.py (line 100-101), sentiment_data.py,
+        # economic_calendar_api.py, news_filter.py, news_api_provider.py,
+        # and macro_data.py.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            return {
+                "long_pct":           50.0,
+                "short_pct":          50.0,
+                "contrarian_signal":  "NEUTRAL",
+                "strength":           "weak",
+                "source":             "backtest_skipped",
+                "pair":               pair,
+            }
+
         # Cache check
         cached = self._cache.get(pair)
         if cached and (datetime.now(timezone.utc).timestamp() - cached[0]) < self.CACHE_TTL_SEC:

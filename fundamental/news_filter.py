@@ -207,6 +207,36 @@ class NewsFilter:
                 "source":             "disabled",
             }
 
+        # P1 perf fix (2026-08-03, parity investigation): a historical bar has
+        # no "upcoming news" to check against — skip the entire FairEconomy /
+        # ForexFactory fetch chain in backtest mode. Without this short-circuit,
+        # _fetch_events() hits the network on every bar (FairEconomy cache
+        # misses + ForexFactory cloudscraper fallback + BeautifulSoup HTML
+        # parse), costing ~4.7s/bar in profiling — the dominant per-bar cost.
+        # The existing is_backtest_mode() short-circuit in
+        # economic_calendar_api.get_calendar() (line 111-113) already returns
+        # a neutral "no block" result; this mirrors that contract exactly so
+        # the two modules stay consistent. The previous "degrade gracefully"
+        # path was correct for live trading (where news IS relevant), but in
+        # backtest mode it just wasted time fetching TODAY's news misapplied
+        # to a historical bar — a parity bug as well as a perf bug.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            log.debug(
+                "[NewsFilter] backtest mode — live news fetch skipped, "
+                "returning neutral no-block result"
+            )
+            return {
+                "trade_allowed":      True,
+                "reason":             "backtest mode — live news fetch skipped",
+                "flagged_events":     [],
+                "upcoming_events":    [],
+                "currencies_checked": [self._extract_currencies(symbol)],
+                "risk_level":         "LOW",
+                "aftermath":          {"in_confirmation_window": False, "advice": ""},
+                "source":             "backtest_skipped",
+            }
+
         currencies = self._extract_currencies(symbol)
         log.info(f"Checking news for: {currencies}")
 

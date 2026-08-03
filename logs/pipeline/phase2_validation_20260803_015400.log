@@ -1,0 +1,3 @@
+2026-08-03 01:54:03 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Starting...
+2026-08-03 01:54:04 | INFO    | pipeline.phase2_validation |   GBPUSD H1: OK (27770 rows) — 1 info notes: 1 potential broker gaps detected (>2.64% move)
+2026-08-03 01:54:04 | INFO    | pipeline.phase2_validation | [Phase 2: Data Validation] Completed in 0m 0.4s

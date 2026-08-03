@@ -58994,3 +58994,39 @@
 2026-08-03 01:34:22 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\catboost\model.pkl
 2026-08-03 01:34:22 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\EURUSD\random_forest\model.pkl
 2026-08-03 01:34:22 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\random_forest\model.pkl
+2026-08-03 01:54:09 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl (hash: 87cf02a8e3c27fa4...)
+2026-08-03 01:54:12 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl (hash: 1216cc55564a78d8...)
+2026-08-03 01:54:14 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl (hash: 66856deaaaee236e...)
+2026-08-03 01:54:16 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl (hash: f7174eb389b19d78...)
+2026-08-03 01:54:21 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl
+2026-08-03 01:54:21 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl
+2026-08-03 01:54:21 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl
+2026-08-03 01:54:21 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl
+2026-08-03 01:54:21 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl
+2026-08-03 01:54:21 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl
+2026-08-03 01:54:21 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl
+2026-08-03 01:54:21 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl
+2026-08-03 01:56:33 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\EURUSD\xgboost\model.pkl (hash: 73bd85031ee86980...)
+2026-08-03 01:56:35 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\EURUSD\lightgbm\model.pkl (hash: 843784dbb579a2c5...)
+2026-08-03 01:56:37 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\EURUSD\catboost\model.pkl (hash: 074c4eeb32703597...)
+2026-08-03 01:56:38 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\EURUSD\random_forest\model.pkl (hash: cb5185822bb123ac...)
+2026-08-03 01:56:39 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\EURUSD\xgboost\model.pkl
+2026-08-03 01:56:39 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\xgboost\model.pkl
+2026-08-03 01:56:39 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\EURUSD\lightgbm\model.pkl
+2026-08-03 01:56:39 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\lightgbm\model.pkl
+2026-08-03 01:56:39 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\EURUSD\catboost\model.pkl
+2026-08-03 01:56:39 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\catboost\model.pkl
+2026-08-03 01:56:39 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\EURUSD\random_forest\model.pkl
+2026-08-03 01:56:39 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\EURUSD\random_forest\model.pkl
+2026-08-03 01:56:55 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl (hash: 29771d82d237cb08...)
+2026-08-03 01:56:56 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl (hash: c884fcb80db33d86...)
+2026-08-03 01:56:57 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl (hash: 427c890ce4d07a95...)
+2026-08-03 01:56:58 | INFO     | safe_pickle               | [SafePickle] Saved D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl (hash: a912665872d044de...)
+2026-08-03 01:56:59 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl
+2026-08-03 01:56:59 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\xgboost\model.pkl
+2026-08-03 01:56:59 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl
+2026-08-03 01:56:59 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\lightgbm\model.pkl
+2026-08-03 01:56:59 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl
+2026-08-03 01:56:59 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\catboost\model.pkl
+2026-08-03 01:56:59 | DEBUG    | safe_pickle               | [SafePickle] Hash verified for D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl
+2026-08-03 01:56:59 | INFO     | safe_pickle               | [SafePickle] Loaded D:\Projects\forex\data\trained_models\GBPUSD\random_forest\model.pkl

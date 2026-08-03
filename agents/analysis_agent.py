@@ -112,6 +112,12 @@ class AnalysisAgent:
       -> News -> Classic LLM -> Vision AI -> MasterAnalyst
     """
 
+    # P1 parity fix (2026-08-03): class-level cache for H4 CSV data loaded
+    # in backtest mode. Keyed by symbol. One load per symbol per process;
+    # subsequent bars slice from the cached full-history DataFrame.
+    # See the H4 fetch block in run() (around line 830) for usage.
+    _H4_CSV_CACHE: dict = {}
+
     def __init__(self, chart_reader=None):
         self.chart_reader       = chart_reader
         self.session_analyzer   = SessionAnalyzer()      # Day 63
@@ -816,15 +822,59 @@ class AnalysisAgent:
         mtf_structure_ctx    = {}
         try:
             df_h4 = None
-            try:
-                df_h4 = self._h4_fetcher.fetch_ohlcv(symbol, "H4", limit=150)
-                if df_h4 is None or len(df_h4) <= 10:
+            # P1 parity fix (2026-08-03): in backtest mode, the live MT5/yfinance
+            # fetcher fails (no MT5 package, no yfinance installed) → df_h4 is
+            # None → the H4 trend-agreement filter in stop_hunt_direct_lane.py
+            # is silently skipped, AND MTFStructureEngine falls back to a
+            # low-information internal approximation. Both degrade backtest
+            # fidelity. Fix: load H4 from data/{SYMBOL}_H4.csv (which exists
+            # for all 5 test pairs — confirmed via ls data/), slice to
+            # h4_full[h4_full.index <= df.index[-1]] (no look-ahead), take
+            # last 150 bars. Cache the full CSV at class level to avoid
+            # re-reading the file every bar (150 bars × 5 pairs × 6200 bars
+            # = 4.6M file reads otherwise).
+            from core.constants import is_backtest_mode
+            if is_backtest_mode():
+                try:
+                    # Class-level cache (declared at module scope below the
+                    # class definition — see _H4_CSV_CACHE). One load per
+                    # symbol per process; subsequent bars just slice.
+                    cached_full = AnalysisAgent._H4_CSV_CACHE.get(symbol)
+                    if cached_full is None:
+                        import pandas as _pd
+                        from config import DATA_DIR as _DATA_DIR
+                        h4_path = _DATA_DIR / f"{symbol}_H4.csv"
+                        if h4_path.exists():
+                            cached_full = _pd.read_csv(h4_path)
+                            cached_full[cached_full.columns[0]] = _pd.to_datetime(
+                                cached_full[cached_full.columns[0]], utc=True)
+                            cached_full = cached_full.set_index(cached_full.columns[0]).sort_index()
+                            for _col in ("open", "high", "low", "close"):
+                                if _col in cached_full.columns:
+                                    cached_full[_col] = _pd.to_numeric(cached_full[_col], errors="coerce")
+                            cached_full = cached_full.dropna(subset=["open", "high", "low", "close"])
+                            AnalysisAgent._H4_CSV_CACHE[symbol] = cached_full
+                            log.debug(f"[AnalysisAgent] Loaded H4 CSV for {symbol}: {len(cached_full)} bars")
+                    if cached_full is not None and len(cached_full) > 0:
+                        # No look-ahead: only H4 bars that CLOSED at or before
+                        # the current H1 bar's close time.
+                        current_time = df.index[-1]
+                        df_h4 = cached_full[cached_full.index <= current_time].iloc[-150:]
+                        if len(df_h4) <= 10:
+                            df_h4 = None
+                except Exception as _h4_csv_err:
+                    log.debug(f"[AnalysisAgent] H4 CSV load for backtest failed: {_h4_csv_err}")
                     df_h4 = None
-                else:
-                    log.debug(f"[AnalysisAgent] MTF H4 fetched: {len(df_h4)} candles")
-            except Exception as _h4_err:
-                log.debug(f"[AnalysisAgent] H4 fetch for MTF failed: {_h4_err}")
-                df_h4 = None
+            else:
+                try:
+                    df_h4 = self._h4_fetcher.fetch_ohlcv(symbol, "H4", limit=150)
+                    if df_h4 is None or len(df_h4) <= 10:
+                        df_h4 = None
+                    else:
+                        log.debug(f"[AnalysisAgent] MTF H4 fetched: {len(df_h4)} candles")
+                except Exception as _h4_err:
+                    log.debug(f"[AnalysisAgent] H4 fetch for MTF failed: {_h4_err}")
+                    df_h4 = None
 
             mtf_structure_result = self.mtf_structure_eng.analyze(
                 df_external=df_h4,   # H4 data (None = fallback to internal approximation)

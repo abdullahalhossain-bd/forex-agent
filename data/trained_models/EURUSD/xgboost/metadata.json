@@ -1,7 +1,7 @@
 {
   "model_type": "xgboost",
   "symbol": "EURUSD",
-  "accuracy": 0.3976,
+  "accuracy": 0.5714,
   "n_features": 72,
   "feature_columns": [
     "ema_8",
@@ -77,9 +77,9 @@
     "month_sin",
     "month_cos"
   ],
-  "n_train": 19439,
-  "n_val": 4165,
-  "trained_at": "2026-08-02T19:34:04.471121+00:00",
-  "training_seconds": 0.9,
-  "data_hash": "5efb46e7d87b"
+  "n_train": 883,
+  "n_val": 189,
+  "trained_at": "2026-08-02T19:56:33.471811+00:00",
+  "training_seconds": 0.3,
+  "data_hash": "e72c05925c43"
 }

@@ -115,6 +115,16 @@ class TradePermission:
         # ──────────────────────────────────────────────────────────────
         conf = decision_out.get("confidence", 0)
         if execution_filters:
+            # P1 fix (2026-08-03, full-scale parity run): direct_lane signals
+            # carry the BLEND's stale execution_filters (set BEFORE direct_lane
+            # overrode the decision/entry/sl/tp). The blend's filters (e.g.
+            # mtf_structure_no_trade) judged a DIFFERENT signal — they have
+            # no authority over the validated standalone stop_hunt signal.
+            # Bypass all execution_filters for direct_lane, matching the
+            # existing bypass pattern at lines 160, 201, 810, 912 which
+            # already skip blend-only gates (S/R alignment, trend alignment,
+            # confidence, factor count) for direct_lane signals.
+            _is_direct_lane = bool(decision_out.get("direct_lane"))
             for gate_name, gate_result in execution_filters.items():
                 blocked = isinstance(gate_result, dict) and gate_result.get("blocked")
                 if blocked and gate_name == "session" and conf >= self.MIN_CONFIDENCE:
@@ -122,6 +132,13 @@ class TradePermission:
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
                         "detail": f"soft override at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
+                    })
+                    passed += 1
+                elif blocked and _is_direct_lane:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": f"bypassed: direct_lane={decision_out['direct_lane']} (blend filter, not applicable to standalone signal)",
                     })
                     passed += 1
                 elif blocked:
@@ -157,6 +174,16 @@ class TradePermission:
         # SELL-at-support / BUY-at-resistance mismatch a hard gate.
         # Fails open (not blocked) if sr_ctx data is unavailable — only
         # block when there's positive evidence of misalignment.
+        #
+        # P1 fix (2026-08-03, full-scale parity run): `sr_ctx` was
+        # referenced but NEVER defined in this scope — every backtest bar
+        # that reached this gate raised NameError, which the unified_engine's
+        # try/except caught as `engine_error` (46/150 bars on EURUSD). This
+        # silently killed evaluate_decision_core BEFORE the direct_lane
+        # block could run, making the entire direct_lane fix look broken.
+        # Fix: pull sr_ctx from decision_out (where AnalysisAgent stores it),
+        # defaulting to {} so the gate fails open as documented.
+        sr_ctx = decision_out.get("sr_ctx", {}) or {}
         if ok and not decision_out.get("direct_lane"):
             dist_sup = sr_ctx.get("dist_to_support_pips")
             dist_res = sr_ctx.get("dist_to_resistance_pips")
@@ -837,7 +864,14 @@ class TradePermission:
         # (Sydney/Tokyo only) so you can verify MT5 execution end-to-end.
         # In production: LOW quality sessions are normally blocked, but
         # high-confidence analysis may still justify a trade.
-        if session_ctx:
+        #
+        # P1 fix (2026-08-03, full-scale parity run): direct_lane signals
+        # already passed the validated session WINDOW filter (8-22 GMT) in
+        # stop_hunt_direct_lane.py — that's the session check the tester
+        # validated. This "session QUALITY" gate (A+/A/B/C grade) is a
+        # blend-only gate the tester never ran. Bypass it for direct_lane
+        # so the validated signal isn't blocked by an unvalidated filter.
+        if session_ctx and not decision_out.get("direct_lane"):
             # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
             # "quality" key at all — it emits "session_grade" (values
             # A+/A/B/C, from calculate_session_confidence()). Reading

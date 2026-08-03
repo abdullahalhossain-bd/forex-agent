@@ -1,0 +1,3 @@
+2026-08-03 01:54:23 | INFO    | pipeline.phase15_retrain | [Phase 15: Auto Retrain Check] Starting...
+2026-08-03 01:54:23 | INFO    | pipeline.phase15_retrain |   GBPUSD: data unchanged — no retrain needed
+2026-08-03 01:54:23 | INFO    | pipeline.phase15_retrain | [Phase 15: Auto Retrain Check] Completed in 0m 0.0s

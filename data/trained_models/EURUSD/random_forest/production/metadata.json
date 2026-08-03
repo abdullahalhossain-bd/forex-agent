@@ -1,29 +1,29 @@
 {
   "symbol": "EURUSD",
   "model_type": "random_forest",
-  "composite_score": 58.98,
+  "composite_score": 81.14,
   "backtest_metrics": {
-    "net_profit": 457.5,
-    "profit_factor": 1.03,
-    "sharpe_ratio": 1.36,
-    "sortino_ratio": 1.76,
-    "max_drawdown_pct": 9.61,
-    "win_rate": 51.5,
-    "total_trades": 4159,
-    "avg_rr_ratio": 0.96,
-    "expectancy": 0.11,
-    "recovery_factor": 0.48,
+    "net_profit": 1140.6,
+    "profit_factor": 1.31,
+    "sharpe_ratio": 15.93,
+    "sortino_ratio": 24.18,
+    "max_drawdown_pct": 10.41,
+    "win_rate": 55.9,
+    "total_trades": 188,
+    "avg_rr_ratio": 1.04,
+    "expectancy": 6.07,
+    "recovery_factor": 1.1,
     "avg_holding_candles": 1.0,
-    "final_balance": 10457.5
+    "final_balance": 11140.6
   },
   "pipeline_config": {
     "symbols": [
       "EURUSD"
     ],
     "timeframes": [
-      "H1"
+      "D1"
     ],
-    "primary_timeframe": "H1",
+    "primary_timeframe": "D1",
     "history_years": 5,
     "data_format": "parquet",
     "train_pct": 0.7,
@@ -69,7 +69,7 @@
     "log_level": "INFO",
     "tensorboard_dir": null
   },
-  "saved_at": "2026-08-02T19:34:24+00:00",
+  "saved_at": "2026-08-02T19:56:39+00:00",
   "n_features": 72,
-  "training_hash": "19439_2022-02-11 08:00:00+00:00_2025-03-28 21:00:00+00:00"
+  "training_hash": "883_2021-09-24 00:00:00+00:00_2025-02-13 00:00:00+00:00"
 }

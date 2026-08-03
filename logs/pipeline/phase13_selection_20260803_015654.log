@@ -1,0 +1,7 @@
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Starting...
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection |   GBPUSD xgboost: composite_score=35.370
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection |   GBPUSD lightgbm: composite_score=29.460
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection |   GBPUSD catboost: composite_score=35.370
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection |   GBPUSD random_forest: composite_score=35.370
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection |   >>> GBPUSD BEST: xgboost (score=35.370)
+2026-08-03 01:56:59 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Completed in 0m 0.0s
