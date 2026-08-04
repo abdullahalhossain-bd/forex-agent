@@ -238,7 +238,7 @@ def main():
     print(f"  Bonferroni alpha: {bonferroni_alpha:.6f}")
 
     fetcher = MT5BulkFetcher()
-    bt = HonestBacktester()
+    bt = HonestBacktester(use_live_permission=False)  # academic-strategy validation
     mc_validator = MonteCarloValidator(n_simulations=2000)
     wf_validator = WalkForwardValidator(
         train_bars=min(1500, args.max_candles // 2),

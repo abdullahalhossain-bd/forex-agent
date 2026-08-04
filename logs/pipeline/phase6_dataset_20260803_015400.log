@@ -1,3 +1,0 @@
-2026-08-03 01:54:08 | INFO    | pipeline.phase6_dataset | [Phase 6: Dataset Creation] Starting...
-2026-08-03 01:54:08 | INFO    | pipeline.phase6_dataset |   GBPUSD: train=19439 | val=4165 | test=4166 | features=72
-2026-08-03 01:54:08 | INFO    | pipeline.phase6_dataset | [Phase 6: Dataset Creation] Completed in 0m 0.1s

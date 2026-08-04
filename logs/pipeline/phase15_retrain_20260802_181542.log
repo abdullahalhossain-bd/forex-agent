@@ -1,3 +1,0 @@
-2026-08-02 18:17:01 | INFO    | pipeline.phase15_retrain | [Phase 15: Auto Retrain Check] Starting...
-2026-08-02 18:17:01 | INFO    | pipeline.phase15_retrain |   EURUSD: data unchanged — no retrain needed
-2026-08-02 18:17:01 | INFO    | pipeline.phase15_retrain | [Phase 15: Auto Retrain Check] Completed in 0m 0.0s

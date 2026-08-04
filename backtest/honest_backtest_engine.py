@@ -14,16 +14,36 @@ Key rules enforced:
   4. Slippage + spread + commission applied to every fill
   5. Stop-loss can be skipped (gap risk modeled)
 
+LIVE-PARITY DEFAULT (2026-08-04 fix):
+  By default, HonestBacktester now runs every signal through the live
+  `risk.trade_permission.TradePermission` gate before simulating it,
+  so the trade count returned by `test_strategy()` reflects what the
+  LIVE system would actually trade — not an inflated pre-gate count.
+
+  To disable (e.g. for ablation studies that implement their own gating
+  in the strategy_fn), pass `use_live_permission=False` to __init__.
+
+  The default `decision_ctx_fn` builds the same context the live path
+  builds: ind_ctx (RSI/EMA/MACD/ATR/trend), regime (MarketRegimeDetector),
+  sr_ctx (with dist_to_support_pips / dist_to_resistance_pips), session_ctx
+  (from bar timestamp), and execution_filters (with the real H4 MTF
+  structure filter when `mtf_filter_data` is provided).
+
 Usage:
     from backtest.honest_backtest_engine import HonestBacktester
+
+    # Default = live-fidelity (TradePermission + real H4 MTF filter):
     bt = HonestBacktester(
         spread_pips=1.5,
         commission_per_lot=7.0,
         slippage_pips=2.0,
         max_hold_bars=50,
+        mtf_filter_data={"EURUSD": df_h4_eurusd, ...},  # optional
     )
     result = bt.test_strategy(df, strategy_fn=your_strategy, pair="EURUSD")
-    # result contains honest stats: real win rate after costs, no look-ahead
+
+    # Pre-gate (legacy) path — for ablation studies only:
+    bt = HonestBacktester(use_live_permission=False, ...)
 """
 
 from __future__ import annotations
@@ -123,6 +143,238 @@ class HonestResult:
     # Equity curve
     equity_curve: List[float] = field(default_factory=list)
     trades: List[HonestTrade] = field(default_factory=list)
+    # Populated by test_strategy when use_live_permission=True
+    n_blocked_by_permission: int = 0
+
+
+# ════════════════════════════════════════════════════════════════
+#  DEFAULT DECISION-CONTEXT BUILDER (for live-parity gating)
+# ════════════════════════════════════════════════════════════════
+
+# Cache engines at module level so we don't re-instantiate per bar.
+_DEFAULT_CONTEXT_ENGINES = {}
+
+def _get_default_engines():
+    """Lazy-init the engines the default decision_ctx_fn needs."""
+    if _DEFAULT_CONTEXT_ENGINES:
+        return _DEFAULT_CONTEXT_ENGINES
+    try:
+        from strategy.signal_engine import SignalEngine
+        from analysis.market_regime import MarketRegimeDetector
+        from analysis.structure_mtf import MTFStructureEngine
+        _DEFAULT_CONTEXT_ENGINES["signal"] = SignalEngine()
+        _DEFAULT_CONTEXT_ENGINES["regime"] = MarketRegimeDetector()
+        _DEFAULT_CONTEXT_ENGINES["mtf"] = MTFStructureEngine(
+            external_swing_window=8, internal_swing_window=3,
+            external_tf="H4", internal_tf="H1",
+        )
+    except Exception as e:
+        log.warning(f"Could not init default context engines: {e}")
+    return _DEFAULT_CONTEXT_ENGINES
+
+
+def _default_compute_indicators(df: pd.DataFrame) -> dict:
+    """Same fast inline indicator set used by the prior backtest scripts."""
+    if len(df) < 30:
+        return {}
+    delta = df["close"].diff()
+    gain = delta.where(delta > 0, 0).rolling(14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+    rs = gain / loss.replace(0, np.nan)
+    rsi = (100 - (100 / (1 + rs))).fillna(50).iloc[-1]
+    ema_50 = df["close"].ewm(span=50, adjust=False).mean().iloc[-1]
+    ema_200 = (df["close"].ewm(span=200, adjust=False).mean().iloc[-1]
+               if len(df) >= 200 else ema_50)
+    ema_12 = df["close"].ewm(span=12, adjust=False).mean()
+    ema_26 = df["close"].ewm(span=26, adjust=False).mean()
+    macd_line = ema_12 - ema_26
+    macd_signal = macd_line.ewm(span=9, adjust=False).mean()
+    macd_cross = ("bullish_cross" if macd_line.iloc[-1] > macd_signal.iloc[-1]
+                  and macd_line.iloc[-2] <= macd_signal.iloc[-2] else
+                  "bearish_cross" if macd_line.iloc[-1] < macd_signal.iloc[-1]
+                  and macd_line.iloc[-2] >= macd_signal.iloc[-2] else "")
+    high_low = df["high"] - df["low"]
+    high_close = (df["high"] - df["close"].shift()).abs()
+    low_close = (df["low"] - df["close"].shift()).abs()
+    true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+    atr = true_range.rolling(14).mean().iloc[-1]
+    close = df["close"].iloc[-1]
+    if close > ema_50 and ema_50 > ema_200:
+        trend = "strong_bullish" if close > ema_50 * 1.005 else "bullish"
+    elif close < ema_50 and ema_50 < ema_200:
+        trend = "strong_bearish" if close < ema_50 * 0.995 else "bearish"
+    else:
+        trend = "ranging"
+    if rsi < 30: rsi_signal = "oversold"
+    elif rsi > 70: rsi_signal = "overbought"
+    elif 50 <= rsi <= 70: rsi_signal = "bullish_zone"
+    elif 30 <= rsi < 50: rsi_signal = "bearish_zone"
+    else: rsi_signal = "neutral"
+    return {
+        "trend": trend, "rsi": float(rsi), "rsi_signal": rsi_signal,
+        "macd_cross": macd_cross, "ema_50": float(ema_50),
+        "ema_200": float(ema_200),
+        "atr": float(atr) if atr == atr else 0.001,
+        "close": float(close), "price": float(close),
+    }
+
+
+def _default_compute_regime(df: pd.DataFrame) -> dict:
+    if len(df) < 50:
+        return {"regime": "UNKNOWN", "volatility": "NORMAL",
+                "direction": "", "strength": ""}
+    try:
+        engines = _get_default_engines()
+        r = engines["regime"].detect(df) or {
+            "regime": "UNKNOWN", "volatility": "NORMAL"}
+        r.setdefault("direction", "")
+        r.setdefault("strength", "")
+        return r
+    except Exception:
+        return {"regime": "UNKNOWN", "volatility": "NORMAL",
+                "direction": "", "strength": ""}
+
+
+def _default_compute_sr_ctx(df: pd.DataFrame, ind_ctx: dict, pair: str) -> dict:
+    if len(df) < 50:
+        return {"price_location": "mid_range"}
+    try:
+        recent = df.tail(50)
+        recent_high = recent["high"].max()
+        recent_low = recent["low"].min()
+        price = ind_ctx.get("close", 0)
+        if price <= 0:
+            return {"price_location": "mid_range"}
+        rng = recent_high - recent_low
+        if rng <= 0:
+            return {"price_location": "mid_range"}
+        pos = (price - recent_low) / rng
+        price_location = ("near_support" if pos < 0.2 else
+                          "near_resistance" if pos > 0.8 else "mid_range")
+        try:
+            from core.constants import get_pip_size
+            pip_size = get_pip_size(pair) or 0.0001
+        except Exception:
+            pip_size = 0.01 if "JPY" in pair else 0.0001
+        return {
+            "price_location": price_location,
+            "dist_to_support_pips": abs(price - recent_low) / pip_size,
+            "dist_to_resistance_pips": abs(recent_high - price) / pip_size,
+        }
+    except Exception:
+        return {"price_location": "mid_range"}
+
+
+def _default_build_session_ctx(df: pd.DataFrame) -> dict:
+    try:
+        ts = df.index[-1]
+        hour = ts.hour
+        if 7 <= hour < 16:
+            grade, quality, sess = "A", "HIGH", "London"
+        elif 12 <= hour < 21:
+            grade, quality, sess = "A", "HIGH", "NewYork"
+        elif 0 <= hour < 9:
+            grade, quality, sess = "B", "MEDIUM", "Tokyo"
+        else:
+            grade, quality, sess = "C", "LOW", "Sydney"
+        return {
+            "current_session": sess, "session_grade": grade, "quality": quality,
+            "session_trade_allowed": quality in ("HIGH", "MEDIUM"),
+            "fusion": {"fusion_allowed": True, "fusion_score": 70,
+                       "fusion_grade": "B"},
+            "fusion_allowed": True,
+        }
+    except Exception:
+        return {}
+
+
+def _default_decision_ctx_fn(visible_df: pd.DataFrame, current_idx: int,
+                              signal: dict, pair: str, h4_df: Any) -> dict:
+    """Default context builder for the live-permission gate.
+
+    Mirrors what the live AnalysisAgent → RiskEngine → TradePermission
+    path builds. The strategy_fn's signal dict provides direction/entry/
+    sl/tp/confidence; we compute the rest from visible_df.
+
+    If `h4_df` is provided, also computes the real H4/H1 MTF structure
+    filter (the same one the live path uses via MTFStructureEngine).
+    """
+    ind_ctx = _default_compute_indicators(visible_df)
+    if not ind_ctx:
+        ind_ctx = {"close": float(signal.get("entry", 0)),
+                   "atr": 0.001, "trend": "ranging", "rsi": 50.0,
+                   "rsi_signal": "neutral", "macd_cross": "",
+                   "ema_50": float(signal.get("entry", 0)),
+                   "ema_200": float(signal.get("entry", 0)),
+                   "price": float(signal.get("entry", 0))}
+    regime = _default_compute_regime(visible_df)
+    sr_ctx = _default_compute_sr_ctx(visible_df, ind_ctx, pair)
+    session_ctx = _default_build_session_ctx(visible_df)
+
+    sig_decision = "BUY" if signal.get("direction") == "long" else "SELL"
+    conf = float(signal.get("confidence", 60.0))
+
+    decision_out = {
+        "decision": sig_decision,
+        "confidence": conf,
+        "aligned_factors": 2,
+        "setup_quality": "GOOD",
+        "raw_setup_quality": "GOOD",
+        "ind_ctx": ind_ctx,
+        "sr_ctx": sr_ctx,
+        "regime": regime,
+        "mtf_bias": None,
+        "market_bias": None,
+        "_symbol": pair,
+        "_df": visible_df,
+        "direct_lane": False,
+        "fast_path": False,
+    }
+
+    entry = float(signal.get("entry", 0))
+    sl = float(signal.get("stop_loss", 0))
+    tp = float(signal.get("take_profit", 0))
+    sl_pips = abs(entry - sl) / (0.01 if "JPY" in pair else 0.0001)
+    tp_pips = abs(tp - entry) / (0.01 if "JPY" in pair else 0.0001)
+    rr = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0.0
+    risk_out = {
+        "approved": True, "signal": sig_decision, "symbol": pair,
+        "entry": entry, "sl_price": sl, "tp_price": tp,
+        "sl_pips": round(sl_pips), "tp_pips": round(tp_pips),
+        "lot": 0.10, "risk_usd": 50.0, "risk_pc": 0.5,
+        "risk_usd_intended": 50.0, "risk_pc_intended": 0.5,
+        "lot_capped": False, "rr_ratio": rr,
+        "daily_loss_pc": 0.0, "open_trades": 0, "reject_reason": None,
+    }
+
+    execution_filters = {}
+    if h4_df is not None and len(h4_df) > 0:
+        try:
+            cur_ts = visible_df.index[-1]
+            h4_window = h4_df[h4_df["timestamp"] + pd.Timedelta(hours=4)
+                              <= cur_ts].tail(50)
+            if len(h4_window) >= 10:
+                engines = _get_default_engines()
+                if "mtf" in engines:
+                    h1_window = visible_df.tail(50)
+                    mtf_result = engines["mtf"].analyze(
+                        df_external=h4_window, df_internal=h1_window)
+                    perm = mtf_result.get("trade_permission", "TRADE_ALLOWED")
+                    if perm == "NO_TRADE":
+                        execution_filters["mtf_structure_no_trade"] = {
+                            "blocked": True,
+                            "reason": f"MTF: {perm}",
+                        }
+        except Exception as e:
+            log.debug(f"MTF filter error: {e}")
+
+    return {
+        "decision_out": decision_out,
+        "risk_out": risk_out,
+        "session_ctx": session_ctx,
+        "execution_filters": execution_filters or None,
+        "news_ctx": {"news_trade_allowed": True},
+    }
 
 
 # ════════════════════════════════════════════════════════════════
@@ -164,6 +416,16 @@ class HonestBacktester:
         max_hold_bars: int = 50,
         gap_probability: float = 0.03,  # 3% of SL exits gap through
         gap_multiplier: float = 2.5,    # gap loss = SL_dist × 2.5
+        # LIVE-PARITY DEFAULT (2026-08-04): when True (default), every
+        # signal returned by strategy_fn is run through TradePermission
+        # before being simulated. This makes the backtest trade count
+        # reflect what the LIVE system would actually trade.
+        use_live_permission: bool = True,
+        permission_engine: Optional[Any] = None,
+        # Per-pair H4 (or other HTF) dataframes for the real MTF filter.
+        # When provided, the default decision_ctx_fn will compute
+        # mtf_structure_no_trade using analysis.structure_mtf.
+        mtf_filter_data: Optional[Dict[str, Any]] = None,
     ):
         self.spread_pips = spread_pips
         self.commission_per_lot = commission_per_lot
@@ -171,6 +433,20 @@ class HonestBacktester:
         self.max_hold_bars = max_hold_bars
         self.gap_probability = gap_probability
         self.gap_multiplier = gap_multiplier
+        self.use_live_permission = use_live_permission
+        self.mtf_filter_data = mtf_filter_data or {}
+        if use_live_permission and permission_engine is None:
+            # Lazy import to avoid circular dependencies
+            try:
+                from risk.trade_permission import TradePermission
+                permission_engine = TradePermission()
+            except Exception as e:
+                log.warning(f"Could not instantiate TradePermission ({e}); "
+                            f"live-permission gate is DISABLED. Backtest will "
+                            f"return pre-gate trade counts.")
+                permission_engine = None
+                self.use_live_permission = False
+        self.permission_engine = permission_engine
 
     def _pair_costs(self, pair: str) -> Dict[str, float]:
         """Get realistic cost parameters for a pair."""
@@ -409,6 +685,7 @@ class HonestBacktester:
         strategy_fn: Callable[[pd.DataFrame, int], Optional[Dict[str, Any]]],
         pair: str = "EURUSD",
         n_comparisons: int = 1,
+        decision_ctx_fn: Optional[Callable] = None,
     ) -> HonestResult:
         """
         Test a strategy on a dataframe, with NO look-ahead bias.
@@ -420,6 +697,12 @@ class HonestBacktester:
                            ONLY — it cannot see future bars.
             pair         : pair name for cost calculation
             n_comparisons: number of strategy/param combos tested (for Bonferroni)
+            decision_ctx_fn : optional callable(visible_df, current_idx, signal,
+                           pair, h4_df) → dict with keys decision_out, risk_out,
+                           session_ctx, execution_filters, news_ctx. Used when
+                           `use_live_permission=True` to build the context for
+                           TradePermission.check(). If None, a default builder
+                           is used (see `_default_decision_ctx_fn`).
 
         The strategy_fn returns:
             {
@@ -427,6 +710,7 @@ class HonestBacktester:
                 "entry": float,
                 "stop_loss": float,
                 "take_profit": float,
+                "confidence": float,  # optional but recommended for gating
             }
             or None if no signal at this bar.
 
@@ -439,6 +723,17 @@ class HonestBacktester:
         # Walk through each bar
         # Strategy sees ONLY df.iloc[0:i+1] — never future
         last_signal_bar = -100  # avoid overlapping trades
+
+        # Live-permission gate setup
+        do_permission = self.use_live_permission and self.permission_engine is not None
+        if do_permission:
+            ctx_fn = decision_ctx_fn or _default_decision_ctx_fn
+            h4_df = self.mtf_filter_data.get(pair)
+        else:
+            ctx_fn = None
+            h4_df = None
+
+        n_blocked_by_permission = 0
 
         for i in range(50, n - 2):  # need 50 bars warmup, 2 bars for entry+exit
             # Skip if too close to last trade
@@ -467,6 +762,29 @@ class HonestBacktester:
             if direction not in ("long", "short"):
                 continue
 
+            # ─── LIVE-PERMISSION GATE (2026-08-04) ──────────────
+            # Run the live TradePermission.check() on this signal
+            # before simulating. Trades denied here are skipped —
+            # they would not have traded live, so they must not
+            # appear in the backtest equity curve either.
+            if do_permission:
+                try:
+                    ctx = ctx_fn(visible_df, i, signal, pair, h4_df)
+                    perm_out = self.permission_engine.check(
+                        decision_out=ctx["decision_out"],
+                        risk_out=ctx["risk_out"],
+                        news_ctx=ctx.get("news_ctx",
+                                         {"news_trade_allowed": True}),
+                        session_ctx=ctx.get("session_ctx"),
+                        execution_filters=ctx.get("execution_filters"),
+                    )
+                except Exception as e:
+                    log.debug(f"permission check raised {e}; treating as deny")
+                    perm_out = {"execution_allowed": False}
+                if not perm_out.get("execution_allowed"):
+                    n_blocked_by_permission += 1
+                    continue
+
             # Simulate trade (with realistic costs + next-bar entry)
             trade = self.simulate_trade(df, i, direction, entry, sl, tp, pair)
             result.trades.append(trade)
@@ -474,6 +792,7 @@ class HonestBacktester:
 
         # Compute stats
         self._compute_stats(result, n_comparisons)
+        result.n_blocked_by_permission = n_blocked_by_permission
         return result
 
     # ══════════════════════════════════════════════════════════

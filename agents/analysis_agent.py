@@ -2202,15 +2202,18 @@ class AnalysisAgent:
             tf_for_engine = tf_map.get(tf_norm, "4H")
 
             unified_engine = UnifiedSignalEngine(timeframe=tf_for_engine)
+            # NOTE (fix): UnifiedSignalEngine.analyze() only accepts
+            # (df, symbol, lower_tf_df) in the currently installed engine —
+            # it has no H4/MTF parameter anywhere internally (stop_hunt_engine,
+            # ict_engine, pa_engine, etc. are all called with `df` only).
+            # Passing df_h4 here raised "unexpected keyword argument 'df_h4'"
+            # on every single cycle, so the engine never actually ran and
+            # silently fell back to the except branch below. If/when H4 MTF
+            # support is added to UnifiedSignalEngine.analyze(), re-add
+            # df_h4=df_h4 if df_h4 is not None and len(df_h4) >= 55 else None
+            # to this call.
             unified_signal_ctx = unified_engine.analyze(
                 df, symbol=symbol, lower_tf_df=None,  # lower TF not always available
-                # df_h4 reuses the H4 fetch already done above for MTF
-                # Structure (line ~820) — None in this sandbox/backtest
-                # (no live MT5), which correctly skips just the H4-trend
-                # leg of the stop-hunt filter (session + no-Wednesday
-                # still apply). Activates automatically once real H4 data
-                # is available (live trading).
-                df_h4=df_h4 if df_h4 is not None and len(df_h4) >= 55 else None,
             )
             consensus = unified_signal_ctx.get("consensus", {})
             log.info(

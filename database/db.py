@@ -329,6 +329,70 @@ class TraderDB:
     # TRADES  (Day 17 — Paper Trading)
     # ─────────────────────────────────────────────
 
+    def save_trade(self, trade: dict) -> int:
+        """Compatibility wrapper for the memory/learning DB contract.
+
+        The learning layer and JournalBridge expect a method named
+        ``save_trade(...)`` that accepts the simplified trade schema used by
+        the memory DB. This keeps the live TraderDB usable as a drop-in for
+        both paper-trading and broker-journal persistence without altering
+        the execution path.
+        """
+        context = trade.get("context") or {}
+        chart_snapshot = trade.get("chart_snapshot") or {}
+        if isinstance(chart_snapshot, dict):
+            context = {**context, **chart_snapshot}
+
+        with self._connect() as conn:
+            cur = conn.execute("""
+                INSERT INTO trades
+                (pair, timeframe, type, entry, sl, tp, lot, confidence,
+                 open_time, pattern, regime, trend, rsi, session,
+                 status, result, pnl, context_json, mt5_ticket)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                trade.get("pair"),
+                trade.get("timeframe"),
+                trade.get("signal") or trade.get("type") or "BUY",
+                trade.get("entry"),
+                trade.get("sl"),
+                trade.get("tp"),
+                trade.get("lot", 0.01),
+                trade.get("confidence"),
+                trade.get("open_time") or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                trade.get("pattern"),
+                trade.get("regime"),
+                trade.get("trend"),
+                trade.get("rsi"),
+                trade.get("session"),
+                "OPEN" if (trade.get("result") in (None, "OPEN", "PENDING")) else "CLOSED",
+                trade.get("result"),
+                trade.get("pnl", 0),
+                _safe_json_dumps(context),
+                trade.get("mt5_ticket")
+                or context.get("mt5_order_ticket")
+                or context.get("mt5_ticket")
+                or context.get("ticket"),
+            ))
+            trade_id = cur.lastrowid
+        log.info(f"Trade saved via compatibility wrapper: #{trade_id} {trade.get('pair')} {trade.get('signal') or trade.get('type')}")
+        return trade_id
+
+    def update_trade_result(self, trade_id: int, result: str, pnl: float | None = None) -> None:
+        """Compatibility update used by JournalBridge and trade recovery flows."""
+        with self._connect() as conn:
+            conn.execute("""
+                UPDATE trades
+                SET result = ?, pnl = ?, status = 'CLOSED', close_time = ?
+                WHERE id = ?
+            """, (
+                result,
+                pnl,
+                datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                trade_id,
+            ))
+        log.info(f"Trade result updated via compatibility wrapper: #{trade_id} {result} | PnL: ${pnl}")
+
     def save_trade_open(self, trade: dict) -> int:
         """
         নতুন trade open হলে save করো। Returns the new trade's row id.

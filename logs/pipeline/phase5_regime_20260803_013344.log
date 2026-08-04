@@ -1,8 +1,0 @@
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime | [Phase 5: Regime Detection] Starting...
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     TRENDING_UP: 9164 (33.0%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     TRENDING_DOWN: 9406 (33.9%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     RANGING: 4685 (16.9%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     HIGH_VOLATILITY: 1282 (4.6%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     LOW_VOLATILITY: 1605 (5.8%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime |     REVERSAL: 1628 (5.9%)
-2026-08-03 01:34:03 | INFO    | pipeline.phase5_regime | [Phase 5: Regime Detection] Completed in 0m 0.1s

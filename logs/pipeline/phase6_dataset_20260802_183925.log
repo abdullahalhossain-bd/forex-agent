@@ -1,3 +1,0 @@
-2026-08-02 18:39:29 | INFO    | pipeline.phase6_dataset | [Phase 6: Dataset Creation] Starting...
-2026-08-02 18:39:29 | INFO    | pipeline.phase6_dataset |   EURUSD: train=77639 | val=16637 | test=16638 | features=72
-2026-08-02 18:39:29 | INFO    | pipeline.phase6_dataset | [Phase 6: Dataset Creation] Completed in 0m 0.2s

@@ -162,6 +162,24 @@ def log_approval_processed(symbol: str, proceed: bool, mode: int,
               mode=mode, action=action, **extra)
 
 
+def log_devils_advocate_result(symbol: str, decision: str, confidence: float,
+                               reasons: list[str] | None = None,
+                               risk_summary: str | None = None,
+                               evidence: list[str] | None = None,
+                               error: str | None = None, **extra) -> None:
+    log_event(
+        "devils_advocate.review",
+        symbol=symbol,
+        decision=decision,
+        confidence=confidence,
+        reasons=reasons or [],
+        risk_summary=risk_summary or "",
+        evidence=evidence or [],
+        error=error or "",
+        **extra,
+    )
+
+
 def log_router_start(symbol: str, decision: str, lot: float,
                      sl: float | None = None, tp: float | None = None,
                      **extra) -> None:

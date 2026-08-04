@@ -1,6 +1,6 @@
 {
-  "hash": "29771d82d237cb086087209f5d9f9d05febb4fe6ce296e80b4b84e61db6ccd00",
-  "saved_at": "2026-08-02T19:56:55.126139+00:00",
+  "hash": "45d2d2805ad79b96490b0ac04bc01647f641bab49fbc40df261396ae490776f7",
+  "saved_at": "2026-08-04T19:20:24.466111+00:00",
   "metadata": {
     "model_type": "xgboost",
     "symbol": "GBPUSD"

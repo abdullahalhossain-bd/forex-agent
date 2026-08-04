@@ -1,0 +1,8 @@
+{
+  "hash": "387a78f70dd5d4ad6aeb01cca2b3a3d1dd6b1e0bc2fde7997b1d6c98d8480bdc",
+  "saved_at": "2026-08-04T19:27:27.904340+00:00",
+  "metadata": {
+    "model_type": "xgboost",
+    "symbol": "GBPAUD"
+  }
+}

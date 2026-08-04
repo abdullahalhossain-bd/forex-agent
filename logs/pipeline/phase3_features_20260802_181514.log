@@ -1,3 +1,0 @@
-2026-08-02 18:15:52 | INFO    | pipeline.phase3_features | [Phase 3: Feature Engineering] Starting...
-2026-08-02 18:15:52 | INFO    | pipeline.phase3_features |   EURUSD: loaded from cache (110914 rows, 80 cols, tf=M15)
-2026-08-02 18:15:52 | INFO    | pipeline.phase3_features | [Phase 3: Feature Engineering] Completed in 0m 0.3s

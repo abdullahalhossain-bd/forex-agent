@@ -28,7 +28,7 @@ OUTPUT (UnifiedSignal-compatible):
     as the swing strategies — no special-case code needed downstream.
 
 USAGE:
-    from strategies.scalping_strategy import ScalpingStrategy
+    from strategy.scalping_strategy import ScalpingStrategy
     from data.fetcher import DataFetcher
 
     df = DataFetcher().fetch_ohlcv("EURUSD", "M5", limit=200)

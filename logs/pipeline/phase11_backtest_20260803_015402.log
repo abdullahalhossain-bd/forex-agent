@@ -1,6 +1,0 @@
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Starting...
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest |   GBPUSD xgboost: PnL=$-88.40 Sharpe=-0.20 WR=51.2%
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest |   GBPUSD lightgbm: PnL=$-393.60 Sharpe=-0.90 WR=51.0%
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest |   GBPUSD catboost: PnL=$-480.80 Sharpe=-1.10 WR=50.9%
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest |   GBPUSD random_forest: PnL=$-200.20 Sharpe=-0.46 WR=51.1%
-2026-08-03 01:54:21 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Completed in 0m 0.3s

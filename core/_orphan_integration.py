@@ -1045,7 +1045,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # Institutional-grade breakout (NaN-safe)
     try:
-        from strategies.breakout import BreakoutStrategy as _BreakoutStrategy
+        from strategy.breakout import BreakoutStrategy as _BreakoutStrategy
         try:
             _service = _BreakoutStrategy(config=None)  # noqa: E501
         except TypeError:
@@ -1063,7 +1063,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # EMA-200 + RSI-50 institutional rewrite
     try:
-        from strategies.ema_rsi_combo import ComboConfig as _ComboConfig
+        from strategy.ema_rsi_combo import ComboConfig as _ComboConfig
         try:
             _service = _ComboConfig()  # noqa: E501
         except TypeError:
@@ -1081,7 +1081,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # BB + RSI mean-reversion (ADX-gated to ranging only)
     try:
-        from strategies.mean_reversion import MeanReversionConfig as _MeanReversionConfig
+        from strategy.mean_reversion import MeanReversionConfig as _MeanReversionConfig
         try:
             _service = _MeanReversionConfig()  # noqa: E501
         except TypeError:
@@ -1099,7 +1099,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # Compact ROC + volume + ADX strategy
     try:
-        from strategies.momentum import MomentumStrategy as _MomentumStrategy
+        from strategy.momentum import MomentumStrategy as _MomentumStrategy
         try:
             _service = _MomentumStrategy()  # noqa: E501
         except TypeError:
@@ -1117,7 +1117,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # EMA pullback with ADX filter
     try:
-        from strategies.pullback import PullbackStrategy as _PullbackStrategy
+        from strategy.pullback import PullbackStrategy as _PullbackStrategy
         try:
             _service = _PullbackStrategy()  # noqa: E501
         except TypeError:
@@ -1135,7 +1135,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # Range-bound support/resistance fades
     try:
-        from strategies.range_trading import RangeTradingStrategy as _RangeTradingStrategy
+        from strategy.range_trading import RangeTradingStrategy as _RangeTradingStrategy
         try:
             _service = _RangeTradingStrategy()  # noqa: E501
         except TypeError:
@@ -1153,7 +1153,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # Breakout-retest entries
     try:
-        from strategies.retest import RetestStrategy as _RetestStrategy
+        from strategy.retest import RetestStrategy as _RetestStrategy
         try:
             _service = _RetestStrategy()  # noqa: E501
         except TypeError:
@@ -1171,7 +1171,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # S/R reversal with candlestick confirmation
     try:
-        from strategies.reversal import ReversalStrategy as _ReversalStrategy
+        from strategy.reversal import ReversalStrategy as _ReversalStrategy
         try:
             _service = _ReversalStrategy()  # noqa: E501
         except TypeError:
@@ -1189,7 +1189,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # M1/M5/M15 scalping with 8-point checklist
     try:
-        from strategies.scalping_strategy import ScalpingStrategy as _ScalpingStrategy
+        from strategy.scalping_strategy import ScalpingStrategy as _ScalpingStrategy
         try:
             _service = _ScalpingStrategy()  # noqa: E501
         except TypeError:
@@ -1207,7 +1207,7 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
 
     # EMA-9/21 + SMA-50/200 + MACD confirmation
     try:
-        from strategies.trend_follow import TrendFollowStrategy as _TrendFollowStrategy
+        from strategy.trend_follow import TrendFollowStrategy as _TrendFollowStrategy
         try:
             _service = _TrendFollowStrategy()  # noqa: E501
         except TypeError:

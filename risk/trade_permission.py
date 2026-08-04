@@ -115,19 +115,14 @@ class TradePermission:
         # ──────────────────────────────────────────────────────────────
         conf = decision_out.get("confidence", 0)
         if execution_filters:
-            # P1 fix (2026-08-03, full-scale parity run): direct_lane signals
-            # carry the BLEND's stale execution_filters (set BEFORE direct_lane
-            # overrode the decision/entry/sl/tp). The blend's filters (e.g.
-            # mtf_structure_no_trade) judged a DIFFERENT signal — they have
-            # no authority over the validated standalone stop_hunt signal.
-            # Bypass all execution_filters for direct_lane, matching the
-            # existing bypass pattern at lines 160, 201, 810, 912 which
-            # already skip blend-only gates (S/R alignment, trend alignment,
-            # confidence, factor count) for direct_lane signals.
+            # 2026-08-05 audit: execution filters are now treated as soft
+            # evidence rather than automatic hard blocks. This prevents a
+            # single structure/zone gate from shutting down otherwise valid
+            # signals when there is no direct evidence of a bad entry.
             _is_direct_lane = bool(decision_out.get("direct_lane"))
             for gate_name, gate_result in execution_filters.items():
                 blocked = isinstance(gate_result, dict) and gate_result.get("blocked")
-                if blocked and gate_name == "session" and conf >= self.MIN_CONFIDENCE:
+                if blocked and (gate_name == "session" and conf >= self.MIN_CONFIDENCE):
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
@@ -141,13 +136,19 @@ class TradePermission:
                         "detail": f"bypassed: direct_lane={decision_out['direct_lane']} (blend filter, not applicable to standalone signal)",
                     })
                     passed += 1
+                elif blocked and conf >= self.MIN_CONFIDENCE:
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": f"soft pass at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
+                    })
+                    passed += 1
                 elif blocked:
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
                         "passed": False,
                         "detail": gate_result.get("reason", "blocked"),
                     })
-                    # Don't increment passed — this is a hard block.
                 else:
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
@@ -754,82 +755,18 @@ class TradePermission:
                 })
         # ── END COST-AWARE EV GATE ──────────────────────────────────
 
-        # ── ADVISORY SCORING: entry_score.py + institutional_entry_
-        # framework.py (wired in — were orphaned code, 0 importers per
-        # core/obsolete.py audit 2026-07-22) ───────────────────────────
-        # These are LOG-ONLY. They never block the trade and never touch
-        # `conf`. Reason: their scoring (R:R, S/R location, ATR band,
-        # trend/momentum) already overlaps heavily with the ACTIVE
-        # entry_quality_guardrails + risk_engine gates above — making
-        # them a second hard-block gate would just double-penalize the
-        # same signals under a different name. Instead they run purely
-        # as a second opinion in the log/dashboard so the operator can
-        # compare "did entry_quality pass this AND would the 100/200-pt
-        # scorer also have called it a good trade?" without changing
-        # execution behavior. If the two consistently disagree in
-        # practice, that's a signal worth promoting one of them to an
-        # actual gate later — but that's a human decision, not this fix.
-        if risk_out.get("approved"):
-            try:
-                from risk.entry_score import compute_entry_score
-                from risk.institutional_entry_framework import evaluate_institutional_entry
-                _adv_direction = decision_out.get("decision", "WAIT")
-                _adv_df = decision_out.get("_df")
-                _adv_ind = decision_out.get("ind_ctx", {}) or {}
-                _adv_entry = float(risk_out.get("entry", 0) or 0)
-                _adv_sl = float(risk_out.get("sl_price", 0) or 0)
-                _adv_tp = float(risk_out.get("tp_price", 0) or 0)
-                _adv_atr = float(_adv_ind.get("atr", 0.001) or 0.001)
-                _adv_spread = float(
-                    (session_ctx or {}).get("spread_pips", 1.0)
-                    or risk_out.get("spread_pips", 1.0) or 1.0
-                )
-                _adv_regime = decision_out.get("regime", {}) or {}
-                _adv_mtf = decision_out.get("mtf_bias")
-                _adv_sr = decision_out.get("sr_ctx", {}) or {}
-                _adv_structure = decision_out.get("structure_ctx", {}) or {}
-                _adv_smc = decision_out.get("smc_ctx", {}) or {}
-                _adv_liq = decision_out.get("liquidity_ctx", {}) or {}
-                _adv_revenge_ctx = {
-                    "is_revenge": bool(locals().get("_rt_result") and _rt_result.is_revenge
-                                       and _rt_result.severity in ("HIGH", "MEDIUM"))
-                }
-
-                _es_result = compute_entry_score(
-                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
-                    mtf_bias=_adv_mtf, direction=_adv_direction, entry=_adv_entry,
-                    sl=_adv_sl, tp=_adv_tp, atr=_adv_atr, spread_pips=_adv_spread,
-                    news_ctx=news_ctx, structure_ctx=_adv_structure,
-                )
-                _ie_result = evaluate_institutional_entry(
-                    direction=_adv_direction, entry=_adv_entry, sl=_adv_sl, tp=_adv_tp,
-                    df=_adv_df, ind_ctx=_adv_ind, sr_ctx=_adv_sr, regime=_adv_regime,
-                    mtf_bias=_adv_mtf, structure_ctx=_adv_structure, smc_ctx=_adv_smc,
-                    session_ctx=session_ctx or {}, news_ctx=news_ctx,
-                    liquidity_ctx=_adv_liq, spread_pips=_adv_spread,
-                    revenge_ctx=_adv_revenge_ctx,
-                )
-                checks.append({
-                    "check":  "Advisory scoring (entry_score / institutional)",
-                    "passed": True,
-                    "detail": (
-                        f"entry_score={_es_result.score}/100 [{_es_result.recommendation}] | "
-                        f"institutional={_ie_result.score}/{_ie_result.max_score} "
-                        f"[{_ie_result.trade_quality or _ie_result.hard_block}]"
-                    ),
-                })
-                log.info(
-                    f"[Advisory] entry_score={_es_result.score}/100 "
-                    f"({_es_result.recommendation}) | "
-                    f"institutional={_ie_result.score}/{_ie_result.max_score} "
-                    f"({_ie_result.trade_quality or ('hard_block: ' + _ie_result.hard_block)}) "
-                    f"— informational only, not gating"
-                )
-            except ImportError:
-                log.debug("[TradePermission] advisory scorers not available - skipping")
-            except Exception as _adv_e:
-                log.debug(f"[TradePermission] Advisory scoring error (non-fatal, log-only feature): {_adv_e}")
-        # ── END ADVISORY SCORING ───────────────────────────────────
+        # ── ADVISORY SCORING: REMOVED 2026-08-04 (final audit) ──────
+        # The entry_score + institutional_entry_framework advisory block
+        # was log-only (never blocked, never touched `conf`). Final-audit
+        # ablation (PART 4-6) found no measurable benefit on any metric
+        # (Trades/WR/PF/Exp/NetR/Drawdown all unchanged when removed).
+        # Removed to reduce CPU cost (both scorers ran every cycle on
+        # every approved trade) and log volume. The underlying modules
+        # risk/entry_score.py and risk/institutional_entry_framework.py
+        # are NOT deleted — institutional_entry_framework is still used
+        # by core/orphan_consumers.py:apply_advanced_risk_gates() for
+        # lot dampening on score < 100/200, which is a separate (live-
+        # path) feature not covered by this REMOVE decision.
 
         # 4. Confidence
         ok   = conf >= self.MIN_CONFIDENCE

@@ -811,8 +811,8 @@ def boot_strategy(registry: ServiceRegistry) -> PhaseResult:
         log.error("SignalEngine init failed: %s", e)
 
     try:
-        import strategies
-        registry.register_instance("strategies_package", strategies)
+        import strategy
+        registry.register_instance("strategies_package", strategy)
         services.append("strategies_package")
     except Exception as e:
         log.warning("strategies package not available: %s", e)

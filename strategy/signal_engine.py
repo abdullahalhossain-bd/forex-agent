@@ -1,53 +1,21 @@
 # strategy/signal_engine.py — Production Signal Engine
 # ============================================================
 # This IS the production signal engine used by core/runtime.py.
-# It generates BUY/SELL signals based on indicator scoring + Fibonacci levels.
+# It generates BUY/SELL signals based on indicator scoring (Trend, RSI,
+# MACD, Candlestick, S/R, MTF bias, Advanced pattern, Extended votes).
 #
-# Originally written as a "patch" to a pre-existing SignalEngine class,
-# it has since become the standalone production module.
+# Fibonacci scoring was REMOVED on 2026-08-04 (final audit) — the
+# static method had been disabled since 2026-07-29 (win-rate audit
+# measured it at 35.9%, below the 40% retention bar) and was retained
+# only as dead code. fib_ctx is still accepted as a generate() arg and
+# returned in the dict for informational display by DecisionAgent /
+# print_summary, but it no longer has any scoring path attached.
 # ============================================================
 
 
-# ── generate() method signature update ────────────────────────
-#
-# def generate(
-#     self,
-#     ind_ctx:          dict,
-#     pat_ctx:          dict,
-#     sr_ctx:           dict,
-#     regime:           dict = None,
-#     mtf_bias:         dict = None,
-#     advanced_pat_ctx: dict = None,
-#     fib_ctx:          dict = None,    # ⭐ Day 40 — add this
-# ) -> dict:
-
-
-# ── Fibonacci scoring block (paste inside generate()) ─────────
-#
-# Existing score variables: bull_score, bear_score, signals, warnings
-# এর পরে এই block যোগ করো:
-
-def _apply_fib_scoring(
-    fib_ctx: dict,
-    bull_score: int,
-    bear_score: int,
-    signals:    list,
-    warnings:   list,
-) -> tuple[int, int]:
-    """
-    Module-level backward-compat wrapper — delegates to the static method
-    on SignalEngine.  Kept so any external code that imports
-    `_apply_fib_scoring` directly still works.
-    """
-    return SignalEngine._apply_fib_scoring(
-        fib_ctx, bull_score, bear_score, signals, warnings
-    )
-
-
 # ══════════════════════════════════════════════════════════════
-# FULL generate() METHOD — Complete updated version
-# তোমার existing generate() কে এটা দিয়ে replace করো।
-# (existing logic সব রেখে শুধু fib block যোগ হয়েছে)
+# Production SignalEngine — generate() method
+# (Fibonacci scoring block removed 2026-08-04 final audit)
 # ══════════════════════════════════════════════════════════════
 
 class SignalEngine:
@@ -57,87 +25,6 @@ class SignalEngine:
     class SignalEngine(SignalEngineDay40Mixin):
         ...
     """
-
-    @staticmethod
-    def _apply_fib_scoring(
-        fib_ctx: dict,
-        bull_score: int,
-        bear_score: int,
-        signals:    list,
-        warnings:   list,
-    ) -> tuple[int, int]:
-        """
-        Fibonacci context দেখে bull/bear score adjust করো।
-
-        Scoring:
-          BUY  signal  + in golden zone  → +3
-          BUY  signal  + confluence high → +2
-          SELL signal  + in golden zone  → +3
-          SELL signal  + confluence high → +2
-          Fib failure risk HIGH          → -2 (both directions)
-          Fib zone conflict with trend   → warning
-        """
-        if not fib_ctx or not fib_ctx.get('fib_valid'):
-            return bull_score, bear_score
-
-        fib_bias      = fib_ctx.get('fib_bias', 'WAIT')
-        fib_conf      = fib_ctx.get('fib_confidence', 0)
-        in_golden     = fib_ctx.get('fib_in_golden', False)
-        conf_strength = fib_ctx.get('fib_confluence_strength', 0)
-        failure_risk  = fib_ctx.get('fib_failure_risk', 'LOW')
-        fib_zone      = fib_ctx.get('fib_zone', '')
-        fib_level     = fib_ctx.get('fib_level_near', '')
-
-        # ── BUY signal from Fibonacci ──────────────────────────────
-        if fib_bias == 'BUY' and fib_conf >= 55:
-            weight = 2
-            reason = f"Fib BUY zone ({fib_zone})"
-
-            if in_golden:
-                weight += 1
-                reason += " — Golden Zone (50-61.8%)"
-
-            if conf_strength >= 70:
-                weight += 1
-                reason += f" + Confluence (str={conf_strength})"
-
-            bull_score += weight
-            signals.append(('bullish', weight, reason))
-
-        # ── SELL signal from Fibonacci ─────────────────────────────
-        elif fib_bias == 'SELL' and fib_conf >= 55:
-            weight = 2
-            reason = f"Fib SELL zone ({fib_zone})"
-
-            if in_golden:
-                weight += 1
-                reason += " — Golden Zone (50-61.8%)"
-
-            if conf_strength >= 70:
-                weight += 1
-                reason += f" + Confluence (str={conf_strength})"
-
-            bear_score += weight
-            signals.append(('bearish', weight, reason))
-
-        # ── Near key level (informational) ────────────────────────
-        elif fib_bias == 'WAIT' and fib_level:
-            signals.append(('neutral', 0, f"Fib: Price near {fib_level} — wait for reaction"))
-
-        # ── Failure risk penalty ───────────────────────────────────
-        if failure_risk == 'HIGH':
-            bull_score = max(0, bull_score - 2)
-            bear_score = max(0, bear_score - 2)
-            warnings.append(
-                f"⚠️  Fib failure risk HIGH — levels less reliable. "
-                f"Reduce position size."
-            )
-        elif failure_risk == 'MEDIUM':
-            warnings.append(
-                f"💡 Fib failure risk MEDIUM — confirm with other signals."
-            )
-
-        return bull_score, bear_score
 
     def generate(
         self,
@@ -251,17 +138,12 @@ class SignalEngine:
                 bear_score += w
                 signals.append(('bearish', w, f'Advanced pattern: {adv_name} ({adv_conf}%)'))
 
-        # ── Fibonacci (Day 40) ⭐ — DISABLED 2026-07-29 ────────
-        # Win-rate audit measured this at 35.9%, below the retention bar
-        # (40%). _apply_fib_scoring() is left defined as a staticmethod
-        # below for reference / possible future rework, it's just no
-        # longer called here. fib_ctx is still accepted as a generate()
-        # arg and still passed through in the return dict below (fib_zone/
-        # fib_tp1/fib_tp2) purely as informational context for the
-        # DecisionAgent — it no longer contributes to bull_score/bear_score.
-        # bull_score, bear_score = self._apply_fib_scoring(
-        #     fib_ctx, bull_score, bear_score, signals, warnings
-        # )
+        # ── Fibonacci scoring: REMOVED 2026-08-04 (final audit) ──
+        # Was disabled 2026-07-29 (win-rate 35.9% < 40% retention bar).
+        # The dead _apply_fib_scoring() static method was deleted from
+        # this module. fib_ctx is still accepted as an arg and returned
+        # in the dict below for informational display only — it no
+        # longer contributes to bull_score / bear_score in any form.
 
         # ── Extended modules (17-module integration pass) ──────
         # Votes from previously imported-only modules: andean_oscillator,
@@ -290,17 +172,10 @@ class SignalEngine:
         if rsi_sig == 'overbought' and 'bullish' in trend:
             warnings.append("⚠️  RSI overbought in bullish trend — pullback possible")
 
-        # ── Fibonacci vs Trend conflict — DISABLED 2026-07-29 ─
-        # Was still letting fib_bias move the final signal indirectly
-        # (each warning costs -10 confidence), which is the same
-        # "fibonacci still deciding trades" problem as the scoring
-        # block above. Disabled alongside it for the same reason.
-        # if fib_ctx and fib_ctx.get('fib_valid'):
-        #     fib_bias = fib_ctx.get('fib_bias', 'WAIT')
-        #     if fib_bias == 'BUY' and 'strong_bearish' in trend:
-        #         warnings.append("⚠️  Fib BUY zone but strong bearish trend — counter-trend risk")
-        #     elif fib_bias == 'SELL' and 'strong_bullish' in trend:
-        #         warnings.append("⚠️  Fib SELL zone but strong bullish trend — counter-trend risk")
+        # ── Fibonacci vs Trend conflict: REMOVED 2026-08-04 (final audit) ─
+        # Was part of the Fibonacci scoring path that was disabled on
+        # 2026-07-29 and removed on 2026-08-04. No fib_bias-driven
+        # warning is emitted anymore.
 
         # ── Final Decision ────────────────────────────────────
         total  = bull_score + bear_score

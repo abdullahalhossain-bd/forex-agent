@@ -49,6 +49,7 @@ from agents.learning_agent import LearningAgent
 from agents.market_agent import MarketAgent
 from config import EXECUTION_MODE
 from core.approval_mode import ApprovalMode
+from core.devils_advocate import DevilsAdvocateGate
 from database.db import TraderDB
 from execution.execution_router import ExecutionRouter
 from execution.paper_trader import PaperTrader
@@ -243,6 +244,7 @@ class AITrader:
         self._decision = DecisionAgent()
         self._risk = RiskEngine(balance=balance, symbol=self.symbol)
         self._perm = TradePermission()
+        self._devils_advocate = DevilsAdvocateGate()
         self._learn = LearningAgent()
         # Prefer the registry's shared TradeMemory if available (so all
         # AITraders for different symbols share the same vector store).
@@ -2163,6 +2165,74 @@ class AITrader:
             if not approved_to_execute:
                 result["reject_reason"] = approval_out.get("message", result.get("reject_reason"))
 
+        if approved_to_execute and result.get("trade_allowed"):
+            try:
+                trade_context = {
+                    "symbol": self.symbol,
+                    "pair": self.symbol,
+                    "market_context": {
+                        "timeframe": self.timeframe,
+                        "session": session_ctx.get("current_session") if session_ctx else None,
+                        "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
+                        "rr_ratio": result.get("rr"),
+                    },
+                    "analysis_out": analysis_out,
+                    "risk_out": risk_out,
+                    "decision_out": dec_out,
+                    "perm_out": perm_out,
+                }
+                review = self._devils_advocate.review(
+                    trade_context=trade_context,
+                    signal=result.get("final_action"),
+                    risk_out=risk_out,
+                    decision_out=dec_out,
+                )
+                result["devils_advocate"] = review
+                dec_out["devils_advocate"] = review
+                if review.get("decision") == "VETO":
+                    result["trade_allowed"] = False
+                    result["final_action"] = "NO TRADE"
+                    result["execution_action"] = "NO TRADE"
+                    result["reject_reason"] = (
+                        f"Devil's Advocate veto: {review.get('risk_summary', 'high concern')}"
+                    )
+                    result["blocked_reason"] = result["reject_reason"]
+                    result["reject_stage"] = "devils_advocate"
+                    approved_to_execute = False
+                    perm_out["allowed"] = False
+                    perm_out["execution_allowed"] = False
+                    perm_out["final_action"] = "NO TRADE"
+                    perm_out["execution_action"] = "NO TRADE"
+                    perm_out["blocked_reason"] = result["reject_reason"]
+                    perm_out["checks"].append({
+                        "check": "Devil's Advocate review",
+                        "passed": False,
+                        "detail": f"{review.get('risk_summary', 'high concern')} | concerns={'; '.join(review.get('reasons_for_concern', [])[:3])}",
+                    })
+                    perm_out["total"] = perm_out.get("total", 0) + 1
+                else:
+                    perm_out["checks"].append({
+                        "check": "Devil's Advocate review",
+                        "passed": True,
+                        "detail": f"{review.get('decision')} conf={review.get('confidence', 0):.0f}%",
+                    })
+                    perm_out["total"] = perm_out.get("total", 0) + 1
+                try:
+                    from core.execution_logger import log_devils_advocate_result
+                    log_devils_advocate_result(
+                        symbol=self.symbol,
+                        decision=review.get("decision", "EXECUTE"),
+                        confidence=float(review.get("confidence", 0) or 0),
+                        reasons=review.get("reasons_for_concern", []),
+                        risk_summary=review.get("risk_summary", ""),
+                        evidence=review.get("evidence", []),
+                    )
+                except Exception as e:
+                    log.warning(f"Suppressed exception at line 1110: {e}")
+                    pass
+            except Exception as e:
+                log.warning(f"[Trader] Devil's Advocate review failed (non-fatal): {e}")
+
         log.info("[9/9] Execution + Alerts...")
         if approved_to_execute:
             with self._stage(f"aitrader.{self.symbol}.execute"):
@@ -2376,6 +2446,8 @@ class AITrader:
                     _reject_stage = "approval_mode_2"
                 elif "execution" in _reject_reason.lower() or "router" in _reject_reason.lower():
                     _reject_stage = "execution_router"
+                elif "devil" in _reject_reason.lower() or "advocate" in _reject_reason.lower():
+                    _reject_stage = "devils_advocate"
                 elif "market closed" in _reject_reason.lower() or "Hard Stop" in _reject_reason:
                     _reject_stage = "absolute_safety"
                 elif _final_action in ("WAIT", "NO TRADE"):
@@ -3303,11 +3375,16 @@ class AITrader:
             # pattern detection was running correctly for live decisions.
             pattern_df = analysis_out.get("df", df)
             db.save_patterns(pattern_df, self.symbol, self.timeframe)
+            bias_result = analysis_out.get("bias_result") or {}
+            bias_score = bias_result.get("net_score")
+            bias_label = bias_result.get("bias") or "UNKNOWN"
+            if bias_score is None:
+                bias_score = dec_out.get("confidence", 0)
             db.save_analysis(
                 self.symbol,
                 self.timeframe,
-                analysis_out["bias_result"]["net_score"],
-                analysis_out["bias_result"]["bias"],
+                bias_score,
+                bias_label,
                 combined,
             )
             # Co-founder fix: save the FINAL decision signal to history,

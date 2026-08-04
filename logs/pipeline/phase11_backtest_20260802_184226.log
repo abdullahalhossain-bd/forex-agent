@@ -1,6 +1,0 @@
-2026-08-02 18:43:07 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Starting...
-2026-08-02 18:43:07 | INFO    | pipeline.phase11_backtest |   EURUSD xgboost: PnL=$0.00 Sharpe=0.00 WR=0.0%
-2026-08-02 18:43:07 | INFO    | pipeline.phase11_backtest |   EURUSD lightgbm: PnL=$0.00 Sharpe=0.00 WR=0.0%
-2026-08-02 18:43:07 | INFO    | pipeline.phase11_backtest |   EURUSD catboost: PnL=$23.70 Sharpe=0.21 WR=50.3%
-2026-08-02 18:43:08 | INFO    | pipeline.phase11_backtest |   EURUSD random_forest: PnL=$173.40 Sharpe=0.29 WR=50.4%
-2026-08-02 18:43:08 | INFO    | pipeline.phase11_backtest | [Phase 11: Backtesting] Completed in 0m 0.8s

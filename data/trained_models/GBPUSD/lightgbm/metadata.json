@@ -1,7 +1,7 @@
 {
   "model_type": "lightgbm",
   "symbol": "GBPUSD",
-  "accuracy": 0.4762,
+  "accuracy": 0.4756,
   "n_features": 72,
   "feature_columns": [
     "ema_8",
@@ -77,9 +77,9 @@
     "month_sin",
     "month_cos"
   ],
-  "n_train": 883,
-  "n_val": 189,
-  "trained_at": "2026-08-02T19:56:56.962502+00:00",
-  "training_seconds": 1.8,
-  "data_hash": "39ab3cb78de6"
+  "n_train": 77640,
+  "n_val": 16637,
+  "trained_at": "2026-08-04T19:20:27.121879+00:00",
+  "training_seconds": 2.5,
+  "data_hash": "b98ff54b0d0f"
 }

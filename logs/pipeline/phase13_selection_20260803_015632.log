@@ -1,7 +1,0 @@
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Starting...
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection |   EURUSD xgboost: composite_score=46.860
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection |   EURUSD lightgbm: composite_score=49.120
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection |   EURUSD catboost: composite_score=49.120
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection |   EURUSD random_forest: composite_score=81.140
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection |   >>> EURUSD BEST: random_forest (score=81.140)
-2026-08-03 01:56:39 | INFO    | pipeline.phase13_selection | [Phase 13: Model Selection] Completed in 0m 0.0s

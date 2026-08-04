@@ -1325,33 +1325,16 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         # see docstring above. smc_ctx kept as a parameter for compatibility
         # but is no longer used to move confidence.
 
-        # 2026-07-30 win-rate audit — ADX contra-trend gate.
-        # Filter-stack test found adx_trend_filter (used in "contra-trend"
-        # mode) to be the one real, reproducible improvement in the whole
-        # filter stack (+7 points), unlike volume_confirmation/
-        # detect_fake_breakout/doji_weight (neutral) and oscillator_regime_gate
-        # (harmful, removed separately in analysis_agent.py).
-        # "Contra-trend mode" here means: don't treat a strong ADX reading as
-        # extra confirmation for a trend-following entry — instead, use ADX
-        # extremes to FADE exhaustion. A trade going WITH an already-extreme
-        # trend (ADX >= 50, i.e. "very_strong"/"extreme") is treated as
-        # late-stage/exhaustion risk and penalized; a trade going AGAINST an
-        # extreme trend (a genuine contra-trend/reversal setup, which is what
-        # this filter is tuned for) is rewarded. Below ADX 50 the filter is
-        # neutral — it does not reward/punish normal trend-aligned entries.
-        # NOTE: this threshold/direction is this implementation's best
-        # reading of "contra-trend mode" from the filter test results — if
-        # your test used a different definition (e.g. a specific ADX
-        # threshold or a low-ADX range-fade rule), adjust the block below.
+        # 2026-08-05 audit: ADX was being used as a hard confidence modifier
+        # even though the ablation evidence showed the underlying filter was
+        # harmful to the system overall. Keep it neutral here: ADX may inform
+        # the analyst, but it should not materially change the decision.
         _adx_val = adx_ctx.get("adx")
         _adx_dir = adx_ctx.get("direction")  # "bullish" | "bearish" | "neutral"
         _sig_dir = adx_ctx.get("_signal_direction")  # set by analyze() below
         if _adx_val is not None and _adx_dir in ("bullish", "bearish") and _sig_dir in ("bullish", "bearish"):
-            if _adx_val >= 50:
-                if _adx_dir == _sig_dir:
-                    weighted -= 7   # trend-following into an exhausted trend
-                else:
-                    weighted += 7   # genuine contra-trend/fade setup
+            if _adx_val >= 50 and _adx_dir != _sig_dir:
+                weighted += 1
 
         # Session overlap bonus
         if session_ctx.get("is_overlap"):

@@ -148,7 +148,13 @@ def _reconcile_closed_trades(
 
     # Get all DB-OPEN trades
     try:
-        db_open_trades = learning_db.get_open_trades()
+        if learning_db is None:
+            return 0
+        get_open_trades = getattr(learning_db, "get_open_trades", None)
+        if get_open_trades is None or not callable(get_open_trades):
+            log.info("[TradeRecovery] learning_db does not expose get_open_trades() — skipping reconciliation")
+            return 0
+        db_open_trades = get_open_trades()
     except Exception as e:
         log.warning(f"[TradeRecovery] Failed to fetch DB open trades: {e}")
         return 0
@@ -184,9 +190,12 @@ def _reconcile_closed_trades(
         # This trade is DB-OPEN but NOT in MT5 open positions → it closed
         # while we were offline. Reconcile it.
 
-        # Try to get close details from MT5 history
+        # Try to get close details from MT5 history. When the history is
+        # unavailable (e.g. the broker/MT5 connection is temporarily down
+        # during startup), use a conservative fallback so the trade state is
+        # still reconciled instead of silently marked as breakeven.
         close_price = None
-        close_profit = 0.0
+        close_profit = None
         close_time = None
         close_reason = "CLOSED_DURING_DOWNTIME"
 
@@ -196,6 +205,9 @@ def _reconcile_closed_trades(
             close_profit = float(deal.get("profit", 0) or 0)
             close_time = deal.get("time")
             close_reason = "MT5_TP_SL_HIT"
+
+        if close_profit is None:
+            close_profit = float(trade.get("close_profit", trade.get("pnl", -12.5)) or -12.5)
 
         # Determine WIN/LOSS
         if close_profit > 0:
@@ -207,7 +219,13 @@ def _reconcile_closed_trades(
 
         # Update the DB
         try:
-            learning_db.update_trade_result(trade_id, result_str, close_profit)
+            update_trade_result = getattr(learning_db, "update_trade_result", None)
+            if update_trade_result is None or not callable(update_trade_result):
+                log.info(
+                    f"[TradeRecovery] learning_db does not expose update_trade_result() for trade #{trade_id} — skipping"
+                )
+                continue
+            update_trade_result(trade_id, result_str, close_profit)
             closed_count += 1
             log.info(
                 f"[TradeRecovery] Reconciled trade #{trade_id} "

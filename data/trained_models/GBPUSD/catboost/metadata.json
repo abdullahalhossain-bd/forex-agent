@@ -1,7 +1,7 @@
 {
   "model_type": "catboost",
   "symbol": "GBPUSD",
-  "accuracy": 0.4762,
+  "accuracy": 0.4772,
   "n_features": 72,
   "feature_columns": [
     "ema_8",
@@ -77,9 +77,9 @@
     "month_sin",
     "month_cos"
   ],
-  "n_train": 883,
-  "n_val": 189,
-  "trained_at": "2026-08-02T19:56:57.778697+00:00",
-  "training_seconds": 0.8,
-  "data_hash": "39ab3cb78de6"
+  "n_train": 77640,
+  "n_val": 16637,
+  "trained_at": "2026-08-04T19:20:31.415392+00:00",
+  "training_seconds": 4.2,
+  "data_hash": "b98ff54b0d0f"
 }

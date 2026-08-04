@@ -1,3 +1,0 @@
-2026-08-03 01:54:23 | INFO    | pipeline.phase14_save | [Phase 14: Save Production Artifacts] Starting...
-2026-08-03 01:54:23 | INFO    | pipeline.phase14_save |   GBPUSD: production artifacts saved to D:\Projects\forex\data\trained_models\GBPUSD\xgboost\production
-2026-08-03 01:54:23 | INFO    | pipeline.phase14_save | [Phase 14: Save Production Artifacts] Completed in 0m 0.1s
