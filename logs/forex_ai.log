@@ -18856,3 +18856,69 @@
 2026-08-05 17:14:23,060 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
 2026-08-05 17:14:23,574 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
 2026-08-05 17:14:23,578 - llm_key_manager - WARNING - [LLM Keys] gemini key #4 too many failures (32), disabled for 2min
+2026-08-05 17:14:28,400 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Pair USDSGD not supported. Allowed: {'AUDCAD', 'EURCAD', 'GBPAUD', 'GBPCAD', 'US | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 17:14:28,446 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED USDSGD SELL → WAIT (score=20/145, threshold=65, reason=Score 20 < threshold 65)
+2026-08-05 17:14:35,867 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: USDSGD | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 20 (C) | Session: 46/100 (B) ║
+║ Technical: 71% | ML: 71% | RL: 60% | LLM: 71% ║
+║ Master: 66% | RuleFusion: 69% | Confluence: 0% (AVOID) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Bonuses: Sentiment: BEARISH (score -12, adj +8%) ║
+║ Penalties: decision_score:direction=NEUTRAL, quality=NEU(-1), signal_validator:soft penalties from gates: -5.(-5) ║
+║ Final Confidence: 68.0% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: MasterAnalyst: STRONG_SELL | LLM unavailable — using rule engine signa... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 17:14:36,080 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,149 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,227 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,306 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,581 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 17:14:36,630 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T10:45:00+00:00 | current=2026-08-05T11:14:36.630535+00:00 | close=2026-08-05T11:00:00+00:00 | seconds_left=-877s | naive_input=False | is_closed=True
+2026-08-05 17:14:36,755 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,847 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:36,939 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:37,010 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,396 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,441 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,486 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,534 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,571 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,604 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,643 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,685 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,733 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,787 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,837 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,897 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:41,984 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,048 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,113 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,205 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,302 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,374 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,451 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,555 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,618 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,692 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,765 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,817 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,876 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,926 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:42,974 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:43,018 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 17:14:44,822 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 17:14:45,199 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 17:14:48,436 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 17:14:52,381 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 101s
+2026-08-05 17:14:53,884 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 17:14:54,425 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 17:14:54,429 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-08-05 17:14:59,501 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 17:15:00,049 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 17:15:00,058 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 64s
+2026-08-05 17:15:02,440 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 17:15:02,766 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 17:15:02,774 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 62s
