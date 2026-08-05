@@ -1,8 +1,0 @@
-{
-  "hash": "c1242c3f631a4292df27faaef8876fb7b24ef19b267b82fdc8a4ff17d7490256",
-  "saved_at": "2026-08-04T19:25:03.976959+00:00",
-  "metadata": {
-    "model_type": "xgboost",
-    "symbol": "EURAUD"
-  }
-}

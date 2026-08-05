@@ -19,3 +19,4 @@ data/history/
 *.db
 *.bin
 data/pipeline_cache/
+data/

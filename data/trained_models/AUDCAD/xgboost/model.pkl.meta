@@ -1,8 +1,0 @@
-{
-  "hash": "ea969fafe3d2ec8b3d1da60b35f5c72bc842a346c25a40b243b6aec4858bca3a",
-  "saved_at": "2026-08-04T19:29:15.217107+00:00",
-  "metadata": {
-    "model_type": "xgboost",
-    "symbol": "AUDCAD"
-  }
-}

@@ -1,8 +1,0 @@
-{
-  "hash": "80c5cc5df927ce50f553bfa519e0d07e46b153c35707ff3c82eb067f7b58c048",
-  "saved_at": "2026-08-04T19:20:57.329959+00:00",
-  "metadata": {
-    "model_type": "xgboost",
-    "symbol": "USDJPY"
-  }
-}
