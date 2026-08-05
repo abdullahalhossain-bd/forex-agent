@@ -14757,3 +14757,913 @@
 2026-08-05 14:50:18,184 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
 2026-08-05 14:50:30,517 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 5: Lower timeframe (M30) confirmation failed | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: CCI state machine: HOLD
 2026-08-05 14:50:30,731 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:50:33,633 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-08-05 14:50:33,733 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-08-05 14:50:33,733 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-08-05 14:50:33,756 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-08-05 14:50:33,771 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-08-05 14:50:34,633 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:34,678 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:34,968 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:35,008 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:35,289 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:35,326 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:35,612 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:35,649 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-08-05 14:50:35,929 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:35,973 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:36,253 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:36,294 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:36,585 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-08-05 14:50:36,913 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-05 14:50:36,948 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-08-05 14:50:37,997 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-08-05 14:50:38,439 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-08-05 14:50:38,539 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-08-05 14:50:38,540 - core.service_registry - INFO - Service 'circuit_breaker_factory' initialized
+2026-08-05 14:50:39,455 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-08-05 14:50:39,638 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
+2026-08-05 14:50:39,824 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
+2026-08-05 14:50:39,827 - telegram.ext.Application - INFO - Application started
+2026-08-05 14:50:39,861 - core._orphan_integration - INFO - ============================================================
+2026-08-05 14:50:39,862 - core._orphan_integration - INFO - Phase 25 — Orphan Module Integration (wiring 83 modules)
+2026-08-05 14:50:39,863 - core._orphan_integration - INFO - ============================================================
+2026-08-05 14:50:39,888 - core._orphan_integration - INFO -   ✓ advanced_risk_orchestrator
+2026-08-05 14:50:39,907 - core._orphan_integration - INFO -   ✓ adversarial_defenses
+2026-08-05 14:50:39,913 - core._orphan_integration - INFO -   ✓ basket_exit_manager
+2026-08-05 14:50:39,918 - core._orphan_integration - INFO -   ✓ book_guardrails (as module)
+2026-08-05 14:50:39,919 - core._orphan_integration - INFO -   ✓ compounding_engine
+2026-08-05 14:50:39,926 - core._orphan_integration - INFO -   ✓ controlled_grid_scaler
+2026-08-05 14:50:39,931 - core._orphan_integration - INFO -   ✓ entry_quality_guardrails (as module)
+2026-08-05 14:50:39,934 - core._orphan_integration - INFO -   ✓ expectancy_calculator
+2026-08-05 14:50:39,938 - core._orphan_integration - INFO -   ✓ institutional_entry_framework
+2026-08-05 14:50:39,940 - core._orphan_integration - INFO -   ✓ monte_carlo_engine
+2026-08-05 14:50:39,947 - core._orphan_integration - INFO -   ✓ order_split_manager
+2026-08-05 14:50:39,951 - core._orphan_integration - INFO -   ✓ position_allocator
+2026-08-05 14:50:39,955 - core._orphan_integration - INFO -   ✓ probability_distribution (as module)
+2026-08-05 14:50:39,955 - core._orphan_integration - INFO -   ✓ rr_policy
+2026-08-05 14:50:39,960 - core._orphan_integration - INFO -   ✓ streak_tracker
+2026-08-05 14:50:39,963 - core._orphan_integration - INFO -   ✓ structure_stop (as module)
+2026-08-05 14:50:39,969 - core._orphan_integration - INFO -   ✓ symbol_lock
+2026-08-05 14:50:39,977 - core._orphan_integration - INFO -   ✓ trade_frequency_controller
+2026-08-05 14:50:39,984 - core._orphan_integration - INFO -   ✓ trading_controls
+2026-08-05 14:50:39,990 - core._orphan_integration - INFO -   ✓ channel_breakout_stops (as module)
+2026-08-05 14:50:39,992 - core._orphan_integration - INFO -   ✓ approval_mode
+2026-08-05 14:50:39,999 - core._orphan_integration - INFO -   ✓ audit_report
+2026-08-05 14:50:40,002 - core._orphan_integration - INFO -   ✓ confidence_manager
+2026-08-05 14:50:40,003 - core._orphan_integration - INFO -   ✓ data_provider_live
+2026-08-05 14:50:40,003 - core._orphan_integration - INFO -   ✓ decision_validator
+2026-08-05 14:50:40,004 - core._orphan_integration - INFO -   ✓ execution_adapter_mt5
+2026-08-05 14:50:40,007 - core._orphan_integration - INFO -   ✓ indicator_cache
+2026-08-05 14:50:40,023 - core._orphan_integration - INFO -   ✓ professional_tools
+2026-08-05 14:50:40,030 - core._orphan_integration - INFO -   ✓ regime_suppressor
+2026-08-05 14:50:40,036 - core._orphan_integration - INFO -   ✓ signal_persistence_filter
+2026-08-05 14:50:40,041 - core._orphan_integration - INFO -   ✓ signal_scorer
+2026-08-05 14:50:40,049 - core._orphan_integration - INFO -   ✓ unified_signal_schema (as module)
+2026-08-05 14:50:40,060 - core._orphan_integration - INFO -   ✓ adaptive_decision_engine
+2026-08-05 14:50:40,063 - core._orphan_integration - INFO -   ✓ adx_filters (as module)
+2026-08-05 14:50:40,066 - core._orphan_integration - INFO -   ✓ adx_trend_filter
+2026-08-05 14:50:40,070 - core._orphan_integration - INFO -   ✓ advanced_filters (as module)
+2026-08-05 14:50:40,096 - core._orphan_integration - INFO -   ✓ decision_bridge
+2026-08-05 14:50:40,100 - core._orphan_integration - INFO -   ✓ engulfing_bar_strategy
+2026-08-05 14:50:40,101 - core._orphan_integration - INFO -   ✓ global_filters
+2026-08-05 14:50:40,106 - core._orphan_integration - INFO -   ✓ high_reliability_patterns
+2026-08-05 14:50:40,114 - core._orphan_integration - INFO -   ✓ ict_amd_signal_engine
+2026-08-05 14:50:40,122 - core._orphan_integration - INFO -   ✓ liquidity_engine
+2026-08-05 14:50:40,123 - core._orphan_integration - INFO -   ✓ liquidity_zones
+2026-08-05 14:50:40,130 - core._orphan_integration - INFO -   ✓ market_state_memory
+2026-08-05 14:50:40,139 - core._orphan_integration - INFO -   ✓ megaphone_pennant_classifier
+2026-08-05 14:50:40,140 - core._orphan_integration - INFO -   ✓ mtf_analyzer
+2026-08-05 14:50:40,148 - core._orphan_integration - INFO -   ✓ multi_strategy_pa_engine
+2026-08-05 14:50:40,149 - core._orphan_integration - INFO -   ✓ order_block_detector
+2026-08-05 14:50:40,153 - core._orphan_integration - INFO -   ✓ pin_bar_strategy
+2026-08-05 14:50:40,156 - core._orphan_integration - INFO -   ✓ price_target_module (as module)
+2026-08-05 14:50:40,156 - core._orphan_integration - INFO -   ✓ session_analysis
+2026-08-05 14:50:40,163 - core._orphan_integration - INFO -   ✓ stop_hunt_signal_engine
+2026-08-05 14:50:40,163 - core._orphan_integration - INFO -   ✓ strength_calculator
+2026-08-05 14:50:40,166 - core._orphan_integration - INFO -   ✓ trend_level_signal
+2026-08-05 14:50:40,181 - core._orphan_integration - INFO -   ✓ cost_tracker
+2026-08-05 14:50:40,186 - core._orphan_integration - INFO -   ✓ signal_debugger
+2026-08-05 14:50:40,189 - core._orphan_integration - INFO -   ✓ system_watchdog
+2026-08-05 14:50:40,190 - core._orphan_integration - INFO -   ✓ network_monitor
+2026-08-05 14:50:40,196 - core._orphan_integration - INFO -   ✓ strategy_breakout
+2026-08-05 14:50:40,202 - core._orphan_integration - INFO -   ✓ strategy_ema_rsi_combo
+2026-08-05 14:50:40,206 - core._orphan_integration - INFO -   ✓ strategy_mean_reversion
+2026-08-05 14:50:40,217 - core._orphan_integration - INFO -   ✓ strategy_momentum
+2026-08-05 14:50:40,221 - core._orphan_integration - INFO -   ✓ strategy_pullback
+2026-08-05 14:50:40,223 - core._orphan_integration - INFO -   ✓ strategy_range_trading
+2026-08-05 14:50:40,228 - core._orphan_integration - INFO -   ✓ strategy_retest
+2026-08-05 14:50:40,232 - core._orphan_integration - INFO -   ✓ strategy_reversal
+2026-08-05 14:50:40,237 - core._orphan_integration - INFO -   ✓ strategy_scalping
+2026-08-05 14:50:40,239 - core._orphan_integration - INFO -   ✓ strategy_trend_follow
+2026-08-05 14:50:40,243 - core._orphan_integration - INFO -   ✓ decision_logger
+2026-08-05 14:50:40,247 - core._orphan_integration - INFO -   ✓ safe_json
+2026-08-05 14:50:40,252 - core._orphan_integration - INFO -   ✓ structured_logger
+2026-08-05 14:50:40,252 - core._orphan_integration - INFO -   ✓ pip_utils
+2026-08-05 14:50:40,256 - core._orphan_integration - INFO -   ✓ indicators_v5
+2026-08-05 14:50:40,273 - core._orphan_integration - INFO -   ✓ ported_indicators_registry
+2026-08-05 14:50:40,279 - core._orphan_integration - INFO -   ✓ ml_concept_drift_detector
+2026-08-05 14:50:40,279 - core._orphan_integration - INFO -   ✓ ml_online_learner
+2026-08-05 14:50:40,280 - core._orphan_integration - INFO -   ✓ ml_uncertainty_estimator
+2026-08-05 14:50:40,286 - core._orphan_integration - INFO -   ✓ ml_diagnostic
+2026-08-05 14:50:40,291 - core._orphan_integration - INFO -   ✓ ml_validation_framework
+2026-08-05 14:50:40,304 - core._orphan_integration - INFO -   ✓ ml_triple_barrier_labels (as module)
+2026-08-05 14:50:40,313 - core._orphan_integration - INFO -   ✓ trading_sessions_manager
+2026-08-05 14:50:40,342 - core._orphan_integration - INFO -   ✓ typed_config_loader (as module)
+2026-08-05 14:50:40,343 - core._orphan_integration - INFO -   ✓ typed_config_schemas (as module)
+2026-08-05 14:50:40,346 - core._orphan_integration - INFO -   ✓ expectancy_patch (PerformanceAnalyzer.summarize() corrected)
+2026-08-05 14:50:40,347 - core._orphan_integration - INFO - ------------------------------------------------------------
+2026-08-05 14:50:40,347 - core._orphan_integration - INFO - Phase 25 complete — 84/83 wired, 0 failed, 0 subscribed
+2026-08-05 14:50:40,347 - core._orphan_integration - INFO - ============================================================
+2026-08-05 14:50:40,353 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-08-05 14:50:40,371 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB'] | Balance: $99159.93 | Auto-restart: ON
+2026-08-05 14:50:41,147 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
+2026-08-05 14:50:44,924 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:50:48,904 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:50:50,685 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:50:52,597 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:50:54,669 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:50:56,731 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:50:56,999 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:50:57,039 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:50:57,086 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:50:57,127 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:00,625 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:51:00,648 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:51:00.648405+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-361s | naive_input=False | is_closed=True
+2026-08-05 14:51:00,703 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:00,759 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:00,821 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:00,888 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:02,870 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-08-05 14:51:04,701 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,740 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,777 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,821 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,858 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,885 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,908 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,932 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,960 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:04,984 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,007 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,029 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,051 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,073 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,093 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,115 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,137 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,157 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,179 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,206 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,226 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,248 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,270 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,293 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,314 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,336 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,357 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:05,380 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:09,517 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:51:09,790 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:51:10,394 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:51:22,827 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:51:23,306 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:51:23,318 - llm_key_manager - WARNING - [LLM Keys] gemini key #10 rate-limited, disabled for 60s
+2026-08-05 14:51:28,413 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:51:35,438 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,468 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,501 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,554 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,588 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,620 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,650 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,687 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,720 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,750 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,799 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,837 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,870 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,902 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,932 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,965 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:35,994 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,032 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,063 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,095 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,132 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,168 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,202 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,236 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,270 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,301 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,335 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:36,370 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:51:42,790 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 504 Gateway Timeout"
+2026-08-05 14:51:42,791 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:51:42,910 - llm_key_manager - WARNING - [LLM Keys] gemini key #8 too many failures (28), disabled for 2min
+2026-08-05 14:51:49,000 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 5: Lower timeframe (M30) confirmation failed | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: CCI state machine: HOLD
+2026-08-05 14:51:49,182 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:51:57,681 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:51:59,999 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:52:05,582 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:05,937 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:52:06,107 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:06,114 - llm_key_manager - WARNING - [LLM Keys] gemini key #11 rate-limited, disabled for 60s
+2026-08-05 14:52:11,154 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:11,660 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:11,668 - llm_key_manager - WARNING - [LLM Keys] gemini key #7 rate-limited, disabled for 60s
+2026-08-05 14:52:13,579 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: EURUSD | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 35 (C) | Session: 52/100 (B) ║
+║ Technical: 32% | ML: 22% | RL: 50% | LLM: 50% ║
+║ Master: 22% | RuleFusion: 0% | Confluence: 22% (B) ║
+║ Risk: blocked:Signal is NO TRADE — no trade ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10) ║
+║ Final Confidence: 76.0% ║
+║ Decision: NO TRADE ║
+║ Reason: SignalFusion gate: WAIT (consensus=0/3, conf=0%) (analysis confidence ... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:52:13,673 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:13,754 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:13,806 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:13,889 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:14,106 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:52:14,138 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:52:14.137991+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-434s | naive_input=False | is_closed=True
+2026-08-05 14:52:14,184 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:14,229 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:14,287 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:14,341 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:15,094 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:52:17,623 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,647 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,670 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,699 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,720 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,741 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,764 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,784 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,806 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,841 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,867 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,890 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,915 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,938 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,966 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:17,993 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,029 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,057 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,095 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,123 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,148 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,175 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,207 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,237 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,266 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,300 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,330 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:18,355 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:19,228 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:19,954 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:52:19,958 - llm_key_manager - WARNING - [LLM Keys] gemini key #12 too many failures (31), disabled for 2min
+2026-08-05 14:52:26,546 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:52:27,245 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:27,268 - llm_key_manager - WARNING - [LLM Keys] groq key #12 rate-limited, disabled for 4380s
+2026-08-05 14:52:27,268 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:52:30,592 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:52:30,772 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:52:34,246 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:52:40,603 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:52:42,760 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:43,431 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:43,436 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-08-05 14:52:47,396 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: GBPUSD | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 15 (C) | Session: 31/100 (C) ║
+║ Technical: 79% | ML: 49% | RL: 50% | LLM: 82% ║
+║ Master: 49% | RuleFusion: 68% | Confluence: 0% (AVOID) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Bonuses: Sentiment: NEUTRAL (score +8, adj +0%) ║
+║ Penalties: decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 59.0% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: MasterAnalyst: BUY | The current session is LONDON with high volatilit... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:52:47,404 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:52:47,499 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,530 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,564 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,593 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,703 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:52:47,715 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:52:47.715041+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-468s | naive_input=False | is_closed=True
+2026-08-05 14:52:47,739 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,764 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,792 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:47,824 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:48,456 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:49,046 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:49,050 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-08-05 14:52:50,467 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,487 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,519 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,562 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,597 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,627 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,656 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,685 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,708 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,733 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,768 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,804 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,837 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,869 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,895 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,920 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,943 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,962 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:50,982 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,005 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,029 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,054 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,081 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,104 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,127 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,155 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,175 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:51,195 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:52:55,994 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:52:56,505 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:52:56,510 - llm_key_manager - WARNING - [LLM Keys] gemini key #9 too many failures (33), disabled for 2min
+2026-08-05 14:52:58,231 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:52:58,808 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:52:58,811 - llm_key_manager - WARNING - [LLM Keys] groq key #1 rate-limited, disabled for 4839s
+2026-08-05 14:52:58,811 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:53:06,161 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:53:07,741 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:53:07,939 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:53:10,972 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: CCI state machine: HOLD
+2026-08-05 14:53:11,000 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED USDJPY BUY → WAIT (score=25/145, threshold=65, reason=Score 25 < threshold 65)
+2026-08-05 14:53:17,811 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: USDJPY | TF: 15m | Session: LONDON ║
+║ Trend: strong_bullish | Pattern: Unknown ║
+║ SMC: 45 (B) | Session: 76/100 (A+) ║
+║ Technical: 61% | ML: 37% | RL: 50% | LLM: 85% ║
+║ Master: 50% | RuleFusion: 63% | Confluence: 37% (A) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Bonuses: Sentiment: NEUTRAL (score -1, adj +0%) ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 62.0% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: MasterAnalyst: BUY | The current session is LONDON with high volatilit... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:53:17,881 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:17,930 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:17,961 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:17,985 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:18,068 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:53:18,078 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:53:18.078402+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-498s | naive_input=False | is_closed=True
+2026-08-05 14:53:18,099 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:18,121 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:18,142 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:18,161 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:20,094 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:53:20,521 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:53:21,078 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,097 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,116 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,134 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,151 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,170 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,187 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,205 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,224 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,240 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,259 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,276 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,293 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,310 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,327 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,346 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,366 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,387 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,407 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,432 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,456 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,477 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,496 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,514 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,533 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,553 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,572 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:21,590 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:29,560 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:53:30,530 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:30,534 - llm_key_manager - WARNING - [LLM Keys] groq key #5 rate-limited, disabled for 4845s
+2026-08-05 14:53:30,534 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:53:36,175 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:36,183 - llm_key_manager - WARNING - [LLM Keys] groq key #8 rate-limited, disabled for 3804s
+2026-08-05 14:53:36,183 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:53:36,422 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-08-05 14:53:40,979 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:53:41,156 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:53:41,784 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:41,787 - llm_key_manager - WARNING - [LLM Keys] groq key #11 rate-limited, disabled for 1709s
+2026-08-05 14:53:41,787 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:53:46,907 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:53:47,566 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:47,585 - llm_key_manager - WARNING - [LLM Keys] gemini key #6 rate-limited, disabled for 60s
+2026-08-05 14:53:50,287 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,316 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,342 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,369 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,396 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,423 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,449 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,476 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,504 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,526 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,550 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,576 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,600 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,623 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,647 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,670 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,691 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,714 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,736 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,756 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,781 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,805 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,826 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,850 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,880 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,905 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,927 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:50,950 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:51,413 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:53:52,048 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:52,055 - llm_key_manager - WARNING - [LLM Keys] gemini key #8 rate-limited, disabled for 60s
+2026-08-05 14:53:52,263 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,285 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,304 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,325 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,348 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,366 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:53:52,367 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,389 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,415 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,433 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,454 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,474 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,492 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,514 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,535 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,556 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,577 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,605 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,626 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,648 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,668 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,688 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,708 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,731 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,753 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,773 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,794 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,818 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:52,839 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:53:55,329 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:53:55,880 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:55,883 - llm_key_manager - WARNING - [LLM Keys] gemini key #7 rate-limited, disabled for 60s
+2026-08-05 14:53:56,141 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:53:56,898 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:53:56,901 - llm_key_manager - WARNING - [LLM Keys] gemini key #10 rate-limited, disabled for 60s
+2026-08-05 14:54:00,801 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:01,379 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:01,388 - llm_key_manager - WARNING - [LLM Keys] gemini key #6 rate-limited, disabled for 63s
+2026-08-05 14:54:06,152 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:54:06,187 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED AUDUSD SELL → WAIT (score=18/145, threshold=65, reason=Score 18 < threshold 65)
+2026-08-05 14:54:08,424 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:08,947 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:54:08,952 - llm_key_manager - WARNING - [LLM Keys] gemini key #11 too many failures (38), disabled for 2min
+2026-08-05 14:54:13,055 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: AUDUSD | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 20 (C) | Session: 44/100 (B) ║
+║ Technical: 62% | ML: 72% | RL: 50% | LLM: 62% ║
+║ Master: 72% | RuleFusion: 66% | Confluence: 0% (AVOID) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Bonuses: Sentiment: NEUTRAL (score +8, adj +0%) ║
+║ Penalties: decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 58.0% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: MasterAnalyst: SELL | LLM unavailable — using rule engine signal: SELL... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:54:13,124 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,166 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,196 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,237 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,345 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:54:13,353 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:54:13.353667+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-553s | naive_input=False | is_closed=True
+2026-08-05 14:54:13,382 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,450 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,522 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:13,591 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,711 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,748 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,783 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,826 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,869 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,912 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,959 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:18,995 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,026 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,061 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,105 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,140 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,179 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,222 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,254 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,290 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,325 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,364 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,399 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,429 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,489 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,559 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,623 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,680 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,738 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,782 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,816 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:19,855 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:54:24,283 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:54:24,464 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:54:24,575 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:54:28,272 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:28,297 - llm_key_manager - WARNING - [LLM Keys] groq key #3 rate-limited, disabled for 865s
+2026-08-05 14:54:28,297 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:54:36,315 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:54:36,491 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:36,588 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:36,591 - llm_key_manager - WARNING - [LLM Keys] groq key #2 rate-limited, disabled for 2477s
+2026-08-05 14:54:36,591 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:54:37,090 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:37,097 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-08-05 14:54:41,999 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:42,155 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:42,158 - llm_key_manager - WARNING - [LLM Keys] groq key #4 rate-limited, disabled for 4418s
+2026-08-05 14:54:42,158 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:54:42,590 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:42,596 - llm_key_manager - WARNING - [LLM Keys] gemini key #3 rate-limited, disabled for 60s
+2026-08-05 14:54:47,785 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:47,791 - llm_key_manager - WARNING - [LLM Keys] groq key #13 rate-limited, disabled for 1461s
+2026-08-05 14:54:47,792 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:54:49,475 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:50,087 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:54:50,094 - llm_key_manager - WARNING - [LLM Keys] gemini key #13 too many failures (23), disabled for 2min
+2026-08-05 14:54:52,062 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:52,625 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:54:52,628 - llm_key_manager - WARNING - [LLM Keys] gemini key #12 rate-limited, disabled for 60s
+2026-08-05 14:54:56,533 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:54:56,765 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:54:59,586 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 503 Service Unavailable"
+2026-08-05 14:55:01,384 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:55:01,756 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:01,770 - llm_key_manager - WARNING - [LLM Keys] gemini key #13 rate-limited, disabled for 63s
+2026-08-05 14:55:05,570 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:55:05,750 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:55:11,728 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: CCI state machine: HOLD
+2026-08-05 14:55:11,739 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED USDCAD SELL → WAIT (score=21/145, threshold=65, reason=Score 21 < threshold 65)
+2026-08-05 14:55:18,732 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: USDCAD | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 60 (B) | Session: 71/100 (A) ║
+║ Technical: 32% | ML: 23% | RL: 50% | LLM: 70% ║
+║ Master: 23% | RuleFusion: 70% | Confluence: 23% (B) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 90.5% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: Confidence override: llm_analyst SELL 70% (SignalFusion consensus was ... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:55:18,791 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:18,823 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:55:18,854 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:18,899 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:18,941 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:19,069 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:55:19,085 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:55:19.085611+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-619s | naive_input=False | is_closed=True
+2026-08-05 14:55:19,127 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:19,167 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:19,211 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:19,255 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:19,316 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:19,322 - llm_key_manager - WARNING - [LLM Keys] gemini key #7 rate-limited, disabled for 60s
+2026-08-05 14:55:21,914 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:21,940 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:21,970 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:21,998 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,026 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,068 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,125 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,180 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,223 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,265 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,314 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,355 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,382 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,459 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,523 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,554 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,583 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,615 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,646 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,672 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,696 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,724 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,758 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,786 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,816 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,839 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,865 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:22,889 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:55:24,537 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:55:25,086 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:25,103 - llm_key_manager - WARNING - [LLM Keys] gemini key #9 rate-limited, disabled for 60s
+2026-08-05 14:55:28,958 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:55:29,956 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:29,959 - llm_key_manager - WARNING - [LLM Keys] groq key #14 rate-limited, disabled for 21600s
+2026-08-05 14:55:29,959 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:55:32,077 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:55:32,643 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:55:32,647 - llm_key_manager - WARNING - [LLM Keys] gemini key #6 too many failures (32), disabled for 2min
+2026-08-05 14:55:37,711 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:37,962 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:37,964 - llm_key_manager - WARNING - [LLM Keys] groq key #10 rate-limited, disabled for 1037s
+2026-08-05 14:55:37,965 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:55:43,955 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:55:44,117 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:55:45,321 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:46,653 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:48,616 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:50,608 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:52,601 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:54,612 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:55:56,286 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:55:56,823 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:55:56,827 - llm_key_manager - WARNING - [LLM Keys] gemini key #1 rate-limited, disabled for 60s
+2026-08-05 14:55:58,451 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=BUY(Medium) voted | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:55:58,495 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED XAUUSD BUY → WAIT (score=24/145, threshold=65, reason=Score 24 < threshold 65)
+2026-08-05 14:56:01,159 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:56:01,842 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:02,401 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:02,407 - llm_key_manager - WARNING - [LLM Keys] gemini key #12 rate-limited, disabled for 62s
+2026-08-05 14:56:05,375 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: XAUUSD | TF: 15m | Session: LONDON ║
+║ Trend: strong_bullish | Pattern: Unknown ║
+║ SMC: 40 (C) | Session: 51/100 (B) ║
+║ Technical: 51% | ML: 24% | RL: 50% | LLM: 80% ║
+║ Master: 50% | RuleFusion: 58% | Confluence: 24% (B) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Bonuses: Sentiment: NEUTRAL (score +7, adj +0%) ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 60.0% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: MasterAnalyst: BUY | The current session is LONDON with HIGH volatilit... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:56:05,426 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,494 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,532 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,577 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,732 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:56:05,744 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:56:05.744434+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-666s | naive_input=False | is_closed=True
+2026-08-05 14:56:05,791 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,827 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,869 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:05,904 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,041 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,077 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,109 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,140 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,165 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,189 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,210 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,229 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,248 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,268 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,287 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,305 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,323 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,342 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,361 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,381 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,400 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,423 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,452 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,472 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,493 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,514 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,533 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,535 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:09,554 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,581 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,602 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,622 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,642 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:56:09,893 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:56:09,897 - llm_key_manager - WARNING - [LLM Keys] gemini key #8 too many failures (29), disabled for 2min
+2026-08-05 14:56:19,181 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:19,184 - llm_key_manager - WARNING - [LLM Keys] groq key #9 rate-limited, disabled for 260s
+2026-08-05 14:56:19,184 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:56:21,428 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:56:21,562 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:56:26,900 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-05 14:56:27,154 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:27,156 - llm_key_manager - WARNING - [LLM Keys] groq key #9 rate-limited, disabled for 3717s
+2026-08-05 14:56:27,157 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:56:32,644 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:32,674 - llm_key_manager - WARNING - [LLM Keys] groq key #6 rate-limited, disabled for 3153s
+2026-08-05 14:56:32,677 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:56:33,345 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:56:33,665 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:34,184 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:34,188 - llm_key_manager - WARNING - [LLM Keys] gemini key #7 rate-limited, disabled for 60s
+2026-08-05 14:56:38,301 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:38,304 - llm_key_manager - WARNING - [LLM Keys] groq key #7 rate-limited, disabled for 3734s
+2026-08-05 14:56:38,304 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
+2026-08-05 14:56:39,129 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:42,305 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 731s
+2026-08-05 14:56:42,306 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:42,848 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:42,854 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-08-05 14:56:46,661 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:47,054 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:47,057 - llm_key_manager - WARNING - [LLM Keys] gemini key #5 rate-limited, disabled for 60s
+2026-08-05 14:56:50,803 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:56:51,422 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:56:51,426 - llm_key_manager - WARNING - [LLM Keys] gemini key #8 rate-limited, disabled for 60s
+2026-08-05 14:56:58,288 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:56:58,479 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:57:01,693 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:57:01,705 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED USDCHF BUY → WAIT (score=21/145, threshold=65, reason=Score 21 < threshold 65)
+2026-08-05 14:57:05,531 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:57:08,459 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: USDCHF | TF: 15m | Session: LONDON ║
+║ Trend: sideways | Pattern: Unknown ║
+║ SMC: 25 (C) | Session: 47/100 (B) ║
+║ Technical: 35% | ML: 27% | RL: 50% | LLM: 70% ║
+║ Master: 27% | RuleFusion: 70% | Confluence: 27% (B) ║
+║ Risk: blocked:Signal is WAIT — no trade ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 71.2% ║
+║ Decision: WAIT -> Execution: NO TRADE ║
+║ Reason: Confidence override: llm_analyst BUY 70% (SignalFusion consensus was W... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:57:08,511 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,536 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,565 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,591 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,693 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:57:08,704 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:57:08.704856+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-729s | naive_input=False | is_closed=True
+2026-08-05 14:57:08,732 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,757 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,796 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:08,816 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,086 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:11,726 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,748 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,766 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,787 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,809 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,831 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,851 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,869 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,890 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,911 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,931 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,950 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,972 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:11,993 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,014 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,035 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,054 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,077 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,097 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,116 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,133 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,154 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,174 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,191 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,210 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,231 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,252 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:12,272 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:57:20,399 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:20,943 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:20,949 - llm_key_manager - WARNING - [LLM Keys] gemini key #12 rate-limited, disabled for 60s
+2026-08-05 14:57:25,726 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:27,024 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 200 OK"
+2026-08-05 14:57:32,464 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:57:32,666 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:57:37,723 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:57:40,404 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:40,942 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:40,946 - llm_key_manager - WARNING - [LLM Keys] gemini key #11 rate-limited, disabled for 60s
+2026-08-05 14:57:44,868 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:44,895 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:45,429 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:45,436 - llm_key_manager - WARNING - [LLM Keys] gemini key #4 rate-limited, disabled for 60s
+2026-08-05 14:57:45,474 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:45,480 - llm_key_manager - WARNING - [LLM Keys] gemini key #5 rate-limited, disabled for 60s
+2026-08-05 14:57:49,728 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:50,321 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:50,325 - llm_key_manager - WARNING - [LLM Keys] gemini key #6 rate-limited, disabled for 60s
+2026-08-05 14:57:50,906 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:51,387 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:57:51,393 - llm_key_manager - WARNING - [LLM Keys] gemini key #7 rate-limited, disabled for 60s
+2026-08-05 14:57:58,211 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:57:58,726 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:57:58,732 - llm_key_manager - WARNING - [LLM Keys] gemini key #10 too many failures (33), disabled for 2min
+2026-08-05 14:58:00,197 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:58:07,048 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
+║ PAIR: NZDUSD | TF: 15m | Session: LONDON ║
+║ Trend: bearish | Pattern: Unknown ║
+║ SMC: 35 (C) | Session: 44/100 (B) ║
+║ Technical: 49% | ML: 29% | RL: 50% | LLM: 67% ║
+║ Master: 29% | RuleFusion: 39% | Confluence: 29% (A) ║
+║ Risk: blocked:Signal is NO TRADE — no trade ║
+║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), decision_score:direction=NEUTRAL, quality=NEU(-1) ║
+║ Final Confidence: 65.4% ║
+║ Decision: NO TRADE ║
+║ Reason: SignalFusion gate: WAIT (consensus=2/3, conf=39%) (analysis confidence... ║
+╚═════════════════════════════════════════════════════════╝
+2026-08-05 14:58:07,080 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,104 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,129 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,174 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,274 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:07,289 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-05T08:30:00+00:00 | current=2026-08-05T08:58:07.289159+00:00 | close=2026-08-05T08:45:00+00:00 | seconds_left=-787s | naive_input=False | is_closed=True
+2026-08-05 14:58:07,315 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,341 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,366 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:07,388 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:09,527 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bearish FVG found in manipulation move | PA=NO_TRADE abstained: Step 1: No S/R zones detected | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:58:09,680 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:09,910 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:09,917 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:58:10,025 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,070 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,102 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,152 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,236 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,247 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:10,269 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,301 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,334 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,369 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,395 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,428 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,453 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,477 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,503 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:10,506 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,539 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,577 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,603 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,625 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,665 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,693 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,717 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,742 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,769 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,774 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:10,803 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,826 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,851 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,880 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:10,904 - indicators - INFO - All indicators added successfully | Total columns: 23
+2026-08-05 14:58:16,084 - llm_key_manager - WARNING - [LLM Keys] All Groq keys exhausted — next recovery in 637s
+2026-08-05 14:58:16,886 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:17,395 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:58:17,404 - llm_key_manager - WARNING - [LLM Keys] gemini key #9 rate-limited, disabled for 60s
+2026-08-05 14:58:22,334 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:22,836 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:58:22,840 - llm_key_manager - WARNING - [LLM Keys] gemini key #2 rate-limited, disabled for 60s
+2026-08-05 14:58:23,085 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:23,792 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:58:23,801 - llm_key_manager - WARNING - [LLM Keys] gemini key #12 rate-limited, disabled for 60s
+2026-08-05 14:58:28,620 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:29,124 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 429 Too Many Requests"
+2026-08-05 14:58:29,129 - llm_key_manager - WARNING - [LLM Keys] gemini key #4 rate-limited, disabled for 60s
+2026-08-05 14:58:29,813 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:30,162 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:58:35,972 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:36,327 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 400 Bad Request"
+2026-08-05 14:58:36,331 - llm_key_manager - WARNING - [LLM Keys] gemini key #11 too many failures (39), disabled for 2min
+2026-08-05 14:58:36,898 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
+2026-08-05 14:58:42,119 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-05 14:58:49,355 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bullish FVG found in manipulation move | PA=NO_TRADE abstained: NO_TRADE (Outside trading window 11:00-22:00 BD Time) | Liquidity=SELL(Medium) voted | CCI=NO_TRADE abstained: Price not near a scored S/R zone
+2026-08-05 14:58:49,519 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 170 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
+2026-08-05 14:58:54,758 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 200 OK"
