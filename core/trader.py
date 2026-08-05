@@ -805,6 +805,30 @@ class AITrader:
                     "metric": "position_size_multiplier",
                     "value": sizing.final_mult,
                 })
+
+            # ── Market DNA position-size adjustment (Day 100+) ──────
+            # Multiply the final lot by the DNA cluster's position_multiplier.
+            # This lets the unsupervised regime clusterer scale down trades
+            # in unfamiliar/low-edge market states without blocking them.
+            try:
+                _dna_ctx = (market_out.get("regime_ctx", {}) or {}).get("market_dna", {})
+                if _dna_ctx and risk_out.get("approved"):
+                    _dna_mult = float(_dna_ctx.get("position_multiplier", 1.0))
+                    _orig_lot = risk_out.get("lot", 0)
+                    _new_lot = round(_orig_lot * _dna_mult, 2)
+                    if _new_lot < _orig_lot:
+                        log.info(
+                            f"[MarketDNA] {self.symbol} lot adjusted: "
+                            f"{_orig_lot:.2f} → {_new_lot:.2f} (×{_dna_mult:.2f}, "
+                            f"cluster={_dna_ctx.get('cluster_id')}, "
+                            f"tier={_dna_ctx.get('tier')})"
+                        )
+                    risk_out["lot"] = max(0.01, _new_lot)
+                    risk_out["dna_multiplier"] = _dna_mult
+                    risk_out["dna_cluster_id"] = _dna_ctx.get("cluster_id")
+                    risk_out["dna_tier"] = _dna_ctx.get("tier")
+            except Exception as _dna_e:
+                log.debug(f"[MarketDNA] adjustment skipped: {_dna_e}")
         except Exception as e:
             # Audit fix (fail-open risk bug): this used to log and fall
             # through with the ORIGINAL risk_out untouched — meaning if
@@ -837,7 +861,7 @@ class AITrader:
     def get_signal(self, show_chart: bool = False, auto_paper_trade: bool = True) -> dict:
         return self.run_cycle(show_chart=show_chart, auto_paper_trade=auto_paper_trade)
 
-    def evaluate_decision_core(self, market_out: dict, session_ctx: dict, debugger=None) -> dict:
+    def evaluate_decision_core(self, market_out: dict, session_ctx: dict, debugger=None, bypass_checks=None) -> dict:
         """
         SHARED DECISION CORE — Backtest / Demo / Real execution parity.//
 
@@ -1308,6 +1332,7 @@ class AITrader:
             news_ctx=analysis_out.get("news_ctx", {}),
             session_ctx=self._session_permission_context(session_ctx),
             execution_filters=analysis_out.get("execution_filters", {}),
+            bypass_checks=bypass_checks,
         )
 
         # Day 97+ Book Page 15: Signal Persistence Filter

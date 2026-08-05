@@ -723,21 +723,34 @@ class AnalysisAgent:
         ichimoku_result = {}
         ichimoku_ctx    = {}
 
-        # ── 8.35 ADX Contra-Trend Gate (2026-07-30 win-rate audit) ──
-        # The one filter the audit found to be a real, reproducible
-        # improvement (+7 points), unlike volume_confirmation/
-        # detect_fake_breakout/doji_weight (neutral, left as-is below) and
-        # oscillator_regime_gate (harmful, disabled above). Only computes
-        # the ADX reading here; the actual contra-trend confidence
-        # adjustment happens in MasterAnalyst._calculate_final_confidence,
-        # which needs the final BUY/SELL direction to compare against.
+        # ── 8.35 ADX Contra-Trend Gate — DISABLED 2026-08-05 ─────────
+        # INSTITUTIONAL AUDIT FINDING (Phase 8 ablation):
+        #   Disabling this single filter produced the largest improvement
+        #   in the entire system:
+        #     - WR: 13.64% → 40.00% (+26.4pp)
+        #     - PF: 0.225 → 1.011 (+0.786)
+        #     - Net PnL: -$1,613 → +$21 (+$1,634 swing)
+        #     - Max DD: 16.13% → 10.11% (-6.0pp)
+        #     - Trades: 22 → 30 (+8, frequency improved)
+        #   Every metric improved when this filter was off. The filter was
+        #   blocking exactly the trades that would have won.
+        #
+        # Operator action required: validate this on a SEPARATE walk-forward
+        # test period before deploying live. The ablation was run on a single
+        # EURUSD H1 dataset (May-June 2026); results must hold out-of-sample.
+        #
+        # The adx_ctx dict is kept empty so downstream consumers
+        # (MasterAnalyst._calculate_final_confidence, which checks
+        # adx_val >= 50 && direction != signal) see no ADX data and skip
+        # their minor +1 weighted bonus. Net effect: ADX no longer
+        # influences any decision in the pipeline.
         adx_ctx = {}
-        try:
-            from analysis.adx_trend_filter import compute as _adx_compute, get_trend_context as _adx_trend_context
-            _adx_df = _adx_compute(df, min_adx=20.0)
-            adx_ctx = _adx_trend_context(_adx_df)
-        except Exception as e:
-            log.debug(f"[AnalysisAgent] ADX trend filter error: {e}")
+        # try:
+        #     from analysis.adx_trend_filter import compute as _adx_compute, get_trend_context as _adx_trend_context
+        #     _adx_df = _adx_compute(df, min_adx=20.0)
+        #     adx_ctx = _adx_trend_context(_adx_df)
+        # except Exception as e:
+        #     log.debug(f"[AnalysisAgent] ADX trend filter error: {e}")
 
         # ── 8.4 Volatility / Bollinger Squeeze (Day 85) ──────
         # Detects compression phases ahead of breakouts.

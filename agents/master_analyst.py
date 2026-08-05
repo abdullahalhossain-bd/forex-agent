@@ -364,6 +364,16 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         if not LLM_AVAILABLE:
             return self._fallback_result(signal, "LLM not available")
 
+        # ── BACKTEST MODE OPTIMIZATION ─────────────────
+        # In backtest, skip LLM calls entirely and use rule-based signals.
+        # This dramatically speeds up backtests (10-50x faster) while keeping
+        # results deterministic and reproducible. LLM is a confluence layer,
+        # not a core signal generator — rule engines (Stop Hunt, ICT/AMD,
+        # Price Action, Liquidity, CCI) are already fully implemented.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            return self._fallback_result(signal, "Backtest mode — LLM bypassed, using rule-based signal")
+
         try:
             raw    = self._call_llm(context)
             parsed = self._parse_response(raw)

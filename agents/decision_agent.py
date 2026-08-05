@@ -151,7 +151,7 @@ class DecisionAgent:
     # that still requires strong single-layer evidence but is achievable.
     # Configurable via env var ZERO_CONSENSUS_OVERRIDE_FLOOR for tuning.
     ZERO_CONSENSUS_OVERRIDE_FLOOR = float(
-        _os_conf.getenv("ZERO_CONSENSUS_OVERRIDE_FLOOR", "70.0")
+        _os_conf.getenv("ZERO_CONSENSUS_OVERRIDE_FLOOR", str(CONFIDENCE_FLOOR))
     )
 
     def __init__(self):
@@ -1189,7 +1189,10 @@ class DecisionAgent:
             or adv_ctx.get("dominant_pattern")
             or pat_ctx.get("latest_pattern")
         )
-        return pattern or "Unknown"
+        pattern = str(pattern or "").strip()
+        if not pattern or pattern.lower() in {"unknown", "none"}:
+            return "mt5_real_trade"
+        return pattern
 
     def _result(self, decision, confidence, risk_out, reasons,
                 entry=None, sl=None, tp=None,

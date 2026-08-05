@@ -593,6 +593,7 @@ Examples:
     parser.add_argument("--max-cycles", type=int, help="Max trading cycles (for testing)")
     parser.add_argument("--days", type=int, help="Backtest: use only the last N days of data")
     parser.add_argument("--bars", type=int, help="Backtest: use only the last N bars/candles of data")
+    parser.add_argument("--bypass-gates", help="Comma-separated TradePermission gates to bypass during backtest")
 
     args = parser.parse_args()
 
@@ -724,6 +725,11 @@ def _run_backtest(args):
         print(f"  Bars: {len(df)} | {df.index[0]} to {df.index[-1]}")
         print(f"  Running...")
 
+        bypass_checks = []
+        if getattr(args, "bypass_gates", None):
+            bypass_checks = [gate.strip() for gate in args.bypass_gates.split(",") if gate.strip()]
+            print(f"  Bypass gates: {bypass_checks}")
+
         result = run_unified_backtest(
             symbol=symbol,
             df=df,
@@ -734,6 +740,7 @@ def _run_backtest(args):
             max_hold_bars=100,
             db_path=f"backtest/backtest_run_{symbol}_{timeframe}.db",
             verbose=True,
+            bypass_checks=bypass_checks,
         )
 
         if result.error:

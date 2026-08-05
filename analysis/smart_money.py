@@ -106,7 +106,15 @@ class SmartMoneyEngine:
             structure_result, liquidity_result, nearest_ob, nearest_fvg, htf_bias=None
         )
 
-        bias = direction if score >= 50 else "NEUTRAL"
+        # CONSISTENCY FIX (self-review): smc_engine.py already had this
+        # exact "hard score cliff discards directional evidence" issue
+        # fixed (see its MIN_TRADE_SCORE comment) — this sibling file in
+        # the same codebase still had the old pattern. `bias = direction
+        # if score >= 50 else "NEUTRAL"` silently threw away a real
+        # directional read (e.g. BUY at score=48) instead of letting score
+        # communicate strength downstream. bias now always follows
+        # direction; score is where confidence actually lives.
+        bias = direction
 
         result = {
             "valid":            True,
@@ -147,10 +155,19 @@ class SmartMoneyEngine:
         Needs DataFetcher/Indicators — imported lazily so this module
         also works standalone (analyze_single) without network access.
         """
-        from data.fetcher import DataFetcher
+        # BUG FIX (self-review, not from a supplied audit): this used to
+        # call `DataFetcher()` directly, constructing a brand-new
+        # DataFetcher (and therefore a brand-new MT5Connection
+        # initialize/shutdown cycle) on every single analyze() call.
+        # Every other module in this codebase (smc_engine.py included)
+        # goes through get_data_fetcher(), a singleton specifically built
+        # to avoid repeated MT5 init/shutdown cycles when multiple modules
+        # need a fetcher (see its docstring in data/fetcher.py). This was
+        # the one caller that had drifted from that pattern.
+        from data.fetcher import get_data_fetcher
         from data.indicators import Indicators
 
-        fetcher = DataFetcher()
+        fetcher = get_data_fetcher()
         ind     = Indicators()
 
         tf_map = {"D1": "1d", "H4": "4h", "H1": "1h", "M15": "15m"}
@@ -218,7 +235,12 @@ class SmartMoneyEngine:
         )
         if m15_aligned:
             score = min(100, score + 5)
-        signal = direction if score >= 60 and direction != "NEUTRAL" else "WAIT"
+        # CONSISTENCY FIX (self-review): same hard-cliff issue as
+        # analyze_single()'s bias above — `signal = direction if score>=60
+        # else "WAIT"` discarded directional evidence below 60 instead of
+        # letting it flow downstream as confidence, unlike smc_engine.py's
+        # already-fixed equivalent. signal now always follows direction.
+        signal = direction if direction != "NEUTRAL" else "WAIT"
 
         result = {
             "valid":   True,
@@ -316,11 +338,24 @@ class SmartMoneyEngine:
                 bear_weight += SMC_WEIGHTS["fvg"]
 
         # Liquidity sweep
-        sweep = liquidity_result.get("recent_sweep") if liquidity_result.get("valid") else None
-        if sweep:
+        # BUG FIX (self-review): this used to read `liquidity_result.get("valid")`
+        # and `liquidity_result.get("recent_sweep")["implication"]` — neither
+        # key exists in liquidity_engine.py's actual return schema (confirmed
+        # against its own docstring: 'bias'/'score'/'grade'/'best_stop_hunt'/
+        # 'analysis', no 'valid' or 'recent_sweep' key at all). That meant
+        # `sweep` was unconditionally None and this 20-point factor never
+        # fired, on every single call, in both analyze_single() and analyze().
+        # Fixed to use the engine's real fields: best_stop_hunt (has a sweep
+        # actually happened) and bias (which direction it implies — the
+        # engine's own bias already incorporates the stop-hunt direction plus
+        # its other confluence/penalty factors, so it's a stronger signal
+        # than a raw sweep-only implication would have been anyway).
+        stop_hunt = liquidity_result.get("best_stop_hunt")
+        liq_bias  = liquidity_result.get("bias", "NEUTRAL")
+        if stop_hunt is not None and liq_bias in ("BULLISH", "BEARISH"):
             factors["liquidity_sweep"] = True
             score += SMC_WEIGHTS["liquidity_sweep"]
-            if sweep["implication"] == "BULLISH_REVERSAL_LIKELY":
+            if liq_bias == "BULLISH":
                 bull_weight += SMC_WEIGHTS["liquidity_sweep"]
             else:
                 bear_weight += SMC_WEIGHTS["liquidity_sweep"]
@@ -389,8 +424,10 @@ class SmartMoneyEngine:
             parts.append(f"H4 structure shows {bos.get('event')}")
 
         if factors.get("liquidity_sweep"):
-            sweep = h4_liquidity.get("recent_sweep", {})
-            parts.append(sweep.get("note", "Liquidity sweep detected"))
+            # BUG FIX (self-review): 'recent_sweep' doesn't exist in
+            # liquidity_engine.py's schema — its own 'analysis' string
+            # already describes the stop hunt in the same role.
+            parts.append(h4_liquidity.get("analysis", "Liquidity sweep detected"))
 
         if factors.get("order_block") and nearest_ob:
             parts.append(
@@ -440,7 +477,14 @@ class SmartMoneyEngine:
                 "smc_bos":        structure.get("bos", {}).get("event", "NONE"),
                 "smc_choch":      structure.get("choch", {}).get("event", "NONE"),
                 "smc_displacement": structure.get("displacement", {}).get("detected", False),
-                "smc_liquidity_zone": liquidity.get("premium_discount", {}).get("zone", "UNKNOWN"),
+                # BUG FIX (self-review): 'premium_discount' was never a key
+                # liquidity_engine.py produces (that engine doesn't compute
+                # premium/discount arrays at all — a genuinely missing
+                # concept, not a naming mismatch) so this was always
+                # "UNKNOWN". Surfacing the engine's real bias/score instead
+                # of a field that could never be anything else.
+                "smc_liquidity_bias": liquidity.get("bias", "NEUTRAL"),
+                "smc_liquidity_score": liquidity.get("score", 0),
                 "smc_ob_zone": (
                     f"{nearest_ob['zone_bottom']}-{nearest_ob['zone_top']}" if nearest_ob else None
                 ),
@@ -473,7 +517,10 @@ class SmartMoneyEngine:
             "smc_h4_bos":      h4_structure.get("bos", {}).get("event", "NONE"),
             "smc_h4_choch":    h4_structure.get("choch", {}).get("event", "NONE"),
             "smc_h4_displacement": h4_structure.get("displacement", {}).get("detected", False),
-            "smc_h4_liquidity_zone": h4_liquidity.get("premium_discount", {}).get("zone", "UNKNOWN"),
+            # BUG FIX (self-review): see single-TF note above — same dead
+            # key, same fix.
+            "smc_h4_liquidity_bias": h4_liquidity.get("bias", "NEUTRAL"),
+            "smc_h4_liquidity_score": h4_liquidity.get("score", 0),
             "smc_h1_ob_zone": (
                 f"{nearest_ob['zone_bottom']}-{nearest_ob['zone_top']}" if nearest_ob else None
             ),

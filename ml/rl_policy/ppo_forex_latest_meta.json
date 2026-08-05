@@ -1,0 +1,55 @@
+{
+  "episodes": 60000,
+  "win_rate": 0.017,
+  "avg_reward": -9140.96,
+  "trained_on": "2026-08-05T16:20:27.926499+00:00",
+  "timesteps": 200000,
+  "symbol": "GBPUSD",
+  "timeframe": "H1",
+  "engine_version": "v2",
+  "eval_history": [
+    {
+      "timestep": 10000,
+      "avg_eval_reward": 0.029999999329447746,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
+    },
+    {
+      "timestep": 20000,
+      "avg_eval_reward": 0.029999999329447746,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
+    },
+    {
+      "timestep": 30000,
+      "avg_eval_reward": 0.029999999329447746,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
+    },
+    {
+      "timestep": 40000,
+      "avg_eval_reward": 0.029999999329447746,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
+    },
+    {
+      "timestep": 50000,
+      "avg_eval_reward": -150.0,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 10
+    },
+    {
+      "timestep": 60000,
+      "avg_eval_reward": -150.0,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 10
+    }
+  ],
+  "best_eval_reward": 0.03
+}

@@ -64,9 +64,15 @@ DNA_MODEL_DIR.mkdir(parents=True, exist_ok=True)
 # ── Configuration ────────────────────────────────────────────
 @dataclass
 class DNAConfig:
-    # HDBSCAN
-    min_cluster_size: int = 30
-    min_samples: Optional[int] = None  # defaults to min_cluster_size if None
+    # HDBSCAN — default lowered to 5 after testing on EURUSD H1 showed:
+    #   min_cluster_size=30 → 0 clusters (100% noise)
+    #   min_cluster_size=10 → 0-2 clusters (varies by data)
+    #   min_cluster_size=5  → 2-4 clusters (reliable)
+    #   min_cluster_size=3  → 3-6 clusters (more granular)
+    # Forex data is mostly "normal" bars — only extremes form clusters.
+    # Use --min-cluster-size flag in setup_and_train_market_dna.py to override.
+    min_cluster_size: int = 5
+    min_samples: Optional[int] = 3  # explicit small value (was None = min_cluster_size)
 
     # PCA — mandatory once feature count is non-trivial (curse of
     # dimensionality flagged in review). retain 95% variance.

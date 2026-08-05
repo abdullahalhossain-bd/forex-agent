@@ -99,7 +99,11 @@ class SMCAdvancedEngine:
         # Step 4: Build active signals
         active_signals = []
         for mb in mitigation_blocks:
-            if mb["status"] == "ACTIVE_RETEST":
+            # FIX (audit H7 follow-through): only a CONFIRMED retest
+            # (wick-into-zone + close-rejection) counts as an active
+            # tradeable signal now — an UNCONFIRMED one (close merely
+            # drifted near the zone) no longer counts the same.
+            if mb["status"] == "ACTIVE_RETEST_CONFIRMED":
                 if mb["type"] == "BULLISH_MITIGATION":
                     active_signals.append("MITIGATION_BULLISH")
                 else:
@@ -249,27 +253,55 @@ class SMCAdvancedEngine:
             if len(post_break_closes) < 2:
                 continue
 
+            # FIX (audit H7): retest_active used to be satisfied purely by
+            # the LAST CLOSE happening to sit near the zone — that's true
+            # whenever price is drifting through the area for any reason,
+            # not specifically evidence of institutional mitigation. Real
+            # mitigation is a wick INTO the zone that gets REJECTED (close
+            # back outside it) — check the last few candles for that
+            # specific signature instead of just checking where the latest
+            # close landed.
+            recent_highs = highs[-3:]
+            recent_lows  = lows[-3:]
+            recent_closes = closes[-3:]
+            wick_rejection = False
+            for hh, ll, cc in zip(recent_highs, recent_lows, recent_closes):
+                if broken_dir == "DOWN":
+                    # bullish mitigation: wick dipped into/through the zone,
+                    # close rejected back above zone_bottom
+                    if ll <= ob_top and cc > ob_bot:
+                        wick_rejection = True
+                        break
+                else:
+                    # bearish mitigation: wick poked into/through the zone,
+                    # close rejected back below zone_top
+                    if hh >= ob_bot and cc < ob_top:
+                        wick_rejection = True
+                        break
+
             # Did price reverse?
             if broken_dir == "DOWN":
                 # Need price to recover back toward zone
                 reversed = float(post_break_closes[-1]) > float(post_break_closes[0])
-                # Currently retesting zone?
-                near_zone = abs(last_close - ob_top) <= last_atr * 2 or \
-                            abs(last_close - ob_bot) <= last_atr * 2
                 retest_active = last_close >= ob_bot - last_atr * 0.5 and last_close <= ob_top + last_atr * 0.5
 
                 mb_type = "BULLISH_MITIGATION"
             else:
                 reversed = float(post_break_closes[-1]) < float(post_break_closes[0])
-                near_zone = abs(last_close - ob_top) <= last_atr * 2 or \
-                            abs(last_close - ob_bot) <= last_atr * 2
                 retest_active = last_close <= ob_top + last_atr * 0.5 and last_close >= ob_bot - last_atr * 0.5
 
                 mb_type = "BEARISH_MITIGATION"
 
             # Status
-            if retest_active and reversed:
-                status = "ACTIVE_RETEST"
+            # FIX (audit H7): ACTIVE_RETEST now requires the wick-rejection
+            # signature, not just closing-price proximity. A close-only
+            # "retest" (proximity but no actual wick-into-zone rejection)
+            # is downgraded to a weaker status rather than being presented
+            # with the same confidence as a confirmed mitigation retest.
+            if retest_active and reversed and wick_rejection:
+                status = "ACTIVE_RETEST_CONFIRMED"
+            elif retest_active and reversed:
+                status = "ACTIVE_RETEST_UNCONFIRMED"
             elif reversed:
                 status = "REVERSED_NO_RETEST"
             else:
@@ -282,6 +314,7 @@ class SMCAdvancedEngine:
                 "zone_mid":      round((ob_top + ob_bot) / 2, 5),
                 "broken_at":     broken_idx,
                 "broken_dir":    broken_dir,
+                "wick_rejection": wick_rejection,
                 "status":        status,
                 "note":          self._mb_note(mb_type, status),
             })
@@ -292,8 +325,10 @@ class SMCAdvancedEngine:
         return mitigation_blocks
 
     def _mb_note(self, mb_type: str, status: str) -> str:
-        if status == "ACTIVE_RETEST":
-            return f"{mb_type} retest active — reversal likely"
+        if status == "ACTIVE_RETEST_CONFIRMED":
+            return f"{mb_type} retest active with wick rejection confirmed — reversal likely"
+        if status == "ACTIVE_RETEST_UNCONFIRMED":
+            return f"{mb_type} price near zone but no wick-rejection confirmed yet"
         if status == "REVERSED_NO_RETEST":
             return f"{mb_type} reversed but not yet retested"
         return f"{mb_type} broken, no reversal yet"
@@ -318,6 +353,7 @@ class SMCAdvancedEngine:
         highs  = df["high"].values
         lows   = df["low"].values
         closes = df["close"].values
+        atrs   = df["atr"].values
         n = len(df)
 
         inducements: List[Dict[str, Any]] = []
@@ -329,48 +365,73 @@ class SMCAdvancedEngine:
             if i < w or i + 3 >= n:
                 continue
 
+            atr_i = atrs[i] if not np.isnan(atrs[i]) and atrs[i] > 0 else None
+
             # Swing low: check that lows[i] is the minimum of
             # [i-w, i+w] window (NOT including future sweep candles).
             # Confirmation candle at i+1 must be higher.
             past_window_low  = lows[i - w:i + 1]    # i-w to i (inclusive)
             next_window_low  = lows[i + 1:i + 2]    # just the confirmation candle
 
-            if lows[i] == past_window_low.min() and len(next_window_low) > 0 and next_window_low[0] > lows[i]:
+            # FIX (audit M5): exact float equality (`lows[i] == arr.min()`)
+            # is a floating-point trap — two candles with the "same" wick
+            # can differ by a rounding epsilon and silently miss the swing.
+            # np.isclose gives the intended behavior (this candle IS the
+            # window low) without that fragility.
+            if np.isclose(lows[i], past_window_low.min()) and len(next_window_low) > 0 and next_window_low[0] > lows[i]:
                 # Now check sweep: any of next 1-3 candles breaks below lows[i]
                 # AND the candle after that closes back above
                 swept = False
+                sweep_depth = 0.0
                 for k in range(i + 1, min(i + 4, n - 1)):
                     if closes[k] < lows[i] and closes[k + 1] > lows[i]:
                         swept = True
+                        # FIX (audit H2): depth of the sweep below the level,
+                        # using the wick (low) of the sweeping candle — a
+                        # 1-pip poke and a 30-pip stop-hunt used to be
+                        # indistinguishable ("swept": True either way).
+                        sweep_depth = float(lows[i] - lows[k])
                         break
-                if swept:
+                depth_atr = (sweep_depth / atr_i) if (swept and atr_i) else None
+                # A sweep that barely dips below the level (near-zero depth,
+                # i.e. essentially a wick-equality tie) isn't a meaningful
+                # liquidity grab — filter it out rather than counting it
+                # the same as a real stop-hunt.
+                if swept and (depth_atr is None or depth_atr >= 0.05):
                     inducements.append({
                         "type":      "SELL_SIDE_INDUCEMENT",
                         "level":     round(float(lows[i]), 5),
                         "idx":       i,
                         "swept":     True,
                         "sweep_dir": "DOWN_THEN_REVERSE",
-                        "note":      f"SSI at {lows[i]:.5f} swept — bullish reversal likely",
+                        "sweep_depth": round(sweep_depth, 5),
+                        "sweep_depth_atr": round(depth_atr, 2) if depth_atr is not None else None,
+                        "note":      f"SSI at {lows[i]:.5f} swept (depth={sweep_depth:.5f}) — bullish reversal likely",
                     })
 
             # Swing high: similar logic mirrored
             past_window_high = highs[i - w:i + 1]
             next_window_high = highs[i + 1:i + 2]
 
-            if highs[i] == past_window_high.max() and len(next_window_high) > 0 and next_window_high[0] < highs[i]:
+            if np.isclose(highs[i], past_window_high.max()) and len(next_window_high) > 0 and next_window_high[0] < highs[i]:
                 swept = False
+                sweep_depth = 0.0
                 for k in range(i + 1, min(i + 4, n - 1)):
                     if closes[k] > highs[i] and closes[k + 1] < highs[i]:
                         swept = True
+                        sweep_depth = float(highs[k] - highs[i])
                         break
-                if swept:
+                depth_atr = (sweep_depth / atr_i) if (swept and atr_i) else None
+                if swept and (depth_atr is None or depth_atr >= 0.05):
                     inducements.append({
                         "type":      "BUY_SIDE_INDUCEMENT",
                         "level":     round(float(highs[i]), 5),
                         "idx":       i,
                         "swept":     True,
                         "sweep_dir": "UP_THEN_REVERSE",
-                        "note":      f"BSI at {highs[i]:.5f} swept — bearish reversal likely",
+                        "sweep_depth": round(sweep_depth, 5),
+                        "sweep_depth_atr": round(depth_atr, 2) if depth_atr is not None else None,
+                        "note":      f"BSI at {highs[i]:.5f} swept (depth={sweep_depth:.5f}) — bearish reversal likely",
                     })
 
         return inducements[-self.max_zones:]
@@ -421,7 +482,7 @@ class SMCAdvancedEngine:
             "smc_adv_mitigation_count":   len(result.get("mitigation_blocks", [])),
             "smc_adv_inducement_count":   len(result.get("inducements", [])),
             "smc_adv_has_active_retest":  any(
-                mb.get("status") == "ACTIVE_RETEST"
+                mb.get("status") == "ACTIVE_RETEST_CONFIRMED"
                 for mb in result.get("mitigation_blocks", [])
             ),
         }

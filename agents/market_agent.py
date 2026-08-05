@@ -301,6 +301,27 @@ class MarketAgent:
             log.error(f"[MarketAgent] Regime detection failed for {self.symbol}: {e}")
             return {"error": "regime_detection_failed", "detail": str(e)}
 
+        # ── Market DNA context (Day 100+) ─────────────────────────
+        # Adds unsupervised cluster context to regime_ctx. Falls back
+        # gracefully to UNKNOWN if no model is fitted yet.
+        try:
+            from analysis.market_dna_service import get_market_dna_service
+            dna_service = get_market_dna_service()
+            dna_ctx = dna_service.predict_for_bar(df, self.symbol, self.timeframe)
+            regime_ctx["market_dna"] = dna_ctx
+            if dna_ctx.get("state") == "KNOWN":
+                log.info(
+                    f"[MarketAgent] DNA: cluster={dna_ctx.get('cluster_id')} "
+                    f"tier={dna_ctx.get('tier')} rec={dna_ctx.get('recommendation')} "
+                    f"mult={dna_ctx.get('position_multiplier')}"
+                )
+        except Exception as e:
+            log.debug(f"[MarketAgent] Market DNA unavailable: {e}")
+            regime_ctx["market_dna"] = {
+                "state": "UNKNOWN", "recommendation": "REDUCE_SIZE",
+                "position_multiplier": 0.25, "reason": f"service error: {e}",
+            }
+
         log.info(
             f"[MarketAgent] Done — "
             f"Source: {data_source} | "

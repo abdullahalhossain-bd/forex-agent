@@ -64,6 +64,7 @@ MIN_SAMPLE_SIZE      = 3
 SKIP_THRESHOLD       = 30.0   # win rate এর নিচে গেলে pattern disable
 RECENT_WINDOW        = 10     # last N trades
 DECAY_HALF_LIFE_DAYS = 90     # 90 দিন পুরনো data → 50% weight
+DEFAULT_PATTERN      = "mt5_real_trade"
 
 # ── Weights for final confidence formula ──────────────────────
 W_HISTORICAL = 0.50
@@ -391,9 +392,16 @@ class ConfidenceEngine:
         regime_wins  = 0
         regime_total = 0
 
+        pattern_key = str(pattern or "").strip()
+        if not pattern_key or pattern_key.lower() in {"unknown", "none"}:
+            pattern_key = self.DEFAULT_PATTERN
+        pattern_key = pattern_key.replace(" ", "_")
+
+        regime_key = str(regime or "UNKNOWN").strip().upper() or "UNKNOWN"
+
         for key, entry in all_stats.items():
             parts = key.split("|")
-            if len(parts) == 4 and parts[0] == pattern and parts[3] == regime:
+            if len(parts) == 4 and parts[0] == pattern_key and parts[3] == regime_key:
                 regime_wins  += entry.get("wins", 0)
                 regime_total += entry.get("total_trades", 0)
 
@@ -888,6 +896,14 @@ class ConfidenceEngine:
         return " | ".join(parts)
 
     def _key(self, pattern: str, pair: str, timeframe: str, regime: str) -> str:
+        pattern = str(pattern or "").strip()
+        if not pattern or pattern.lower() in {"unknown", "none"}:
+            pattern = self.DEFAULT_PATTERN
+
+        pair = str(pair or "UNKNOWN").strip().upper() or "UNKNOWN"
+        timeframe = str(timeframe or "UNKNOWN").strip().upper() or "UNKNOWN"
+        regime = str(regime or "UNKNOWN").strip().upper() or "UNKNOWN"
+
         return f"{pattern}|{pair}|{timeframe}|{regime}".replace(" ", "_")
 
     def _empty_entry(self, pattern, pair, timeframe, regime) -> dict:

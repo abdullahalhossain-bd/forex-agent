@@ -35,6 +35,48 @@ SCORE_WEIGHTS = {
     "confirmation_candle": 15,
 }
 
+# FIX (audit C1): weights used to be static across every instrument,
+# timeframe, and volatility regime. Institutional desks weight confluence
+# factors differently depending on regime — e.g. in a high-volatility
+# expansion, a liquidity sweep is more meaningful (real stop-hunt) while a
+# single confirmation candle is less meaningful (noise); in a quiet range,
+# zones (OB/FVG) matter more and sweeps are less conclusive. These
+# multipliers are applied to SCORE_WEIGHTS based on the H4 ATR's own
+# recent regime (see _volatility_regime()) and then renormalized back to
+# a 100-point scale so score is still comparable across regimes.
+REGIME_WEIGHT_MULTIPLIERS = {
+    "HIGH": {
+        "liquidity_sweep": 1.25, "bos": 1.10, "order_block": 0.90,
+        "fvg": 0.85, "confirmation_candle": 0.70,
+    },
+    "LOW": {
+        "liquidity_sweep": 0.85, "bos": 1.00, "order_block": 1.15,
+        "fvg": 1.15, "confirmation_candle": 1.05,
+    },
+    "NORMAL": {
+        "liquidity_sweep": 1.0, "bos": 1.0, "order_block": 1.0,
+        "fvg": 1.0, "confirmation_candle": 1.0,
+    },
+}
+
+# FIX (audit H5): patterns.py's _pattern_signal() maps every bullish/
+# bearish pattern name to the same Bullish/Bearish label with no notion
+# that e.g. a three-bar reversal is a stronger signal than a lone hammer.
+# This tier table (standard TA reliability ordering) plus the candle's own
+# body-size-vs-ATR (computed below) gives confirmation_candle a real
+# quality multiplier instead of treating every pattern identically.
+PATTERN_RELIABILITY_TIER = {
+    "three_bar_reversal_bullish": 1.20, "three_bar_reversal_bearish": 1.20,
+    "bullish_engulfing": 1.15, "bearish_engulfing": 1.15,
+    "morning_star": 1.15, "evening_star": 1.15,
+    "three_bar_continuation_bullish": 1.05, "three_bar_continuation_bearish": 1.05,
+    "breakout_bullish": 1.10, "breakout_bearish": 1.10,
+    "bullish_pin_bar": 1.05, "bearish_pin_bar": 1.05,
+    "hammer": 0.90, "shooting_star": 0.90,
+    "doji": 0.70,
+}
+DEFAULT_PATTERN_RELIABILITY = 1.0
+
 MIN_TRADE_SCORE = 45   # Soft floor (informational only) — score flows downstream as
                        # confidence rather than being hard-blocked here.
                        # The old code used this as a hard "signal=WAIT" cliff
@@ -73,6 +115,12 @@ class SMCEngine:
         current_price = float(m15_df['close'].iloc[-1])
         m15_atr       = float(m15_df['atr'].iloc[-1]) if not m15_df['atr'].isna().iloc[-1] else None
         h4_atr        = float(h4_df['atr'].iloc[-1]) if not h4_df['atr'].isna().iloc[-1] else None
+
+        # FIX (audit C1): volatility regime from the H4 ATR's own recent
+        # history (not an arbitrary external threshold) — current ATR vs.
+        # its trailing average. Feeds into dynamic factor weighting in
+        # _score_confluence() below.
+        vol_regime = self._volatility_regime(h4_df, h4_atr)
 
         # ── H4: Zones + Structure (bias) ──────────────────────
         h4_obs   = self.ob_detector.detect(h4_df)
@@ -120,9 +168,10 @@ class SMCEngine:
         m15_pat   = self.pat_detector.get_ai_pattern_context(m15_df, lookback=3)
 
         # ── Confluence scoring ─────────────────────────────────
-        score, factors, direction = self._score_confluence(
+        score, factors, direction, quality_notes = self._score_confluence(
             h4_sweep, h4_bos, h4_choch, nearest_ob, nearest_fvg,
             m15_sweep, m15_bos, m15_pat,
+            vol_regime=vol_regime, h4_atr=h4_atr, m15_atr=m15_atr, current_price=current_price,
         )
         # Compute grade from score + factors (informational only —
         # not used as a hard gate anywhere downstream).
@@ -154,6 +203,18 @@ class SMCEngine:
         except Exception as e:
             log.debug(f"[SMCEngine] confidence_trace unavailable (non-fatal): {e}")
 
+        # FIX (audit C2): previously only BUY/SELL/WAIT with a raw score —
+        # no probability, uncertainty, or expected-RR surface at all. This
+        # adds a probability-shaped number and an uncertainty tier, but is
+        # explicit that it's a monotonic transform of the confluence score,
+        # NOT a statistically calibrated win-rate (that requires backtested
+        # outcome data this module doesn't have — expected_rr is likewise
+        # not computed here since it needs an entry/SL/TP model this module
+        # doesn't own). Consumers should treat this as "how much confluence
+        # agrees", not "P(win)".
+        true_count = sum(1 for v in factors.values() if v)
+        uncertainty = "LOW" if true_count >= 4 else "MEDIUM" if true_count == 3 else "HIGH"
+
         result = {
             "symbol":        self.symbol,
             "current_price": current_price,
@@ -173,6 +234,11 @@ class SMCEngine:
             },
             "confluence_score":  score,
             "confluence_factors": factors,
+            "quality_notes":     quality_notes,   # per-factor freshness/magnitude adjustments applied (H1/H3/H4/H5)
+            "volatility_regime": vol_regime,       # HIGH | NORMAL | LOW — drove the dynamic weights (C1)
+            "confluence_probability": round(score / 100, 2),  # heuristic only — see note above (C2)
+            "probability_basis": "heuristic_confluence_score_not_statistically_calibrated",
+            "uncertainty":       uncertainty,      # LOW/MEDIUM/HIGH based on how many factors actually fired
             "direction":         direction,
             "grade":             grade,
             "signal":            signal,
@@ -202,12 +268,76 @@ class SMCEngine:
     # CONFLUENCE SCORING  ⭐⭐⭐⭐⭐
     # ═══════════════════════════════════════════════════════
 
+    def _volatility_regime(self, h4_df, h4_atr) -> str:
+        """
+        FIX (audit C1): classifies current H4 volatility relative to its
+        own recent history (not a hardcoded absolute threshold, which
+        would need per-instrument tuning). Returns 'HIGH' / 'LOW' /
+        'NORMAL'. Falls back to 'NORMAL' if ATR data is insufficient
+        rather than guessing.
+        """
+        if h4_atr is None or "atr" not in h4_df.columns:
+            return "NORMAL"
+        atr_series = h4_df["atr"].dropna()
+        if len(atr_series) < 20:
+            return "NORMAL"
+        mean_atr = float(atr_series.tail(50).mean())
+        if mean_atr <= 0:
+            return "NORMAL"
+        ratio = h4_atr / mean_atr
+        if ratio >= 1.3:
+            return "HIGH"
+        if ratio <= 0.7:
+            return "LOW"
+        return "NORMAL"
+
+    def _dynamic_weights(self, vol_regime: str) -> dict:
+        """SCORE_WEIGHTS adjusted for the current volatility regime (C1),
+        renormalized back to a 100-point scale so scores stay comparable
+        across regimes."""
+        mult = REGIME_WEIGHT_MULTIPLIERS.get(vol_regime, REGIME_WEIGHT_MULTIPLIERS["NORMAL"])
+        raw = {k: SCORE_WEIGHTS[k] * mult[k] for k in SCORE_WEIGHTS}
+        scale = 100.0 / sum(raw.values())
+        return {k: v * scale for k, v in raw.items()}
+
+    @staticmethod
+    def _freshness_multiplier(candles_ago) -> float:
+        """FIX (audit H1/H3): a 5-candle-old zone and a 70-candle-old zone
+        used to get identical weight. candles_ago comes straight from
+        order_block.py / fvg_detector.py — real data, not estimated."""
+        if candles_ago is None:
+            return 1.0
+        if candles_ago <= 10:
+            return 1.15
+        if candles_ago <= 40:
+            return 1.0
+        return 0.70
+
+    @staticmethod
+    def _magnitude_multiplier(level, current_price, atr) -> float:
+        """FIX (audit H4/H2-partial): a break/sweep 1 pip beyond a level
+        and one 50 pips beyond it used to score identically. Uses the
+        break's distance from the broken level, in ATR units, as a proxy
+        for conviction."""
+        if level is None or current_price is None or not atr:
+            return 1.0
+        ratio = abs(current_price - level) / atr
+        if ratio >= 1.0:
+            return 1.20
+        if ratio >= 0.5:
+            return 1.0
+        return 0.75
+
     def _score_confluence(
         self, h4_sweep, h4_bos, h4_choch, nearest_ob, nearest_fvg,
         m15_sweep, m15_bos, m15_pat,
-    ) -> tuple[int, dict, str]:
+        vol_regime: str = "NORMAL", h4_atr: float | None = None,
+        m15_atr: float | None = None, current_price: float | None = None,
+    ) -> tuple[int, dict, str, dict]:
 
-        score   = 0
+        weights = self._dynamic_weights(vol_regime)   # C1: regime-adjusted, not static
+
+        score   = 0.0
         factors = {
             "liquidity_sweep":     False,
             "order_block":         False,
@@ -215,63 +345,122 @@ class SMCEngine:
             "bos":                 False,
             "confirmation_candle": False,
         }
+        quality_notes: dict = {}
         # FIX (institutional review, Finding H-1): see smart_money.py for
         # the full rationale — direction is now derived from the SAME
         # SCORE_WEIGHTS used for `score`, instead of an unweighted vote
         # tally that could contradict the weighted score.
-        bull_weight = 0
-        bear_weight = 0
+        bull_weight = 0.0
+        bear_weight = 0.0
 
         # ── Liquidity Sweep (H4 preferred, M15 fallback) ──────
+        # FIX (audit H2-partial): magnitude-weighted by how far price
+        # traveled beyond the swept level (in ATR units) — a 1-pip poke
+        # and a 30-pip stop-hunt no longer score the same.
         sweep = h4_sweep if h4_sweep.get("type") != "NONE" else m15_sweep
-        if sweep.get("type") == "BULLISH_SWEEP":
+        sweep_atr = h4_atr if sweep is h4_sweep else m15_atr
+        if sweep.get("type") in ("BULLISH_SWEEP", "BEARISH_SWEEP"):
+            mag_mult = self._magnitude_multiplier(sweep.get("level"), current_price, sweep_atr)
+            w = weights["liquidity_sweep"] * mag_mult
             factors["liquidity_sweep"] = True
-            score += SCORE_WEIGHTS["liquidity_sweep"]
-            bull_weight += SCORE_WEIGHTS["liquidity_sweep"]
-        elif sweep.get("type") == "BEARISH_SWEEP":
-            factors["liquidity_sweep"] = True
-            score += SCORE_WEIGHTS["liquidity_sweep"]
-            bear_weight += SCORE_WEIGHTS["liquidity_sweep"]
+            score += w
+            quality_notes["liquidity_sweep"] = {"magnitude_multiplier": round(mag_mult, 2)}
+            if sweep["type"] == "BULLISH_SWEEP":
+                bull_weight += w
+            else:
+                bear_weight += w
 
         # ── Order Block (active/near zone) ────────────────────
+        # FIX (audit H1): freshness (candles_ago) and the detector's own
+        # quality_score (structure-break/FVG-confluence/sweep-conditioned
+        # composite from order_block.py) now both scale the weight instead
+        # of every active OB counting the same.
         if nearest_ob and nearest_ob.get("in_zone"):
+            fresh_mult = self._freshness_multiplier(nearest_ob.get("candles_ago"))
+            q = nearest_ob.get("quality_score")
+            q_mult = (0.5 + 0.5 * min(1.0, q / 100.0)) if q is not None else 1.0
+            ob_mult = fresh_mult * q_mult
+            w = weights["order_block"] * ob_mult
             factors["order_block"] = True
-            score += SCORE_WEIGHTS["order_block"]
+            score += w
+            quality_notes["order_block"] = {
+                "candles_ago": nearest_ob.get("candles_ago"),
+                "quality_score": q,
+                "multiplier": round(ob_mult, 2),
+            }
             if nearest_ob["direction"] == "BULLISH":
-                bull_weight += SCORE_WEIGHTS["order_block"]
+                bull_weight += w
             else:
-                bear_weight += SCORE_WEIGHTS["order_block"]
+                bear_weight += w
 
         # ── FVG (active/near zone) ─────────────────────────────
+        # FIX (audit H3): freshness (candles_ago) + gap size relative to
+        # ATR now scale the weight — a tiny gap and a wide displacement
+        # gap used to be worth the same.
         if nearest_fvg and nearest_fvg.get("in_zone"):
+            fresh_mult = self._freshness_multiplier(nearest_fvg.get("candles_ago"))
+            gap_size = nearest_fvg.get("zone_top", 0) - nearest_fvg.get("zone_bottom", 0)
+            gap_mult = 1.0
+            if h4_atr:
+                gap_ratio = gap_size / h4_atr
+                gap_mult = min(1.3, 0.7 + 0.3 * gap_ratio)
+            fvg_mult = fresh_mult * gap_mult
+            w = weights["fvg"] * fvg_mult
             factors["fvg"] = True
-            score += SCORE_WEIGHTS["fvg"]
+            score += w
+            quality_notes["fvg"] = {
+                "candles_ago": nearest_fvg.get("candles_ago"),
+                "gap_size": round(gap_size, 5),
+                "multiplier": round(fvg_mult, 2),
+            }
             if nearest_fvg["direction"] == "BULLISH":
-                bull_weight += SCORE_WEIGHTS["fvg"]
+                bull_weight += w
             else:
-                bear_weight += SCORE_WEIGHTS["fvg"]
+                bear_weight += w
 
         # ── BOS (H4 preferred, M15 as confirmation) ────────────
+        # FIX (audit H4): break magnitude beyond the broken swing level
+        # (in ATR units) now scales the weight instead of every BOS
+        # counting the same regardless of how decisive the break was.
         bos = h4_bos if h4_bos.get("type") != "NONE" else m15_bos
-        if bos.get("type") == "BULLISH_BOS":
+        bos_atr = h4_atr if bos is h4_bos else m15_atr
+        if bos.get("type") in ("BULLISH_BOS", "BEARISH_BOS"):
+            mag_mult = self._magnitude_multiplier(bos.get("level"), current_price, bos_atr)
+            w = weights["bos"] * mag_mult
             factors["bos"] = True
-            score += SCORE_WEIGHTS["bos"]
-            bull_weight += SCORE_WEIGHTS["bos"]
-        elif bos.get("type") == "BEARISH_BOS":
-            factors["bos"] = True
-            score += SCORE_WEIGHTS["bos"]
-            bear_weight += SCORE_WEIGHTS["bos"]
+            score += w
+            quality_notes["bos"] = {"magnitude_multiplier": round(mag_mult, 2)}
+            if bos["type"] == "BULLISH_BOS":
+                bull_weight += w
+            else:
+                bear_weight += w
 
         # ── Confirmation candle (M15 candlestick pattern) ──────
+        # FIX (audit H5): a Hammer and a Three-Bar-Reversal used to score
+        # identically. Now weighted by a standard TA reliability tier
+        # (PATTERN_RELIABILITY_TIER) combined with the candle's own body
+        # size relative to ATR (a bigger-bodied confirmation candle is a
+        # more decisive signal than a small one of the same pattern type).
         pat_signal = m15_pat.get("pattern_signal", "")
-        if "Bullish" in pat_signal:
+        pattern_name = m15_pat.get("latest_pattern", "none")
+        if "Bullish" in pat_signal or "Bearish" in pat_signal:
+            reliability = PATTERN_RELIABILITY_TIER.get(pattern_name, DEFAULT_PATTERN_RELIABILITY)
+            body_mult = 1.0
+            if m15_atr:
+                body_ratio = m15_pat.get("body_size", 0) / m15_atr
+                body_mult = min(1.3, 0.7 + 0.3 * body_ratio)
+            pat_mult = reliability * body_mult
+            w = weights["confirmation_candle"] * pat_mult
             factors["confirmation_candle"] = True
-            score += SCORE_WEIGHTS["confirmation_candle"]
-            bull_weight += SCORE_WEIGHTS["confirmation_candle"]
-        elif "Bearish" in pat_signal:
-            factors["confirmation_candle"] = True
-            score += SCORE_WEIGHTS["confirmation_candle"]
-            bear_weight += SCORE_WEIGHTS["confirmation_candle"]
+            score += w
+            quality_notes["confirmation_candle"] = {
+                "pattern": pattern_name, "reliability_tier": reliability,
+                "multiplier": round(pat_mult, 2),
+            }
+            if "Bullish" in pat_signal:
+                bull_weight += w
+            else:
+                bear_weight += w
 
         if bull_weight > bear_weight:
             direction = "BUY"
@@ -280,7 +469,7 @@ class SMCEngine:
         else:
             direction = "NEUTRAL"
 
-        return min(100, score), factors, direction
+        return min(100, round(score)), factors, direction, quality_notes
 
     # ═══════════════════════════════════════════════════════
     # ZONE RANKING  (A+ / A / B / Invalid)
@@ -352,6 +541,9 @@ class SMCEngine:
             "smc_grade":       result.get("grade", "INVALID"),
             "smc_factors":     result.get("confluence_factors", {}),
             "smc_analysis":    result.get("analysis", ""),
+            "smc_probability": result.get("confluence_probability", 0),   # heuristic, see probability_basis
+            "smc_uncertainty": result.get("uncertainty", "HIGH"),
+            "smc_volatility_regime": result.get("volatility_regime", "NORMAL"),
             "smc_h4_ob_zone":  (
                 f"{nearest_ob['zone_bottom']}-{nearest_ob['zone_top']}" if nearest_ob else None
             ),

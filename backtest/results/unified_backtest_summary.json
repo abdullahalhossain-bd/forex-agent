@@ -1,0 +1,22 @@
+{
+  "GBPUSD": {
+    "symbol": "GBPUSD",
+    "timeframe": "H1",
+    "trades": 0,
+    "win_rate": 0.0,
+    "profit_factor": 0.0,
+    "total_pnl_usd": 0.0,
+    "max_drawdown_pct": 0.0,
+    "sharpe": 0.0,
+    "sortino": 0.0,
+    "rejection_stats": {
+      "WAIT": 45,
+      "NO_TRADE_ANALYSIS": 0,
+      "risk_rejected": 1,
+      "permission_blocked": 4,
+      "engine_error": 0,
+      "max_trades": 0,
+      "total_bars": 50
+    }
+  }
+}

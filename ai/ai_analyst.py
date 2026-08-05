@@ -277,6 +277,15 @@ class AIAnalyst:
         )
         prompt  = self._build_prompt(context)
 
+        # ── BACKTEST MODE OPTIMIZATION ─────────────────
+        # In backtest, skip LLM calls entirely and use rule-based signals.
+        # This dramatically speeds up backtests (10-50x faster) while keeping
+        # results deterministic and reproducible. LLM is a confluence layer,
+        # not a core signal generator.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            return self._fallback_result("Backtest mode — LLM bypassed, using rule-based signal", rule_signal=signal)
+
         # ── Day 90 — LLM cache lookup ──────────────────────────
         # Same prompt within 5 min → return cached response.
         # This is the BIGGEST token saver because AIAnalyst gets

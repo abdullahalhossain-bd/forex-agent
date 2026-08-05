@@ -215,6 +215,7 @@ def run_unified_backtest(
     verbose: bool = False,
     save_forensics: bool = True,
     forensics_path: Optional[str] = None,
+    bypass_checks: set[str] | list[str] | None = None,
 ) -> UnifiedBacktestResult:
     """Replay `df` bar-by-bar through the SAME decision core Demo/Real use.
 
@@ -350,18 +351,22 @@ def run_unified_backtest(
         except Exception as e:
             rejection_stats["engine_error"] += 1
             if verbose:
-                log.info(f"  [{current_time}] Market build error: {str(e)[:120]}")
+                import traceback
+                log.error(f"  [{current_time}] Market build error: {str(e)}")
+                log.error(f"  Traceback: {traceback.format_exc()}")
             equity_curve.append(broker.get_balance())
             continue
 
         try:
             session_ctx = {"current_session": "BACKTEST", "gmt_time": str(current_time),
                             "session_strategy": "n/a"}
-            core = trader.evaluate_decision_core(market_out, session_ctx)
+            core = trader.evaluate_decision_core(market_out, session_ctx, bypass_checks=bypass_checks)
         except Exception as e:
             rejection_stats["engine_error"] += 1
             if verbose:
-                log.info(f"  [{current_time}] Decision core error: {str(e)[:120]}")
+                import traceback
+                log.error(f"  [{current_time}] Decision core error: {str(e)}")
+                log.error(f"  Traceback: {traceback.format_exc()}")
             equity_curve.append(broker.get_balance())
             continue
 

@@ -334,14 +334,22 @@ def validate_fusion(
                 f"{penalty_pct:.1f}pp (new weighted_conf={result.weighted_confidence:.1f}%)"
             )
 
-    # If the weighted fusion disagrees with the decision, flag it.
-    # (DecisionAgent may have produced BUY via its own voting, but the
-    # 40/40/20 weighted fusion says WAIT or SELL — that's a real conflict.)
+    # If the weighted fusion disagrees with the decision, flag it only
+    # when the fusion's weighted confidence is at least as strong as
+    # the decision's confidence. This prevents FusionV3 from vetoing a
+    # single high-confidence layer that intentionally overrode the
+    # fusion gate in DecisionAgent.
     if decision in ("BUY", "SELL") and final_signal != decision:
-        result.failure_reasons.append(
-            f"Weighted fusion disagrees: decision={decision} but "
-            f"fusion={final_signal}. Conflict resolution: {conflict_expl}"
-        )
+        if result.weighted_confidence >= float(confidence or 0.0):
+            result.failure_reasons.append(
+                f"Weighted fusion disagrees: decision={decision} but "
+                f"fusion={final_signal}. Conflict resolution: {conflict_expl}"
+            )
+        else:
+            log.info(
+                f"[FusionV3] Fusion disagrees ({final_signal}) but fusion_conf={result.weighted_confidence:.1f}% "
+                f"< decision_conf={float(confidence or 0.0):.1f}% — allowing decision"
+            )
 
     # ── Final safe flag ────────────────────────────────────────────
     result.safe = (

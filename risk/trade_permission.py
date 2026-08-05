@@ -4,6 +4,68 @@ from utils.logger import get_logger
 
 log = get_logger("trade_permission")
 
+_BYPASS_CHECK_ALIASES = {
+    "valid_signal": "Valid signal",
+    "sr_alignment": "S/R zone alignment",
+    "trend_alignment": "Trend alignment (regime)",
+    "zone_cooldown": "Zone cooldown (duplicate entry)",
+    "risk_approved": "Risk approved",
+    "news_safe": "News safe",
+    "entry_quality": "Entry quality guardrails",
+    "confirmation_bias": "Confirmation bias defense",
+    "revenge_trading": "Revenge trading detector",
+    "cost_aware_ev": "Cost-aware EV gate (book_guardrails)",
+    "min_confidence": "Min confidence",
+    "session_quality": "Session quality",
+    "confluence_quality": "Confluence quality",
+    "min_rr": "Min R:R",
+    "smc_session_fusion": "SMC+Session fusion",
+    "signal_persistence": "Signal persistence",
+    "regime_suppression": "Regime suppression",
+    "duplicate_trade": "Duplicate trade",
+    "correlation_filter": "Correlation filter",
+    "news": "Execution filter: news",
+    "news_intelligence": "Execution filter: news_intelligence",
+    "confluence_avoid": "Execution filter: confluence_avoid",
+    "mtf_structure_no_trade": "Execution filter: mtf_structure_no_trade",
+    "session": "Execution filter: session",
+    "fusion": "Execution filter: fusion",
+}
+
+
+def _normalize_bypass_checks(bypass_checks: set[str] | list[str] | None) -> set[str]:
+    normalized = set()
+    if bypass_checks is None:
+        return normalized
+    for check in bypass_checks:
+        if check is None:
+            continue
+        raw = str(check).strip()
+        if not raw:
+            continue
+        normalized.add(raw)
+        normalized.add(raw.lower())
+        alias_target = _BYPASS_CHECK_ALIASES.get(raw)
+        if alias_target:
+            normalized.add(alias_target)
+            normalized.add(alias_target.lower())
+        alias_target = _BYPASS_CHECK_ALIASES.get(raw.lower())
+        if alias_target:
+            normalized.add(alias_target)
+            normalized.add(alias_target.lower())
+    return normalized
+
+
+def _bypass_check(check_name: str, bypass_checks: set[str]) -> bool:
+    if "all" in bypass_checks:
+        return True
+    if check_name in bypass_checks or check_name.lower() in bypass_checks:
+        return True
+    alias_target = _BYPASS_CHECK_ALIASES.get(check_name)
+    if alias_target and (alias_target in bypass_checks or alias_target.lower() in bypass_checks):
+        return True
+    return False
+
 
 def _test_mode() -> bool:
     """Lazy check — avoids importing config at module load (which would
@@ -98,11 +160,13 @@ class TradePermission:
         news_ctx:     dict,
         session_ctx:  dict | None = None,
         execution_filters: dict | None = None,
+        bypass_checks: set[str] | list[str] | None = None,
     ) -> dict:
 
         checks = []
         passed = 0
         total = 0
+        bypass_checks = _normalize_bypass_checks(bypass_checks)
 
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
         # The new `execution_filters` dict (produced by AnalysisAgent)
@@ -115,34 +179,30 @@ class TradePermission:
         # ──────────────────────────────────────────────────────────────
         conf = decision_out.get("confidence", 0)
         if execution_filters:
-            # 2026-08-05 audit: execution filters are now treated as soft
-            # evidence rather than automatic hard blocks. This prevents a
-            # single structure/zone gate from shutting down otherwise valid
-            # signals when there is no direct evidence of a bad entry.
+            # Treat execution_filters as authoritative gate results.
+            # By default a blocked execution_filter is a hard block unless
+            # explicitly bypassed. This preserves AnalysisAgent's intent
+            # to veto execution when it detects an unsafe entry.
             _is_direct_lane = bool(decision_out.get("direct_lane"))
             for gate_name, gate_result in execution_filters.items():
                 blocked = isinstance(gate_result, dict) and gate_result.get("blocked")
-                if blocked and (gate_name == "session" and conf >= self.MIN_CONFIDENCE):
+                # Bypass via permission flags still wins
+                if blocked and _bypass_check(gate_name, bypass_checks):
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
-                        "detail": f"soft override at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
+                        "detail": "BYPASSED via permission_bypass",
                     })
                     passed += 1
+                # Direct lane bypass (blend filter not applicable)
                 elif blocked and _is_direct_lane:
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
-                        "detail": f"bypassed: direct_lane={decision_out['direct_lane']} (blend filter, not applicable to standalone signal)",
+                        "detail": f"bypassed: direct_lane={decision_out.get('direct_lane')} (blend filter, not applicable to standalone signal)",
                     })
                     passed += 1
-                elif blocked and conf >= self.MIN_CONFIDENCE:
-                    checks.append({
-                        "check":  f"Execution filter: {gate_name}",
-                        "passed": True,
-                        "detail": f"soft pass at {conf:.0f}% confidence: {gate_result.get('reason', 'blocked')}",
-                    })
-                    passed += 1
+                # Otherwise a blocked execution filter is a failure
                 elif blocked:
                     checks.append({
                         "check":  f"Execution filter: {gate_name}",
@@ -160,7 +220,12 @@ class TradePermission:
         # 1. Signal
         sig = decision_out.get("decision", "WAIT")
         ok  = sig in ("BUY", "SELL")
-        checks.append({"check": "Valid signal", "passed": ok, "detail": sig})
+        if _bypass_check("Valid signal", bypass_checks):
+            ok = True
+            detail = f"{sig} (BYPASSED)"
+        else:
+            detail = sig
+        checks.append({"check": "Valid signal", "passed": ok, "detail": detail})
         if ok: passed += 1
 
         # 1b. S/R ALIGNMENT GATE (added 2026-08-02, Abdullah audit)
@@ -186,31 +251,40 @@ class TradePermission:
         # defaulting to {} so the gate fails open as documented.
         sr_ctx = decision_out.get("sr_ctx", {}) or {}
         if ok and not decision_out.get("direct_lane"):
-            dist_sup = sr_ctx.get("dist_to_support_pips")
-            dist_res = sr_ctx.get("dist_to_resistance_pips")
-            sr_ok = True
-            sr_detail = "no S/R zone data — not evaluated"
-            if dist_sup is not None and dist_res is not None:
-                if sig == "SELL" and dist_sup < dist_res:
-                    sr_ok = False
-                    sr_detail = (f"SELL is {dist_sup:.1f} pips from support vs "
-                                 f"{dist_res:.1f} pips from resistance — closer "
-                                 f"to support, wrong side for a SELL")
-                elif sig == "BUY" and dist_res < dist_sup:
-                    sr_ok = False
-                    sr_detail = (f"BUY is {dist_res:.1f} pips from resistance vs "
-                                 f"{dist_sup:.1f} pips from support — closer to "
-                                 f"resistance, wrong side for a BUY")
-                else:
-                    sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
-                                 f"dist_to_resistance={dist_res:.1f}p")
-            checks.append({
-                "check":  "S/R zone alignment",
-                "passed": sr_ok,
-                "detail": sr_detail,
-            })
-            if sr_ok: passed += 1
-            total += 1
+            if _bypass_check("S/R zone alignment", bypass_checks):
+                checks.append({
+                    "check":  "S/R zone alignment",
+                    "passed": True,
+                    "detail": "BYPASSED via permission_bypass",
+                })
+                passed += 1
+                total += 1
+            else:
+                dist_sup = sr_ctx.get("dist_to_support_pips")
+                dist_res = sr_ctx.get("dist_to_resistance_pips")
+                sr_ok = True
+                sr_detail = "no S/R zone data — not evaluated"
+                if dist_sup is not None and dist_res is not None:
+                    if sig == "SELL" and dist_sup < dist_res:
+                        sr_ok = False
+                        sr_detail = (f"SELL is {dist_sup:.1f} pips from support vs "
+                                     f"{dist_res:.1f} pips from resistance — closer "
+                                     f"to support, wrong side for a SELL")
+                    elif sig == "BUY" and dist_res < dist_sup:
+                        sr_ok = False
+                        sr_detail = (f"BUY is {dist_res:.1f} pips from resistance vs "
+                                     f"{dist_sup:.1f} pips from support — closer to "
+                                     f"resistance, wrong side for a BUY")
+                    else:
+                        sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
+                                     f"dist_to_resistance={dist_res:.1f}p")
+                checks.append({
+                    "check":  "S/R zone alignment",
+                    "passed": sr_ok,
+                    "detail": sr_detail,
+                })
+                if sr_ok: passed += 1
+                total += 1
 
         # 1c. TREND ALIGNMENT GATE (added 2026-08-02, Abdullah audit)
         # Backtest evidence: after the S/R alignment gate (1b) above, the
@@ -227,34 +301,50 @@ class TradePermission:
         # NEUTRAL/RANGING — we only block on positive evidence of a
         # trend running against the signal.
         if ok and not decision_out.get("direct_lane"):
-            regime = decision_out.get("regime", {}) or {}
-            r_regime = str(regime.get("regime", "")).upper()
-            r_direction = str(regime.get("direction", "")).upper()
-            r_strength = str(regime.get("strength", "")).upper()
-            trend_ok = True
-            trend_detail = "no regime data — not evaluated"
-            if r_regime and r_direction:
-                is_trending = r_regime == "TRENDING" and r_strength in ("STRONG", "MODERATE")
-                if is_trending:
-                    if sig == "SELL" and r_direction == "BULLISH":
-                        trend_ok = False
-                        trend_detail = (f"SELL against a {r_strength} BULLISH trending "
-                                         f"regime — counter-trend fade, blocked")
-                    elif sig == "BUY" and r_direction == "BEARISH":
-                        trend_ok = False
-                        trend_detail = (f"BUY against a {r_strength} BEARISH trending "
-                                         f"regime — counter-trend fade, blocked")
-                    else:
-                        trend_detail = f"aligned: regime={r_regime}/{r_direction}/{r_strength}"
+                if _bypass_check("Trend alignment (regime)", bypass_checks):
+                    checks.append({
+                        "check":  "Trend alignment (regime)",
+                        "passed": True,
+                        "detail": "BYPASSED via permission_bypass",
+                    })
+                    passed += 1
+                    total += 1
                 else:
-                    trend_detail = f"not trending: regime={r_regime}/{r_direction}/{r_strength}"
-            checks.append({
-                "check":  "Trend alignment (regime)",
-                "passed": trend_ok,
-                "detail": trend_detail,
-            })
-            if trend_ok: passed += 1
-            total += 1
+                    regime = decision_out.get("regime", {}) or {}
+                # Accept either a dict (with keys) or a simple string
+                if isinstance(regime, dict):
+                    r_regime = str(regime.get("regime", "")).upper()
+                    r_direction = str(regime.get("direction", "")).upper()
+                    r_strength = str(regime.get("strength", "")).upper()
+                else:
+                    # If regime is a plain string, treat it as the regime name
+                    r_regime = str(regime).upper()
+                    r_direction = ""
+                    r_strength = ""
+                trend_ok = True
+                trend_detail = "no regime data — not evaluated"
+                if r_regime and r_direction:
+                    is_trending = r_regime == "TRENDING" and r_strength in ("STRONG", "MODERATE")
+                    if is_trending:
+                        if sig == "SELL" and r_direction == "BULLISH":
+                            trend_ok = False
+                            trend_detail = (f"SELL against a {r_strength} BULLISH trending "
+                                             f"regime — counter-trend fade, blocked")
+                        elif sig == "BUY" and r_direction == "BEARISH":
+                            trend_ok = False
+                            trend_detail = (f"BUY against a {r_strength} BEARISH trending "
+                                             f"regime — counter-trend fade, blocked")
+                        else:
+                            trend_detail = f"aligned: regime={r_regime}/{r_direction}/{r_strength}"
+                    else:
+                        trend_detail = f"not trending: regime={r_regime}/{r_direction}/{r_strength}"
+                checks.append({
+                    "check":  "Trend alignment (regime)",
+                    "passed": trend_ok,
+                    "detail": trend_detail,
+                })
+                if trend_ok: passed += 1
+                total += 1
 
         # 1d. ZONE COOLDOWN / DUPLICATE-ENTRY GATE (added 2026-08-02,
         # Abdullah audit). Both the training-window backtest (3 SELL trades
@@ -274,19 +364,28 @@ class TradePermission:
         ZONE_COOLDOWN_HOURS = 4
         ZONE_COOLDOWN_PIPS = 30
         if ok:
-            _zc_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
-            _zc_entry = float(risk_out.get("entry", 0) or decision_out.get("entry", 0) or 0)
-            _zc_df = decision_out.get("_df")
-            _zc_now = None
-            try:
-                if _zc_df is not None and len(_zc_df) > 0:
-                    _zc_now = _zc_df.index[-1].to_pydatetime()
-            except Exception:
+            if _bypass_check("Zone cooldown (duplicate entry)", bypass_checks):
+                checks.append({
+                    "check":  "Zone cooldown (duplicate entry)",
+                    "passed": True,
+                    "detail": "BYPASSED via permission_bypass",
+                })
+                passed += 1
+                total += 1
+            else:
+                _zc_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
+                _zc_entry = float(risk_out.get("entry", 0) or decision_out.get("entry", 0) or 0)
+                _zc_df = decision_out.get("_df")
                 _zc_now = None
-            if _zc_now is None:
-                from datetime import datetime as _dt, timezone as _tz
-                _zc_now = _dt.now(_tz.utc)
-            from analysis.support_resistance import SupportResistance as _SR_pip
+                try:
+                    if _zc_df is not None and len(_zc_df) > 0:
+                        _zc_now = _zc_df.index[-1].to_pydatetime()
+                except Exception:
+                    _zc_now = None
+                if _zc_now is None:
+                    from datetime import datetime as _dt, timezone as _tz
+                    _zc_now = _dt.now(_tz.utc)
+                from analysis.support_resistance import SupportResistance as _SR_pip
             _zc_pip_value = _SR_pip()._resolve_pip_value(_zc_symbol) if _zc_entry else 0.0001
             zone_ok = True
             zone_detail = "no recent nearby entry"
@@ -311,10 +410,15 @@ class TradePermission:
 
         # 2. Risk approved
         ok = risk_out.get("approved", False)
+        if _bypass_check("Risk approved", bypass_checks):
+            ok = True
+            detail = "BYPASSED via permission_bypass"
+        else:
+            detail = risk_out.get("reject_reason", "OK")
         checks.append({
             "check":  "Risk approved",
             "passed": ok,
-            "detail": risk_out.get("reject_reason", "OK"),
+            "detail": detail,
         })
         if ok: passed += 1
 
@@ -334,9 +438,9 @@ class TradePermission:
         # Defaults to false — bypass must be turned on deliberately.
         import os as _os_news
         _bypass_news = _os_news.getenv("BYPASS_NEWS_GATE", "false").lower() == "true"
-        if _bypass_news:
+        if _bypass_news or _bypass_check("News safe", bypass_checks):
             ok = True
-            detail = "News system unavailable (BYPASS_NEWS_GATE=true: allowed anyway — no CPI/NFP protection)"
+            detail = "News system unavailable or bypass requested: allowed via bypass"
         elif not news_ctx:
             ok = False
             detail = "News system unavailable — fail-safe block (set BYPASS_NEWS_GATE=true to override)"
@@ -518,10 +622,19 @@ class TradePermission:
         # tier as the entry-quality EXTREME BLOCK above.
         if risk_out.get("approved"):
             try:
-                from risk.confirmation_bias_defense import check_disconfirming_evidence
-                _cb_ind_ctx = decision_out.get("ind_ctx", {}) or {}
-                _cb_result = check_disconfirming_evidence(
-                    signal=decision_out.get("decision", "WAIT"),
+                if _bypass_check("Confirmation bias defense", bypass_checks):
+                    total += 1
+                    passed += 1
+                    checks.append({
+                        "check":  "Confirmation bias defense",
+                        "passed": True,
+                        "detail": "BYPASSED via permission_bypass",
+                    })
+                else:
+                    from risk.confirmation_bias_defense import check_disconfirming_evidence
+                    _cb_ind_ctx = decision_out.get("ind_ctx", {}) or {}
+                    _cb_result = check_disconfirming_evidence(
+                        signal=decision_out.get("decision", "WAIT"),
                     ind_ctx=_cb_ind_ctx,
                     market_bias=decision_out.get("market_bias"),
                     mtf_bias=decision_out.get("mtf_bias"),
@@ -597,8 +710,17 @@ class TradePermission:
         # otherwise-good setup.
         if risk_out.get("approved"):
             try:
-                from risk.revenge_trading_detector import check_revenge_trading
-                from database.db import TraderDB
+                if _bypass_check("Revenge trading detector", bypass_checks):
+                    total += 1
+                    passed += 1
+                    checks.append({
+                        "check":  "Revenge trading detector",
+                        "passed": True,
+                        "detail": "BYPASSED via permission_bypass",
+                    })
+                else:
+                    from risk.revenge_trading_detector import check_revenge_trading
+                    from database.db import TraderDB
                 _rt_symbol = decision_out.get("_symbol", "") or str(risk_out.get("symbol", ""))
                 # 2026-08-02 fix: use the caller's own DB instance (correct
                 # for backtest — isolated file — and live) instead of always
@@ -689,8 +811,17 @@ class TradePermission:
         # account can be a meaningful, recurring drag on a $5 one.
         if risk_out.get("approved"):
             try:
-                from risk.book_guardrails import check_cost_aware_ev
-                from core.constants import get_pip_size
+                if _bypass_check("Cost-aware EV gate (book_guardrails)", bypass_checks):
+                    total += 1
+                    passed += 1
+                    checks.append({
+                        "check":  "Cost-aware EV gate (book_guardrails)",
+                        "passed": True,
+                        "detail": "BYPASSED via permission_bypass",
+                    })
+                else:
+                    from risk.book_guardrails import check_cost_aware_ev
+                    from core.constants import get_pip_size
 
                 _ev_symbol = str(
                     decision_out.get("_symbol", "") or risk_out.get("symbol", "")
@@ -771,7 +902,10 @@ class TradePermission:
         # 4. Confidence
         ok   = conf >= self.MIN_CONFIDENCE
         _conf_detail = f"{conf}% (min {self.MIN_CONFIDENCE}%)"
-        if not ok and decision_out.get("direct_lane"):
+        if _bypass_check("Min confidence", bypass_checks):
+            ok = True
+            _conf_detail = f"{conf}% (min {self.MIN_CONFIDENCE}%) — BYPASSED via permission_bypass"
+        elif not ok and decision_out.get("direct_lane"):
             # 2026-08-02: Stop Hunt Direct Lane signals carry the BLENDED
             # pipeline's stale confidence (it was WAIT before this lane
             # overrode decision/entry/sl/tp) — not comparable to this
@@ -809,42 +943,53 @@ class TradePermission:
         # blend-only gate the tester never ran. Bypass it for direct_lane
         # so the validated signal isn't blocked by an unvalidated filter.
         if session_ctx and not decision_out.get("direct_lane"):
-            # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
-            # "quality" key at all — it emits "session_grade" (values
-            # A+/A/B/C, from calculate_session_confidence()). Reading
-            # session_ctx.get("quality", "LOW") therefore ALWAYS fell
-            # back to the "LOW" default on every single trade, no matter
-            # how good the actual session setup was (even an A+ graded
-            # session read as LOW here) — forcing every trade through
-            # the strict low-quality confidence override gate below.
-            # Fix: read the real "quality" key if a caller ever sets one
-            # (forward-compatible), otherwise derive it from the actual
-            # session_grade the analyzer produces.
-            quality = session_ctx.get("quality")
-            if quality is None:
-                _grade = session_ctx.get("session_grade", "C")
-                quality = {"A+": "HIGH", "A": "HIGH", "B": "MEDIUM", "C": "LOW"}.get(_grade, "LOW")
-            conf = decision_out.get("confidence", 0)
-            if _test_mode():
-                ok = True   # always pass in test mode
-                detail = f"{quality} (TEST_MODE: allowed)"
+            if _bypass_check("Session quality", bypass_checks):
+                ok = True
+                detail = "BYPASSED via permission_bypass"
+                checks.append({
+                    "check":  "Session quality",
+                    "passed": ok,
+                    "detail": detail,
+                })
+                passed += 1
+                total += 5
             else:
-                ok = quality in ("HIGH", "MEDIUM")
-                if not ok and quality == "LOW":
-                    ok = conf >= self.SESSION_LOW_QUALITY_MIN_CONFIDENCE
-                    detail = (
-                        f"{quality} (high-confidence override: {conf}%)"
-                        if ok else quality
-                    )
+                # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
+                # "quality" key at all — it emits "session_grade" (values
+                # A+/A/B/C, from calculate_session_confidence()). Reading
+                # session_ctx.get("quality", "LOW") therefore ALWAYS fell
+                # back to the "LOW" default on every single trade, no matter
+                # how good the actual session setup was (even an A+ graded
+                # session read as LOW here) — forcing every trade through
+                # the strict low-quality confidence override gate below.
+                # Fix: read the real "quality" key if a caller ever sets one
+                # (forward-compatible), otherwise derive it from the actual
+                # session_grade the analyzer produces.
+                quality = session_ctx.get("quality")
+                if quality is None:
+                    _grade = session_ctx.get("session_grade", "C")
+                    quality = {"A+": "HIGH", "A": "HIGH", "B": "MEDIUM", "C": "LOW"}.get(_grade, "LOW")
+                conf = decision_out.get("confidence", 0)
+                if _test_mode():
+                    ok = True   # always pass in test mode
+                    detail = f"{quality} (TEST_MODE: allowed)"
                 else:
-                    detail = quality
-            checks.append({
-                "check":  "Session quality",
-                "passed": ok,
-                "detail": detail,
-            })
-            if ok: passed += 1
-            total += 5
+                    ok = quality in ("HIGH", "MEDIUM")
+                    if not ok and quality == "LOW":
+                        ok = conf >= self.SESSION_LOW_QUALITY_MIN_CONFIDENCE
+                        detail = (
+                            f"{quality} (high-confidence override: {conf}%)"
+                            if ok else quality
+                        )
+                    else:
+                        detail = quality
+                checks.append({
+                    "check":  "Session quality",
+                    "passed": ok,
+                    "detail": detail,
+                })
+                if ok: passed += 1
+                total += 5
         else:
             total += 4
 
@@ -880,6 +1025,9 @@ class TradePermission:
                 f" — soft override at {conf:.0f}% confidence"
             )
             _passed = True
+        elif _bypass_check("Confluence quality", bypass_checks):
+            _detail = "BYPASSED via permission_bypass"
+            _passed = True
         elif decision_out.get("fast_path") or decision_out.get("direct_lane"):
             # 2026-08-02 (Abdullah audit): this check exists to judge a
             # BLEND of several strategies' agreement — it was never
@@ -909,6 +1057,8 @@ class TradePermission:
         if risk_out.get("approved", False):
             rr = risk_out.get("rr_ratio", 0)
             ok_rr = rr >= self.MIN_RR
+            if _bypass_check("Min R:R", bypass_checks):
+                ok_rr = True
             checks.append({
                 "check":  "Min R:R",
                 "passed": ok_rr,
@@ -962,11 +1112,11 @@ class TradePermission:
             # Round-10: explicit env-var bypass (NOT tied to TEST_MODE)
             import os as _os
             _bypass_fusion = _os.getenv("BYPASS_FUSION_GATE", "false").lower() == "true"
-            if _bypass_fusion:
+            if _bypass_fusion or _bypass_check("SMC+Session fusion", bypass_checks):
                 ok_fusion = True
                 detail = (
                     f"score={fusion_score}/100 [{fusion_grade}] "
-                    f"(BYPASS_FUSION_GATE=true: allowed even if blocked)"
+                    f"(bypassed via permission_bypass or BYPASS_FUSION_GATE)"
                 )
             else:
                 ok_fusion = bool(fusion_allowed)

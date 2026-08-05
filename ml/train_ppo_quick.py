@@ -18,6 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 from datetime import datetime, timezone
+import json
 
 import numpy as np
 import pandas as pd
@@ -298,10 +299,35 @@ def train_quick(
         log.info(f"  Average reward: {avg_reward:.4f} ± {std_reward:.4f}")
         log.info(f"  Average episode length: {avg_length:.1f} steps")
 
-    # ── 5. Save model ───────────────────────────────────────────────
+    # ── 5. Save model and write metadata sidecar ──────────────────────
     POLICY_PATH.parent.mkdir(parents=True, exist_ok=True)
     model.save(str(POLICY_PATH))
     log.info(f"\n✅ Model saved to {POLICY_PATH}")
+
+    # Compute simple episode metrics for the metadata sidecar
+    episodes = len(callback.episode_rewards) if callback.episode_rewards else 0
+    avg_reward = float(np.mean(callback.episode_rewards)) if episodes else 0.0
+    std_reward = float(np.std(callback.episode_rewards)) if episodes else 0.0
+    # Win rate: fraction of episodes with positive reward
+    win_rate = float(sum(1 for r in (callback.episode_rewards or []) if r > 0) / episodes) if episodes else 0.0
+
+    meta = {
+        "episodes": episodes,
+        "win_rate": win_rate,
+        "avg_reward": avg_reward,
+        "std_reward": std_reward,
+        "trained_on": datetime.now(timezone.utc).isoformat(),
+        "timesteps": timesteps,
+        "symbol": symbol,
+        "timeframe": timeframe,
+    }
+
+    try:
+        meta_path = POLICY_PATH.parent / f"{POLICY_PATH.stem}_meta.json"
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        log.info(f"✅ Metadata written to {meta_path}")
+    except Exception as e:
+        log.warning(f"Failed to write policy metadata sidecar: {e}")
 
     return {
         "status": "success",
@@ -314,7 +340,9 @@ def train_quick(
         "observation_dim": obs_shape,
         "timesteps": timesteps,
         "model_path": str(POLICY_PATH),
-        "episodes": len(callback.episode_rewards) if callback.episode_rewards else 0,
+        "episodes": episodes,
+        "win_rate": win_rate,
+        "meta_path": str(meta_path) if 'meta_path' in locals() else None,
     }
 
 
