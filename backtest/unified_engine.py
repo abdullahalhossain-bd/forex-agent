@@ -102,13 +102,25 @@ def _json_safe(obj):
         return obj
     if isinstance(obj, pd.Timestamp):
         return str(obj)
+    if isinstance(obj, pd.Series):
+        return _json_safe(obj.to_dict())
+    if isinstance(obj, pd.DataFrame):
+        try:
+            return _json_safe(obj.to_dict(orient="records"))
+        except Exception:
+            return obj.to_string()
     try:
         import numpy as _np
+        if isinstance(obj, _np.ndarray):
+            return obj.tolist()
         if isinstance(obj, _np.generic):
             return obj.item()
     except Exception:
         pass
-    return str(obj)
+    try:
+        return str(obj)
+    except Exception:
+        return repr(obj)
 
 
 @dataclass

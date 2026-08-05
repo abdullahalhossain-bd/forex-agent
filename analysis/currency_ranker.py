@@ -60,10 +60,23 @@ class CurrencyRanker:
     # 2. STRONG vs WEAK PAIR FINDER  ⭐⭐⭐⭐⭐
     # ═══════════════════════════════════════════════════════
 
-    def find_best_pairs(self, strengths: dict, min_diff: int = 40, max_pairs: int = 10) -> list[dict]:
+    def find_best_pairs(
+        self, strengths: dict, min_diff: int = 40, max_pairs: int = 10,
+        pair_details: dict | None = None,
+    ) -> list[dict]:
         """
         প্রতিটা currency-pair combination-এর strength difference হিসাব করে,
         min_diff-এর নিচে যেগুলো সেগুলো বাদ দেয় (Avoid Bad Trades — doc #11)।
+
+        FIX (audit H4): আগে ranking শুধু strength_difference দিয়ে হতো —
+        একটা 90 vs 20 diff দেখতে দুর্দান্ত লাগে, কিন্তু সেই move যদি ATR
+        spike/noise-চালিত হয়, তাহলে আসলে risk বেশি, reliability কম। এখন
+        `pair_details` (CurrencyStrengthEngine.calculate_strength()-এর
+        output, প্রতিটা cross-pair-এর volatility_adj component সহ) দেওয়া
+        হলে সেটা quality grading-এ ছাড় দেয়/downgrade করে।
+
+        pair_details: {"USDJPY": {"volatility_adj": 32.1, ...}, ...} —
+        না দিলে আগের মতোই diff-only grading হয় (backward compatible)।
 
         Returns: strength_difference অনুযায়ী sorted (descending) opportunity list।
         """
@@ -85,6 +98,8 @@ class CurrencyRanker:
                 if diff < min_diff:
                     continue
 
+                vol_score, vol_flag = self._pair_volatility(pair_details, strong, weak)
+
                 opportunities.append({
                     "pair":                f"{strong}{weak}",
                     "direction":           "BUY",   # strong/weak → strong-side কেনা হবে
@@ -93,20 +108,51 @@ class CurrencyRanker:
                     "strong_strength":     strong_score,
                     "weak_strength":       weak_score,
                     "strength_difference": diff,
-                    "trade_quality":       self._grade_difference(diff),
+                    "volatility_score":    vol_score,   # None যদি pair_details না থাকে
+                    "volatility_flag":     vol_flag,    # "ELEVATED" | "NORMAL" | None
+                    "trade_quality":       self._grade_difference(diff, vol_flag),
                 })
 
         opportunities.sort(key=lambda o: o["strength_difference"], reverse=True)
         return opportunities[:max_pairs]
 
-    def _grade_difference(self, diff: float) -> str:
+    def _pair_volatility(self, pair_details: dict | None, strong: str, weak: str) -> tuple:
+        """
+        strong/weak currency-র underlying cross pair(s)-এর
+        volatility_adj magnitude থেকে একটা risk indicator বের করে।
+        pair_details না থাকলে (None, None) — grading-এ কোনো প্রভাব পড়ে না।
+        """
+        if not pair_details:
+            return None, None
+
+        candidates = (f"{strong}{weak}", f"{weak}{strong}")
+        for sym in candidates:
+            detail = pair_details.get(sym)
+            if detail is not None:
+                vol = abs(detail.get("volatility_adj", 0.0))
+                flag = "ELEVATED" if vol >= 25.0 else "NORMAL"
+                return round(vol, 1), flag
+
+        return None, None
+
+    def _grade_difference(self, diff: float, vol_flag: str | None = None) -> str:
         if diff >= self.VERY_HIGH_DIFF:
-            return "VERY_HIGH"
-        if diff >= self.HIGH_DIFF:
-            return "HIGH"
-        if diff >= self.MEDIUM_DIFF:
-            return "MEDIUM"
-        return "LOW"
+            grade = "VERY_HIGH"
+        elif diff >= self.HIGH_DIFF:
+            grade = "HIGH"
+        elif diff >= self.MEDIUM_DIFF:
+            grade = "MEDIUM"
+        else:
+            grade = "LOW"
+
+        # FIX (audit H4): an ELEVATED-volatility pair gets knocked down one
+        # tier — a big strength gap during an ATR spike is more likely to
+        # be noise than a clean directional move.
+        if vol_flag == "ELEVATED":
+            downgrade = {"VERY_HIGH": "HIGH", "HIGH": "MEDIUM", "MEDIUM": "LOW", "LOW": "LOW"}
+            grade = downgrade[grade]
+
+        return grade
 
     # ═══════════════════════════════════════════════════════
     # 3. CORRELATION PROTECTION  ⭐
@@ -117,37 +163,60 @@ class CurrencyRanker:
         একাধিক opportunity একই currency-র উপর ভিত্তি করে তৈরি হলে
         (যেমন GBPJPY BUY আর AUDJPY BUY — দুটোই JPY weakness trade)
         সেগুলোকে correlation group-এ চিহ্নিত করো এবং risk note যোগ করো।
+
+        FIX (audit H5): শুধু "shared currency আছে" বলাটা যথেষ্ট না — সেই
+        currency দুই opportunity-তে একই role-এ (দুটোতেই strong, বা দুটোতেই
+        weak) থাকলে দুটো trade একই দিকে move করে (REINFORCING — exposure
+        সত্যিই যোগ হয়)। বিপরীত role-এ থাকলে (একটায় strong, আরেকটায় weak)
+        সেই currency-র exposure আংশিক offset করে (OFFSETTING — কম risky)।
+        এটা এখনও rolling correlation/covariance না (তার জন্য price
+        history লাগবে, এই দুই ফাইলের scope-এ নেই) — কিন্তু বিনামূল্যে
+        পাওয়া যাচ্ছে এমন directional তথ্য দিয়ে অন্তত ভুল দিকে
+        conservative (REINFORCING-কে worst-case ধরে) হওয়া যাচ্ছে।
         """
         if not opportunities:
             return opportunities
 
-        # currency -> কোন কোন opportunity index এই currency ব্যবহার করছে
-        usage: dict[str, list[int]] = {}
+        # currency -> কোন কোন opportunity index এই currency ব্যবহার করছে,
+        # আর সেই currency-টা সেই opportunity-তে কোন role-এ (strong/weak)
+        usage: dict[str, list[tuple[int, str]]] = {}
         for idx, opp in enumerate(opportunities):
-            usage.setdefault(opp["strong_currency"], []).append(idx)
-            usage.setdefault(opp["weak_currency"], []).append(idx)
+            usage.setdefault(opp["strong_currency"], []).append((idx, "strong"))
+            usage.setdefault(opp["weak_currency"], []).append((idx, "weak"))
 
         enriched = [dict(o) for o in opportunities]
 
-        for currency, idxs in usage.items():
-            if len(idxs) < 2:
+        for currency, entries in usage.items():
+            if len(entries) < 2:
                 continue
-            for idx in idxs:
+            for idx, role in entries:
+                other_roles = [r for i, r in entries if i != idx]
+                reinforcing = any(r == role for r in other_roles)
                 enriched[idx].setdefault("correlation_groups", []).append({
                     "shared_currency": currency,
-                    "group_size":      len(idxs),
+                    "group_size":      len(entries),
+                    "risk_direction":  "REINFORCING" if reinforcing else "OFFSETTING",
                 })
 
         for opp in enriched:
             groups = opp.get("correlation_groups", [])
             if groups:
-                shared = ", ".join(g["shared_currency"] for g in groups)
+                shared = ", ".join(
+                    f"{g['shared_currency']} ({g['risk_direction'].lower()})" for g in groups
+                )
+                any_reinforcing = any(g["risk_direction"] == "REINFORCING" for g in groups)
                 opp["correlated"]            = True
                 opp["correlation_note"]      = (
                     f"Shares exposure with other active opportunities via {shared} — "
-                    f"reduce combined position size to manage correlated risk"
+                    + ("reduce combined position size to manage correlated risk"
+                       if any_reinforcing else
+                       "exposure partially offsets across opportunities, but monitor combined size")
                 )
-                opp["suggested_size_divisor"] = max(g["group_size"] for g in groups)
+                # Only reinforcing overlaps genuinely stack risk; size divisor
+                # should reflect that rather than penalizing offsetting overlaps
+                # as if they were additive.
+                reinforcing_sizes = [g["group_size"] for g in groups if g["risk_direction"] == "REINFORCING"]
+                opp["suggested_size_divisor"] = max(reinforcing_sizes) if reinforcing_sizes else 1
             else:
                 opp["correlated"]             = False
                 opp["correlation_note"]       = "No correlation risk detected"

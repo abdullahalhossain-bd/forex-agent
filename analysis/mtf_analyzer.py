@@ -14,6 +14,34 @@
 #   ✅ Conflict Severity Scoring
 #   ✅ Higher Timeframe Override Rule
 #   ✅ Final Decision: BUY / SELL / WAIT
+#
+# CHANGELOG — institutional review fix (order_block/fvg/curve integration
+# gap: this file had order_block.py, fvg_detector.py and curve_mtf.py
+# fully built elsewhere in the project but never called anything in them —
+# every decision was effectively RSI + MACD + Bollinger + SMA, with the
+# structural (BOS/CHoCH/liquidity sweep) detection reimplemented ad hoc
+# instead of using the dedicated, better-tested detectors):
+#   [REVIEW-A] Added `_build_structural_context()` — runs OrderBlockDetector
+#       and FVGDetector per timeframe and builds a curve_mtf.Curve from the
+#       nearest demand/supply order blocks where both sides exist.
+#   [REVIEW-B] `_get_tf_directions()` now takes structural context and uses
+#       the curve bias as the PRIMARY direction signal per TF when it's
+#       confident (score >= _STRUCTURAL_MIN_CONFIDENCE); indicator-based
+#       direction (RSI/MACD/trend) is now the FALLBACK, used only when
+#       there's no structural read or the curve is in equilibrium — this is
+#       the "indicators should be secondary, not primary" fix, and it is a
+#       priority change, not a removal: the old indicator logic is untouched
+#       and still runs every time as the fallback path.
+#   [REVIEW-C] Added `_apply_curve_gate()` — enforces Book P135 ("the longer
+#       frame always wins") as a hard gate using curve_mtf.CurveMTF's own
+#       `resolve_conflict`, the same way `_apply_regime_gate` already
+#       enforces the regime filter. Mirrors that function's pattern
+#       (additive, no-op if structural context isn't available) so this is
+#       backward compatible with every existing caller of `analyze()`.
+#   Both new steps are wrapped in per-timeframe try/except — a broken or
+#   missing OB/FVG read on one TF degrades to the indicator fallback for
+#   that TF rather than raising, consistent with how the rest of this class
+#   already treats a single missing timeframe (see `_fetch_all_timeframes`).
 # ============================================================
 
 import pandas as pd
@@ -21,7 +49,22 @@ from data.fetcher import get_data_fetcher
 from data.indicators import Indicators
 from utils.logger import get_logger
 
+from analysis.order_block import OrderBlockDetector
+from analysis.fvg_detector import FVGDetector
+from analysis.curve_mtf import CurveMTF, DirectionalBias
+
 log = get_logger(__name__)
+
+# Minimum curve confidence (0-100, see curve_mtf.Curve.confidence_for) for
+# the structural bias to be trusted as the PRIMARY direction signal for a
+# timeframe (REVIEW-B). Below this, the timeframe falls back to the
+# existing indicator-based direction logic untouched.
+_STRUCTURAL_MIN_CONFIDENCE = 55.0
+
+# Only these timeframes get OB/FVG/curve detectors — their labels ('H4',
+# 'H1', 'M15', 'M5') already match analysis/order_block.py's and
+# analysis/fvg_detector.py's TIMEFRAME_PARAMS keys directly (MTF_CHAIN
+# below), so no timeframe-code translation is needed.
 
 # ── Timeframe hierarchy ──────────────────────────────────────
 MTF_CHAIN = {
@@ -70,6 +113,13 @@ class MTFAnalyzer:
         self.fetcher = get_data_fetcher()
         self.ind     = Indicators()
 
+        # REVIEW-A: one OB/FVG detector per MTF_CHAIN timeframe. Built once
+        # here (not per-analyze() call) since each detector is stateless
+        # aside from its resolved timeframe params — cheap to keep around,
+        # avoids re-resolving TIMEFRAME_PARAMS on every analyze().
+        self._ob_detectors:  dict = {label: OrderBlockDetector(timeframe=label) for label in MTF_CHAIN}
+        self._fvg_detectors: dict = {label: FVGDetector(timeframe=label) for label in MTF_CHAIN}
+
     # ═══════════════════════════════════════════════════════
     # MAIN METHOD
     # ═══════════════════════════════════════════════════════
@@ -105,8 +155,13 @@ class MTFAnalyzer:
         # Step 3: Market structure detect করো
         tf_structure = self._detect_market_structure(tf_data)
 
+        # Step 3b (NEW, REVIEW-A): Order Block / FVG / Curve structural context
+        structural_ctx = self._build_structural_context(tf_data)
+
         # Step 4: MTF direction বের করো (BULLISH / BEARISH / NEUTRAL)
-        tf_directions = self._get_tf_directions(tf_contexts)
+        # REVIEW-B: structural_ctx now drives direction when confident;
+        # indicator logic (unchanged) is the fallback — see docstring.
+        tf_directions = self._get_tf_directions(tf_contexts, structural_ctx)
 
         # Step 5: Conflict detection
         conflicts = self._detect_conflicts(tf_directions)
@@ -124,10 +179,17 @@ class MTFAnalyzer:
             tf_directions, conflicts, h4_override, confidence
         )
 
-        # Step 9 (NEW): Global regime hard gate — overrides everything above
+        # Step 9: Global regime hard gate — overrides everything above
         # if the broader market regime says this is not a tradeable moment.
         regime_gate = self._apply_regime_gate(regime_ctx)
         if regime_gate["blocked"]:
+            decision = 'WAIT'
+
+        # Step 10 (NEW, REVIEW-C): Book P135 HTF curve override — "the
+        # longer frame always wins". Only engages if a confident H4 curve
+        # read exists; otherwise a no-op, same pattern as the regime gate.
+        curve_gate = self._apply_curve_gate(structural_ctx, tf_directions)
+        if curve_gate["blocked"]:
             decision = 'WAIT'
 
         result = {
@@ -137,12 +199,15 @@ class MTFAnalyzer:
             'score_breakdown': score_breakdown,
             'timeframes':    tf_directions,
             'structure':     tf_structure,
+            'structural':    structural_ctx,   # NEW: OB/FVG/curve per TF (REVIEW-A)
             'contexts':      tf_contexts,
             'conflicts':     conflicts,
             'h4_override':   h4_override,
             'regime_gate':   regime_gate,
+            'curve_gate':    curve_gate,        # NEW (REVIEW-C)
             'reason':        (
                 regime_gate['note'] if regime_gate['blocked'] else
+                curve_gate['note'] if curve_gate['blocked'] else
                 self._build_reason(
                     decision, tf_directions, conflicts,
                     h4_override, confidence
@@ -154,6 +219,7 @@ class MTFAnalyzer:
             f"MTF Result: {decision} | Confidence: {confidence}% | "
             f"Conflicts: {len(conflicts)}"
             + (f" | REGIME-BLOCKED: {regime_gate['note']}" if regime_gate['blocked'] else "")
+            + (f" | CURVE-BLOCKED: {curve_gate['note']}" if curve_gate['blocked'] else "")
         )
         return result
 
@@ -201,6 +267,142 @@ class MTFAnalyzer:
             }
 
         return {"blocked": False, "checked": True, "regime": regime, "note": "Regime gate passed"}
+
+    # ═══════════════════════════════════════════════════════
+    # STEP 3b (NEW): STRUCTURAL CONTEXT — ORDER BLOCK / FVG / CURVE
+    # (REVIEW-A — see file header changelog)
+    # ═══════════════════════════════════════════════════════
+
+    def _build_structural_context(self, tf_data: dict) -> dict:
+        """
+        Run order_block.py + fvg_detector.py per timeframe and, where both a
+        nearest demand and nearest supply order block exist, build a
+        curve_mtf.Curve from them.
+
+        This does NOT reimplement zone/gap detection — it's a thin
+        orchestration layer over the two dedicated detector classes, which
+        is exactly the gap the institutional review flagged: those modules
+        already existed and were fully built, they just weren't wired to
+        anything upstream of them.
+
+        Returns: {label: {order_blocks, fvgs, nearest_demand, nearest_supply,
+                           nearest_ob, nearest_fvg, curve, curve_bias,
+                           curve_confidence, curve_reason}, ...}
+        Missing/failed timeframes are simply absent from the returned dict
+        (not raised) — callers (`_get_tf_directions`, `_apply_curve_gate`)
+        already treat "no structural data for this TF" as "fall back to
+        indicators" / "no gate", so a partial result degrades gracefully.
+        """
+        structural = {}
+        for label, df in tf_data.items():
+            if label not in self._ob_detectors or len(df) < 20 or 'atr' not in df.columns:
+                continue
+            try:
+                price = float(df['close'].iloc[-1])
+                last_atr = df['atr'].iloc[-1]
+                atr = float(last_atr) if pd.notna(last_atr) and last_atr > 0 else None
+
+                obs  = self._ob_detectors[label].detect(df, max_results=20)
+                fvgs = self._fvg_detectors[label].detect(df, max_results=20)
+
+                nearest_demand = self._nearest_zone(obs, price, 'BULLISH')
+                nearest_supply = self._nearest_zone(obs, price, 'BEARISH')
+                nearest_ob  = self._ob_detectors[label].nearest_active(obs, price, atr=atr)
+                nearest_fvg = self._fvg_detectors[label].nearest_active(fvgs, price, atr=atr)
+
+                curve = None
+                curve_bias = None
+                curve_confidence = None
+                curve_reason = None
+                if nearest_demand and nearest_supply:
+                    curve = CurveMTF.from_zones(
+                        nearest_demand, nearest_supply, current_price=price,
+                        timeframe=label, atr=atr,
+                    )
+                    cconf = curve.confidence_for(price, atr=atr)
+                    curve_bias = cconf.bias.value
+                    curve_confidence = cconf.score
+                    curve_reason = cconf.reason
+
+                structural[label] = {
+                    'order_blocks':      obs,
+                    'fvgs':              fvgs,
+                    'nearest_demand':    nearest_demand,
+                    'nearest_supply':    nearest_supply,
+                    'nearest_ob':        nearest_ob,
+                    'nearest_fvg':       nearest_fvg,
+                    'curve':             curve,
+                    'curve_bias':        curve_bias,
+                    'curve_confidence':  curve_confidence,
+                    'curve_reason':      curve_reason,
+                }
+            except Exception as e:
+                log.warning(f"[MTF] structural context failed for {label}: {e}")
+        return structural
+
+    @staticmethod
+    def _nearest_zone(order_blocks: list, price: float, direction: str) -> dict | None:
+        """
+        Nearest active (fresh/tested) order block of `direction` that's
+        actually on the correct side of price — a 'demand' zone sitting
+        above current price (or a 'supply' zone below it) isn't the curve's
+        nearest edge, it's behind price / already invalidated for that role.
+        `direction` is order_block.py's own vocabulary: 'BULLISH' (used
+        here as demand) / 'BEARISH' (used as supply).
+        """
+        edge_key = 'zone_top' if direction == 'BULLISH' else 'zone_bottom'
+        candidates = [
+            ob for ob in order_blocks
+            if ob.get('direction') == direction and ob.get('state') in ('fresh', 'tested')
+            and (ob['zone_top'] <= price if direction == 'BULLISH' else ob['zone_bottom'] >= price)
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda ob: abs(price - ob[edge_key]))
+
+    # ═══════════════════════════════════════════════════════
+    # STEP 10 (NEW): BOOK P135 HTF CURVE OVERRIDE
+    # (REVIEW-C — see file header changelog)
+    # ═══════════════════════════════════════════════════════
+
+    def _apply_curve_gate(self, structural_ctx: dict, tf_directions: dict) -> dict:
+        """
+        Book P135: "the longer frame always wins." Uses the H4 curve (the
+        highest timeframe this class analyzes) as the HTF bias and checks
+        every lower timeframe's direction against it via
+        curve_mtf.CurveMTF.resolve_conflict — the same conflict-resolution
+        logic curve_mtf.py itself exposes, not a reimplementation of it.
+
+        No-op (blocked=False, checked=False) when there's no confident H4
+        curve read, so this is purely additive for callers/backtests that
+        ran before this feature existed.
+        """
+        h4 = (structural_ctx or {}).get('H4')
+        if not h4 or not h4.get('curve') or h4.get('curve_bias') is None:
+            return {"blocked": False, "checked": False, "note": "No H4 curve available — gate not applied"}
+        if h4['curve_bias'] == DirectionalBias.TREND_FOLLOW_OR_NO_TRADE.value:
+            return {"blocked": False, "checked": True, "note": "H4 curve in equilibrium — no HTF override to apply"}
+        if (h4.get('curve_confidence') or 0) < _STRUCTURAL_MIN_CONFIDENCE:
+            return {"blocked": False, "checked": True,
+                    "note": f"H4 curve bias={h4['curve_bias']} but confidence "
+                            f"{h4.get('curve_confidence')}% < {_STRUCTURAL_MIN_CONFIDENCE}% — gate not applied"}
+
+        htf_bias = DirectionalBias(h4['curve_bias'])
+        ltf_signals = [
+            (tf, info.get('direction', 'neutral').replace('bullish', 'long').replace('bearish', 'short'))
+            for tf, info in tf_directions.items() if tf != 'H4'
+        ]
+        resolved = CurveMTF.resolve_conflict(htf_bias, ltf_signals)
+
+        return {
+            "blocked":  resolved["decision"] == "wait",
+            "checked":  True,
+            "htf_bias": htf_bias.value,
+            "note": (
+                f"H4 curve bias={htf_bias.value} ({h4.get('curve_confidence')}% confidence): "
+                f"{resolved['reason']}"
+            ),
+        }
 
     # ═══════════════════════════════════════════════════════
     # STEP 1: DATA FETCH
@@ -449,10 +651,19 @@ class MTFAnalyzer:
     # STEP 4: TF DIRECTION
     # ═══════════════════════════════════════════════════════
 
-    def _get_tf_directions(self, tf_contexts: dict) -> dict:
+    def _get_tf_directions(self, tf_contexts: dict, structural_ctx: dict | None = None) -> dict:
         """
         প্রতিটা TF-এর direction বের করো।
         Output: { 'H4': 'bullish', 'H1': 'bearish', ... }
+
+        REVIEW-B: `structural_ctx` (order_block/fvg/curve — see
+        `_build_structural_context`) is now the PRIMARY signal per TF when
+        it's confident. The original indicator-based logic below is
+        unchanged and still runs unconditionally as the fallback — for a
+        TF with no structural read, or a curve sitting in equilibrium, or
+        confidence below `_STRUCTURAL_MIN_CONFIDENCE`, behavior is
+        identical to before this change (structural_ctx=None reproduces
+        the exact prior output).
         """
         directions = {}
         for label, ctx in tf_contexts.items():
@@ -460,32 +671,53 @@ class MTFAnalyzer:
             rsi        = ctx.get('rsi', 50)
             macd_cross = ctx.get('macd_cross', '')
 
-            # Primary: trend direction
+            # ── Indicator-based direction (fallback path, unchanged) ──
             if 'bullish' in trend:
-                direction = 'bullish'
+                indicator_direction = 'bullish'
             elif 'bearish' in trend:
-                direction = 'bearish'
+                indicator_direction = 'bearish'
             else:
                 # Sideways — RSI দিয়ে tiebreak
                 if rsi > 55:
-                    direction = 'bullish'
+                    indicator_direction = 'bullish'
                 elif rsi < 45:
-                    direction = 'bearish'
+                    indicator_direction = 'bearish'
                 else:
-                    direction = 'neutral'
+                    indicator_direction = 'neutral'
 
-            # MACD confirmation
+            # ── Structural direction (primary path, when confident) ──
+            struct = (structural_ctx or {}).get(label)
+            direction = indicator_direction
+            direction_source = 'indicator'
+            structural_bias = None
+            structural_confidence = None
+
+            if struct and struct.get('curve_bias') is not None:
+                structural_bias = struct['curve_bias']
+                structural_confidence = struct.get('curve_confidence')
+                confident = (structural_confidence or 0) >= _STRUCTURAL_MIN_CONFIDENCE
+                if confident and structural_bias == DirectionalBias.BUY_ONLY.value:
+                    direction, direction_source = 'bullish', 'structural(curve)'
+                elif confident and structural_bias == DirectionalBias.SELL_ONLY.value:
+                    direction, direction_source = 'bearish', 'structural(curve)'
+                # else: equilibrium or low confidence → keep indicator_direction
+
+            # MACD confirmation (kept as a secondary confirmation signal
+            # regardless of which path set `direction`)
             macd_aligned = (
                 ('bullish' in direction and 'bullish_cross' in macd_cross) or
                 ('bearish' in direction and 'bearish_cross' in macd_cross)
             )
 
             directions[label] = {
-                'direction':     direction,
-                'trend':         trend,
-                'rsi':           round(rsi, 1),
-                'macd_aligned':  macd_aligned,
-                'strong':        'strong_' in trend,
+                'direction':               direction,
+                'direction_source':        direction_source,
+                'trend':                   trend,
+                'rsi':                     round(rsi, 1),
+                'macd_aligned':            macd_aligned,
+                'strong':                  'strong_' in trend,
+                'structural_bias':         structural_bias,
+                'structural_confidence':   structural_confidence,
             }
 
         return directions
@@ -829,10 +1061,12 @@ class MTFAnalyzer:
             'reason':     reason,
             'timeframes': {},
             'structure':  {},
+            'structural': {},
             'contexts':   {},
             'conflicts':  [],
             'h4_override': {'active': False},
             'regime_gate': {'blocked': False, 'checked': False, 'note': reason},
+            'curve_gate':  {'blocked': False, 'checked': False, 'note': reason},
             'score_breakdown': {},
         }
 
@@ -873,6 +1107,23 @@ class MTFAnalyzer:
                 choch = s.get('choch', {}).get('type', 'NONE')
                 liq   = s.get('liquidity_sweep', {}).get('type', 'NONE')
                 print(f"  {tf:<6}  :  BOS={bos:<15} CHoCH={choch:<16} LIQ={liq}")
+
+        # Structural context (REVIEW-A: order block / FVG / curve)
+        structural = result.get('structural', {})
+        if structural:
+            print()
+            print("  ── Structure (Order Block / FVG / Curve) ──")
+            for tf, s in structural.items():
+                bias = s.get('curve_bias') or 'n/a'
+                conf = s.get('curve_confidence')
+                conf_str = f"{conf:.0f}%" if conf is not None else "n/a"
+                print(f"  {tf:<6}  :  curve_bias={bias:<24} confidence={conf_str}")
+
+        curve_gate = result.get('curve_gate', {})
+        if curve_gate.get('blocked'):
+            print()
+            print("  ── HTF Curve Override Active (Book P135) ──")
+            print(f"  ⛔  {curve_gate['note']}")
 
         # Conflicts
         conflicts = result.get('conflicts', [])
@@ -962,6 +1213,13 @@ class MTFAnalyzer:
             # NEW: regime hard-gate visibility (additive, safe for existing consumers to ignore)
             'regime_gate_blocked': result.get('regime_gate', {}).get('blocked', False),
             'regime_gate_note':    result.get('regime_gate', {}).get('note', ''),
+
+            # NEW (REVIEW-A/C): structural (OB/FVG/curve) visibility
+            'curve_gate_blocked':  result.get('curve_gate', {}).get('blocked', False),
+            'curve_gate_note':     result.get('curve_gate', {}).get('note', ''),
+            'h4_curve_bias':       result.get('structural', {}).get('H4', {}).get('curve_bias'),
+            'h4_curve_confidence': result.get('structural', {}).get('H4', {}).get('curve_confidence'),
+            'h1_curve_bias':       result.get('structural', {}).get('H1', {}).get('curve_bias'),
         }
 
 

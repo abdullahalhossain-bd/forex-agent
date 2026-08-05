@@ -191,22 +191,49 @@ class StrengthCalculator:
     # NORMALIZATION — raw avg score (per currency) → 0-100
     # ═══════════════════════════════════════════════════════
 
+    # compute_pair_score()'s weighted components are each bounded to
+    # roughly ±100 (price_change/trend/momentum) or ±50 (volatility_adj),
+    # and the weights sum to 1.0, so a single-pair "total" — and therefore
+    # the per-currency average of several such totals — stays within
+    # roughly this range in practice. Used as a fixed reference scale for
+    # normalization below.
+    RAW_SCORE_SCALE = 100.0
+
     def normalize_scores(self, raw_scores: dict) -> dict:
         """
-        Min-max normalize করে সব currency-কে 0-100 স্কেলে আনে,
-        যাতে "GBP 85, JPY 23"-এর মতো doc-friendly output পাওয়া যায়।
+        Currency raw scores (avg of compute_pair_score()['total'] across
+        that currency's pairs) কে 0-100 স্কেলে আনে।
+
+        FIX (audit H1): আগে এখানে min-max normalization হতো — প্রতিটা
+        cycle-এর সবচেয়ে দুর্বল currency 0 আর সবচেয়ে শক্তিশালীটা 100 হয়ে
+        যেত, independent of actual strength। এতে কিছু সমস্যা হতো:
+          - Historical comparable না: আজকের 70 আর গতকালের 70 ভিন্ন জিনিস
+            বোঝাতে পারত, কারণ scale প্রতিবার basket-এর min/max-এর উপর
+            নির্ভর করত (momentum/cycle detection যেটার উপর নির্ভর করে)।
+          - Outlier-sensitive: একটা extreme currency পুরো basket-এর scale
+            চেপে দিত (v_min/v_max একাই পুরো mapping ঠিক করে দেয়)।
+          - সবগুলো currency দুর্বল হলেও, min-max সবসময় একজনকে "100"
+            বানিয়ে দিত — misleading।
+
+        এখন raw score-কে একটা fixed reference scale (RAW_SCORE_SCALE)-এর
+        বিপরীতে map করা হয়, যাতে 70 মানে সবসময় একই জিনিস বোঝায় —
+        currency সত্যিই শক্তিশালী, শুধু আজকের basket-এ relatively কম
+        দুর্বল না। Monotonic, outlier-resistant (কোনো একটা currency-র
+        extreme value বাকিদের scale নষ্ট করে না), এবং cycle-to-cycle
+        comparable।
         """
         if not raw_scores:
             return {}
 
-        values = list(raw_scores.values())
-        v_min, v_max = min(values), max(values)
-        spread = v_max - v_min
-
-        if spread == 0:
-            return {c: 50.0 for c in raw_scores}
-
         normalized = {}
         for cur, val in raw_scores.items():
-            normalized[cur] = round((val - v_min) / spread * 100, 1)
+            # FIX (audit M1/M2): guard against NaN raw scores (e.g. every
+            # pair fetch for a currency failed, leaving a NaN average)
+            # reaching the ranker as a bogus number instead of failing loudly.
+            if val is None or pd.isna(val):
+                log.warning(f"[StrengthCalculator] NaN/None raw score for {cur} — defaulting to neutral 50.0")
+                normalized[cur] = 50.0
+                continue
+            clipped = max(-self.RAW_SCORE_SCALE, min(self.RAW_SCORE_SCALE, val))
+            normalized[cur] = round((clipped + self.RAW_SCORE_SCALE) / (2 * self.RAW_SCORE_SCALE) * 100, 1)
         return normalized

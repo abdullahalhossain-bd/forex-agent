@@ -32,16 +32,24 @@ from core.constants import MEMORY_DIR
 
 log = get_logger("currency_strength")
 
-# 2026-07-22 wiring fix: calculate_strength() fetches all 28 CROSS_PAIRS
-# every call. Before this engine was wired into the live pipeline that
-# cost was never paid (module was dead). Now that AnalysisAgent calls
-# analyze() once per cycle, an unconditional 28-pair fetch every cycle
-# would multiply MT5/broker call volume ~28x versus the single-pair
-# analysis the rest of the pipeline does — same class of problem as the
-# already-known Groq dual-call rate-limit issue. Cache the strength
-# matrix across cycles; a currency's relative strength doesn't need
-# recomputing every 15m-bar-close anyway.
-_STRENGTH_CACHE_TTL_SECONDS = 300  # 5 min, matches sentiment_data.py's convention
+# FIX (audit H2): a flat 300s TTL made sense for 15m bars but is wrong for
+# 1m/5m (serves stale data for most of the bar) and wastes freshness
+# headroom on 4h/1d (recomputes far more often than the underlying data
+# actually changes). TTL now scales with the timeframe's own bar duration
+# instead of a single hardcoded number.
+_TIMEFRAME_SECONDS = {
+    "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "4h": 14400, "1d": 86400,
+}
+_STRENGTH_CACHE_TTL_SECONDS = 300  # fallback for unrecognized timeframe strings
+
+
+def _ttl_for_timeframe(timeframe: str) -> float:
+    """TTL = half the bar duration (doc recommendation) — a strength
+    matrix computed mid-bar is still valid for the rest of that bar,
+    but shouldn't survive into the next one unrefreshed."""
+    bar_seconds = _TIMEFRAME_SECONDS.get(timeframe, _STRENGTH_CACHE_TTL_SECONDS * 2)
+    return max(30.0, bar_seconds / 2)
 
 # ── Tracked currencies ──────────────────────────────────────────
 MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD"]
@@ -109,8 +117,9 @@ class CurrencyStrengthEngine:
         for why (28-pair fetch is too heavy to repeat every cycle).
         """
         now = time.time()
-        if self._strength_cache and (now - self._strength_cache_time) < _STRENGTH_CACHE_TTL_SECONDS:
-            log.debug("[CurrencyStrength] Using cached strength matrix")
+        ttl = _ttl_for_timeframe(self.timeframe)
+        if self._strength_cache and (now - self._strength_cache_time) < ttl:
+            log.debug(f"[CurrencyStrength] Using cached strength matrix (ttl={ttl:.0f}s, tf={self.timeframe})")
             return self._strength_cache
 
         raw_scores     = {c: 0.0 for c in MAJOR_CURRENCIES}
@@ -216,7 +225,14 @@ class CurrencyStrengthEngine:
     # ═══════════════════════════════════════════════════════
 
     def find_best_pairs(self, strengths: dict, min_diff: int = 40) -> list[dict]:
-        opportunities = self.ranker.find_best_pairs(strengths, min_diff=min_diff)
+        # FIX (audit H4 wiring): pass through the cached pair_details (has
+        # each cross-pair's volatility_adj) so the ranker can grade
+        # opportunities by volatility, not diff alone. Uses whatever is in
+        # the strength cache right now rather than forcing a recompute.
+        pair_details = (self._strength_cache or {}).get("pair_details")
+        opportunities = self.ranker.find_best_pairs(
+            strengths, min_diff=min_diff, pair_details=pair_details
+        )
         return self.ranker.detect_correlation_risk(opportunities)
 
     # ═══════════════════════════════════════════════════════
@@ -290,9 +306,17 @@ class CurrencyStrengthEngine:
         ব্যয়বহুল (heavy)। Scanner-এ প্রতি cycle-এ না চালিয়ে, শুধু
         high-quality opportunity confirm করার আগে call করাই ভালো।
         """
+        # FIX (audit H3): previously did `CurrencyStrengthEngine(timeframe=tf, ...)`
+        # here directly — a brand-new, cold engine every call, for every
+        # timeframe, discarded right after use. For 3 TFs that's 3 x 28 = 84
+        # pair downloads, repeated in full on the *next* call too since
+        # nothing was kept around to reuse. Route through the shared
+        # per-timeframe registry so the normal TTL cache (see H2 fix above)
+        # actually gets reused across calls, the way the single-timeframe
+        # path already does via get_currency_strength_engine().
         tf_strengths = {}
         for tf in timeframes:
-            engine_tf = CurrencyStrengthEngine(timeframe=tf, candle_limit=self.candle_limit)
+            engine_tf = get_currency_strength_engine_for_timeframe(tf, candle_limit=self.candle_limit)
             tf_result = engine_tf.calculate_strength()
             tf_strengths[tf] = tf_result["strengths"]
 
@@ -532,7 +556,7 @@ class CurrencyStrengthEngine:
 # ═══════════════════════════════════════════════════════════════
 
 # ═══════════════════════════════════════════════════════════════
-# SHARED SINGLETON — single source of truth
+# SHARED SINGLETON(S) — one engine per timeframe, single source of truth
 # ------------------------------------------------------------
 # 2026-07-22 fix: sentiment_data.py used to run its own private
 # yfinance-based recalculation of currency strength (12 sample pairs,
@@ -543,36 +567,52 @@ class CurrencyStrengthEngine:
 # could patch locally. Any caller that wants currency strength
 # (sentiment_data.py included) must now go through this singleton so
 # there is exactly one calculation and one cache.
+#
+# FIX (audit H3): this used to be a *single* global instance, so any
+# caller asking for a different timeframe than the first caller got
+# ignored/warned rather than served. multi_timeframe_strength() worked
+# around that by building its own throwaway engines per TF, which
+# defeated caching entirely (see the H3 fix in multi_timeframe_strength
+# above). Now it's a small registry, one cached engine per timeframe,
+# so every timeframe gets its own TTL-cached (see H2 fix) engine that
+# every caller for that timeframe shares.
 # ═══════════════════════════════════════════════════════════════
-_engine_singleton: "CurrencyStrengthEngine | None" = None
+_engine_registry: dict[tuple[str, int], "CurrencyStrengthEngine"] = {}
+
+
+def get_currency_strength_engine_for_timeframe(
+    timeframe: str = "1h", candle_limit: int = 100
+) -> "CurrencyStrengthEngine":
+    """
+    Registry accessor — one shared, TTL-cached CurrencyStrengthEngine per
+    (timeframe, candle_limit) combination for the lifetime of the process.
+    Unlike get_currency_strength_engine(), this does NOT collapse every
+    timeframe onto a single instance, so multi-timeframe callers actually
+    get their caching benefit instead of racing/overwriting each other.
+    """
+    key = (timeframe, candle_limit)
+    engine = _engine_registry.get(key)
+    if engine is None:
+        engine = CurrencyStrengthEngine(timeframe=timeframe, candle_limit=candle_limit)
+        _engine_registry[key] = engine
+        log.info(
+            f"[CurrencyStrength] Registry engine created "
+            f"(timeframe={timeframe}, candle_limit={candle_limit})"
+        )
+    return engine
 
 
 def get_currency_strength_engine(timeframe: str = "1h", candle_limit: int = 100) -> "CurrencyStrengthEngine":
     """
-    Process-wide singleton accessor. Returns the same CurrencyStrengthEngine
-    instance (and therefore the same _strength_cache) on every call, so
-    every consumer sees identical, consistently-cached strength numbers.
-
-    First caller's timeframe/candle_limit wins for the lifetime of the
-    process; later calls with different args are ignored (logged once)
-    rather than silently spinning up a second, divergent engine.
+    Process-wide default-timeframe accessor (kept for backward
+    compatibility with existing callers like sentiment_data.py). Returns
+    the same CurrencyStrengthEngine instance (and therefore the same
+    _strength_cache) on every call for a given timeframe, so every
+    consumer of that timeframe sees identical, consistently-cached
+    strength numbers. Internally just the "1h"-shaped slice of the
+    per-timeframe registry above.
     """
-    global _engine_singleton
-    if _engine_singleton is None:
-        _engine_singleton = CurrencyStrengthEngine(timeframe=timeframe, candle_limit=candle_limit)
-        log.info(
-            f"[CurrencyStrength] Singleton engine created "
-            f"(timeframe={timeframe}, candle_limit={candle_limit})"
-        )
-    elif timeframe != _engine_singleton.timeframe or candle_limit != _engine_singleton.candle_limit:
-        log.warning(
-            f"[CurrencyStrength] get_currency_strength_engine() called with "
-            f"(timeframe={timeframe}, candle_limit={candle_limit}) but singleton "
-            f"already exists with (timeframe={_engine_singleton.timeframe}, "
-            f"candle_limit={_engine_singleton.candle_limit}) — ignoring new args, "
-            f"reusing existing engine so cache/consistency isn't broken."
-        )
-    return _engine_singleton
+    return get_currency_strength_engine_for_timeframe(timeframe, candle_limit)
 
 
 if __name__ == "__main__":

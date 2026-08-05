@@ -35,6 +35,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -79,9 +80,17 @@ class InstitutionalFlowEngine:
     COT_PARSING_IMPLEMENTED = True
     _cot_warning_logged = False
 
+    # FIX (audit H4/H5): how many days old a report can be before we treat
+    # it as stale rather than current. CFTC's normal cadence is weekly
+    # (Friday positioning, released the following week); this gives slack
+    # for that lag without silently accepting month-old data as current.
+    STALE_THRESHOLD_DAYS = 10
+
     def __init__(self):
-        # NOTE: currently unused — kept for forward-compatibility with a
-        # future real COT parser (see COT_PARSING_IMPLEMENTED above).
+        # FIX (audit H1/H2): this used to be declared but never read from
+        # or written to anywhere — every analyze() call re-fetched from
+        # CFTC over HTTP even though COT only updates weekly. Now actually
+        # used by _fetch_cot_data() below.
         self._cache: Dict[str, tuple] = {}  # symbol -> (timestamp, data)
         self.CACHE_TTL = 3600 * 6  # 6 hours (COT is weekly anyway)
 
@@ -162,9 +171,21 @@ class InstitutionalFlowEngine:
         if not cot_symbol:
             return None
 
+        # FIX (audit H1/H2): serve from cache within TTL instead of making
+        # a fresh HTTPS request to CFTC on every single analyze() call —
+        # COT only updates weekly, so re-fetching every call was pure
+        # waste (and a real network round-trip on the hot path).
+        cache_key = pair.upper()
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            cached_at, cached_data = cached
+            if (time.time() - cached_at) < self.CACHE_TTL:
+                log.debug(f"[InstFlow] Using cached COT data for {pair} (age={time.time()-cached_at:.0f}s)")
+                return cached_data
+
         # Round-10: try to fetch real CoT data
         try:
-            return self._fetch_cot_from_cftc(cot_symbol, pair)
+            data = self._fetch_cot_from_cftc(cot_symbol, pair)
         except Exception as e:
             if not InstitutionalFlowEngine._cot_warning_logged:
                 log.info(
@@ -173,6 +194,13 @@ class InstitutionalFlowEngine:
                 )
                 InstitutionalFlowEngine._cot_warning_logged = True
             return None
+
+        # Only cache real, successful fetches — never cache a None/failure,
+        # so a transient CFTC outage doesn't lock the engine out of real
+        # data for the full 6-hour TTL once the site recovers.
+        if data is not None:
+            self._cache[cache_key] = (time.time(), data)
+        return data
 
     def _fetch_cot_from_cftc(self, cot_symbol: str, pair: str) -> Optional[Dict]:
         """Fetch and parse CFTC CoT text report for a given symbol.
@@ -229,10 +257,34 @@ class InstitutionalFlowEngine:
         # Confidence: higher when positioning is more extreme (>30% net)
         confidence = min(100, abs(net_pct) * 2)
 
+        # FIX (audit H4/H5): CFTC releases this report weekly (Friday
+        # positioning data, published the following week — historically
+        # Saturday, currently Friday afternoon). Without checking the
+        # report's own as-of date, a stale/cached-by-CFTC page from weeks
+        # ago would be used as if it were this week's positioning with no
+        # indication anything was off. Parse the report date out of the
+        # page header (best-effort — CFTC's text format isn't guaranteed),
+        # and flag the data as stale if it's meaningfully older than one
+        # normal release cycle should allow.
+        report_date = self._extract_report_date(text)
+        data_age_days = None
+        stale = False
+        if report_date is not None:
+            data_age_days = (datetime.now(timezone.utc) - report_date).days
+            # One release cycle is ~7 days; allow slack for the
+            # Friday-data/next-week-release lag before calling it stale.
+            stale = data_age_days > self.STALE_THRESHOLD_DAYS
+        else:
+            # Couldn't verify the date at all — treat conservatively as
+            # unverified rather than silently assuming it's fresh.
+            log.debug(f"[InstFlow] Could not parse report date for {cot_symbol}; freshness unverified")
+
         log.info(
             f"[InstFlow] COT {pair} ({cot_symbol}): "
             f"long={long_pos:,} short={short_pos:,} "
-            f"net={net_long:+,} ({net_pct:+.1f}%) conf={confidence:.0f}%"
+            f"net={net_long:+,} ({net_pct:+.1f}%) conf={confidence:.0f}% "
+            f"report_date={report_date.date() if report_date else 'unknown'} "
+            f"age_days={data_age_days} stale={stale}"
         )
 
         return {
@@ -243,7 +295,36 @@ class InstitutionalFlowEngine:
             "confidence": round(confidence, 1),
             "source": "cftc_cot",
             "url": url,
+            "report_date": report_date.isoformat() if report_date else None,
+            "data_age_days": data_age_days,
+            "stale": stale,
         }
+
+    @staticmethod
+    def _extract_report_date(text: str) -> Optional[datetime]:
+        """Best-effort extraction of the report's 'as of' date from the
+        CFTC text header. Only looks near the top of the document, where
+        the report date normally appears — searching the whole (large)
+        report body risks matching an unrelated date deep in the data.
+        Returns None (never guesses) if no recognizable date is found.
+        """
+        import re
+        header = text[:3000]
+        patterns_and_formats = [
+            (r"\b(\d{1,2}/\d{1,2}/\d{2,4})\b", ("%m/%d/%y", "%m/%d/%Y")),
+            (r"\b([A-Za-z]+ \d{1,2},\s*\d{4})\b", ("%B %d, %Y", "%b %d, %Y")),
+        ]
+        for pattern, formats in patterns_and_formats:
+            m = re.search(pattern, header)
+            if not m:
+                continue
+            for fmt in formats:
+                try:
+                    dt = datetime.strptime(m.group(1), fmt)
+                    return dt.replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+        return None
 
 
     def _build_cot_result(self, pair: str, cot: Dict, retail_long: float) -> Dict[str, Any]:
@@ -253,10 +334,39 @@ class InstitutionalFlowEngine:
             net_long (was net_position)
             net_pct (was position_change)
             confidence (was calculated here)
+
+        FIX (audit C1): this used to recompute `confidence` a second time
+        with `min(100, abs(net) / 1000 + abs(net_pct) / 500)`, silently
+        discarding the confidence `_fetch_cot_from_cftc()` had already
+        computed from how extreme the net positioning is. That second
+        formula was leftover from an earlier design (see the Round-19 note
+        that used to be here about an undefined `change` variable) and is
+        never used now — the parser's confidence is the one number that
+        actually reflects this specific report.
+
+        FIX (audit C2): COT data is a WEEKLY snapshot (Friday positioning,
+        released the following week) — treating it as `source: "cot_live"`
+        misrepresents it as a fresh/intraday read. It's a strategic bias,
+        not a live signal, and it can be several days old even when
+        "fresh" by CFTC's own schedule. This now labels the source
+        `"cot_weekly"`, carries the parsed report date + age through to
+        the result, and marks the signal explicitly as STRATEGIC so
+        downstream consumers (MasterAnalyst etc.) don't weight it like an
+        intraday indicator. If the report is older than expected for the
+        normal weekly release cycle, `stale` is set True and confidence is
+        further discounted rather than presented at full strength.
         """
         net = cot.get("net_long", cot.get("net_position", 0))
         net_pct = cot.get("net_pct", 0)
         confidence = cot.get("confidence", 50.0)
+
+        report_date = cot.get("report_date")
+        data_age_days = cot.get("data_age_days")
+        stale = bool(cot.get("stale", False))
+        if stale:
+            # Old report still usable (better than nothing) but shouldn't
+            # be presented with the same confidence as a fresh one.
+            confidence = round(confidence * 0.5, 1)
 
         # Institutional bias: net positive = institutions long
         if net > 0:
@@ -270,26 +380,25 @@ class InstitutionalFlowEngine:
         retail_bias = "LONG" if retail_long > 55 else "SHORT" if retail_long < 45 else "NEUTRAL"
         divergence = "DIVERGENT" if retail_bias != inst_bias and inst_bias != "NEUTRAL" else "ALIGNED"
 
-        # Confidence based on position size + net_pct change
-        # Round-19 audit fix: 'change' was undefined (leftover from old
-        # variable name). The correct variable is 'net_pct' (renamed in
-        # Round-10 but these two lines were missed).
-        confidence = min(100, abs(net) / 1000 + abs(net_pct) / 500)
-
         result = {
-            "source":              "cot_live",
+            "source":              "cot_weekly",
+            "signal_type":         "STRATEGIC",   # weekly positioning, NOT an intraday/live signal
             "pair":                pair,
             "institutional_bias":  inst_bias,
             "net_position":        net,
-            "position_change":     net_pct,  # Round-19: was 'change' (undefined)
+            "position_change":     net_pct,
             "confidence":          int(confidence),
             "retail_vs_inst":      divergence,
             "retail_bias":         retail_bias,
+            "report_date":         report_date,
+            "data_age_days":       data_age_days,
+            "stale":               stale,
             "fetched_at":          datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         log.info(
             f"[InstFlow] {pair} | inst={inst_bias} (net={net}) | "
-            f"retail={retail_bias} | {divergence} | conf={confidence:.0f}%"
+            f"retail={retail_bias} | {divergence} | conf={confidence:.0f}% | "
+            f"report_date={report_date} age_days={data_age_days} stale={stale}"
         )
         return result
 
@@ -337,6 +446,7 @@ class InstitutionalFlowEngine:
 
             result = {
                 "source":              "synthetic_displacement",
+                "signal_type":         "SYNTHETIC",  # price-action proxy, not real COT positioning
                 "pair":                pair,
                 "institutional_bias":  inst_bias,
                 "net_position":        net_large,
@@ -365,6 +475,7 @@ class InstitutionalFlowEngine:
     def _fallback_result(pair: str, reason: str) -> Dict[str, Any]:
         return {
             "source":              "fallback",
+            "signal_type":         "UNKNOWN",
             "pair":                pair,
             "institutional_bias":  "NEUTRAL",
             "net_position":        0,
@@ -383,10 +494,14 @@ class InstitutionalFlowEngine:
     def get_ai_context(self, result: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "inst_source":          result.get("source", "fallback"),
+            "inst_signal_type":     result.get("signal_type", "SYNTHETIC"),  # STRATEGIC (weekly COT) vs SYNTHETIC vs UNKNOWN
             "inst_bias":            result.get("institutional_bias", "NEUTRAL"),
             "inst_confidence":      result.get("confidence", 0),
             "inst_retail_vs_inst":  result.get("retail_vs_inst", "UNKNOWN"),
             "inst_divergent":       result.get("retail_vs_inst") == "DIVERGENT",
+            "inst_report_date":     result.get("report_date"),
+            "inst_data_age_days":   result.get("data_age_days"),
+            "inst_stale":           result.get("stale", False),
         }
 
     def print_summary(self, result: Dict[str, Any]) -> None:
@@ -395,10 +510,12 @@ class InstitutionalFlowEngine:
         log.info("  🏦  INSTITUTIONAL FLOW  (Day 96)")
         log.info(bar)
         log.info(f"  Pair           : {result.get('pair','?')}")
-        log.info(f"  Source         : {result.get('source','?')}")
+        log.info(f"  Source         : {result.get('source','?')} ({result.get('signal_type','?')})")
         log.info(f"  Inst bias      : {result.get('institutional_bias','?')}")
         log.info(f"  Confidence     : {result.get('confidence',0)}%")
         log.info(f"  Retail vs Inst : {result.get('retail_vs_inst','?')}")
+        if result.get("report_date"):
+            log.info(f"  Report date    : {result['report_date']} (age {result.get('data_age_days')}d, stale={result.get('stale', False)})")
         if result.get("large_bullish") is not None:
             log.info(f"  Large bullish  : {result['large_bullish']}")
             log.info(f"  Large bearish  : {result['large_bearish']}")

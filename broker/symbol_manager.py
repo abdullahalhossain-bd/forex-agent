@@ -37,6 +37,93 @@ class SymbolManager:
             resolved[sym] = self.account_manager.resolve_symbol(sym)
         return resolved
 
+    # ─────────────────────────────────────────────
+    # CURRENCY-RANKER OPPORTUNITY → EXECUTABLE ORDER  (fixes audit C1/C2)
+    # ─────────────────────────────────────────────
+    # CurrencyRanker.find_best_pairs() only knows currency strength, not
+    # what the broker actually lists. It always emits "STRONGWEAK" + BUY
+    # (e.g. JPY strong vs USD weak -> "JPYUSD" BUY), but a broker may only
+    # list "USDJPY". Trading "JPYUSD" BUY on a "USDJPY" broker means the
+    # wrong instrument or, if resolve_symbol() happens to fuzzy-match it,
+    # the wrong direction (BUY USDJPY when SELL USDJPY was intended).
+    #
+    # Fix: try both orientations against the broker's actual symbol list.
+    # If only the reversed orientation exists, flip BUY<->SELL to keep the
+    # trade's real meaning ("go long the strong currency vs the weak one")
+    # intact. If neither orientation is listed by this broker, the
+    # opportunity is not tradable here and is dropped (never guessed).
+
+    def resolve_opportunity(self, opportunity: dict) -> dict | None:
+        """
+        একটা CurrencyRanker opportunity dict (strong_currency/weak_currency/
+        direction) নিয়ে broker-এ আসলে কোন symbol trade করতে হবে এবং কোন
+        direction-এ, সেটা বের করে।
+
+        Returns None (এবং log warning) যদি কোনো orientation-ই broker-এ
+        না থাকে — কখনো guess করে না।
+
+        Returns:
+            {
+                **opportunity,
+                "broker_symbol":      "USDJPY",
+                "execution_direction": "SELL",   # opportunity['direction'] থেকে flipped হতে পারে
+                "symbol_flipped":      True,      # STRONGWEAK না পেয়ে WEAKSTRONG ব্যবহার হয়েছে কিনা
+            }
+        """
+        strong = opportunity.get("strong_currency")
+        weak   = opportunity.get("weak_currency")
+        base_direction = opportunity.get("direction", "BUY")
+        if not strong or not weak:
+            log.warning(f"[SymbolManager] Opportunity missing strong/weak currency: {opportunity}")
+            return None
+
+        straight = f"{strong}{weak}"   # e.g. "JPYUSD"
+        reversed_ = f"{weak}{strong}"  # e.g. "USDJPY"
+
+        broker_straight = self.account_manager.resolve_symbol(straight)
+        if broker_straight:
+            return {
+                **opportunity,
+                "broker_symbol":       broker_straight,
+                "execution_direction": base_direction,
+                "symbol_flipped":      False,
+            }
+
+        broker_reversed = self.account_manager.resolve_symbol(reversed_)
+        if broker_reversed:
+            flipped_direction = "SELL" if base_direction == "BUY" else "BUY"
+            log.info(
+                f"[SymbolManager] '{straight}' not listed by broker; using "
+                f"'{broker_reversed}' with direction flipped "
+                f"{base_direction} -> {flipped_direction} to preserve "
+                f"{strong}-strong-vs-{weak}-weak intent."
+            )
+            return {
+                **opportunity,
+                "broker_symbol":       broker_reversed,
+                "execution_direction": flipped_direction,
+                "symbol_flipped":      True,
+            }
+
+        log.warning(
+            f"[SymbolManager] Neither '{straight}' nor '{reversed_}' is listed "
+            f"by this broker — opportunity {strong}/{weak} is not tradable here."
+        )
+        return None
+
+    def resolve_opportunities(self, opportunities: list[dict]) -> list[dict]:
+        """
+        find_best_pairs() / detect_correlation_risk() থেকে আসা পুরো
+        opportunity list broker-executable রূপে filter+annotate করে।
+        যেগুলো broker-এ resolve হয় না, সেগুলো silently বাদ পড়ে (log হয়)।
+        """
+        resolved = []
+        for opp in opportunities:
+            r = self.resolve_opportunity(opp)
+            if r is not None:
+                resolved.append(r)
+        return resolved
+
     def scan(self, broker_symbols: list[str]) -> dict[str, dict]:
         """
         প্রতিটা pair-এর জন্য basic trend/volatility snapshot বানায়।
