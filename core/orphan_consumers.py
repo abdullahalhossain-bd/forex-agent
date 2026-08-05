@@ -458,6 +458,23 @@ def apply_signal_scoring(
                     f"threshold={verdict.get('threshold')}, "
                     f"reason={verdict.get('reason')})"
                 )
+                # BUG FIX (2026-08-05): this used to overwrite dec_out["decision"]
+                # in place with no record of what it was before. Downstream,
+                # trader.py's final-report builder reads
+                # `"analysis_signal": dec_out.get("decision")` — i.e. it was
+                # reading THIS SAME already-overwritten field, not a separate
+                # pre-gate snapshot, despite the surrounding comment claiming
+                # the report "separates the ANALYSIS verdict from the
+                # EXECUTION verdict". Net effect: the report printed
+                # "ANALYSIS: WAIT (confidence 95%)" even when the real
+                # analysis decision had been SELL @ 95% — the confidence
+                # number and the signal label came from two different
+                # points in time, which is exactly the "confidence 90% but
+                # decision NO TRADE" mismatch. Preserve the original
+                # direction/confidence here so the report can show what was
+                # actually analyzed vs. what was actually allowed.
+                dec_out.setdefault("pre_gate_decision", direction)
+                dec_out.setdefault("pre_gate_confidence", dec_out.get("confidence"))
                 dec_out["decision"] = "WAIT"
                 dec_out["reject_reason"] = (
                     f"Signal scorer below threshold "

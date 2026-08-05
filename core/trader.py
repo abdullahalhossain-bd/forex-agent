@@ -1276,6 +1276,31 @@ class AITrader:
             except Exception as _oc_e:
                 log.warning(f"[Trader] apply_advanced_risk_gates failed (non-fatal): {_oc_e}")
 
+        # ── BUG FIX (root cause of "Confluence quality: 0 factors, UNKNOWN"
+        # blocking ~93% of all signals): analysis_out["confluence"] (built by
+        # AnalysisAgent / Day-67 ConfluenceEngine) was computed correctly and
+        # used later for journaling (see confluence_ctx around line ~2346)
+        # and for the debug-only "confluence_quality" report field (~3258),
+        # but was NEVER copied into dec_out before being handed to
+        # TradePermission.check(). TradePermission reads
+        # decision_out.get("aligned_factors", 0) and
+        # decision_out.get("setup_quality", "UNKNOWN") — since dec_out never
+        # had these keys, EVERY trade failed the Confluence quality gate
+        # with the default "0 factors, UNKNOWN", regardless of what the
+        # ConfluenceEngine actually found. Wire it through here.
+        _confluence_ctx = analysis_out.get("confluence") if isinstance(analysis_out, dict) else None
+        if isinstance(_confluence_ctx, dict):
+            dec_out.setdefault("aligned_factors", _confluence_ctx.get("aligned_factors", 0))
+            dec_out.setdefault("total_factors", _confluence_ctx.get("total_factors", 0))
+            dec_out.setdefault("setup_quality", _confluence_ctx.get("setup_quality", "UNKNOWN"))
+            dec_out.setdefault("raw_setup_quality", _confluence_ctx.get("raw_setup_quality", _confluence_ctx.get("setup_quality", "")))
+        else:
+            log.warning(
+                "[Trader] analysis_out['confluence'] missing/not a dict — "
+                "Confluence quality gate will fall back to 0 factors/UNKNOWN "
+                "(check AnalysisAgent/ConfluenceEngine wiring)."
+            )
+
         log.info("[6/9] Safety Guard (Permission + Correlation)...")
         perm_out = self._perm.check(
             decision_out=dec_out,
@@ -3206,9 +3231,20 @@ class AITrader:
             # will actually do, after gates). Both are reported so the
             # operator can distinguish "analysis said X, execution did Y".
             "decision":           dec_out.get("decision"),
-            "analysis_signal":    dec_out.get("decision"),  # alias, clearer name
+            # BUG FIX (2026-08-05): this was `dec_out.get("decision")` — the
+            # SAME field the signal_scorer downgrade overwrites to "WAIT" in
+            # place (core/orphan_consumers.py apply_signal_scoring()). So
+            # "analysis_signal" was never actually a distinct pre-gate
+            # snapshot despite the comment above claiming it separates
+            # analysis from execution; it just aliased the post-downgrade
+            # value. Now prefers the pre_gate_decision/pre_gate_confidence
+            # that apply_signal_scoring() records BEFORE downgrading, so the
+            # final report shows what was really analyzed (e.g. "SELL 95%")
+            # even when execution was blocked and dec_out["decision"] became
+            # "WAIT".
+            "analysis_signal":    dec_out.get("pre_gate_decision") or dec_out.get("decision"),
             "execution_action":   dec_out.get("execution_action") or perm_out.get("final_action"),
-            "confidence":         dec_out.get("confidence"),
+            "confidence":         dec_out.get("pre_gate_confidence") or dec_out.get("confidence"),
             "trade_allowed":      perm_out["allowed"],
             "final_action":       perm_out["final_action"],
             "blocked_reason":     perm_out.get("blocked_reason"),

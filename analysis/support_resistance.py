@@ -49,15 +49,43 @@ def _strength_emoji(strength: str) -> str:
 
 
 def _atr_pct(df: pd.DataFrame, period: int = 14) -> float:
-    """ATR as % of price — used for adaptive cluster threshold."""
+    """ATR as % of price — used for adaptive cluster threshold.
+
+    BUG FIX (2026-08-05): production logs showed this hitting its except
+    branch on nearly every candle with "The truth value of a Series is
+    ambiguous" — that error only happens when `if ... or not np.isfinite(atr)`
+    is evaluated on a Series instead of a scalar. Root cause: `df["high"]`
+    / `df["low"]` / `df["close"]` return a DataFrame instead of a Series
+    whenever the incoming df has duplicate-labeled columns (an upstream
+    merge artifact), and duplicate index labels turn the aligned
+    subtraction `(l - c.shift())` into a cartesian-style expansion — either
+    of which makes `.iloc[-1]` return a Series/row instead of a scalar.
+    Both are now defended against explicitly instead of silently falling
+    back to the 0.4% default on every single call (which made this
+    function's adaptive behavior a no-op in production).
+    """
     try:
         if len(df) < period + 1:
             return 0.004  # default 0.4%
         h, l, c = df["high"], df["low"], df["close"]
+        # Defensive: duplicate-labeled columns make df["col"] return a
+        # DataFrame, not a Series. Squeeze to the first column.
+        if isinstance(h, pd.DataFrame):
+            h = h.iloc[:, 0]
+        if isinstance(l, pd.DataFrame):
+            l = l.iloc[:, 0]
+        if isinstance(c, pd.DataFrame):
+            c = c.iloc[:, 0]
+        # Defensive: duplicate index labels break aligned subtraction into
+        # a cartesian-style expansion. Keep the last occurrence per label
+        # (most recent data wins) before doing any index-aligned math.
+        if df.index.duplicated().any():
+            keep = ~df.index.duplicated(keep="last")
+            h, l, c = h[keep], l[keep], c[keep]
         tr = pd.concat(
             [(h - l), (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1
         ).max(axis=1)
-        atr = tr.rolling(period, min_periods=1).mean().iloc[-1]
+        atr = float(tr.rolling(period, min_periods=1).mean().iloc[-1])
         price = float(c.iloc[-1])
         if price <= 0 or not np.isfinite(atr):
             return 0.004

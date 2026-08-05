@@ -440,13 +440,22 @@ class SessionAnalyzer:
         else:
             grade = "C"  # was "INVALID" — now just a low grade, not a block
 
-        from utils.confidence_trace import confidence_trace
-        confidence_trace.record(
-            module="session_analyzer_fusion",
-            before=fusion_score,
-            after=fusion_score,
-            reason=f"session={session}, smc={smc_score}, grade={grade}, issues={len(issues)} (fusion always allowed)",
-        )
+        # BUG FIX: this import/call was unguarded — every other external
+        # dependency in this file (zoneinfo, session_rules data, etc.) has
+        # a fallback, but a missing/broken utils.confidence_trace would
+        # have raised here and crashed session_smc_fusion() -> analyze(),
+        # taking down the whole session-intelligence pipeline for what's
+        # only a diagnostic trace log. Fail-safe like everything else here.
+        try:
+            from utils.confidence_trace import confidence_trace
+            confidence_trace.record(
+                module="session_analyzer_fusion",
+                before=fusion_score,
+                after=fusion_score,
+                reason=f"session={session}, smc={smc_score}, grade={grade}, issues={len(issues)} (fusion always allowed)",
+            )
+        except Exception as e:
+            log.debug(f"[SessionAnalyzer] confidence_trace unavailable (non-fatal): {e}")
 
         return {
             "fusion_allowed": allowed,
@@ -777,6 +786,13 @@ class SessionAnalyzer:
             return day >= 8
         if month == 11:
             return day < 7
+        # BUG FIX: month==11 and day>=7 (post-DST-end November) previously
+        # fell through with no return statement, implicitly returning None
+        # instead of False. None is falsy in the `12 if us_dst else 13`
+        # ternary so it happened to behave like False there, but any
+        # strict boolean check (or JSON/dashboard display of
+        # "us_dst_active") downstream would show None instead of False.
+        return False
 
     def _is_eu_dst(self, dt: datetime) -> bool:
         """
@@ -792,6 +808,10 @@ class SessionAnalyzer:
             return day >= 25
         if month == 10:
             return day < 25
+        # BUG FIX: month==10 and day>=25 (post-DST-end October) previously
+        # fell through with no return, implicitly returning None instead
+        # of False. Same class of bug as _is_us_dst above.
+        return False
 
     def _is_dead_zone(self, gmt_hour: int) -> bool:
         # DEAD_ZONES is imported at module level (see top of file) — no

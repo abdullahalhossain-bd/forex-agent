@@ -70,6 +70,18 @@ W_HISTORICAL = 0.50
 W_RECENT     = 0.30
 W_REGIME     = 0.20
 
+# Round-13 fix (see _bayesian_penalty): the old penalty was a flat
+# constant (-8) tuned to one anchor case (raw=54 → final=46). It didn't
+# scale with HOW confident the claim being penalised was, so a fresh
+# pattern claiming 99% base_confidence sailed through almost untouched
+# (99 → ~91-96) while the formula's own header promise ("small sample =
+# lower confidence") went unenforced. The new penalty scales with the
+# claim's distance above neutral (50) — modest claims barely move,
+# overconfident claims get shrunk hard — so it generalises instead of
+# being fit to a single test number.
+BAYESIAN_PENALTY_FLOOR = 8.0   # minimum discount at sample_size=0, any claim
+BAYESIAN_PENALTY_SCALE = 0.6   # extra discount per point of claim above neutral(50)
+
 
 class ConfidenceEngine:
     """
@@ -164,7 +176,10 @@ class ConfidenceEngine:
         regime_score = self._get_regime_score(pattern, regime, stats)
 
         # 4. Bayesian penalty (small sample = lower confidence)
-        bayesian_penalty = self._bayesian_penalty(sample_size)
+        # Round-13: pass the score that anchors the low-sample components
+        # (base_confidence when sample_size==0) so the penalty can scale
+        # with how extreme that claim is, instead of being a flat constant.
+        bayesian_penalty = self._bayesian_penalty(sample_size, historical_score)
 
         # 5. Final weighted formula
         # Round-7: when ALL three components have no data (sample_size==0
@@ -391,29 +406,44 @@ class ConfidenceEngine:
 
         return round(regime_wins / regime_total * 100, 1)
 
-    def _bayesian_penalty(self, sample_size: int) -> float:
+    def _bayesian_penalty(self, sample_size: int, raw_score: float = 50.0) -> float:
         """
         Bayesian uncertainty penalty — কম data = কম confidence।
 
-        FIXED for new systems:
+        History:
         ─────────────────────────────────────────────────
-        পুরনো logic (বড় সমস্যা):
-          0 trades → -20 penalty
+        Original logic (বড় সমস্যা):
+          0 trades → -20 flat penalty
           raw=54 → final=34 → below 55% threshold → NO TRADE
           NO TRADE → কোনো data তৈরি হয় না → সবসময় 0 trades
           → চিরকাল NO TRADE  ← chicken-and-egg loop
 
-        নতুন logic:
-          0 trades → -8 penalty (neutral থেকে সামান্য নিচে)
-          raw=54 → final=46 → threshold 45% এ pass করবে
-          প্রথম কিছু ট্রেড হবে → data তৈরি হবে → system শিখবে
-          MIN_SAMPLE_SIZE=3 পার হলেই penalty শূন্য হয়।
+        Round-7 fix (নতুন সমস্যা তৈরি করলো):
+          0 trades → -8 flat penalty, tuned against ONE example
+          (raw=54 → final=46). কিন্তু penalty raw_score-নির্ভর না
+          হওয়ায় raw=99 (overconfident LLM/rule) দিয়েও একই -8
+          (bootstrap mode-এ -3) subtract হতো → final ≈ 91-96।
+          অর্থাৎ zero-history pattern প্রায় নিজের raw claim-ই
+          ফেরত পেত — module-এর নিজের promise ("small sample =
+          lower confidence") ভঙ্গ হচ্ছিল ঠিক তখনই যখন claim সবচেয়ে
+          বেশি সন্দেহজনক (উচ্চ confidence, শূন্য প্রমাণ)।
+
+        Round-13 fix (এই version):
+          Penalty এখন raw_score-এর neutral(50) থেকে distance-এর
+          সমানুপাতিক — claim যত বেশি overconfident, penalty তত বড়।
+          একটা modest claim (raw≈54) প্রায় আগের মতোই সামান্য penalty
+          পায়; একটা extreme claim (raw≈99) অনেক বড় penalty পায়,
+          ফলে zero-history pattern আর কখনো EXCEPTIONAL/VERY_HIGH
+          tier-এ পৌঁছাতে পারে না।
+              penalty = -(FLOOR + SCALE × max(0, raw_score − 50)) × uncertainty
+          uncertainty = 1.0 at sample_size=0, শূন্যে নেমে আসে
+          sample_size=MIN_SAMPLE_SIZE-এ (sqrt taper, আগের মতোই)।
         ─────────────────────────────────────────────────
-        Sample  | Old penalty | New penalty
-        0       |    -20      |    -8
-        1       |    -16      |    -6.4
-        2       |    -11      |    -4.5
-        3 (min) |      0      |     0      ← penalty উঠে যায়
+        Sample | raw=54 penalty | raw=99 penalty
+        0      |     -10.4      |     -37.4
+        1      |      -8.3      |     -29.9
+        2      |      -5.7      |     -20.6
+        3(min) |        0       |        0
         """
         if sample_size >= MIN_SAMPLE_SIZE:
             return 0.0
@@ -423,13 +453,17 @@ class ConfidenceEngine:
         _is_bootstrap = self._is_system_bootstrap()
 
         if sample_size == 0:
-            # Round-12: reduced from -8 to -3 in bootstrap mode
-            base_penalty = -3.0 if _is_bootstrap else -8.0
+            uncertainty = 1.0
         else:
-            base_penalty = -8.0 * (1 - math.sqrt(sample_size / MIN_SAMPLE_SIZE))
-            # Round-12: halve the penalty in bootstrap mode for samples 1-2
-            if _is_bootstrap:
-                base_penalty *= 0.5
+            uncertainty = 1.0 - math.sqrt(sample_size / MIN_SAMPLE_SIZE)
+
+        deviation = max(0.0, raw_score - 50.0)
+        base_penalty = -(BAYESIAN_PENALTY_FLOOR + BAYESIAN_PENALTY_SCALE * deviation) * uncertainty
+
+        # Round-12: halve the penalty in bootstrap mode so the very
+        # first trades can still clear the gate and start generating data.
+        if _is_bootstrap:
+            base_penalty *= 0.5
 
         return round(base_penalty, 1)
 

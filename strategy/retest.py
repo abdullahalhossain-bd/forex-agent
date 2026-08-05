@@ -2,7 +2,7 @@
 from __future__ import annotations
 import math
 import pandas as pd
-from strategies._common import safe_float, pip_size_for
+from ._common import safe_float, pip_size_for
 from utils.logger import get_logger
 log = get_logger("retest_strategy")
 

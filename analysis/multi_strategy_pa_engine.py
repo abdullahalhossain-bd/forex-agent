@@ -59,6 +59,16 @@ ALLOWED_PAIRS = {
     "EURGBP", "EURJPY", "GBPJPY", "XAUUSD",
     "EURCHF", "EURAUD", "EURCAD", "EURNZD",
     "GBPCHF", "GBPAUD", "GBPCAD", "GBPNZD",
+    # 2026-08-05 fix: forex_ai.log/trader.log show these still hitting
+    # "Pair X not supported" on EVERY cycle, silently dropping the PA vote
+    # (the same way the 2026-07-20 fix addressed GBP/EUR crosses) — the
+    # AUD/NZD/CAD/CHF/JPY cross matrix plus metals and the exotic pairs the
+    # bot is actually scanning were still missing entirely.
+    "AUDJPY", "AUDCHF", "AUDCAD", "AUDNZD",
+    "NZDJPY", "NZDCHF", "NZDCAD",
+    "CADJPY", "CADCHF", "CHFJPY",
+    "XAGUSD", "XPTUSD", "XPDUSD",
+    "USDTRY", "USDZAR", "EURNOK",
 }
 ALLOWED_TIMEFRAMES = {"1D", "4H", "1H", "H1", "H4", "D1"}
 

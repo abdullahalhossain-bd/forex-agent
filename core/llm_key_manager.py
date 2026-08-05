@@ -381,7 +381,13 @@ class _OpenAICompatClient:
             "Accept-Encoding": "gzip, deflate",
             "Connection": "keep-alive",
         }
-        url = f"{self._base_url}/chat/completions"
+        # Default OpenAI-compatible chat completions path used by many
+        # providers. Hugging Face inference API is not OpenAI-compatible
+        # — call its /models/{model} endpoint instead and normalise.
+        if self._provider == "huggingface":
+            url = f"{self._base_url.rstrip('/')}/models/{model}"
+        else:
+            url = f"{self._base_url}/chat/completions"
         headers = browser_headers.copy()
         headers.update({
             "Authorization": f"Bearer {self._api_key}",
@@ -391,12 +397,25 @@ class _OpenAICompatClient:
             headers["HTTP-Referer"] = "https://github.com/forex-ai-trader"
             headers["X-Title"] = "Forex AI Trader"
 
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
+        # Build payload. For Hugging Face we send a simple `inputs` payload
+        # (their inference API expects the model id in the URL).
+        if self._provider == "huggingface":
+            # Prefer the last user message as the input for HF models.
+            last_msg = None
+            for m in reversed(messages or []):
+                if isinstance(m, dict) and m.get("role") in ("user", "system", "assistant"):
+                    last_msg = m.get("content")
+                    break
+            if last_msg is None:
+                last_msg = ""
+            payload = {"inputs": last_msg}
+        else:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
         
         skip = {"model", "messages", "max_tokens", "temperature", "timeout"}
         http_timeout = extra.get("timeout") or 60
@@ -422,11 +441,36 @@ class _OpenAICompatClient:
 
         if resp.status_code != 200:
             err_body = resp.text[:500]
+            # Convert 404 into a clearer error for missing model/repo.
+            if resp.status_code == 404:
+                raise RuntimeError(f"{self._provider} API error 404: model '{model}' not found ({url})")
             hint = ""
             if resp.status_code == 403:
                 hint = " — HTTP 403 typically means Cloudflare bot detection. Install curl_cffi."
             raise RuntimeError(f"{self._provider} API error {resp.status_code}: {err_body}{hint}")
-            
+
+        # Normalise provider responses into the small OpenAI-like dict
+        # structure the rest of the code expects (`choices[0].message.content`).
+        if self._provider == "huggingface":
+            # HF may return text, a list, or a dict with generated_text.
+            try:
+                data = resp.json()
+            except Exception:
+                data = resp.text
+            text = ""
+            if isinstance(data, dict):
+                text = data.get("generated_text") or data.get("text") or str(data)
+            elif isinstance(data, list) and data:
+                first = data[0]
+                if isinstance(first, dict):
+                    text = first.get("generated_text") or first.get("text") or str(first)
+                else:
+                    text = str(first)
+            else:
+                text = str(data)
+            norm = {"choices": [{"message": {"content": text}}]}
+            return _OpenAICompatResponse(norm)
+
         data = resp.json()
         return _OpenAICompatResponse(data)
 

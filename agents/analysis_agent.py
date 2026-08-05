@@ -2394,7 +2394,14 @@ class AnalysisAgent:
                         "reason": (
                             f"MTF structure: {_mtf_perm}"
                             + (" (HTF/LTF conflict)" if _mtf_conflict else "")
-                            + f" — bias={mtf_structure_ctx.get('combined_bias', '?')}"
+                            # BUG FIX: mtf_structure_ctx is the get_ai_context()
+                            # output, whose key is "mtf_combined_bias" — not
+                            # "combined_bias" (that key only exists on the raw
+                            # analyze() dict). The old lookup always missed and
+                            # fell back to "?", making every single block look
+                            # like an unresolved/data-missing bias regardless
+                            # of what the engine actually computed.
+                            + f" — bias={mtf_structure_ctx.get('mtf_combined_bias', '?')}"
                         ),
                     }
                     log.info(

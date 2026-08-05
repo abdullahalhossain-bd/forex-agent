@@ -594,7 +594,8 @@ class OrderManager:
                 log.warning(f"[OrderManager] order_send returned invalid response — MT5 API issue")
                 self._wait_retry(attempt, "invalid API response")
                 continue
-            outcome = self._check_confirmation(result, attempt)
+            # FIX: symbol wasn't passed — logged as "?" in execution.log audit trail.
+            outcome = self._check_confirmation(result, attempt, symbol=broker_symbol)
             if outcome["success"]:
                 _exp_note = f", expires in {expiration_minutes:.0f}m" if expiration_minutes else " (GTC)"
                 log.info(f"[OrderManager] ✅ LIMIT ORDER PLACED — {direction} {broker_symbol} @ {price}{_exp_note}")
@@ -717,7 +718,8 @@ class OrderManager:
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             result = mt5.order_send(request)
-            outcome = self._check_confirmation(result, attempt=attempt)
+            # FIX: symbol wasn't passed — logged as "?" in execution.log audit trail.
+            outcome = self._check_confirmation(result, attempt=attempt, symbol=broker_symbol)
             if outcome.get("success"):
                 return outcome
             if attempt < self.MAX_RETRIES:
@@ -774,7 +776,8 @@ class OrderManager:
 
         for attempt in range(1, self.MAX_RETRIES + 1):
             result = mt5.order_send(request)
-            outcome = self._check_confirmation(result, attempt=attempt)
+            # FIX: symbol wasn't passed — logged as "?" in execution.log audit trail.
+            outcome = self._check_confirmation(result, attempt=attempt, symbol=broker_symbol)
             if outcome.get("success"):
                 return outcome
             if attempt < self.MAX_RETRIES:
@@ -868,11 +871,18 @@ class OrderManager:
         }
 
         result = mt5.order_send(request)
-        outcome = self._check_confirmation(result, attempt=1)
+        # FIX: symbol was never passed here, so every close_order() fill
+        # logged "broker.order_send" with symbol="?" in execution.log
+        # (the _check_confirmation default) — no way to tell from the
+        # audit log which position was actually closed. position.symbol
+        # is already known at this point, so pass it through.
+        outcome = self._check_confirmation(result, attempt=1, symbol=position.symbol)
         if outcome["success"]:
             profit = position.profit
             log.info(f"[OrderManager] ✅ Position closed — ticket {ticket} | Profit: ${profit:.2f}")
             outcome["profit"] = profit
+            outcome["symbol"] = position.symbol
+            outcome["close_price"] = price
         return outcome
 
     # ─────────────────────────────────────────────

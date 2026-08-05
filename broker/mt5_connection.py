@@ -484,6 +484,49 @@ class MT5Connection:
             return None
 
     # ==========================================================
+    # SYMBOL INFO  (fix: was missing entirely — every caller of
+    # mt5_conn.symbol_info() was silently falling back to the static
+    # USD pip-value table, which is wrong by ~100x on Cent accounts.
+    # See core/constants.py:get_live_pip_value_per_lot().)
+    # ==========================================================
+
+    def symbol_info(self, symbol: str):
+        """Thread-safe wrapper around mt5.symbol_info().
+
+        Returns the broker's live SymbolInfo struct (point, digits,
+        trade_tick_value, trade_tick_size, trade_contract_size, etc.)
+        for `symbol`, or None if unavailable. Callers that need pip
+        value / contract-size math (e.g. get_live_pip_value_per_lot)
+        depend on this actually working — do not remove.
+        """
+        if not self._require_connected():
+            return None
+
+        try:
+            with self.MT5_LOCK:
+                # symbol_info() only returns data for symbols that are
+                # currently selected in Market Watch — make sure it's
+                # selected first so this doesn't silently return None
+                # for symbols the terminal hasn't shown yet.
+                info = mt5.symbol_info(symbol)
+                if info is None:
+                    mt5.symbol_select(symbol, True)
+                    info = mt5.symbol_info(symbol)
+
+            if info is None:
+                log.warning(
+                    f"[MT5Connection] symbol_info({symbol}) returned None "
+                    f"(symbol not found / not selectable on this broker)"
+                )
+                return None
+
+            return info
+
+        except Exception as e:
+            log.exception(f"[MT5Connection] symbol_info error: {e}")
+            return None
+
+    # ==========================================================
     # POSITIONS
     # ==========================================================
 

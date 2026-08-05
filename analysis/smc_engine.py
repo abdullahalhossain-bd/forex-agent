@@ -139,13 +139,20 @@ class SMCEngine:
         # whether the overall confluence is sufficient.
         signal = direction if direction != "NEUTRAL" else "WAIT"
 
-        from utils.confidence_trace import confidence_trace
-        confidence_trace.record(
-            module="smc_engine",
-            before=score,
-            after=score,
-            reason=f"direction={direction}, score={score}/100, grade={grade} (no hard cutoff, MIN_TRADE_SCORE={MIN_TRADE_SCORE} is informational)",
-        )
+        # BUG FIX: unguarded import — a missing/broken utils.confidence_trace
+        # would crash analyze() (this module's main entry point, and SMC
+        # score feeds directly into the Confluence gate) for what's only a
+        # diagnostic trace log. Made fail-safe.
+        try:
+            from utils.confidence_trace import confidence_trace
+            confidence_trace.record(
+                module="smc_engine",
+                before=score,
+                after=score,
+                reason=f"direction={direction}, score={score}/100, grade={grade} (no hard cutoff, MIN_TRADE_SCORE={MIN_TRADE_SCORE} is informational)",
+            )
+        except Exception as e:
+            log.debug(f"[SMCEngine] confidence_trace unavailable (non-fatal): {e}")
 
         result = {
             "symbol":        self.symbol,

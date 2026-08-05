@@ -458,6 +458,72 @@ class PositionManager:
 
     # ── 4. SCHEDULED EXITS (Time + Friday) ──
 
+    def _sync_scheduled_close_to_db(self, ticket: int, symbol: str, outcome: dict,
+                                     action: str, reason: str) -> None:
+        """Persist a scheduled close (Friday/session-end) to the trades DB.
+
+        BUG FIX: _check_scheduled_exits() used to only call self._log_action(),
+        which appends to an in-memory list and never touches the sqlite
+        `trades` table. The position was genuinely closed on the broker side
+        (order_manager.close_order() succeeded), but the DB row stayed
+        status='OPEN' forever. On the next restart, orphan_cleanup.py would
+        find "DB says OPEN, MT5 has 0 positions" and force-close it as a
+        blind AUTO_CLOSED guess — with no real exit price or P&L, since
+        close_order()'s actual fill data was never recorded anywhere.
+
+        Fix: reuse the same journal_bridge.log_mt5_close() path that
+        _handle_close() (Day 33 SL/TP-detected closes) already uses, so
+        scheduled closes are recorded with real exit price / P&L exactly
+        the same way. This also clears _ticket_to_db_id so this ticket
+        isn't mistaken for still-open by anything polling this instance.
+        """
+        pnl = float(outcome.get("profit", 0.0) or 0.0)
+        close_price = outcome.get("close_price")
+        result = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
+
+        db_id = self._ticket_to_db_id.get(ticket)
+        if db_id and self.journal_bridge:
+            try:
+                close_data = {
+                    "close_time":  datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "exit_price":  close_price,
+                    "result":      result,
+                    "pnl":         round(pnl, 2),
+                    "pnl_pips":    0,
+                    "spread_cost": 0,
+                    "commission":  0,
+                    "slippage":    0,
+                }
+                self.journal_bridge.log_mt5_close(db_id, close_data)
+            except Exception as e:
+                log.warning(f"[PositionManager] journal_bridge.log_mt5_close failed for "
+                            f"ticket {ticket} ({action}): {e}")
+        elif not self.journal_bridge:
+            log.warning(f"[PositionManager] No journal_bridge wired — ticket {ticket} "
+                        f"({action}) closed on broker but DB status was NOT updated. "
+                        f"This will show up as an orphan trade on next restart.")
+        else:
+            log.warning(f"[PositionManager] No DB id tracked for ticket {ticket} "
+                        f"({action}) — cannot sync close to trades table.")
+
+        if self.on_closed:
+            try:
+                self.on_closed(symbol, result, pnl)
+            except Exception as e:
+                log.warning(f"[PositionManager] on_closed callback failed: {e}")
+
+        if self.risk_engine:
+            try:
+                self.risk_engine.record_trade_close(symbol, pnl)
+            except Exception as e:
+                log.warning(f"[PositionManager] risk_engine.record_trade_close failed: {e}")
+
+        self._breakeven_done.discard(ticket)
+        self._partial_done.discard(ticket)
+        self._ticket_to_db_id.pop(ticket, None)
+
+        self._log_action(ticket, symbol, action, reason=reason)
+
     def _check_scheduled_exits(self, current_positions: dict) -> None:
         """Time-based exit এবং Friday close চেক করে।"""
         if not current_positions:
@@ -473,10 +539,12 @@ class PositionManager:
                 f"[PositionManager] ⚠️ FRIDAY CLOSE — {len(current_positions)} positions to close"
             )
             for ticket in list(current_positions.keys()):
-                result = self.order_manager.close_order(ticket, comment="friday_close")
+                outcome = self.order_manager.close_order(ticket, comment="friday_close")
                 sym = current_positions[ticket]["symbol"]
-                if result.get("success"):
-                    self._log_action(ticket, sym, "FRIDAY_CLOSE", reason="Weekend gap protection")
+                if outcome.get("success"):
+                    self._sync_scheduled_close_to_db(
+                        ticket, sym, outcome, "FRIDAY_CLOSE", "Weekend gap protection"
+                    )
                     log.info(f"[PositionManager] ⚠️ Friday closed — {sym} ticket {ticket}")
             return
 
@@ -487,10 +555,12 @@ class PositionManager:
                 f"closing {len(current_positions)} positions"
             )
             for ticket in list(current_positions.keys()):
-                result = self.order_manager.close_order(ticket, comment="session_end")
+                outcome = self.order_manager.close_order(ticket, comment="session_end")
                 sym = current_positions[ticket]["symbol"]
-                if result.get("success"):
-                    self._log_action(ticket, sym, "TIME_EXIT", reason=f"Session end UTC {hour_utc}:00")
+                if outcome.get("success"):
+                    self._sync_scheduled_close_to_db(
+                        ticket, sym, outcome, "TIME_EXIT", f"Session end UTC {hour_utc}:00"
+                    )
                     log.info(f"[PositionManager] ⏰ Time exit — {sym} ticket {ticket}")
 
     # ─────────────────────────────────────────────

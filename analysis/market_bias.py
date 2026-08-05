@@ -199,13 +199,20 @@ class MarketBiasEngine:
                     total_deduction += 3  # floor for extra conflicts
             confidence = max(25, confidence - total_deduction)
 
-            from utils.confidence_trace import confidence_trace
-            confidence_trace.record(
-                module="market_bias",
-                before=min(100, confidence + total_deduction),
-                after=confidence,
-                reason=f"{len(warnings)} conflict(s), diminishing deduction -{total_deduction}, floored at 25",
-            )
+            # BUG FIX: unguarded import — a missing/broken utils.confidence_trace
+            # would crash analyze() (this module's main entry point) for what's
+            # only a diagnostic trace log. Made fail-safe like the rest of the
+            # confidence-adjustment logic in this method.
+            try:
+                from utils.confidence_trace import confidence_trace
+                confidence_trace.record(
+                    module="market_bias",
+                    before=min(100, confidence + total_deduction),
+                    after=confidence,
+                    reason=f"{len(warnings)} conflict(s), diminishing deduction -{total_deduction}, floored at 25",
+                )
+            except Exception as e:
+                log.debug(f"[MarketBias] confidence_trace unavailable (non-fatal): {e}")
 
         # ── Recommendation ─────────────────────────────────
         recommendation = self._recommendation(bias, confidence, warnings)

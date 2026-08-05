@@ -32,6 +32,72 @@ def _mt5_positions_get(retries: int = 2, delay: float = 0.3, **kwargs):
     return None
 
 
+def _lookup_close_deal(mt5_ticket: Optional[int], pair: str, open_time: Optional[str]):
+    """Look up the real closing deal for an orphaned position from MT5
+    history, so orphan_cleanup doesn't have to blind-guess AUTO_CLOSED
+    with no exit price / P&L.
+
+    BUG FIX: previously every orphan was closed with a bare
+    {"close_reason": "auto_orphan_cleanup"} — the actual exit price,
+    profit, and close reason (SL hit / TP hit / manual close) were
+    never recorded anywhere, so the orphaned trade's real outcome was
+    permanently lost. mt5.history_deals_get() still has this data for
+    any recently-closed position, so look it up before falling back.
+
+    Returns a dict {"price": float, "profit": float, "time": iso str,
+    "matched_by": "ticket"|"pair"} or None if nothing usable was found.
+    """
+    try:
+        import MetaTrader5 as mt5
+        from datetime import timedelta
+
+        end = datetime.now(timezone.utc)
+        # Look back generously (30 days) — a restart could happen long
+        # after the position actually closed.
+        start = end - timedelta(days=30)
+        if open_time:
+            try:
+                parsed_open = datetime.fromisoformat(str(open_time).replace("Z", "+00:00"))
+                if parsed_open < start:
+                    start = parsed_open
+            except Exception:
+                pass
+
+        deals = mt5.history_deals_get(start, end)
+        if not deals:
+            return None
+
+        # Only exit deals (DEAL_ENTRY_OUT / DEAL_ENTRY_OUT_BY) actually
+        # close a position and carry the realized P&L we want.
+        exit_deals = [d for d in deals if getattr(d, "entry", None) in
+                      (getattr(mt5, "DEAL_ENTRY_OUT", 1), getattr(mt5, "DEAL_ENTRY_OUT_BY", 3))]
+
+        if mt5_ticket:
+            matches = [d for d in exit_deals if int(getattr(d, "position_id", -1)) == int(mt5_ticket)]
+            if matches:
+                d = max(matches, key=lambda x: x.time)
+                return {
+                    "price": float(d.price), "profit": float(d.profit),
+                    "time": datetime.fromtimestamp(d.time, tz=timezone.utc).isoformat(),
+                    "matched_by": "ticket",
+                }
+
+        # Fall back to symbol match (less reliable — could be the wrong
+        # trade if multiple positions on the same pair closed recently).
+        matches = [d for d in exit_deals if str(getattr(d, "symbol", "")) == str(pair)]
+        if matches:
+            d = max(matches, key=lambda x: x.time)
+            return {
+                "price": float(d.price), "profit": float(d.profit),
+                "time": datetime.fromtimestamp(d.time, tz=timezone.utc).isoformat(),
+                "matched_by": "pair",
+            }
+    except Exception as e:
+        log.warning(f"[OrphanCleanup] _lookup_close_deal failed for {pair}: {e}")
+
+    return None
+
+
 def reconcile_open_positions(
     db,
     mt5_conn=None,
@@ -149,17 +215,49 @@ def reconcile_open_positions(
 
             if is_orphan:
                 try:
-                    context = {"close_reason": "auto_orphan_cleanup"}
-                    cur.execute(
-                        "UPDATE trades SET status = 'CLOSED', "
-                        "close_time = ?, result = 'AUTO_CLOSED', "
-                        "context_json = ? "
-                        "WHERE id = ?",
-                        (datetime.now(timezone.utc).isoformat(),
-                         json.dumps(context), trade_id),
-                    )
+                    has_ticket_col = "mt5_ticket" in row.keys() if hasattr(row, "keys") else True
+                    db_ticket = row["mt5_ticket"] if has_ticket_col else None
+                    open_time = row["open_time"] if "open_time" in row.keys() else None
+
+                    deal = _lookup_close_deal(db_ticket, pair, open_time)
+                    if deal:
+                        pnl = deal["profit"]
+                        real_result = "WIN" if pnl > 0 else ("LOSS" if pnl < 0 else "BREAKEVEN")
+                        context = {
+                            "close_reason": "auto_orphan_cleanup",
+                            "matched_from_mt5_history": True,
+                            "matched_by": deal["matched_by"],
+                            "exit_price": deal["price"],
+                            "pnl": pnl,
+                            "actual_close_time": deal["time"],
+                        }
+                        cur.execute(
+                            "UPDATE trades SET status = 'CLOSED', "
+                            "close_time = ?, result = ?, "
+                            "context_json = ? "
+                            "WHERE id = ?",
+                            (deal["time"], real_result, json.dumps(context), trade_id),
+                        )
+                        log.warning(
+                            f"[OrphanCleanup] Closed orphan trade #{trade_id} {pair} {trade_type} "
+                            f"— recovered from MT5 history (matched_by={deal['matched_by']}): "
+                            f"{real_result} @ {deal['price']} (${pnl:.2f})"
+                        )
+                    else:
+                        context = {"close_reason": "auto_orphan_cleanup", "matched_from_mt5_history": False}
+                        cur.execute(
+                            "UPDATE trades SET status = 'CLOSED', "
+                            "close_time = ?, result = 'AUTO_CLOSED', "
+                            "context_json = ? "
+                            "WHERE id = ?",
+                            (datetime.now(timezone.utc).isoformat(),
+                             json.dumps(context), trade_id),
+                        )
+                        log.warning(
+                            f"[OrphanCleanup] Closed orphan trade #{trade_id} {pair} {trade_type} "
+                            f"— no matching MT5 history found, exit price/P&L unknown"
+                        )
                     result["closed"] += 1
-                    log.warning(f"[OrphanCleanup] Closed orphan trade #{trade_id} {pair} {trade_type}")
                 except Exception as e:
                     result["errors"] += 1
                     log.error(f"[OrphanCleanup] Failed to close trade #{trade_id}: {e}")

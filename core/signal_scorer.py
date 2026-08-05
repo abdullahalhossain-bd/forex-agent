@@ -156,11 +156,46 @@ class SignalScorer:
     """
 
     # Default max-points per layer (used for reporting % of max)
+    #
+    # BUG FIX (2026-08-05): this dict used to have keys "smc" and "trend"
+    # that NOTHING ever calls — the real caller, core/orphan_consumers.py
+    # apply_signal_scoring(), calls scorer.add() with the layer names
+    # "rule_pa", "ml", "llm", "mtf", "strength", "liquidity". Because
+    # add() fell back to `self.LAYER_MAX.get(layer, points)`, any of
+    # those unregistered names (rule_pa, mtf, strength) got their "max"
+    # silently set equal to whatever points they scored *that cycle* —
+    # which (a) made a perfect layer always look like 100% coverage
+    # (max == its own score) and (b) turned negative contrarian scores
+    # (e.g. mtf contradicting direction, -10) into a NEGATIVE max_possible,
+    # corrupting the score/threshold math for the whole decision. On top
+    # of that, "session"/"news"/"risk" (30 pts of budget) were NEVER
+    # populated by the real caller at all, so the achievable ceiling was
+    # nowhere near what the 60-65 threshold assumed — meaning almost
+    # every signal was mathematically unable to clear the bar regardless
+    # of true quality. This is the reason execution.log showed 53/53
+    # NO_TRADE even at 95-99% aggregate confidence.
+    #
+    # Caps below now match the actual layer names AND the actual point
+    # ranges computed in orphan_consumers.apply_signal_scoring():
+    #   rule_pa   : up to 30 (patterns) + 10 (STRONG bonus) = 40
+    #   ml        : up to 25 (min(25, ml_conf * 0.25))
+    #   llm       : up to 30 (min(30, llm_conf * 0.30)) — was capped at 15,
+    #               silently halving the LLM layer's real weight
+    #   mtf       : ±20 (matches direction / contradicts)
+    #   strength  : ±10
+    #   liquidity : up to 20 (A+ grade) — was capped at 15, clipping the
+    #               engine's own top grade
+    #   session/news/risk kept for any caller that still uses the older
+    #   layer names (e.g. the SignalScorer docstring example at the top
+    #   of this file).
     LAYER_MAX = {
+        "rule_pa":   40,
+        "ml":        25,
+        "llm":       30,
+        "mtf":       20,
+        "strength":  10,
+        "liquidity": 20,
         "smc":       20,
-        "liquidity": 15,
-        "ml":        20,
-        "llm":       15,
         "trend":     15,
         "session":   10,
         "news":      10,
@@ -192,10 +227,35 @@ class SignalScorer:
     # ── Recording ──────────────────────────────────────────────
 
     def add(self, layer: str, points: int, detail: str = "") -> None:
-        """Record one layer's contribution."""
-        max_p = self.LAYER_MAX.get(layer, points)
-        # Clamp contribution to [0, max_p] — no negative overshoot
-        points = max(0, min(points, max_p))
+        """Record one layer's contribution.
+
+        BUG FIX (2026-08-05): previously `max_p = self.LAYER_MAX.get(layer,
+        points)` used the passed-in `points` as the fallback max whenever
+        `layer` wasn't a registered key. That silently broke max_possible()
+        for any unregistered layer (see LAYER_MAX comment above) and could
+        even make max_possible negative when points was negative. Now an
+        unregistered layer is loud (logged) and contributes 0 rather than
+        corrupting the score/threshold math, and negative (contradiction)
+        points are floored at -max_p instead of 0 so a real contradiction
+        still counts as a penalty instead of being clamped away.
+        """
+        if layer not in self.LAYER_MAX:
+            log.warning(
+                f"[SignalScorer] add() called with unregistered layer "
+                f"'{layer}' (points={points}) — no LAYER_MAX entry exists, "
+                f"so this layer contributes 0 instead of corrupting "
+                f"max_possible(). Register '{layer}' in LAYER_MAX."
+            )
+            self._components.append(ScoreComponent(
+                layer=layer, points=0, max_possible=0, detail=detail,
+            ))
+            return
+        max_p = self.LAYER_MAX[layer]
+        # Clamp contribution to [-max_p, max_p] — positive contributions
+        # capped at the layer's ceiling, negative (contrarian) contributions
+        # floored symmetrically so one bad layer can't swing the score more
+        # than a perfect layer could swing it the other way.
+        points = max(-max_p, min(points, max_p))
         self._components.append(ScoreComponent(
             layer=layer, points=points, max_possible=max_p, detail=detail,
         ))
