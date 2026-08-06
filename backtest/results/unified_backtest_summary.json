@@ -10,13 +10,13 @@
     "sharpe": 0.0,
     "sortino": 0.0,
     "rejection_stats": {
-      "WAIT": 45,
+      "WAIT": 134,
       "NO_TRADE_ANALYSIS": 0,
-      "risk_rejected": 1,
-      "permission_blocked": 4,
+      "risk_rejected": 0,
+      "permission_blocked": 16,
       "engine_error": 0,
       "max_trades": 0,
-      "total_bars": 50
+      "total_bars": 150
     }
   }
 }

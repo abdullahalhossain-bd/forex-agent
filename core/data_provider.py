@@ -113,7 +113,23 @@ class HistoricalMT5Provider(DataProvider):
             log.warning(f"[HistoricalMT5Provider] cursor {self._cursor} out of bounds (len={len(self._df)})")
             self._cursor = max(0, min(self._cursor, len(self._df) - 1))
 
-        df_slice = self._df.iloc[: self._cursor + 1].copy()
+        # ── P5 FIX: Bounded rolling window for O(n²)→O(n) backtest perf ─────
+        # ORIGINAL CODE (O(n²) complexity):
+        #   df_slice = self._df.iloc[: self._cursor + 1].copy()
+        # The full history-to-date slice grew with each bar, so indicator
+        # computation (139 indicators + pattern detection) ran on an
+        # ever-growing dataset: 1st bar→1 row, 2nd→2 rows, ..., nth→n rows.
+        # Total work = sum(1..n) = O(n²). A 5,000-bar backtest was 2,500x
+        # slower than a 100-bar one.
+        #
+        # FIX: Bound the slice to a fixed rolling window (300 bars).
+        # Indicator cost is now constant per bar → O(n) total.
+        # Window size = 300 matches live trading's limit=300 in
+        # agents/market_agent.py for execution parity.
+        # Early bars (when cursor < 300) naturally clamp to start via max(0, ...).
+        LOOKBACK_BARS = 300
+        start = max(0, self._cursor - LOOKBACK_BARS)
+        df_slice = self._df.iloc[start : self._cursor + 1].copy()
         ind_ctx = {}
         try:
             from data.indicator_registry import add_canonical_indicators, get_ai_context as _get_ctx
