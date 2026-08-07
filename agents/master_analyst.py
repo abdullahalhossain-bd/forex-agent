@@ -28,6 +28,7 @@ import json
 import math
 import os
 import re
+import time
 from datetime import datetime
 
 from dotenv import load_dotenv
@@ -1170,7 +1171,25 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             if fb1: or_models.append(fb1)
             if fb2: or_models.append(fb2)
 
+            # BUGFIX (log audit — 279 occurrences of "404: model
+            # 'liquid/lfm-2.5-1.2b-instruct:free' not found"): a model
+            # that 404s on OpenRouter is permanently dead — retrying it
+            # every cycle (and on every key in the rotation) generates
+            # the same 404 hundreds of times. Track dead models in a
+            # process-local set so we skip them on subsequent cycles.
+            # Set is intentionally NOT persisted — OpenRouter may bring
+            # a model back, and a process restart re-checks once.
+            if not hasattr(self, "_dead_openrouter_models"):
+                self._dead_openrouter_models = set()
+
             for or_model in or_models:
+                if or_model in self._dead_openrouter_models:
+                    log.debug(
+                        f"[MasterAnalyst] OpenRouter skipping dead model "
+                        f"{or_model!r} (previously returned 404 — not retried "
+                        f"this process)"
+                    )
+                    continue
                 try:
                     or_client = _key_manager.get_openrouter_client()
                     if or_client is None:
@@ -1192,6 +1211,18 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 except Exception as e:
                     info = log_llm_call_failure(log, "OpenRouter", or_model, 0, 1, e)
                     _key_manager.mark_openrouter_failure(info["error_str"], info["rate_limited"])
+                    # BUGFIX (log audit): a 404 / model_unavailable means
+                    # the model id itself is dead — no amount of key
+                    # rotation will fix it. Mark it so we don't retry on
+                    # the next cycle / next key.
+                    if info.get("model_unavailable"):
+                        self._dead_openrouter_models.add(or_model)
+                        log.error(
+                            f"[MasterAnalyst] OpenRouter model {or_model!r} "
+                            f"permanently unavailable — added to skip-list for "
+                            f"this process. Update OPENROUTER_MODEL env var to "
+                            f"a valid model id."
+                        )
                     # If this model 429s, try the next fallback model
                     continue
 
@@ -1274,7 +1305,42 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 info = log_llm_call_failure(log, "SambaNova", "sambanova-model", 0, 1, e)
                 _key_manager.mark_sambanova_failure(info["error_str"], info["rate_limited"])
 
-        raise RuntimeError("[MasterAnalyst] No LLM client available (all keys failed)")
+        # BUGFIX (log audit — 101 "No LLM client available" errors):
+        # The generic message gave the operator no clue WHICH providers
+        # were tried and WHY each failed. Build a richer diagnostic
+        # that lists the providers in the cascade order with their
+        # last error so the next iteration of debugging doesn't have
+        # to grep the full log to figure out which key is dead.
+        _diag_parts = []
+        if _key_manager is not None:
+            try:
+                # The KeyManager stores per-provider lists as private
+                # attributes (_groq_keys, _gemini_keys, _openrouter_keys,
+                # _cerebras_keys, _sambanova_keys). Read them defensively.
+                _prov_attr_map = {
+                    "groq":        "_groq_keys",
+                    "gemini":      "_gemini_keys",
+                    "openrouter":  "_openrouter_keys",
+                    "cerebras":    "_cerebras_keys",
+                    "sambanova":   "_sambanova_keys",
+                }
+                for prov, attr in _prov_attr_map.items():
+                    keys = getattr(_key_manager, attr, None) or []
+                    if not keys:
+                        continue
+                    active = sum(1 for k in keys if getattr(k, "is_active", True))
+                    rl = sum(1 for k in keys if getattr(k, "rate_limited_until", 0) > time.time())
+                    _diag_parts.append(
+                        f"{prov}: {active}/{len(keys)} active, {rl} rate-limited"
+                    )
+            except Exception:
+                pass
+        _diag = " | ".join(_diag_parts) if _diag_parts else "no key manager diagnostics available"
+        raise RuntimeError(
+            f"[MasterAnalyst] No LLM client available (all keys failed). "
+            f"Provider states: {_diag}. "
+            f"Check .env for valid GROQ_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY."
+        )
 
     def _parse_response(self, raw: str) -> dict:
         text = raw.strip() if raw else ""

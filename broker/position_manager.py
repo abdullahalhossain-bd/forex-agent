@@ -129,6 +129,14 @@ class PositionManager:
         self._breakeven_done:   set[int]        = set()  # ইতিমধ্যে breakeven করা tickets
         self._partial_done:     set[int]        = set()  # ইতিমধ্যে partial close করা tickets
         self._action_log:       list[dict]      = []     # সব management action record
+        # BUGFIX (log audit — "[PositionManager] ⚠️ Low health N/100 ..."
+        # warning fires every monitoring cycle for the same stuck
+        # position): track per-ticket last-warn timestamp so we only
+        # re-emit the warning once every 5 minutes per ticket. The
+        # health score itself is still computed every cycle (and other
+        # actions like trailing stop / breakeven still fire normally);
+        # only the log line is throttled.
+        self._low_health_warn_last_ts: dict[int, float] = {}
 
     # ─────────────────────────────────────────────
     # PUBLIC — REGISTER AFTER OPEN
@@ -318,10 +326,19 @@ class PositionManager:
         # ── Rule 4: Trade Health Score ──
         health = self._compute_health(pos, profit_pips, current_price)
         if health < 30:
-            log.warning(
-                f"[PositionManager] ⚠️ Low health {health}/100 — {symbol} {direction} "
-                f"profit={profit_pips} pips"
-            )
+            # BUGFIX (log audit): throttle the warning to once per 5
+            # minutes per ticket — a stuck position can sit at low
+            # health for hours, and the previous code logged the same
+            # line every cycle. Health is still computed every cycle
+            # (used for the kill-switch check below if any).
+            _now = time.time()
+            _last = self._low_health_warn_last_ts.get(ticket, 0.0)
+            if _now - _last > 300:
+                log.warning(
+                    f"[PositionManager] ⚠️ Low health {health}/100 — {symbol} {direction} "
+                    f"profit={profit_pips} pips (warning throttled to 5min/ticket)"
+                )
+                self._low_health_warn_last_ts[ticket] = _now
 
     # ── 1. BREAKEVEN ──
 
@@ -646,6 +663,9 @@ class PositionManager:
         # Cleanup sets
         self._breakeven_done.discard(ticket)
         self._partial_done.discard(ticket)
+        # BUGFIX (log audit): also discard the low-health throttle
+        # entry so the dict doesn't grow unbounded over a long session.
+        self._low_health_warn_last_ts.pop(ticket, None)
         self._ticket_to_db_id.pop(ticket, None)
 
         return {"ticket": ticket, "symbol": symbol, "result": result, "pnl": pnl}

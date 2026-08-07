@@ -221,6 +221,14 @@ class AITrader:
         # positions" or "no losses" when MT5 is unreachable.
         self._mt5_sync_ok = True
         self._mt5_disconnect_cycles = 0
+        # BUGFIX (log audit — "[Risk] Shared MT5Connection.positions_get()
+        # returned None ..." warning fires every cycle): the warning is
+        # logged on every single cycle while MT5 is degraded, producing
+        # hundreds of identical lines per session. Track the last warn
+        # timestamp so we only re-emit at most once every 5 minutes —
+        # `_mt5_sync_ok` itself stays False the whole time so the fail-
+        # closed behavior is unaffected.
+        self._mt5_none_warn_last_ts: float = 0.0
         # Edge-detection for kill-switch Level 3 (max drawdown / full stop)
         # emergency close — see check_trade_permission() call site below.
         # Without this, every subsequent cycle while Level 3 stays active
@@ -2745,13 +2753,21 @@ class AITrader:
                             p.symbol for p in positions
                             if getattr(p, "magic", MT5_MAGIC_NUMBER) == MT5_MAGIC_NUMBER
                         ]
-                    # Shared connection returned None — this is a real issue
-                    log.warning(
-                        "[Risk] Shared MT5Connection.positions_get() returned None "
-                        "(MT5 terminal may not be running or account issue) — "
-                        "open positions unknown, failing closed for correlation"
-                    )
+                    # Shared connection returned None — this is a real issue.
+                    # BUGFIX (log audit): throttle the warning to at most
+                    # once per 5 minutes — `_mt5_sync_ok=False` is set
+                    # every cycle (fail-closed behavior unchanged), but
+                    # the warning was producing one log line per cycle.
                     self._mt5_sync_ok = False
+                    _now = time.time()
+                    if _now - getattr(self, "_mt5_none_warn_last_ts", 0.0) > 300:
+                        log.warning(
+                            "[Risk] Shared MT5Connection.positions_get() returned None "
+                            "(MT5 terminal may not be running or account issue) — "
+                            "open positions unknown, failing closed for correlation "
+                            "(warning throttled to once per 5min; _mt5_sync_ok stays False)"
+                        )
+                        self._mt5_none_warn_last_ts = _now
                 else:
                     # No shared connection — cannot verify live exposure.
                     self._mt5_sync_ok = False

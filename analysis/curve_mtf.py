@@ -307,13 +307,49 @@ class Curve:
         # nonsensical/inverted classification.
         eq_width = abs(self.equilibrium_top - self.low_top)
         max_buffer = eq_width / 2.0
+        # BUGFIX (log audit — "[curve_mtf] boundary_buffer=0.000032
+        # exceeds half the equilibrium width (0.000000)" warning fires
+        # every cycle when eq_width is zero): when the equilibrium zone
+        # has zero width (equilibrium_top == low_top — happens on a
+        # fresh / tightly-ranged market), max_buffer is 0, ANY non-zero
+        # boundary_buffer gets clamped to 0 (silently disabling the
+        # deadband), and the warning spams the log every cycle.
+        # Better: when eq_width is zero or near-zero, fall back to a
+        # small fraction of the overall curve width (or skip clamping
+        # entirely if curve_width is also zero — degenerate input),
+        # and demote the log to debug since this is a normal market
+        # condition, not an error.
         if self.boundary_buffer > max_buffer:
-            log.warning(
-                "[curve_mtf] boundary_buffer=%.6f exceeds half the equilibrium "
-                "width (%.6f) — clamping to avoid crossed boundaries",
-                self.boundary_buffer, max_buffer,
-            )
-            self.boundary_buffer = max_buffer
+            if max_buffer <= 0:
+                # Equilibrium zone has no width — use 5% of curve_width
+                # as a sane fallback buffer, or 0 if curve_width is also
+                # degenerate. This keeps the deadband functional instead
+                # of silently zeroing it out.
+                fallback_buffer = max(0.0, self.curve_width * 0.05)
+                if fallback_buffer > 0 and self.boundary_buffer > fallback_buffer:
+                    log.debug(
+                        "[curve_mtf] equilibrium width is zero — clamping "
+                        "boundary_buffer=%.6f to 5%% of curve_width=%.6f "
+                        "(no warning, this is a normal tight-range case)",
+                        self.boundary_buffer, fallback_buffer,
+                    )
+                    self.boundary_buffer = fallback_buffer
+                else:
+                    # Both eq_width and curve_width are degenerate —
+                    # leave boundary_buffer as-is (it'll be applied to
+                    # a near-flat curve, which is harmless). No warning.
+                    log.debug(
+                        "[curve_mtf] equilibrium and curve widths both ~0 "
+                        "— boundary_buffer=%.6f left as-is (degenerate input)",
+                        self.boundary_buffer,
+                    )
+            else:
+                log.warning(
+                    "[curve_mtf] boundary_buffer=%.6f exceeds half the equilibrium "
+                    "width (%.6f) — clamping to avoid crossed boundaries",
+                    self.boundary_buffer, max_buffer,
+                )
+                self.boundary_buffer = max_buffer
 
     @property
     def curve_low(self) -> float:

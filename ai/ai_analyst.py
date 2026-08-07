@@ -377,7 +377,19 @@ class AIAnalyst:
                 fb2 = os.getenv("OPENROUTER_MODEL_FALLBACK_2", "")
                 if fb1: or_models.append(fb1)
                 if fb2: or_models.append(fb2)
+                # BUGFIX (log audit): mirror master_analyst's dead-model
+                # skip-list so a 404 on 'liquid/lfm-2.5-1.2b-instruct:free'
+                # is not retried on every cycle and every key. The set
+                # is process-local; restart re-checks once.
+                if not hasattr(self, "_dead_openrouter_models"):
+                    self._dead_openrouter_models = set()
                 for or_model in or_models:
+                    if or_model in self._dead_openrouter_models:
+                        log.debug(
+                            f"[AIAnalyst] OpenRouter skipping dead model "
+                            f"{or_model!r} (previously returned 404)"
+                        )
+                        continue
                     if time.monotonic() >= deadline:
                         break
                     raw = self._call_with_timeout(
@@ -819,6 +831,27 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     log, provider_name, model, attempt, max_retries, e
                 )
                 failure_marker(info["error_str"], info["rate_limited"])
+                # BUGFIX (log audit): a 404 / model_unavailable means
+                # the model id itself is permanently dead. Retry-on-
+                # same-key is pointless; retry-on-next-key is also
+                # pointless (the model isn't coming back). Mark it as
+                # dead in the instance set so callers can skip it on
+                # subsequent cycles, and break out of the retry loop
+                # immediately — no point burning the remaining attempt.
+                if info.get("model_unavailable"):
+                    if not hasattr(self, "_dead_openrouter_models"):
+                        self._dead_openrouter_models = set()
+                    # Extract the model id from provider_name — for
+                    # OpenRouter it's wrapped as "OpenRouter(model_id)".
+                    if "(" in provider_name and provider_name.endswith(")"):
+                        dead_model_id = provider_name[provider_name.index("(") + 1:-1]
+                        if dead_model_id:
+                            self._dead_openrouter_models.add(dead_model_id)
+                            log.error(
+                                f"[AIAnalyst] OpenRouter model {dead_model_id!r} "
+                                f"permanently unavailable — added to skip-list."
+                            )
+                    return None  # do not retry — model is dead
                 if attempt < max_retries - 1:
                     base_delay = 2 ** attempt
                     if info.get("rate_limited"):

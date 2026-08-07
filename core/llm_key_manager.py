@@ -95,7 +95,37 @@ def classify_llm_error(error: Exception) -> dict:
         or "has been decommissioned" in err_lower
         or "decommissioned" in err_lower
         or ("model" in err_lower and "not found" in err_lower)
+        # BUGFIX (log audit — 279 OpenRouter 404 occurrences for
+        # 'liquid/lfm-2.5-1.2b-instruct:free'): the 404 error message
+        # from _OpenAICompatClient._do_create() is literally
+        # "openrouter API error 404: model '...' not found (...)" —
+        # the word "model" is followed by a quoted string then "not
+        # found", so the existing `("model" in err_lower and "not
+        # found" in err_lower)` check matches, but the wording
+        # "API error 404" should also be treated as a hard
+        # model-availability signal so callers can permanently skip
+        # the offending model id instead of retrying it every cycle.
+        or ("api error 404" in err_lower and "model" in err_lower)
     )
+    # BUGFIX (log audit — 558 OpenRouter 429 occurrences): the OpenRouter
+    # rate-limit body uses the phrase "Rate limit exceeded:
+    # free-models-per-day" with `limit_source` set to
+    # "openrouter_free_tier_daily". The existing 429/rate-limit
+    # matcher catches it, but the TPD classifier missed the
+    # "free-models-per-day" / "openrouter_free_tier_daily" wording,
+    # so OpenRouter 429s were treated as generic RPM limits with a
+    # 60s cooldown instead of a multi-hour daily-limit cooldown —
+    # causing the same free-tier-exhausted key to be retried every
+    # 60s for hours, generating hundreds of duplicate error lines.
+    is_openrouter_free_tier_daily = (
+        "free-models-per-day" in err_lower
+        or "openrouter_free_tier_daily" in err_lower
+        or "free tier daily" in err_lower
+    )
+    if is_openrouter_free_tier_daily:
+        # Promote to TPD so it gets the multi-hour cooldown below.
+        is_tpd = True
+        is_rate_limited = True
     return {
         "error_str": error_str,
         "error_type": type(error).__name__,
@@ -111,6 +141,11 @@ def classify_llm_error(error: Exception) -> dict:
         ),
         "transient_server": is_transient_server,
         "model_unavailable": is_model_unavailable,
+        # Surface this so callers (master_analyst / ai_analyst) can
+        # permanently skip a dead model id instead of just rotating
+        # keys — the same dead model would otherwise fail on every
+        # key in the rotation.
+        "openrouter_free_tier_daily": is_openrouter_free_tier_daily,
     }
 
 
@@ -253,6 +288,30 @@ def parse_groq_retry_after(error_str: str) -> int:
         total = int(m.group(1))
         return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
 
+    # BUGFIX (log audit): OpenRouter returns 429 with an
+    # "X-RateLimit-Reset" header (epoch-millis) embedded in the JSON
+    # body, e.g. `"X-RateLimit-Reset":"1786147200000"`. Parse it and
+    # compute the cooldown as (reset - now) so we don't waste cycles
+    # retrying a key that the provider has already told us won't
+    # recover until midnight UTC.
+    or_reset_match = re.search(
+        r'["\']X-RateLimit-Reset["\']\s*:\s*["\']?(\d{10,13})["\']?',
+        s,
+    )
+    if or_reset_match:
+        try:
+            reset_ms = int(or_reset_match.group(1))
+            # Normalize to seconds if it looks like millis
+            if reset_ms > 10_000_000_000:  # > year 2286 in seconds
+                reset_sec = reset_ms / 1000.0
+            else:
+                reset_sec = float(reset_ms)
+            now_sec = time.time()
+            cooldown = max(MIN_RETRY_COOLDOWN, int(reset_sec - now_sec) + 5)
+            return min(MAX_RETRY_COOLDOWN, cooldown)
+        except (ValueError, OSError):
+            pass
+
     return DEFAULT_RETRY_COOLDOWN
 
 
@@ -382,7 +441,20 @@ class KeyHealth:
             # cooldown to every 429. Positively identify TPD (daily
             # budget) exhaustion vs a transient RPM/TPM limit and pick
             # a cooldown that actually matches how soon the limit clears.
-            is_tpd = "tpd" in err_lower or "tokens per day" in err_lower or "daily limit" in err_lower or "quota" in err_lower
+            # BUGFIX (log audit): also detect OpenRouter's free-tier
+            # daily limit ("free-models-per-day" / "openrouter_free_tier_daily")
+            # — it's a per-day limit just like Groq's TPD, but the
+            # wording didn't match any of the existing TPD detectors,
+            # so the key was retried every 60s for hours (558 dup errors).
+            is_tpd = (
+                "tpd" in err_lower
+                or "tokens per day" in err_lower
+                or "daily limit" in err_lower
+                or "quota" in err_lower
+                or "free-models-per-day" in err_lower
+                or "openrouter_free_tier_daily" in err_lower
+                or "free tier daily" in err_lower
+            )
             is_rpm = (not is_tpd) and (
                 "rpm" in err_lower or "tpm" in err_lower
                 or "requests per minute" in err_lower or "tokens per minute" in err_lower

@@ -128,6 +128,14 @@ _cache: Dict[str, Any] = {
     "central_bank": None, "central_bank_at": 0,
 }
 
+# BUGFIX (log audit — "[NewsSources] Forex Factory status 429" warning
+# fires every fetch_economic_calendar call when FF is rate-limiting):
+# track the last warn timestamp so we only re-emit at most once every
+# 5 minutes. The fetch still fails-through to the local calendar
+# fallback every cycle (behavior unchanged) — only the log line is
+# throttled.
+_FF_WARN_LAST_TS: float = 0.0
+
 
 @dataclass
 class NewsItem:
@@ -161,6 +169,9 @@ class NewsSources:
 
     def fetch_economic_calendar(self, hours_ahead: int = 24) -> List[NewsItem]:
         """Fetch HIGH-impact events from Forex Factory for the next `hours_ahead` hours."""
+        # BUGFIX (log audit): module-level throttle flag for the FF
+        # status warning — see _FF_WARN_LAST_TS definition above.
+        global _FF_WARN_LAST_TS
         now = time.time()
         with _cache_lock:
             if _cache["calendar"] is not None and (now - _cache["calendar_at"]) < self.cache_ttl:
@@ -198,9 +209,24 @@ class NewsSources:
                             previous=ev.get("previous"),
                         ))
             else:
-                log.warning(f"[NewsSources] Forex Factory status {resp.status_code}")
+                # BUGFIX (log audit): throttle the FF status warning to
+                # once per 5 minutes — a 429 from FF persists for a while
+                # and the previous code logged a fresh warning every
+                # single cycle (the local calendar fallback still runs
+                # every cycle; only the log is throttled).
+                _now = time.time()
+                if _now - _FF_WARN_LAST_TS > 300:
+                    log.warning(
+                        f"[NewsSources] Forex Factory status {resp.status_code} "
+                        f"(warning throttled to 5min; using local calendar fallback)"
+                    )
+                    _FF_WARN_LAST_TS = _now
         except Exception as e:
-            log.warning(f"[NewsSources] Forex Factory fetch failed: {e}")
+            # Throttle this too — same rationale as the status-code branch.
+            _now = time.time()
+            if _now - _FF_WARN_LAST_TS > 300:
+                log.warning(f"[NewsSources] Forex Factory fetch failed: {e}")
+                _FF_WARN_LAST_TS = _now
 
         # Always also pull from local calendar (broker/economic_calendar.py)
         items.extend(self._fetch_local_calendar(hours_ahead))

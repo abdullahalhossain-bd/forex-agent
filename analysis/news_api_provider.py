@@ -101,6 +101,16 @@ class NewsAPIProvider:
         self._last_call_ts = 0.0
         self._daily_request_count = 0
         self._daily_count_date = datetime.now(timezone.utc).date()
+        # BUGFIX (log audit — NewsAPI 429 storm in trader.log):
+        # When NewsAPI returns HTTP 429 (Too Many Requests), the previous
+        # code logged a warning and fell back to RSS for that ONE call,
+        # but the next call (next pair / next cycle) immediately hit the
+        # API again — producing another 429, another warning, another
+        # fallback. Hundreds of these log lines per session. Track a
+        # global 429 backoff timestamp: once we get a 429, skip ALL live
+        # API calls for the next 15 minutes (well past the typical
+        # per-minute window) and go straight to RSS fallback.
+        self._rate_limited_until: float = 0.0
 
     def _check_quota(self) -> bool:
         """Track/reset the local daily request counter.
@@ -180,6 +190,17 @@ class NewsAPIProvider:
             result["quota_exhausted"] = True
             return result
 
+        # BUGFIX (log audit): if we recently got a 429 from NewsAPI,
+        # skip the live call entirely and go straight to RSS fallback.
+        # The previous behavior (immediate retry on next pair/cycle)
+        # produced a 429 storm of 100+ identical warnings per session.
+        if self._rate_limited_until > time.time():
+            result = self._rss_fallback(
+                pair, f"NewsAPI 429 backoff ({int(self._rate_limited_until - time.time())}s remaining)"
+            )
+            result["quota_exhausted"] = True
+            return result
+
         # Build query — search for either currency
         # NewsAPI 'everything' endpoint supports OR / AND in q param
         query = " OR ".join(currencies)
@@ -211,9 +232,35 @@ class NewsAPIProvider:
             )
             self._last_call_ts = time.time()
             self._daily_request_count += 1
+            # BUGFIX (log audit): on HTTP 429, set a 15-min global backoff
+            # so the next N calls skip the live API and go straight to RSS
+            # fallback (instead of producing a fresh 429 warning per pair).
+            # We don't increment the daily counter on a 429 because the
+            # request was rejected before being processed — the daily
+            # quota wasn't consumed.
+            if resp.status_code == 429:
+                self._rate_limited_until = time.time() + 15 * 60
+                log.warning(
+                    f"[NewsAPI] HTTP 429 received — backing off all live "
+                    f"calls for 15 minutes. Subsequent pair lookups will "
+                    f"use RSS fallback until {datetime.fromtimestamp(self._rate_limited_until).isoformat()}"
+                )
+                # Don't count a rejected request against the daily quota.
+                self._daily_request_count = max(0, self._daily_request_count - 1)
+                return self._rss_fallback(pair, "NewsAPI HTTP 429 — 15min backoff")
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
+            # Defensive: also catch the raise_for_status() 429 in case
+            # the status-code check above missed it (different code path
+            # through requests' exception hierarchy).
+            err_str = str(e)
+            if "429" in err_str or "Too Many Requests" in err_str:
+                self._rate_limited_until = time.time() + 15 * 60
+                log.warning(
+                    f"[NewsAPI] 429 Client Error — backing off for 15 minutes. {err_str[:200]}"
+                )
+                return self._rss_fallback(pair, "NewsAPI HTTP 429 — 15min backoff")
             log.warning(f"[NewsAPI] fetch failed: {e}")
             return self._rss_fallback(pair, f"NewsAPI fetch error: {e}")
 

@@ -112,9 +112,11 @@ SYMBOLS = [
     "AUDJPY", "AUDCHF", "AUDCAD", "AUDNZD",
     "NZDJPY", "NZDCHF", "NZDCAD",
     "CADJPY", "CADCHF", "CHFJPY",
-    # ── METALS / COMMODITIES (4) ──
+    # ── METALS / COMMODITIES (2) ──
     "XAUUSD", "XAGUSD",          # Gold, Silver
-    "XPTUSD", "XPDUSD",          # Platinum, Palladium
+    # BUGFIX (log audit): XPTUSD/XPDUSD delisted from yfinance — see
+    # matching comment in /config.py for full rationale.
+    # "XPTUSD", "XPDUSD",          # Platinum, Palladium — DELISTED from yfinance
     # ── ENERGY: REMOVED (2026-07-23) ──
     # "USOUSD", "UKOUSD" — repeatedly failed to fetch under MT5_ONLY_MODE=true
     # (no fallback source active), auto-marked unavailable, and contributed

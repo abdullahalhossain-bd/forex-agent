@@ -607,6 +607,36 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
                     "report NOT_READY until retrained",
                     ML_MODEL_CONSISTENCY_ACTION, len(audit["missing"]),
                 )
+                # BUGFIX (log audit — forex_ai.log shows the same 85
+                # missing-model warnings repeated at every boot for
+                # hours/days): the "warn" branch logged but never
+                # cleaned the registry, so every subsequent boot /
+                # ModelStore re-init re-audited the SAME stale entries
+                # and re-logged the same warnings. Auto-clean the
+                # stale entries now (one-time, idempotent) so the
+                # registry converges to disk reality after the first
+                # boot that sees the mismatch — subsequent boots will
+                # see "registry/disk consistency OK" instead of the
+                # same 85-line warning block.
+                try:
+                    cleanup = store.cleanup_registry()
+                    if cleanup["removed_versions"] > 0 or cleanup["removed_keys"] > 0:
+                        log.info(
+                            "[ModelStore] auto-cleaned %d stale version(s) and "
+                            "%d empty key(s) from registry after warn — subsequent "
+                            "boots will not re-log these missing-model warnings",
+                            cleanup["removed_versions"], cleanup["removed_keys"],
+                        )
+                        # Re-compute cold_pairs after cleanup so
+                        # ModelPredictor doesn't keep skipping pairs
+                        # whose stale entries were just removed (and
+                        # vice versa).
+                        cold_pairs = store.get_cold_pairs()
+                except Exception as _clean_e:
+                    log.debug(
+                        "[ModelStore] auto-cleanup after warn failed: %s",
+                        _clean_e,
+                    )
         else:
             log.info(
                 "[ModelStore] registry/disk consistency OK (%d model file(s) verified)",
