@@ -2236,37 +2236,31 @@ class AITrader:
 
         if approved_to_execute and result.get("trade_allowed"):
             try:
-                trade_context = {
-                    "symbol": self.symbol,
-                    "pair": self.symbol,
-                    "market_context": {
-                        "timeframe": self.timeframe,
-                        "session": session_ctx.get("current_session") if session_ctx else None,
-                        "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
-                        "rr_ratio": result.get("rr"),
-                    },
-                    "analysis_out": analysis_out,
-                    "risk_out": risk_out,
-                    "decision_out": dec_out,
-                    "perm_out": perm_out,
-                }
-                review = self._devils_advocate.review(
-                    trade_context=trade_context,
-                    signal=result.get("final_action"),
-                    risk_out=risk_out,
-                    decision_out=dec_out,
-                )
-                result["devils_advocate"] = review
-                dec_out["devils_advocate"] = review
-                if review.get("decision") == "VETO":
+                # FIX (log audit — EURNOK 2026-08-07): approval + Devil's
+                # Advocate were running (and now that Devil's Advocate calls
+                # a real LLM, *burning an LLM call*) on trades that then got
+                # blocked seconds later by ExecutionRouter's absolute_safety
+                # gate — the live-feed spread check. The risk check above
+                # (line ~597, check_trade_permission) only uses a stale/
+                # estimated `ind["spread_pips"]`, not the live spread, so it
+                # can pass while the real-time gate still rejects. Re-running
+                # the same live absolute_safety check here, before Devil's
+                # Advocate, means trades that are going to be rejected for
+                # spread/session/connectivity reasons anyway are rejected
+                # for free instead of after paying for an LLM review.
+                try:
+                    from execution.execution_router import _check_absolute_safety
+                    _safe, _safety_reason = _check_absolute_safety(self.symbol)
+                except Exception as _e:
+                    _safe, _safety_reason = True, f"safety pre-check unavailable: {_e}"
+
+                if not _safe:
                     result["trade_allowed"] = False
                     result["final_action"] = "NO TRADE"
                     result["execution_action"] = "NO TRADE"
-                    result["reject_reason"] = (
-                        f"Devil's Advocate veto: {review.get('risk_summary', 'high concern')}"
-                    )
+                    result["reject_reason"] = f"absolute_safety: {_safety_reason}"
                     result["blocked_reason"] = result["reject_reason"]
-                    result["reject_stage"] = "devils_advocate"
+                    result["reject_stage"] = "absolute_safety"
                     approved_to_execute = False
                     perm_out["allowed"] = False
                     perm_out["execution_allowed"] = False
@@ -2274,31 +2268,79 @@ class AITrader:
                     perm_out["execution_action"] = "NO TRADE"
                     perm_out["blocked_reason"] = result["reject_reason"]
                     perm_out["checks"].append({
-                        "check": "Devil's Advocate review",
+                        "check": "Absolute safety pre-check (pre Devil's Advocate)",
                         "passed": False,
-                        "detail": f"{review.get('risk_summary', 'high concern')} | concerns={'; '.join(review.get('reasons_for_concern', [])[:3])}",
+                        "detail": _safety_reason,
                     })
                     perm_out["total"] = perm_out.get("total", 0) + 1
-                else:
-                    perm_out["checks"].append({
-                        "check": "Devil's Advocate review",
-                        "passed": True,
-                        "detail": f"{review.get('decision')} conf={review.get('confidence', 0):.0f}%",
-                    })
-                    perm_out["total"] = perm_out.get("total", 0) + 1
-                try:
-                    from core.execution_logger import log_devils_advocate_result
-                    log_devils_advocate_result(
-                        symbol=self.symbol,
-                        decision=review.get("decision", "EXECUTE"),
-                        confidence=float(review.get("confidence", 0) or 0),
-                        reasons=review.get("reasons_for_concern", []),
-                        risk_summary=review.get("risk_summary", ""),
-                        evidence=review.get("evidence", []),
+                    log.info(
+                        f"[Trader] {self.symbol}: absolute_safety pre-check blocked trade "
+                        f"before Devil's Advocate ({_safety_reason}) — LLM call skipped"
                     )
-                except Exception as e:
-                    log.warning(f"Suppressed exception at line 1110: {e}")
-                    pass
+                else:
+                    trade_context = {
+                        "symbol": self.symbol,
+                        "pair": self.symbol,
+                        "market_context": {
+                            "timeframe": self.timeframe,
+                            "session": session_ctx.get("current_session") if session_ctx else None,
+                            "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
+                            "rr_ratio": result.get("rr"),
+                        },
+                        "analysis_out": analysis_out,
+                        "risk_out": risk_out,
+                        "decision_out": dec_out,
+                        "perm_out": perm_out,
+                    }
+                    review = self._devils_advocate.review(
+                        trade_context=trade_context,
+                        signal=result.get("final_action"),
+                        risk_out=risk_out,
+                        decision_out=dec_out,
+                    )
+                    result["devils_advocate"] = review
+                    dec_out["devils_advocate"] = review
+                    if review.get("decision") == "VETO":
+                        result["trade_allowed"] = False
+                        result["final_action"] = "NO TRADE"
+                        result["execution_action"] = "NO TRADE"
+                        result["reject_reason"] = (
+                            f"Devil's Advocate veto: {review.get('risk_summary', 'high concern')}"
+                        )
+                        result["blocked_reason"] = result["reject_reason"]
+                        result["reject_stage"] = "devils_advocate"
+                        approved_to_execute = False
+                        perm_out["allowed"] = False
+                        perm_out["execution_allowed"] = False
+                        perm_out["final_action"] = "NO TRADE"
+                        perm_out["execution_action"] = "NO TRADE"
+                        perm_out["blocked_reason"] = result["reject_reason"]
+                        perm_out["checks"].append({
+                            "check": "Devil's Advocate review",
+                            "passed": False,
+                            "detail": f"{review.get('risk_summary', 'high concern')} | concerns={'; '.join(review.get('reasons_for_concern', [])[:3])}",
+                        })
+                        perm_out["total"] = perm_out.get("total", 0) + 1
+                    else:
+                        perm_out["checks"].append({
+                            "check": "Devil's Advocate review",
+                            "passed": True,
+                            "detail": f"{review.get('decision')} conf={review.get('confidence', 0):.0f}%",
+                        })
+                        perm_out["total"] = perm_out.get("total", 0) + 1
+                    try:
+                        from core.execution_logger import log_devils_advocate_result
+                        log_devils_advocate_result(
+                            symbol=self.symbol,
+                            decision=review.get("decision", "EXECUTE"),
+                            confidence=float(review.get("confidence", 0) or 0),
+                            reasons=review.get("reasons_for_concern", []),
+                            risk_summary=review.get("risk_summary", ""),
+                            evidence=review.get("evidence", []),
+                        )
+                    except Exception as e:
+                        log.warning(f"Suppressed exception at line 1110: {e}")
+                        pass
             except Exception as e:
                 log.warning(f"[Trader] Devil's Advocate review failed (non-fatal): {e}")
 

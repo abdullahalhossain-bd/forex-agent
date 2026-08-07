@@ -47,15 +47,47 @@ except ImportError:
 # ── Per-symbol spread thresholds (pips) ───────────────────────
 # These are used only in PRODUCTION mode (TEST_MODE=false).
 # Raise a symbol's threshold if you see false EXPLOSIVE blocks.
+#
+# FIX (log audit — EURNOK 2026-08-07): only 7 of the 48 symbols in
+# config.SYMBOLS had an explicit limit here; the other 41 — including
+# every minor cross and every exotic (EURNOK, GBPNOK, EURSEK, GBPSEK,
+# USDTRY, USDZAR, USDMXN, USDTHB, ...) — silently fell back to the
+# generic DEFAULT=10.0, a threshold sized for tight major pairs. A
+# Nordic/exotic cross trading a perfectly normal 11-pip spread was
+# being rejected as if it were a major pair's spread blowing out.
+#
+# The values below are typical-retail-broker starting points by pair
+# class (majors tight, minors moderate, Nordic/Asian crosses wider,
+# TRY/ZAR widest) — NOT pulled from this account's live broker feed.
+# Verify against your broker's actual average spread per symbol (MT5
+# Market Watch → right-click → Symbols, or log snap.spread_pips over a
+# few sessions) and tune these before relying on them for real money.
 SPREAD_LIMITS_PIPS: Dict[str, float] = {
-    "EURUSD": 3.0,
-    "GBPUSD": 4.0,
-    "USDJPY": 3.0,
-    "AUDUSD": 3.0,
-    "USDCAD": 4.0,
-    "XAUUSD": 50.0,   # Gold — wide spread is normal
-    "XAGUSD": 10.0,
-    "DEFAULT": 10.0,
+    # ── MAJORS (7) — tight, high liquidity ──
+    "EURUSD": 3.0, "GBPUSD": 4.0, "USDJPY": 3.0, "USDCHF": 4.0,
+    "USDCAD": 4.0, "AUDUSD": 3.0, "NZDUSD": 4.0,
+    # ── MINORS / CROSSES (21) — wider than majors, still liquid ──
+    "EURGBP": 3.0, "EURJPY": 4.0, "EURCHF": 5.0, "EURAUD": 5.0,
+    "EURCAD": 5.0, "EURNZD": 6.0,
+    "GBPJPY": 5.0, "GBPCHF": 6.0, "GBPAUD": 6.0, "GBPCAD": 6.0, "GBPNZD": 8.0,
+    "AUDJPY": 4.0, "AUDCHF": 5.0, "AUDCAD": 4.0, "AUDNZD": 5.0,
+    "NZDJPY": 5.0, "NZDCHF": 6.0, "NZDCAD": 5.0,
+    "CADJPY": 4.0, "CADCHF": 5.0, "CHFJPY": 5.0,
+    # ── METALS / COMMODITIES (4) ──
+    "XAUUSD": 50.0, "XAGUSD": 10.0,   # Gold, Silver
+    "XPTUSD": 60.0, "XPDUSD": 80.0,   # Platinum, Palladium — wide, verify
+    # ── EXOTIC (2) — low liquidity, naturally wide spreads ──
+    "USDTRY": 30.0, "USDZAR": 40.0,
+    # ── ADDITIONAL CROSSES (9) ──
+    "EURNOK": 15.0, "EURSEK": 15.0,   # Scandinavian crosses
+    "GBPSEK": 20.0, "GBPNOK": 20.0,   # Scandinavian GBP crosses
+    "AUDSGD": 8.0, "NZDSGD": 8.0,     # Singapore Dollar crosses
+    "SGDJPY": 8.0,
+    "HKDJPY": 10.0, "MXNJPY": 15.0,
+    # ── ASIA PACIFIC (7) ──
+    "USDCNH": 15.0, "USDHKD": 8.0, "USDSGD": 6.0,
+    "USDMXN": 25.0, "USDTHB": 20.0,
+    "DEFAULT": 10.0,  # fallback for any symbol added to config.py later
 }
 
 

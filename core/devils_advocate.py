@@ -143,17 +143,104 @@ class DevilsAdvocateGate:
         }
 
     def _call_provider(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        # This repository does not ship a production LLM client in this module.
-        # The gate uses a simple local fallback that mimics the required contract.
-        # It can be overridden in tests or wired to a real provider later.
-        time.sleep(0.01)
-        return {
-            "decision": "EXECUTE",
-            "confidence": 15.0,
-            "reasons_for_concern": [],
-            "risk_summary": "No strong concern identified",
-            "evidence": [],
-        }
+        """Call a real LLM (Groq primary, Gemini fallback) to review the trade.
+
+        Uses the same LLMKeyManager multi-key rotation the rest of the stack
+        relies on (ai/ai_analyst.py), so it benefits from key failover
+        without needing its own credential handling. Returns a dict matching
+        the ``output_schema`` in the payload; raises on total failure so the
+        caller's fail_open/fail_closed logic in ``review()`` takes over.
+        """
+        prompt = self._build_prompt(payload)
+        deadline = time.monotonic() + self.timeout_sec
+
+        from core.llm_key_manager import get_llm_key_manager, log_llm_call_failure
+        manager = get_llm_key_manager()
+
+        last_error: Optional[Exception] = None
+
+        # Try Groq first (fast + cheap), then fall back to Gemini.
+        for provider in ("groq", "gemini"):
+            if time.monotonic() >= deadline:
+                break
+            try:
+                raw = self._call_one_provider(manager, provider, prompt, deadline)
+                if raw is None:
+                    continue
+                from utils.llm_json import parse_llm_json
+                parsed = parse_llm_json(raw)
+                if isinstance(parsed, dict) and parsed.get("decision") in {"EXECUTE", "VETO"}:
+                    return parsed
+                last_error = ValueError(f"[DevilsAdvocate] {provider} returned unparseable/invalid payload")
+            except Exception as exc:
+                last_error = exc
+                log_llm_call_failure(log, provider, self.model_name, 0, 1, exc)
+                continue
+
+        raise last_error or RuntimeError("Devil's Advocate: no LLM provider available")
+
+    def _call_one_provider(
+        self, manager: Any, provider: str, prompt: str, deadline: float
+    ) -> Optional[str]:
+        """Make a single request to the named provider. Returns raw text or None."""
+        if provider == "groq":
+            client = manager.get_groq_client()
+            if client is None:
+                return None
+            create_kwargs = dict(
+                model=self.model_name if "gpt" not in self.model_name else "llama-3.1-8b-instant",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=400,
+                response_format={"type": "json_object"},
+            )
+            remaining = max(0.5, deadline - time.monotonic())
+            create_kwargs["timeout"] = remaining
+            try:
+                resp = client.chat.completions.create(**create_kwargs)
+            except TypeError:
+                create_kwargs.pop("timeout", None)
+                create_kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**create_kwargs)
+            usage = getattr(resp, "usage", None)
+            tokens = (getattr(usage, "prompt_tokens", 0) or 0) + (getattr(usage, "completion_tokens", 0) or 0) if usage else 0
+            try:
+                manager.mark_groq_success(tokens_used=tokens, client=client)
+            except Exception:
+                pass
+            return resp.choices[0].message.content
+
+        if provider == "gemini":
+            if (deadline - time.monotonic()) < 10.0:
+                # Gemini API rejects deadlines under 10s.
+                return None
+            client = manager.get_gemini_client()
+            if client is None:
+                return None
+            generate_kwargs = dict(model="gemini-flash-lite-latest", contents=prompt)
+            resp = client.models.generate_content(**generate_kwargs)
+            usage = getattr(resp, "usage_metadata", None)
+            tokens = 0
+            if usage is not None:
+                tokens = (getattr(usage, "prompt_token_count", 0) or 0) + (getattr(usage, "candidates_token_count", 0) or 0)
+            try:
+                manager.mark_gemini_success(tokens_used=tokens, client=client)
+            except Exception:
+                pass
+            return resp.text
+
+        return None
+
+    @staticmethod
+    def _build_prompt(payload: Dict[str, Any]) -> str:
+        return (
+            f"{payload['instruction']}\n\n"
+            f"Trade proposal:\n{json.dumps(payload['trade'], default=str)}\n\n"
+            f"Market context:\n{json.dumps(payload['market_context'], default=str)}\n\n"
+            f"Check specifically for: {', '.join(payload['context']['reasons_to_check'])}.\n\n"
+            "Respond with ONLY a JSON object (no markdown fences, no prose) matching exactly "
+            f"this schema: {json.dumps(payload['context']['output_schema'])}"
+        )
 
     def _normalize_response(self, response: Any) -> Dict[str, Any]:
         if isinstance(response, str):

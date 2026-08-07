@@ -513,7 +513,29 @@ class LiveRiskManager:
             return perm
 
         # ── Check 6: Position sizing ────────────────────────────────
-        pip_value = 10.0 if not pair.endswith("JPY") else 9.0
+        # FIX (2026-08-08, cent-account audit): this was hardcoded
+        # `10.0 if not pair.endswith("JPY") else 9.0` — a static
+        # real-USD pip value. On a Cent account (Exness Cent etc.),
+        # `balance` above is already synced from live MT5 in cents
+        # (see AITrader._sync_balance), so mixing it with a real-USD
+        # pip value here creates the same ~100x unit mismatch that
+        # core/constants.get_live_pip_value_per_lot() was written to
+        # fix — core/trader.py already uses that live lookup for the
+        # trade's actual final lot size, but this function's own
+        # internal sizing check was never switched over, so it could
+        # wrongly reject (sizing.lot <= 0) a valid cent-account trade
+        # even though the real trade would have sized correctly.
+        try:
+            from core.constants import get_live_pip_value_per_lot
+            pip_value = get_live_pip_value_per_lot(pair)
+        except Exception as e:
+            pip_value = 10.0 if not pair.endswith("JPY") else 9.0
+            log.warning(
+                f"[LiveRiskManager] get_live_pip_value_per_lot failed for "
+                f"{pair} ({e}) — using static pip_value={pip_value}. On a "
+                f"Cent account this can misjudge (not miss-execute) the "
+                f"position_size permission check."
+            )
         sizing = self.position_sizer.calculate(
             balance=balance,
             risk_pct=tier.risk_per_trade,
