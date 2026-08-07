@@ -98,8 +98,31 @@ class DetectedPattern:
 # ─── Helpers ──────────────────────────────────────────────────
 
 def _candle_metrics(c: pd.Series) -> dict:
-    """Extract body/wick metrics from a single OHLC candle."""
-    o = float(c["open"]); h = float(c["high"]); l = float(c["low"]); cl = float(c["close"])
+    """Extract body/wick metrics from a single OHLC candle.
+
+    Defensive: some callers may pass rows with unexpected labels or
+    duplicate-labeled columns which can make label-based access fail.
+    Fall back to positional access when necessary to avoid raising and
+    crashing the pattern detection loop.
+    """
+    try:
+        o = float(c["open"]); h = float(c["high"]); l = float(c["low"]); cl = float(c["close"])
+    except Exception:
+        # Fallback: try common alternative keys, then positional ordering
+        try:
+            o = float(c.get("open") if "open" in c else c.get("Open"))
+            h = float(c.get("high") if "high" in c else c.get("High"))
+            l = float(c.get("low") if "low" in c else c.get("Low"))
+            cl = float(c.get("close") if "close" in c else c.get("Close"))
+        except Exception:
+            # As a last resort, try positional ordering (open, high, low, close)
+            vals = list(c.values)
+            if len(vals) >= 4:
+                o, h, l, cl = float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])
+            else:
+                # Give up gracefully — return zeroed metrics so detectors skip
+                return {"body": 0, "range": 0, "upper_wick": 0, "lower_wick": 0,
+                        "body_pct": 0, "is_bullish": False, "is_bearish": False}
     body = abs(cl - o)
     total_range = h - l
     if total_range <= 0:
@@ -190,9 +213,12 @@ class HighReliabilityPatternDetector:
                 self._detect_bearish_marubozu,
             ]
             for det_fn in single_candle_detectors:
-                p = det_fn(df, i, zones, atr_value)
-                if p:
-                    patterns.append(p)
+                try:
+                    p = det_fn(df, i, zones, atr_value)
+                    if p:
+                        patterns.append(p)
+                except Exception as e:
+                    log.debug(f"[Patterns] detector {det_fn.__name__} failed at idx {i}: {e}")
 
             # ── Two-candle patterns ──
             if i >= 1:
@@ -203,9 +229,12 @@ class HighReliabilityPatternDetector:
                     self._detect_harami,
                 ]
                 for det_fn in two_candle_detectors:
-                    p = det_fn(df, i, zones, atr_value)
-                    if p:
-                        patterns.append(p)
+                    try:
+                        p = det_fn(df, i, zones, atr_value)
+                        if p:
+                            patterns.append(p)
+                    except Exception as e:
+                        log.debug(f"[Patterns] detector {det_fn.__name__} failed at idx {i}: {e}")
 
             # ── Three-candle patterns ──
             if i >= 2:
@@ -215,9 +244,12 @@ class HighReliabilityPatternDetector:
                     self._detect_three_inside_up, self._detect_three_inside_down,
                 ]
                 for det_fn in three_candle_detectors:
-                    p = det_fn(df, i, zones, atr_value)
-                    if p:
-                        patterns.append(p)
+                    try:
+                        p = det_fn(df, i, zones, atr_value)
+                        if p:
+                            patterns.append(p)
+                    except Exception as e:
+                        log.debug(f"[Patterns] detector {det_fn.__name__} failed at idx {i}: {e}")
 
         # Sort by candle_index descending (most recent first)
         patterns.sort(key=lambda p: p.candle_index, reverse=True)

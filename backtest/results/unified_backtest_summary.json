@@ -1,6 +1,6 @@
 {
-  "GBPUSD": {
-    "symbol": "GBPUSD",
+  "EURUSD": {
+    "symbol": "EURUSD",
     "timeframe": "H1",
     "trades": 0,
     "win_rate": 0.0,
@@ -10,13 +10,13 @@
     "sharpe": 0.0,
     "sortino": 0.0,
     "rejection_stats": {
-      "WAIT": 134,
+      "WAIT": 0,
       "NO_TRADE_ANALYSIS": 0,
       "risk_rejected": 0,
-      "permission_blocked": 16,
+      "permission_blocked": 0,
       "engine_error": 0,
       "max_trades": 0,
-      "total_bars": 150
+      "total_bars": 0
     }
   }
 }

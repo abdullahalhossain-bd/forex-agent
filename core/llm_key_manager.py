@@ -30,7 +30,23 @@ log = logging.getLogger("llm_key_manager")
 
 
 def classify_llm_error(error: Exception) -> dict:
-    """Classify LLM API failures without false positives."""
+    """Classify LLM API failures without false positives.
+
+    FIX (rate-limit granularity — audit follow-up): a 429 is not always
+    the same problem. Groq's free tier enforces several independent
+    limits — TPD (tokens per day), RPM (requests per minute), and TPM
+    (tokens per minute) — and they need very different recovery
+    strategies:
+      - TPD exhausted   → this key/account is dead for the rest of the
+        day. The right move is an immediate switch to the next account,
+        not a short retry on the same key.
+      - RPM/TPM limited → transient, resets in seconds to a couple of
+        minutes. A short cooldown (or immediate key switch) is enough.
+    Treating every 429 the same way (as before) meant a TPD-exhausted
+    key could still get a short cooldown and be retried a few minutes
+    later — burning a call that was guaranteed to fail again until UTC
+    midnight. See KeyHealth.mark_failure for how these flags are used.
+    """
     error_str = str(error)
     err_lower = error_str.lower()
     # ── FIX: 503 UNAVAILABLE, 502 Bad Gateway, 504 Gateway Timeout are
@@ -49,15 +65,43 @@ def classify_llm_error(error: Exception) -> dict:
         or "bad gateway" in err_lower
         or "gateway timeout" in err_lower
     )
+    is_rate_limited = (
+        "429" in error_str
+        or "too many requests" in err_lower
+        or "rate limit" in err_lower
+        or "rate_limit" in err_lower
+    )
+    # TPD (daily token budget) — Groq's message reads e.g. "Rate limit
+    # reached for ... tokens per day (TPD) ... Please try again in
+    # 2h59m58s". Also treat plan/quota exhaustion wording the same way
+    # (same recovery: switch account, don't retry soon).
+    is_tpd = is_rate_limited and (
+        "tpd" in err_lower
+        or "tokens per day" in err_lower
+        or "daily limit" in err_lower
+        or "quota" in err_lower
+        or "exceeded your current quota" in err_lower
+    )
+    # RPM/TPM — short-lived, resets within seconds to a couple of minutes.
+    is_rpm = is_rate_limited and not is_tpd and (
+        "rpm" in err_lower
+        or "tpm" in err_lower
+        or "requests per minute" in err_lower
+        or "tokens per minute" in err_lower
+    )
+    is_model_unavailable = (
+        "model_not_found" in err_lower
+        or "does not exist" in err_lower
+        or "has been decommissioned" in err_lower
+        or "decommissioned" in err_lower
+        or ("model" in err_lower and "not found" in err_lower)
+    )
     return {
         "error_str": error_str,
         "error_type": type(error).__name__,
-        "rate_limited": (
-            "429" in error_str
-            or "too many requests" in err_lower
-            or "rate limit" in err_lower
-            or "rate_limit" in err_lower
-        ),
+        "rate_limited": is_rate_limited,
+        "tpd_exhausted": is_tpd,
+        "rpm_limited": is_rpm,
         "auth_failed": (
             "401" in error_str
             or "403" in error_str
@@ -66,6 +110,7 @@ def classify_llm_error(error: Exception) -> dict:
             or "invalid x-api-key" in err_lower
         ),
         "transient_server": is_transient_server,
+        "model_unavailable": is_model_unavailable,
     }
 
 
@@ -81,14 +126,19 @@ def log_llm_call_failure(
     info = classify_llm_error(error)
     logger.error(
         "[LLM] %s failed attempt %s/%s | model=%s | type=%s | "
-        "rate_limited=%s | auth_failed=%s | error=%s",
+        "rate_limited=%s (tpd=%s, rpm=%s) | auth_failed=%s | "
+        "transient_server=%s | model_unavailable=%s | error=%s",
         provider,
         attempt + 1,
         max_retries,
         model,
         info["error_type"],
         info["rate_limited"],
+        info.get("tpd_exhausted"),
+        info.get("rpm_limited"),
         info["auth_failed"],
+        info.get("transient_server"),
+        info.get("model_unavailable"),
         info["error_str"][:800],
         exc_info=True,
     )
@@ -103,49 +153,101 @@ _GROQ_RETRY_RE_MMSS = re.compile(r"(\d+)m\s*([\d.]+)s")
 _GROQ_RETRY_RE_SS   = re.compile(r"([\d.]+)\s*s")
 _GROQ_RETRY_RE_MM   = re.compile(r"(\d+)\s*m(?:in)?(?:ute)?s?", re.IGNORECASE)
 _GROQ_RETRY_RE_HDR  = re.compile(r"retry[-_ ]?after['\"\s:=]+(\d+)", re.IGNORECASE)
+# FIX (audit follow-up): used to scope duration-parsing to the actual
+# "try again in ..." clause instead of the whole error string — see
+# parse_groq_retry_after for why this matters (org-id false positives).
+# The lookahead `(?!\d)` on the terminator makes sure we stop at a
+# sentence-ending period ("...58s. Need more...") but NOT at a decimal
+# point inside the duration itself ("...try again in 21.298s" — a plain
+# `[^.]+` would truncate this to "21", silently dropping the seconds).
+_TRY_AGAIN_CLAUSE_RE = re.compile(r"try again in\s+(.+?)(?:\.(?!\d)|$)", re.IGNORECASE)
 
 MIN_RETRY_COOLDOWN = 60        
 MAX_RETRY_COOLDOWN = 60 * 60 * 6   
 DEFAULT_RETRY_COOLDOWN = 300   
 GROQ_DEFAULT_RETRY_COOLDOWN = 1800  
 
+# FIX (TPD vs RPM cooldown split — audit follow-up): previously every
+# 429 fell back to the same DEFAULT_RETRY_COOLDOWN (5min) whenever the
+# "Please try again in ..." text couldn't be parsed. That's fine for a
+# transient RPM/TPM limit, but wrong for a TPD (daily budget) exhaustion
+# — a key that hit its daily cap won't recover in 5 minutes, so it just
+# gets retried (and fails) every 5 minutes for the rest of the day,
+# wasting calls that were guaranteed to fail. When we can positively
+# identify TPD exhaustion but can't parse an exact retry-after, fall
+# back to a multi-hour cooldown instead.
+TPD_FALLBACK_COOLDOWN = 60 * 60 * 3     # 3h — used only when TPD is detected but unparsable
+RPM_MAX_COOLDOWN = 120                  # RPM/TPM limits reset fast; cap the cooldown so the key isn't held out too long
+
 
 def parse_groq_retry_after(error_str: str) -> int:
-    """Parse 'Please try again in Xh Ym Z.Zs' from a Groq 429 response."""
+    """Parse 'Please try again in Xh Ym Z.Zs' from a Groq 429 response.
+
+    FIX (audit follow-up — confirmed in production log): the original
+    version searched the ENTIRE error string with all duration patterns,
+    including Groq's organization id (e.g.
+    "org_01kxe63htqejksjmghz9n9fbh0"), which can contain a digit-then-'h'
+    substring purely by chance (e.g. "...e63h..."). The hour-only pattern
+    (_GROQ_RETRY_RE_H) matched that "63h" and turned a real
+    "try again in 24m15.84s" (~24 min) into a bogus 63-hour parse,
+    clamped to MAX_RETRY_COOLDOWN (6h) — silently disabling a key for
+    6 hours when it would have recovered in 24 minutes.
+
+    Fix: isolate the actual "try again in ..." clause first and run the
+    duration patterns ONLY against that substring, so unrelated digits
+    elsewhere in the message (org ids, limits, token counts) can't be
+    mistaken for a duration. Full-string scanning is kept only as a
+    last resort, and only with the narrow/safe patterns (explicit
+    Retry-After header, bare seconds) that are far less likely to
+    false-positive on incidental text.
+    """
     if not error_str:
         return DEFAULT_RETRY_COOLDOWN
     s = str(error_str)
 
-    m = _GROQ_RETRY_RE_HMS.search(s)
-    if m:
-        total = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
+    clause_match = _TRY_AGAIN_CLAUSE_RE.search(s)
+    if clause_match:
+        search_text = clause_match.group(1)
 
-    m = _GROQ_RETRY_RE_HM.search(s)
-    if m:
-        total = int(m.group(1)) * 3600 + int(m.group(2)) * 60
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
+        m = _GROQ_RETRY_RE_HMS.search(search_text)
+        if m:
+            total = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
 
-    m = _GROQ_RETRY_RE_H.search(s)
-    if m:
-        total = int(m.group(1)) * 3600
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
+        m = _GROQ_RETRY_RE_HM.search(search_text)
+        if m:
+            total = int(m.group(1)) * 3600 + int(m.group(2)) * 60
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
 
-    m = _GROQ_RETRY_RE_MMSS.search(s)
-    if m:
-        total = int(m.group(1)) * 60 + float(m.group(2))
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
+        m = _GROQ_RETRY_RE_H.search(search_text)
+        if m:
+            total = int(m.group(1)) * 3600
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
 
-    m = _GROQ_RETRY_RE_SS.search(s)
-    if m:
-        total = float(m.group(1))
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
+        m = _GROQ_RETRY_RE_MMSS.search(search_text)
+        if m:
+            total = int(m.group(1)) * 60 + float(m.group(2))
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
 
-    m = _GROQ_RETRY_RE_MM.search(s)
-    if m:
-        total = int(m.group(1)) * 60
-        return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
+        m = _GROQ_RETRY_RE_SS.search(search_text)
+        if m:
+            total = float(m.group(1))
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, int(total) + 5))
 
+        m = _GROQ_RETRY_RE_MM.search(search_text)
+        if m:
+            total = int(m.group(1)) * 60
+            return max(MIN_RETRY_COOLDOWN, min(MAX_RETRY_COOLDOWN, total + 5))
+
+        # Clause was found but didn't match any known duration shape —
+        # fall through to DEFAULT rather than risk scanning the whole
+        # string (which is exactly what caused the false-positive).
+        return DEFAULT_RETRY_COOLDOWN
+
+    # No "try again in ..." clause at all (e.g. a Retry-After header on
+    # its own, or a plain "N seconds" message). These two patterns are
+    # narrow enough (explicit header keyword, or a lone number+unit) to
+    # be safe against the whole string.
     m = _GROQ_RETRY_RE_HDR.search(s)
     if m:
         total = int(m.group(1))
@@ -253,37 +355,71 @@ class KeyHealth:
             "ssl", "certificate", "proxyerror",
         ))
 
-        if rate_limited:
-            cooldown = parse_groq_retry_after(error)
-            self.rate_limited_until = time.time() + cooldown
+        # FIX (audit follow-up): check transient-server (503/502/504/
+        # "high demand") FIRST and unconditionally — regardless of
+        # whether a 401/403 also appears in the same message. Previously
+        # this check only ran *inside* the 401/403 branch, so a pure
+        # Gemini "503 UNAVAILABLE — model overloaded" (no 401/403 at all)
+        # fell through to the generic fail_count-based cooldown, which
+        # only reacts after 5+ failures. A transient server error should
+        # get a short cooldown immediately so the key rotates back in
+        # quickly without needing several failed calls first.
+        is_transient_server = any(s in err_lower for s in (
+            "503", "502", "504", "unavailable", "high demand",
+            "temporarily", "service unavailable", "bad gateway",
+            "gateway timeout",
+        ))
+        if is_transient_server:
+            self.rate_limited_until = time.time() + 30
             log.warning(
                 f"[LLM Keys] {self.provider} key #{self.index + 1} "
-                f"rate-limited, disabled for {cooldown}s"
+                f"transient server error (503/502/504/high-demand) — 30s cooldown"
             )
+            return
+
+        if rate_limited:
+            # FIX (TPD vs RPM — audit follow-up): don't apply the same
+            # cooldown to every 429. Positively identify TPD (daily
+            # budget) exhaustion vs a transient RPM/TPM limit and pick
+            # a cooldown that actually matches how soon the limit clears.
+            is_tpd = "tpd" in err_lower or "tokens per day" in err_lower or "daily limit" in err_lower or "quota" in err_lower
+            is_rpm = (not is_tpd) and (
+                "rpm" in err_lower or "tpm" in err_lower
+                or "requests per minute" in err_lower or "tokens per minute" in err_lower
+            )
+            parsed = parse_groq_retry_after(error)
+            if is_tpd:
+                # If the provider gave us an exact "try again in Xh Ym"
+                # duration, trust it. Otherwise assume a multi-hour wait
+                # rather than the generic 5-minute default — a TPD-capped
+                # key will not recover in 5 minutes.
+                cooldown = parsed if parsed != DEFAULT_RETRY_COOLDOWN else TPD_FALLBACK_COOLDOWN
+                self.rate_limited_until = time.time() + cooldown
+                log.warning(
+                    f"[LLM Keys] {self.provider} key #{self.index + 1} "
+                    f"TPD (daily token budget) EXHAUSTED — disabled for {cooldown}s "
+                    f"(~{cooldown/3600:.1f}h). Rotating to next account."
+                )
+            elif is_rpm:
+                cooldown = min(parsed, RPM_MAX_COOLDOWN)
+                self.rate_limited_until = time.time() + cooldown
+                log.warning(
+                    f"[LLM Keys] {self.provider} key #{self.index + 1} "
+                    f"RPM/TPM (short-lived) rate limit — {cooldown}s cooldown"
+                )
+            else:
+                # Generic/unclassified 429 — keep prior behavior.
+                cooldown = parsed
+                self.rate_limited_until = time.time() + cooldown
+                log.warning(
+                    f"[LLM Keys] {self.provider} key #{self.index + 1} "
+                    f"rate-limited, disabled for {cooldown}s"
+                )
         # P4b FIX (Bug#2): also handle 403 Forbidden — previously only
         # 401 triggered action. 403 (common from Cerebras/Cloudflare) was
         # classified as auth_failed but never acted upon, so the key kept
         # getting selected and wasting API calls every cycle.
         elif "401" in error or "403" in error or "unauthorized" in err_lower:
-            # ── FIX: only count *pure* 401/403 as auth failures. A 503
-            # response from the upstream gateway sometimes wraps a 401 in
-            # its body — but the master_analyst already classifies those
-            # upstream errors with auth_failed=False (since the LLM SDK
-            # raises a ServerError, not an AuthenticationError, in that
-            # case). To be safe, if the error string ALSO contains a
-            # transient-server marker, treat it as transient (10s cooldown)
-            # rather than burning the consecutive_auth_failures counter.
-            if any(s in err_lower for s in (
-                "503", "502", "504", "unavailable", "high demand",
-                "temporarily", "service unavailable", "bad gateway",
-                "gateway timeout",
-            )):
-                self.rate_limited_until = time.time() + 30
-                log.warning(
-                    f"[LLM Keys] {self.provider} key #{self.index + 1} "
-                    f"transient server error (likely upstream 503) — 30s cooldown"
-                )
-                return
             self.consecutive_auth_failures += 1
             # Day 140+ FIX (Bug#4): P4b's move away from permanent-disable
             # (30min cooldown "in case it's transient") had no upper bound —

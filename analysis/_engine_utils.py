@@ -11,36 +11,102 @@
 # All engines should import from here instead of defining their own.
 # ============================================================
 
+import logging
 import numpy as np
 import pandas as pd
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 
 # ─── ATR ──────────────────────────────────────────────────────
 
 def atr_series(df: pd.DataFrame, period: int = 14) -> pd.Series:
     """ATR as a pandas Series (for rolling computations)."""
+    if df is None or df.empty:
+        return pd.Series(dtype=float)
+
+    required_columns = {"high", "low", "close"}
+    missing_columns = required_columns - set(df.columns)
+    if missing_columns:
+        log.warning(
+            "[analysis._engine_utils] ATR series missing required columns: %s",
+            sorted(missing_columns),
+        )
+        return pd.Series([np.nan] * len(df), index=df.index, dtype=float)
+
     try:
-        h, l, c = df["high"], df["low"], df["close"]
-        tr = pd.concat(
-            [(h - l), (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1
-        ).max(axis=1)
-        return tr.rolling(period, min_periods=1).mean()
-    except Exception as e:
-        return pd.Series([np.nan] * len(df), index=df.index)
+        h = df["high"].astype(float)
+        l = df["low"].astype(float)
+        c = df["close"].astype(float)
+
+        # NOTE: Do NOT use pd.concat([...], axis=1).max(axis=1) here.
+        # When the input Series carry non-scalar `.attrs` metadata (e.g.
+        # set upstream by other pandas ops), pd.concat's internal
+        # __finalize__ does `all(obj.attrs == attrs for obj in objs[1:])`,
+        # which raises "ValueError: The truth value of a Series is
+        # ambiguous" if attrs comparison itself returns array-like data.
+        # np.maximum.reduce on the raw numpy arrays sidesteps this pandas
+        # bug entirely while producing an identical result.
+        hl = (h - l).to_numpy()
+        hc = (h - c.shift()).abs().to_numpy()
+        lc = (l - c.shift()).abs().to_numpy()
+        tr = pd.Series(np.maximum.reduce([hl, hc, lc]), index=df.index)
+
+        invalid_row_mask = h.isna() | l.isna() | c.isna() | (h < l)
+        if invalid_row_mask.any():
+            log.debug(
+                "[analysis._engine_utils] ATR series contains %d invalid row(s) out of %d; "
+                "last_row=%s",
+                int(invalid_row_mask.sum()),
+                len(df),
+                df[["high", "low", "close"]].iloc[-1].to_dict(),
+            )
+        # Ensure rows with invalid/missing OHLC are treated as NaN so that
+        # downstream logic (and tests) observe non-finite ATR where input
+        # data is incomplete or malformed.
+        tr.loc[invalid_row_mask] = np.nan
+
+        atr = tr.rolling(period, min_periods=1).mean()
+        # If a row's OHLC is invalid, ensure the resulting ATR for that
+        # row is NaN (don't allow earlier valid TR values to mask the
+        # invalid current row via the rolling window).
+        atr.loc[invalid_row_mask] = np.nan
+        return atr.replace([np.inf, -np.inf], np.nan)
+    except Exception:
+        log.exception("[analysis._engine_utils] ATR series computation failed")
+        return pd.Series([np.nan] * len(df), index=df.index, dtype=float)
 
 
 def atr_value(df: pd.DataFrame, period: int = 14) -> float:
     """Current ATR value as float (with fallback)."""
+    if df is None or df.empty:
+        log.warning("[analysis._engine_utils] ATR value requested on empty dataframe")
+        return 0.001
+
     try:
         atr = atr_series(df, period).iloc[-1]
         if np.isfinite(atr) and atr > 0:
             return float(atr)
+
+        try:
+            last_row = df[["high", "low", "close"]].iloc[-1].to_dict()
+        except Exception:
+            last_row = {}
+
+        log.warning(
+            "[analysis._engine_utils] ATR invalid/non-finite (atr=%s); "
+            "fallback to close*0.001; rows=%d, last_row=%s",
+            atr,
+            len(df),
+            last_row,
+        )
         return float(df["close"].iloc[-1]) * 0.001
-    except Exception as e:
+    except Exception:
+        log.exception("[analysis._engine_utils] ATR value fallback failed")
         try:
             return float(df["close"].iloc[-1]) * 0.001
-        except Exception as e:
+        except Exception:
             return 0.001
 
 

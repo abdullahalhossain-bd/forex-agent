@@ -142,6 +142,91 @@ class ModelStore:
         self.registry_path = self.base_dir / "_registry.json"
         self._lock_path = self.base_dir / "_registry.lock"
         self._registry = self._load_registry()
+        # Import any historically-trained institutional models (saved under
+        # data/trained_models/{PAIR}/{model_type}/production/) into the
+        # ModelStore registry if the registry is currently empty. This
+        # migration is safe and idempotent: it only runs when there are no
+        # existing registry entries, and it writes portable (or absolute)
+        # paths that _resolve_path() understands.
+        try:
+            if not self._registry.get("models"):  # only import when empty
+                trained_root = PROJECT_ROOT / "data" / "trained_models"
+                if trained_root.exists() and trained_root.is_dir():
+                    imported = 0
+                    for pair_dir in trained_root.iterdir():
+                        if not pair_dir.is_dir():
+                            continue
+                        pair = pair_dir.name.upper()
+                        for model_type_dir in pair_dir.iterdir():
+                            if not model_type_dir.is_dir():
+                                continue
+                            model_type = model_type_dir.name
+                            # Prefer a production/ folder, but many institutional
+                            # artifacts place the model at the model_type_dir
+                            # root (see data/trained_models/*/*/). Accept either.
+                            prod_dir = model_type_dir / "production"
+                            search_dir = None
+                            if prod_dir.exists() and any(p.is_file() for p in prod_dir.iterdir()):
+                                search_dir = prod_dir
+                            else:
+                                search_dir = model_type_dir
+
+                            # Find a concrete model file in the chosen search dir
+                            model_file = None
+                            for cand in search_dir.iterdir():
+                                if cand.is_file() and cand.suffix in (".pkl", ".joblib", ".keras", ".h5"):
+                                    model_file = cand
+                                    break
+                            if model_file is None:
+                                # fallback: any file
+                                for cand in search_dir.iterdir():
+                                    if cand.is_file():
+                                        model_file = cand
+                                        break
+                            if model_file is None:
+                                continue
+
+                            # Read optional metadata (prefer production metadata if present)
+                            meta = {}
+                            meta_path = (prod_dir / "metadata.json") if (prod_dir / "metadata.json").exists() else (model_type_dir / "metadata.json")
+                            try:
+                                if meta_path.exists():
+                                    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                meta = {}
+
+                            timeframe = meta.get("timeframe") or "15m"
+                            metrics = meta.get("metrics", {}) or {}
+                            feature_names = meta.get("feature_list") or meta.get("feature_names") or []
+
+                            key = f"{pair}_{timeframe}_{model_type}"
+                            version_label = "v1"
+                            rel_path = str(model_file)
+                            ver_entry = {
+                                "version": version_label,
+                                "saved_at": meta.get("saved_at") or meta.get("trained_at") or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                                "metrics": metrics,
+                                "is_keras": model_file.suffix in (".keras", ".h5"),
+                                "model_path": rel_path,
+                                "meta_path": str(meta_path) if meta_path.exists() else "",
+                                "feature_names": list(feature_names),
+                            }
+                            self._registry.setdefault("models", {})[key] = {
+                                "pair": pair,
+                                "timeframe": timeframe,
+                                "model_type": model_type,
+                                "versions": [ver_entry],
+                                "latest": version_label,
+                            }
+                            imported += 1
+                    if imported:
+                        # Persist the migrated entries so subsequent boots
+                        # see them in the normal ModelStore flow.
+                        with _RegistryLock(self._lock_path):
+                            self._save_registry()
+                        log.info(f"[ModelStore] imported {imported} historical trained model(s) into registry from data/trained_models/")
+        except Exception as _e:
+            log.warning(f"[ModelStore] historical import failed: {_e}")
 
     def _load_registry(self) -> Dict[str, Any]:
         if self.registry_path.exists():
@@ -345,7 +430,12 @@ class ModelStore:
             return None
 
         raw_path = ver_entry.get("model_path", "")
+        log.debug(f"[ModelStore] load attempt: key={key} version={version} expected_path={raw_path}")
         resolved = self._resolve_path(raw_path)
+        if resolved is not None:
+            log.debug(f"[ModelStore] resolved path for {key} {version}: {resolved} (exists={resolved.exists()})")
+        else:
+            log.debug(f"[ModelStore] could not resolve path for {key} {version}: {raw_path}")
         if resolved is None:
             log.warning(f"[ModelStore] model file missing: {raw_path} (pair={pair}, tf={timeframe}, type={model_type}, version={version})")
             return None
@@ -368,13 +458,17 @@ class ModelStore:
             if ver_entry.get("is_keras"):
                 try:
                     from tensorflow import keras
-                    return keras.models.load_model(str(resolved))
+                    m = keras.models.load_model(str(resolved))
+                    log.info(f"[ModelStore] loaded keras model: {key} {version} from {resolved}")
+                    return m
                 except ImportError:
                     log.warning("[ModelStore] tensorflow not installed — cannot load keras model")
                     return None
             else:
                 # safe_pickle_load expects a filepath STRING, not a file object
-                return _safe_load(str(resolved))
+                m = _safe_load(str(resolved))
+                log.info(f"[ModelStore] loaded pickled model: {key} {version} from {resolved} (type={type(m)})")
+                return m
         except Exception as e:
             log.error(f"[ModelStore] model load failed: {e}")
             return None

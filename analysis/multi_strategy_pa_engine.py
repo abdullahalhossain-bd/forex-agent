@@ -381,7 +381,23 @@ class MultiStrategyPAEngine:
         atr_series = _atr(df, period=14)
         atr_val = float(atr_series.iloc[-1]) if len(atr_series) else 0.0
         if not np.isfinite(atr_val) or atr_val <= 0:
-            atr_val = float(df["close"].iloc[-1]) * 0.001
+            # Review fix (item #12): previously fell back to close*0.001 —
+            # an arbitrary synthetic "ATR" with no basis in actual recent
+            # volatility, silently feeding SL/TP sizing, the shooting-star
+            # momentum check, and the confluence band width. A genuinely
+            # invalid ATR here means the OHLC data itself is degenerate
+            # (flat candles / corrupt feed) — safer to abstain than to
+            # trade off a made-up number. This only makes the engine MORE
+            # conservative (extra NO_TRADE in a rare edge case); it never
+            # creates a new BUY/SELL path.
+            return self._no_trade_result(
+                symbol=sym, timeframe=self.timeframe,
+                reason=(
+                    f"ATR invalid/non-finite (atr={atr_val}) — data looks "
+                    f"degenerate (flat range or corrupt feed); aborting "
+                    f"rather than using a synthetic volatility fallback."
+                ),
+            )
 
         # ── STEP 1: S/R Zones + Bias ──
         sr_zones, sr_bias = self._step1_sr_zones_and_bias(df, sym, atr_val)
@@ -390,7 +406,7 @@ class MultiStrategyPAEngine:
         trend = self._step2_trend_structure(df)
 
         # ── STEP 3: Shooting Star 2-candle rule ──
-        ss_setup = self._step3_shooting_star(df, trend, atr_val)
+        ss_setup = self._step3_shooting_star(df, trend, atr_val, sr_zones)
 
         # ── STEP 4: Session time filter ──
         session_ok = _is_in_session(df)
@@ -583,7 +599,8 @@ class MultiStrategyPAEngine:
     # ═══════════════════════════════════════════════════════════
 
     def _step3_shooting_star(
-        self, df: pd.DataFrame, trend: TrendInfo, atr_val: float
+        self, df: pd.DataFrame, trend: TrendInfo, atr_val: float,
+        sr_zones: Optional[List[SRZone]] = None,
     ) -> dict:
         """Detect 2-candle shooting star reversal pattern."""
         result = {
@@ -600,10 +617,29 @@ class MultiStrategyPAEngine:
         c2 = df.iloc[-1]
 
         # Step 3.1: 1st candle must be shooting star (bearish rejection)
-        # AND trend must be downtrend OR price at resistance
+        # AND trend must be downtrend OR price at resistance.
+        #
+        # Bug fix (review item): the AND-condition was documented in this
+        # comment but never actually implemented — c1_is_ss alone set
+        # candle1_confirmed=True, so a shooting-star-shaped candle in an
+        # UPTREND with no resistance nearby (i.e. a low-quality/against-
+        # structure setup) was passing this gate. Added the missing check.
+        # This only makes candle1_confirmed=True *harder* to reach — it
+        # can never turn a previously-False case True, so it strictly
+        # tightens the gate rather than introducing a new trade path.
         c1_is_ss = _is_shooting_star(c1)
         if c1_is_ss:
-            result["candle1_confirmed"] = True
+            c1_close = float(c1["close"])
+            near_resistance = False
+            if sr_zones:
+                proximity_band = atr_val * 0.5
+                near_resistance = any(
+                    z.type == "resistance"
+                    and (z.zone_bottom - proximity_band) <= c1_close <= (z.zone_top + proximity_band)
+                    for z in sr_zones
+                )
+            if trend.structure == "downtrend" or near_resistance:
+                result["candle1_confirmed"] = True
 
         # Step 3.2: 2nd candle must confirm seller pressure
         # = bearish candle (close < open) AND close in lower half of range

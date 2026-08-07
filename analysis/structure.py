@@ -189,6 +189,8 @@ class MarketStructureEngine:
         Bearish BOS : close < সর্বশেষ confirmed swing low
 
         Trend continuation signal — গঠন একই দিকে আরও এগোচ্ছে।
+        
+        Enhanced with fallback detection for recent swing breaks.
         """
         highs = [p for p in labeled if p["kind"] == "high"]
         lows  = [p for p in labeled if p["kind"] == "low"]
@@ -199,7 +201,10 @@ class MarketStructureEngine:
         last_high = highs[-1]
         last_low  = lows[-1]
         curr_close = float(df["close"].iloc[-1])
+        curr_high = float(df["high"].iloc[-1])
+        curr_low = float(df["low"].iloc[-1])
 
+        # Primary: Close-based detection
         if curr_close > last_high["price"]:
             confidence = self._bos_confidence(df, last_high["price"], "bullish")
             return {
@@ -216,6 +221,45 @@ class MarketStructureEngine:
                 "level":      last_low["price"],
                 "confidence": confidence,
                 "note": f"Price broke below swing low {last_low['price']:.5f}",
+            }
+
+        # Secondary: High/Low wicks detection for even stronger BOS signal
+        if curr_high > last_high["price"] * 1.001:  # 0.1% higher for wick
+            confidence = self._bos_confidence(df, last_high["price"], "bullish")
+            return {
+                "event":      "BULLISH_BOS",
+                "level":      last_high["price"],
+                "confidence": max(confidence, 55),  # Wick BOS has lower confidence
+                "note": f"High wick broke above swing high {last_high['price']:.5f} (wicking BOS)",
+            }
+
+        if curr_low < last_low["price"] * 0.999:  # 0.1% lower for wick
+            confidence = self._bos_confidence(df, last_low["price"], "bearish")
+            return {
+                "event":      "BEARISH_BOS",
+                "level":      last_low["price"],
+                "confidence": max(confidence, 55),  # Wick BOS has lower confidence
+                "note": f"Low wick broke below swing low {last_low['price']:.5f} (wicking BOS)",
+            }
+
+        # Tertiary: Check if we're very close to breaking (near-BOS) as signal building
+        threshold = 0.002  # 0.2% proximity
+        if abs(curr_close - last_high["price"]) / last_high["price"] < threshold and curr_close > last_high["price"] * 0.998:
+            confidence = 35  # Very low confidence, but signal forming
+            return {
+                "event":      "BULLISH_BOS",
+                "level":      last_high["price"],
+                "confidence": confidence,
+                "note": f"Price near swing high {last_high['price']:.5f} — BOS forming",
+            }
+
+        if abs(curr_close - last_low["price"]) / last_low["price"] < threshold and curr_close < last_low["price"] * 1.002:
+            confidence = 35  # Very low confidence, but signal forming
+            return {
+                "event":      "BEARISH_BOS",
+                "level":      last_low["price"],
+                "confidence": confidence,
+                "note": f"Price near swing low {last_low['price']:.5f} — BOS forming",
             }
 
         return {"event": "NONE", "level": None, "confidence": 0}
@@ -248,40 +292,82 @@ class MarketStructureEngine:
         if len(labeled) < 4:
             return {"event": "NONE", "confidence": 0, "note": "Insufficient swings"}
 
-        last4 = labeled[-4:]
-        types = [p["type"] for p in last4]
+        # Check last 8 swings for better pattern detection (not just last 4)
+        lookback_swings = min(8, len(labeled))
+        recent = labeled[-lookback_swings:]
+        types = [p["type"] for p in recent]
 
         # Bullish -> Bearish: ...HH, HL ... then LL appears breaking prior HL
-        if structure_bias in ("BULLISH", "RANGING") and "LL" in types:
-            ll_idx = types.index("LL")
-            prior_hl = [p for p in last4[:ll_idx] if p["type"] == "HL"]
-            if prior_hl:
-                broken_level = prior_hl[-1]["price"]
-                return {
-                    "event": "BEARISH_CHOCH",
-                    "confidence": 70,
-                    "broken_level": broken_level,
-                    "note": (
-                        f"Bullish HL at {broken_level:.5f} broken — "
-                        f"character shifting to bearish"
-                    ),
-                }
+        if structure_bias in ("BULLISH", "RANGING"):
+            # Look for LL in recent swings
+            if "LL" in types:
+                ll_idx = len(types) - 1 - types[::-1].index("LL")  # Find last LL
+                # Find most recent HL before this LL
+                prior_hl = [p for p in recent[:ll_idx] if p["type"] == "HL"]
+                if prior_hl:
+                    broken_level = prior_hl[-1]["price"]
+                    curr_close = float(df["close"].iloc[-1])
+                    # Check if we're actually below the HL level
+                    if curr_close < broken_level:
+                        confidence = 75 if curr_close < broken_level * 0.99 else 60
+                        return {
+                            "event": "BEARISH_CHOCH",
+                            "confidence": confidence,
+                            "broken_level": broken_level,
+                            "note": (
+                                f"Bullish HL at {broken_level:.5f} broken — "
+                                f"character shifting to bearish"
+                            ),
+                        }
+            
+            # Secondary detection: check for sustained bearish pattern (LH, LL sequence)
+            if len(types) >= 3:
+                if types[-2] == "LH" and types[-1] == "LL":
+                    broken_level = recent[-3]["price"] if len(recent) >= 3 and recent[-3]["type"] == "HL" else None
+                    if broken_level:
+                        confidence = 65
+                        return {
+                            "event": "BEARISH_CHOCH",
+                            "confidence": confidence,
+                            "broken_level": broken_level,
+                            "note": f"Bearish pattern LH→LL confirmed at {broken_level:.5f}",
+                        }
 
         # Bearish -> Bullish: ...LH, LL ... then HH appears breaking prior LH
-        if structure_bias in ("BEARISH", "RANGING") and "HH" in types:
-            hh_idx = types.index("HH")
-            prior_lh = [p for p in last4[:hh_idx] if p["type"] == "LH"]
-            if prior_lh:
-                broken_level = prior_lh[-1]["price"]
-                return {
-                    "event": "BULLISH_CHOCH",
-                    "confidence": 70,
-                    "broken_level": broken_level,
-                    "note": (
-                        f"Bearish LH at {broken_level:.5f} broken — "
-                        f"character shifting to bullish"
-                    ),
-                }
+        if structure_bias in ("BEARISH", "RANGING"):
+            # Look for HH in recent swings
+            if "HH" in types:
+                hh_idx = len(types) - 1 - types[::-1].index("HH")  # Find last HH
+                # Find most recent LH before this HH
+                prior_lh = [p for p in recent[:hh_idx] if p["type"] == "LH"]
+                if prior_lh:
+                    broken_level = prior_lh[-1]["price"]
+                    curr_close = float(df["close"].iloc[-1])
+                    # Check if we're actually above the LH level
+                    if curr_close > broken_level:
+                        confidence = 75 if curr_close > broken_level * 1.01 else 60
+                        return {
+                            "event": "BULLISH_CHOCH",
+                            "confidence": confidence,
+                            "broken_level": broken_level,
+                            "note": (
+                                f"Bearish LH at {broken_level:.5f} broken — "
+                                f"character shifting to bullish"
+                            ),
+                        }
+            
+            # Secondary detection: check for sustained bullish pattern (HH, HL sequence)
+            if len(types) >= 3:
+                if types[-2] == "HH" and types[-1] == "HL":
+                    broken_level = recent[-3]["price"] if len(recent) >= 3 and recent[-3]["type"] == "LH" else None
+                    if broken_level:
+                        confidence = 65
+                        return {
+                            "event": "BULLISH_CHOCH",
+                            "confidence": confidence,
+                            "broken_level": broken_level,
+                            "note": f"Bullish pattern HH→HL confirmed at {broken_level:.5f}",
+                        }
 
         return {"event": "NONE", "confidence": 0, "note": "No character change detected"}
 

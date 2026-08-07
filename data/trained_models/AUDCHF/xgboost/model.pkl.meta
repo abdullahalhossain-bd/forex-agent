@@ -1,0 +1,8 @@
+{
+  "hash": "08b480bf6be7adb00c318c5ac79adfe71a299703f3cbc6e61cc782ace926cad3",
+  "saved_at": "2026-08-04T19:28:53.550854+00:00",
+  "metadata": {
+    "model_type": "xgboost",
+    "symbol": "AUDCHF"
+  }
+}

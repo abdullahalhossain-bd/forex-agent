@@ -1,0 +1,8 @@
+{
+  "hash": "2ac9c1d65831323bc67cdb98cf428c1e79158a063acaa00e2175e8f74a2763d5",
+  "saved_at": "2026-08-04T19:36:19.999520+00:00",
+  "metadata": {
+    "model_type": "xgboost",
+    "symbol": "EURSEK"
+  }
+}

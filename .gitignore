@@ -19,7 +19,16 @@ data/history/
 *.db
 *.bin
 data/pipeline_cache/
-data/
+data/history/
+data/*.csv
+data/*.bin
+data/*.db
+data/*.parquet
+data/*.feather
+data/*.h5
+data/cache/
+data/pipeline_cache/
+data/history/
 
 memory/*
 

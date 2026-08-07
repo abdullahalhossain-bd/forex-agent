@@ -694,22 +694,43 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                 info = log_llm_call_failure(
                     log, "Groq", self.GROQ_MODEL, attempt, max_retries, e
                 )
+                rotated_client = None
                 if hasattr(self, '_key_manager') and self._key_manager:
                     self._key_manager.mark_groq_failure(
                         info["error_str"], info["rate_limited"], client=client
                     )
-                    # Get a fresh client with a different key
+                    # Get a fresh client — the manager's rotation excludes
+                    # whatever key/account just failed (it's now in
+                    # cooldown), so this is guaranteed to be a *different*
+                    # key if one is available.
                     self._groq_client = self._key_manager.get_groq_client()
+                    rotated_client = self._groq_client
+
+                # FIX (audit follow-up — "same key retried 3x on TPD 429"):
+                # rate-limit and auth failures already got the failing
+                # key/account excluded from rotation above. Sleeping here
+                # before the next attempt no longer protects anything —
+                # either a different, healthy account is ready right now
+                # (try it immediately, no delay), or none are left at all
+                # (stop immediately and let analyze()'s fallback cascade
+                # move on to Gemini/OpenRouter/etc. rather than burning
+                # the shared time budget on a sleep that changes nothing).
+                if info.get("rate_limited") or info.get("auth_failed"):
+                    if rotated_client is not None:
+                        continue
+                    log.info(
+                        "[AIAnalyst] Groq: no healthy account left after "
+                        f"{'TPD/rate-limit' if info.get('rate_limited') else 'auth failure'} "
+                        "— moving to fallback providers immediately"
+                    )
+                    return None
+
+                # Non-rate-limit failure (e.g. transient network blip) —
+                # the "fresh" client above may well be the SAME key (it
+                # wasn't excluded from rotation), so a short exponential
+                # backoff still helps avoid hammering it back-to-back.
                 if attempt < max_retries - 1:
-                    # BUGFIX (audit follow-up): flat 1s sleep between
-                    # retries hits a rate-limited endpoint at a fixed
-                    # cadence, which is exactly the pattern that keeps
-                    # tripping the same limit. Exponential backoff with
-                    # jitter (1s, 2s, 4s, ± up to 250ms) spreads retries
-                    # out and backs off harder specifically on 429s.
                     base_delay = 2 ** attempt
-                    if info.get("rate_limited"):
-                        base_delay *= 2
                     delay = base_delay + random.uniform(0, 0.25)
                     if deadline is not None:
                         delay = min(delay, max(0.0, deadline - time.monotonic()))
@@ -821,6 +842,14 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
             if deadline is not None and time.monotonic() >= deadline:
                 log.debug("[AIAnalyst] Gemini: deadline already elapsed — abandoning remaining retries")
                 return None
+            # BUGFIX (audit): Gemini API hard-rejects any http_options.timeout
+            # below 10000ms ("Manually set deadline Xs is too short. Minimum
+            # allowed deadline is 10s."). When caller's remaining budget is
+            # under 10s, skip Gemini cleanly so cascade falls through to the
+            # next provider, rather than burning a guaranteed-rejected call.
+            if deadline is not None and (deadline - time.monotonic()) < 10.0:
+                log.debug("[AIAnalyst] Gemini: remaining budget < 10s — skipping (Gemini API minimum deadline is 10s)")
+                return None
             client = self._gemini_client
             if client is None and hasattr(self, '_key_manager') and self._key_manager:
                 client = self._key_manager.get_gemini_client()
@@ -837,7 +866,9 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     # never break a call that would otherwise succeed.
                     try:
                         from google.genai import types as _genai_types
-                        remaining_ms = max(500, int((deadline - time.monotonic()) * 1000))
+                        # BUGFIX (audit): floor at 10000ms — Gemini API minimum.
+                        # Paired with the pre-loop skip-when-<10s check above.
+                        remaining_ms = max(10000, int((deadline - time.monotonic()) * 1000))
                         generate_kwargs["config"] = _genai_types.GenerateContentConfig(
                             http_options=_genai_types.HttpOptions(timeout=remaining_ms)
                         )
@@ -864,11 +895,32 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                 info = log_llm_call_failure(
                     log, "Gemini", self.GEMINI_MODEL, attempt, max_retries, e
                 )
+                rotated_client = None
                 if hasattr(self, '_key_manager') and self._key_manager:
                     self._key_manager.mark_gemini_failure(
                         info["error_str"], info["rate_limited"], client=client
                     )
                     self._gemini_client = self._key_manager.get_gemini_client()
+                    rotated_client = self._gemini_client
+
+                # FIX (audit follow-up): same rationale as _call_groq —
+                # once the failing key/account is excluded from rotation,
+                # switch to a healthy one immediately instead of sleeping.
+                # transient_server (e.g. Gemini's "503 high demand") is
+                # deliberately excluded here: KeyHealth.mark_failure gives
+                # it a short 30s cooldown, not a full account rotation, so
+                # a brief backoff before retrying the same call is still
+                # useful there.
+                if (info.get("rate_limited") or info.get("auth_failed")) and not info.get("transient_server"):
+                    if rotated_client is not None:
+                        continue
+                    log.info(
+                        "[AIAnalyst] Gemini: no healthy account left after "
+                        f"{'TPD/rate-limit' if info.get('rate_limited') else 'auth failure'} "
+                        "— moving to fallback providers immediately"
+                    )
+                    return None
+
                 if attempt < max_retries - 1:
                     # BUGFIX (audit follow-up): exponential backoff with
                     # jitter instead of a flat 1s sleep — see _call_groq

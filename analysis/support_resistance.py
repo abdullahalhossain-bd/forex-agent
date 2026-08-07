@@ -14,7 +14,6 @@
 # ============================================================
 
 import json
-import logging
 from typing import Optional
 
 import numpy as np
@@ -236,12 +235,42 @@ class SupportResistance:
         """
         Count candles within `proximity_pct` of the zone that show
         valid rejection wick. Used to enhance strength score.
+
+        PERF (2026-08-06): previously looped candle-by-candle with
+        `.iterrows()` (the slowest pandas row-access pattern) and called
+        `_is_valid_rejection()` once per row. This is called once per zone
+        built (potentially many times per analyze()), so vectorize with
+        the same math `_is_valid_rejection()` uses — the boolean logic
+        below is kept in lockstep with that method, just applied to whole
+        Series instead of one candle at a time.
         """
         try:
             cp = float(df["close"].iloc[-1])
             if cp <= 0:
                 return 0
             band = cp * proximity_pct
+            # Instrumentation: log types and shapes to diagnose expensive comparisons
+            try:
+                low_col = df["low"]
+                # `low_col` can be a Series or DataFrame when duplicate columns exist
+                low_dtype = getattr(low_col, "dtype", type(low_col))
+                low_shape = getattr(low_col, "shape", None)
+            except Exception as _e:
+                low_dtype = f"error:{_e}"
+                low_shape = None
+            try:
+                log.info(
+                    "[SR-INSTR] _count_valid_rejections zone_top=%r (%s) band=%r (%s) df['low'].dtype=%r shape=%r",
+                    zone_top,
+                    type(zone_top).__name__,
+                    band,
+                    type(band).__name__,
+                    low_dtype,
+                    low_shape,
+                )
+            except Exception:
+                # Best-effort instrumentation — do not raise
+                log.info("[SR-INSTR] _count_valid_rejections instrumentation skipped due to logging error")
             # We want candles that touched the zone (wick reached it)
             if direction == "resistance":
                 touched = df[(df["high"] >= zone_bottom - band) &
@@ -249,11 +278,22 @@ class SupportResistance:
             else:
                 touched = df[(df["low"] <= zone_top + band) &
                              (df["low"] >= zone_bottom - band)]
-            count = 0
-            for _, c in touched.iterrows():
-                if self._is_valid_rejection(c, direction=direction):
-                    count += 1
-            return count
+            if touched.empty:
+                return 0
+
+            o = touched["open"].astype(float)
+            h = touched["high"].astype(float)
+            l = touched["low"].astype(float)
+            c = touched["close"].astype(float)
+            body = (c - o).abs()
+            upper_wick = h - np.maximum(o, c)
+            lower_wick = np.minimum(o, c) - l
+            wick = upper_wick if direction == "resistance" else lower_wick
+
+            is_doji = body < 1e-9
+            # Doji: rejection if any wick exists. Non-doji: wick >= ratio * body.
+            valid = np.where(is_doji, wick > 0, wick >= self.wick_body_ratio * body)
+            return int(np.sum(valid))
         except Exception as e:
             log.debug(f"[SR] _count_valid_rejections failed for zone [{zone_bottom}, {zone_top}]: {e}")
             return 0
@@ -262,7 +302,7 @@ class SupportResistance:
     # STEP 3: Cluster swing points into ZONES (ranges)
     # ─────────────────────────────────────────────
 
-    def _get_cluster_threshold(self, df: pd.DataFrame) -> float:
+    def _get_cluster_threshold(self, df: pd.DataFrame, atr_pct: Optional[float] = None) -> float:
         """
         Cluster threshold as % of price.
         Auto-tune from ATR if not specified.
@@ -272,11 +312,22 @@ class SupportResistance:
         way too wide. We use ATR×1.5 with sensible caps:
           - Floor: 0.10% (10 pips on EURUSD) — prevents micro-clusters
           - Ceiling: 0.80% — caps on highly volatile instruments
+
+        PERF (2026-08-06): `_atr_pct(df)` is an O(n) rolling computation
+        over the whole df. Before this fix it was being recomputed from
+        scratch by every caller in the pipeline (this method, once per
+        zone in `_build_zone`, twice in `_raw_swing_levels`...) — 15-20+
+        times per `analyze()` call on a live multi-symbol bot. Callers that
+        already have `atr_pct` for this df (analyze() computes it once at
+        the top) should pass it in here; this only falls back to computing
+        it when no cached value is supplied, so direct/standalone callers
+        keep working unchanged.
         """
         if self.cluster_threshold_pct is not None:
             return self.cluster_threshold_pct
 
-        atr_pct = _atr_pct(df, period=14)
+        if atr_pct is None:
+            atr_pct = _atr_pct(df, period=14)
         # ATR × 1.5 is a common "zone width" multiplier in S/R literature
         threshold = max(0.001, min(0.008, atr_pct * 1.5))
         return threshold
@@ -289,6 +340,7 @@ class SupportResistance:
         threshold_pct_override: Optional[float] = None,
         min_touches_override: Optional[int] = None,
         source: str = "cluster",
+        atr_pct: Optional[float] = None,
     ) -> list:
         """
         Cluster nearby swing prices into ZONES (range/box).
@@ -315,7 +367,7 @@ class SupportResistance:
 
         threshold_pct = (
             threshold_pct_override if threshold_pct_override is not None
-            else self._get_cluster_threshold(df)
+            else self._get_cluster_threshold(df, atr_pct=atr_pct)
         )
         min_touches = (
             min_touches_override if min_touches_override is not None
@@ -346,12 +398,12 @@ class SupportResistance:
                 current_cluster.append(p)
             else:
                 if len(current_cluster) >= min_touches:
-                    zones.append(self._build_zone(current_cluster, df, direction, source=source))
+                    zones.append(self._build_zone(current_cluster, df, direction, source=source, atr_pct=atr_pct))
                 current_cluster = [p]
 
         # last cluster
         if len(current_cluster) >= min_touches:
-            zones.append(self._build_zone(current_cluster, df, direction, source=source))
+            zones.append(self._build_zone(current_cluster, df, direction, source=source, atr_pct=atr_pct))
 
         return zones
 
@@ -362,6 +414,7 @@ class SupportResistance:
         direction: str,
         max_levels: Optional[int] = None,
         buffer_multiplier: float = 0.5,
+        atr_pct: Optional[float] = None,
     ) -> list:
         """
         TRENDING-regime fallback liquidity source: turns the most recent
@@ -389,7 +442,8 @@ class SupportResistance:
             return []
         max_levels = max_levels if max_levels is not None else self.max_raw_swing_levels
 
-        atr_pct = _atr_pct(df, period=14)
+        if atr_pct is None:
+            atr_pct = _atr_pct(df, period=14)
         buffer_pct = max(atr_pct * buffer_multiplier, 0.0003)  # thin band, floor ~3 pips-equivalent
 
         # Most RECENT swing points first (by bar index/time, not by price) —
@@ -423,7 +477,7 @@ class SupportResistance:
             })
         return levels
 
-    def _merge_zone_sources(self, *tiers: list, df: pd.DataFrame) -> list:
+    def _merge_zone_sources(self, *tiers: list, df: pd.DataFrame, atr_pct: Optional[float] = None) -> list:
         """
         Merge zone lists from different confidence tiers, highest-priority
         tier first (e.g. confirmed multi-touch cluster, then EQH/EQL loose
@@ -432,7 +486,7 @@ class SupportResistance:
         threshold) a zone already accepted from a higher tier — no need to
         report the same price level twice at different confidence tiers.
         """
-        threshold_pct = self._get_cluster_threshold(df)
+        threshold_pct = self._get_cluster_threshold(df, atr_pct=atr_pct)
         merged: list = []
         for tier in tiers:
             for z in tier:
@@ -442,7 +496,14 @@ class SupportResistance:
                 merged.append(z)
         return merged
 
-    def _build_zone(self, cluster: list, df: pd.DataFrame, direction: str, source: str = "cluster") -> dict:
+    def _build_zone(
+        self,
+        cluster: list,
+        df: pd.DataFrame,
+        direction: str,
+        source: str = "cluster",
+        atr_pct: Optional[float] = None,
+    ) -> dict:
         """Build a zone dict from a cluster of swing points."""
         prices = [p["price"] for p in cluster]
         zone_top = max(prices)
@@ -485,7 +546,7 @@ class SupportResistance:
         # ATR is not "Strong" in practice. Confidence: high (largest sample
         # and effect size in the whole analysis).
         zone_width = zone_top - zone_bottom
-        atr_pct_now = _atr_pct(df, period=14)
+        atr_pct_now = atr_pct if atr_pct is not None else _atr_pct(df, period=14)
         price_ref = float(df["close"].iloc[-1]) if len(df) else 0.0
         atr_abs = atr_pct_now * price_ref
         is_thin_zone = bool(atr_abs > 0 and zone_width < 0.5 * atr_abs)
@@ -634,21 +695,23 @@ class SupportResistance:
             return []
 
         # direction filter
+        # FIX (2026-08-06): previously used a strict `zone_top < current_price`
+        # / `zone_bottom > current_price` test, which drops a zone the moment
+        # price is trading *inside* it (zone_bottom <= current_price <=
+        # zone_top). That's exactly the "AT SUPPORT"/"AT RESISTANCE" case
+        # get_ai_context() separately detects off the unfiltered
+        # nearest_support/nearest_res — so the single most actionable zone
+        # (the one price is standing on right now) was silently missing from
+        # support_zones/resistance_zones (and therefore from to_json() /
+        # to_prompt_text() / get_summary()) while get_ai_context() still
+        # called it out by name, giving the LLM an inconsistent picture.
+        # `<=`/`>=` include the "at zone" case; the sort key below already
+        # clamps distance to a floor of 1e-9, so an at-zone entry (which can
+        # have dist <= 0) naturally sorts first as the most relevant.
         if side == "support":
-            relevant = [z for z in zones if z["zone_top"] < current_price]
+            relevant = [z for z in zones if z["zone_bottom"] <= current_price]
         else:
-            relevant = [z for z in zones if z["zone_bottom"] > current_price]
-
-        # FIX (evidence: backtest instrumentation on 5yr EURUSD H1 showed
-        # this fallback firing in ~5.5% of analyze() calls, in every case
-        # handing the LLM/signal engine a zone mislabeled as being on the
-        # wrong side of price — e.g. a zone below price reported as
-        # "Resistance (above price)"). Previously fell back to ALL zones
-        # regardless of side. Correct behavior: report no zones on that
-        # side rather than a wrong-side one; downstream already handles
-        # `(none)` gracefully in to_prompt_text()/get_summary().
-        if not relevant:
-            relevant = []
+            relevant = [z for z in zones if z["zone_top"] >= current_price]
 
         # Strength weight for sort
         strength_weight = {"Strong": 3, "Medium": 2, "Weak": 1}
@@ -726,36 +789,44 @@ class SupportResistance:
                 f"[SR] Insufficient candles ({len(df)}) for swing_window={self.swing_window}"
             )
 
+        # 0. ATR% — computed ONCE per analyze() call and threaded through the
+        # rest of the pipeline. PERF (2026-08-06): _atr_pct() is an O(n)
+        # rolling calc over the whole df; previously every downstream caller
+        # (cluster threshold x5, raw swing levels x2, _build_zone per zone
+        # built) recomputed it independently — 15-20+ full recomputations
+        # per analyze() call. A 10-zone result now does exactly one.
+        atr_pct = _atr_pct(df, period=14)
+
         # 1. Swing points
         swing_highs = self.find_swing_highs(df)
         swing_lows = self.find_swing_lows(df)
 
         # 2. Cluster into zones (tier 1: confirmed multi-touch, tight threshold)
-        all_resistance = self.cluster_into_zones(swing_highs, df, direction="resistance")
-        all_support = self.cluster_into_zones(swing_lows, df, direction="support")
+        all_resistance = self.cluster_into_zones(swing_highs, df, direction="resistance", atr_pct=atr_pct)
+        all_support = self.cluster_into_zones(swing_lows, df, direction="support", atr_pct=atr_pct)
 
         # 2a. Trending-regime fallback tier 2: EQH/EQL loose cluster — same
         # clustering logic, threshold widened by trending_eqh_loose_multiplier,
         # tagged source="eqh_eql" (this is what _build_zone reads to set
         # is_equal_level=True).
-        loose_threshold = self._get_cluster_threshold(df) * self.trending_eqh_loose_multiplier
+        loose_threshold = self._get_cluster_threshold(df, atr_pct=atr_pct) * self.trending_eqh_loose_multiplier
         eqh_resistance = self.cluster_into_zones(
             swing_highs, df, direction="resistance",
-            threshold_pct_override=loose_threshold, source="eqh_eql",
+            threshold_pct_override=loose_threshold, source="eqh_eql", atr_pct=atr_pct,
         )
         eql_support = self.cluster_into_zones(
             swing_lows, df, direction="support",
-            threshold_pct_override=loose_threshold, source="eqh_eql",
+            threshold_pct_override=loose_threshold, source="eqh_eql", atr_pct=atr_pct,
         )
 
         # 2b. Trending-regime fallback tier 3: single-touch raw swing levels
         # for any price real estate the two cluster passes didn't cover.
-        raw_resistance = self._raw_swing_levels(swing_highs, df, direction="resistance")
-        raw_support = self._raw_swing_levels(swing_lows, df, direction="support")
+        raw_resistance = self._raw_swing_levels(swing_highs, df, direction="resistance", atr_pct=atr_pct)
+        raw_support = self._raw_swing_levels(swing_lows, df, direction="support", atr_pct=atr_pct)
 
         # 2c. Merge, highest-confidence tier first
-        all_resistance = self._merge_zone_sources(all_resistance, eqh_resistance, raw_resistance, df=df)
-        all_support = self._merge_zone_sources(all_support, eql_support, raw_support, df=df)
+        all_resistance = self._merge_zone_sources(all_resistance, eqh_resistance, raw_resistance, df=df, atr_pct=atr_pct)
+        all_support = self._merge_zone_sources(all_support, eql_support, raw_support, df=df, atr_pct=atr_pct)
 
         # DIAGNOSTIC (temporary) - proves whether this analyze() call, and the
         # tier-2/tier-3 fallback, actually ran. Remove once confirmed.
@@ -827,7 +898,7 @@ class SupportResistance:
             "symbol":                symbol,
             "timeframe":             self.timeframe,
             "swing_window":          self.swing_window,
-            "cluster_threshold_pct": self._get_cluster_threshold(df),
+            "cluster_threshold_pct": self._get_cluster_threshold(df, atr_pct=atr_pct),
             "min_touches":           self.min_touches,
             "wick_body_ratio":       self.wick_body_ratio,
         }

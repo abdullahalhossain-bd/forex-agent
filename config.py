@@ -218,6 +218,18 @@ MONITORING_INTERVAL = 60  # seconds between health checks
 # Day 100+ Update: Default to cheaper/faster models to reduce 429 rate limits.
 # Production logs showed llama-3.3-70b-versatile hitting Groq TPD limits (98k+ tokens).
 # llama-3.1-8b-instant is ~10x cheaper and rarely hits limits.
+# ── IMPORTANT — do not call providers with these directly ──────
+# GROQ_API_KEY / GEMINI_API_KEY below are the single LEGACY key only
+# (kept for backward compat with pre-multi-key deployments). They are
+# NOT the 14/13-key rotation pool — that lives in core/llm_key_manager.py,
+# which reads GROQ_API_KEY_1..14 / GEMINI_API_KEY_1..13 from the
+# environment directly (plus this legacy single key as one extra
+# fallback entry appended to the pool). Any code that calls Groq/Gemini
+# using `config.GROQ_API_KEY` / `config.GEMINI_API_KEY` directly bypasses
+# the 14-key rotation entirely and will hit that one account's rate
+# limit immediately. Always go through
+# `core.llm_key_manager.get_llm_key_manager()` (`get_groq_client()` /
+# `get_gemini_client()`) for any actual API call.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

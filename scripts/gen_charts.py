@@ -105,7 +105,7 @@ ax.pie(sizes, labels=labels, colors=clrs, wedgeprops=nwedges, autopct='%1.1f%%',
 ax.set_title('Classification Breakdown (All 144 Combinations)', fontsize=11)
 prec = tp/(tp+fp) if tp+fp > 0 else 0
 rec = tp/(tp+fn) if tp+fn > 0 else 0
-ax.text(0, -1.3, f'Precision: {prec:.1%}  |  Recall: {rec:.1%}', fontsize=10, ha='center)
+ax.text(0, -1.3, f'Precision: {prec:.1%}  |  Recall: {rec:.1%}', fontsize=10, ha='center')
 plt.savefig(CHARTS + '/precision_recall.png', dpi=200, bbox_inches='tight')
 plt.close()
 print('  precision_recall.png', flush=True)

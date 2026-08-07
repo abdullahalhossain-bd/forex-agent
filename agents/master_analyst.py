@@ -101,18 +101,24 @@ try:
             LLM_AVAILABLE = True
             _provider = "gemini"
             log.info(f"[MasterAnalyst] Gemini client initialized (fallback) | model={MODEL}")
-        # Day 81+ hotfix: warn loudly if the Gemini key format looks wrong.
-        # Valid Gemini API keys start with "AIza" (39 chars total).
-        # If the user pasted an OAuth token (starts with "AQ." or "ya29.")
-        # or a service-account key, the genai client will silently construct
-        # but every call will return 401 UNAUTHENTICATED.
+        # Day 81+ hotfix, UPDATED: the "must start with AIza" check below
+        # was based on the classic AI-Studio key format only. In practice
+        # Gemini API keys issued through some paths (e.g. Cloud/Vertex-
+        # linked API keys) start with other prefixes such as "AQ..." and
+        # authenticate fine against the genai client used here — the old
+        # check produced a false-positive "will return 401" warning for
+        # perfectly valid, working keys (confirmed: AQ... keys in this
+        # deployment are live). Rather than hardcode a prefix allowlist
+        # that will just go stale again, only warn on formats that are
+        # *definitely* wrong (empty, whitespace, or an obvious non-key
+        # OAuth-style token) — never on prefix alone.
         gemini_key_check = os.getenv("GEMINI_API_KEY_1") or os.getenv("GEMINI_API_KEY", "")
-        if gemini_key_check and not gemini_key_check.startswith("AIza"):
+        if gemini_key_check and gemini_key_check.startswith("ya29."):
             log.warning(
-                f"[MasterAnalyst] Gemini key format looks wrong — starts with "
-                f"'{gemini_key_check[:4]}', expected 'AIza'. Get a valid key from "
-                f"https://aistudio.google.com/app/apikey (it should be 39 chars, "
-                f"format: AIzaSy...). Current key will return 401 UNAUTHENTICATED."
+                f"[MasterAnalyst] Gemini key looks like a short-lived OAuth "
+                f"access token (starts with 'ya29.'), not an API key. Get a "
+                f"real API key from https://aistudio.google.com/app/apikey — "
+                f"OAuth tokens expire in ~1h and will start failing with 401."
             )
     # ── Day 91 — check the three new providers ──────────────────
     # Even if Groq + Gemini are unavailable, LLM is considered
@@ -964,7 +970,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         )
 
         import time as _time
-        from core.llm_key_manager import log_llm_call_failure
+        from core.llm_key_manager import log_llm_call_failure, parse_groq_retry_after
 
         # ── NEW PROVIDER ORDER (2026-07-25): Groq → Gemini → OpenRouter ─
         # Ollama has been COMPLETELY REMOVED from this cascade per user
@@ -1039,6 +1045,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 info = log_llm_call_failure(
                     log, "Groq", GROQ_MODEL, attempt, max_retries, e
                 )
+                rotated_client = None
                 if _key_manager is not None:
                     _key_manager.mark_groq_failure(
                         info["error_str"], info["rate_limited"], client=client
@@ -1047,6 +1054,41 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                     import sys
                     current_module = sys.modules[__name__]
                     current_module._groq_client = _key_manager.get_groq_client()
+                    rotated_client = current_module._groq_client
+                # If Groq returned an explicit long retry-after, skip
+                # further Groq attempts and fall back immediately to
+                # the next provider (Gemini/OpenRouter). This avoids
+                # wasting the remaining attempt budget on predictable
+                # 429 failures when the provider asked us to wait.
+                try:
+                    if info.get("rate_limited"):
+                        cooldown = parse_groq_retry_after(info.get("error_str", ""))
+                        if cooldown is not None and cooldown > 60:
+                            log.info(
+                                "[MasterAnalyst] Groq rate limit cooldown=%ss — skipping further Groq retries",
+                                cooldown,
+                            )
+                            break
+                except Exception:
+                    # Non-fatal: if parsing fails, continue the retry loop
+                    pass
+                # FIX (audit follow-up — same rationale as ai_analyst.py):
+                # the failing key/account is already excluded from
+                # rotation by mark_groq_failure above (whether it was a
+                # short RPM cooldown, an auth failure, or a TPD cooldown
+                # under the 60s threshold checked above). A fresh, healthy
+                # key is either ready right now — try it immediately, no
+                # sleep — or none are left, in which case sleeping
+                # accomplishes nothing and only burns the shared time
+                # budget before falling through to Gemini/OpenRouter.
+                if info.get("rate_limited") or info.get("auth_failed"):
+                    if rotated_client is not None:
+                        continue
+                    log.info(
+                        "[MasterAnalyst] Groq: no healthy account left — "
+                        "moving to fallback providers immediately"
+                    )
+                    break
                 if attempt < max_retries - 1:
                     _time.sleep(1)
 
@@ -1083,6 +1125,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 info = log_llm_call_failure(
                     log, "Gemini", GEMINI_MODEL, attempt, max_retries, e
                 )
+                rotated_client = None
                 if _key_manager is not None:
                     _key_manager.mark_gemini_failure(
                         info["error_str"], info["rate_limited"], client=client
@@ -1090,6 +1133,29 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                     import sys
                     current_module = sys.modules[__name__]
                     current_module._gemini_client = _key_manager.get_gemini_client()
+                    rotated_client = current_module._gemini_client
+
+                # FIX (audit follow-up — this loop previously had NO
+                # fast-skip logic at all, unlike the Groq loop above: it
+                # always slept 1s and retried up to 3x regardless of
+                # error type. For rate-limit/auth failures the failing
+                # key/account is already excluded from rotation by
+                # mark_gemini_failure — a healthy key is either ready
+                # right now (use it immediately) or none are left (stop
+                # and fall through to OpenRouter rather than sleeping).
+                # transient_server (Gemini's "503 high demand") is
+                # deliberately excluded — that gets a short 30s KeyHealth
+                # cooldown, not a full rotation, so a brief same-call
+                # retry is still the right move there.
+                if (info.get("rate_limited") or info.get("auth_failed")) and not info.get("transient_server"):
+                    if rotated_client is not None:
+                        continue
+                    log.info(
+                        "[MasterAnalyst] Gemini: no healthy account left — "
+                        "moving to fallback providers immediately"
+                    )
+                    break
+
                 if attempt < max_retries - 1:
                     _time.sleep(1)
 

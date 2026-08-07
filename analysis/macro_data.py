@@ -164,6 +164,19 @@ class MacroDataProvider:
                 if close_col is None or close_col is None or len(close_col) < 2:
                     continue
 
+                # FIX: newer yfinance versions sometimes return MultiIndex
+                # columns even for a single-symbol download, so raw["Close"]
+                # (or the xs() fallback above) can come back as a one-column
+                # DataFrame instead of a Series. In that shape, .iloc[-2] /
+                # .iloc[-1] each return a one-element Series rather than a
+                # scalar, and float(series) is what triggers "Calling float
+                # on a single element Series is deprecated". squeeze()
+                # collapses that one-column DataFrame down to a plain Series
+                # (no-op if it's already a Series), so the .iloc[...] below
+                # always yields a real scalar.
+                if hasattr(close_col, "columns"):
+                    close_col = close_col.squeeze(axis=1)
+
                 # Drop NaN values
                 close_col = close_col.dropna()
                 if len(close_col) < 2:
