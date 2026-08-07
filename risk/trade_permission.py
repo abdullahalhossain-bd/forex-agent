@@ -8,6 +8,7 @@ _BYPASS_CHECK_ALIASES = {
     "valid_signal": "Valid signal",
     "sr_alignment": "S/R zone alignment",
     "trend_alignment": "Trend alignment (regime)",
+    "mtf_trend_alignment": "MTF trend alignment (H4/H1/M15)",
     "zone_cooldown": "Zone cooldown (duplicate entry)",
     "risk_approved": "Risk approved",
     "news_safe": "News safe",
@@ -202,17 +203,6 @@ class TradePermission:
                         "detail": f"bypassed: direct_lane={decision_out.get('direct_lane')} (blend filter, not applicable to standalone signal)",
                     })
                     passed += 1
-                # Advisory-only MTF structure verdicts should not hard-block
-                elif blocked and gate_name == "mtf_structure_no_trade":
-                    checks.append({
-                        "check":  f"Execution filter: {gate_name}",
-                        "passed": True,
-                        "detail": (
-                            "SOFTENED advisory MTF structure no-trade filter "
-                            "(allowed for this execution path)"
-                        ),
-                    })
-                    passed += 1
                 # Otherwise a blocked execution filter is a failure
                 elif blocked:
                     checks.append({
@@ -356,6 +346,71 @@ class TradePermission:
                 })
                 if trend_ok: passed += 1
                 total += 1
+
+        # 1c-2. MTF TREND ALIGNMENT GATE (added 2026-08-07) — HARD BLOCK.
+        # The "Trend alignment (regime)" gate above only looks at ONE
+        # regime object (computed off the primary trading timeframe) and
+        # only blocks the specific case of fading a STRONG/MODERATE trend.
+        # It never actually compares H4 vs H1 vs M15 against each other,
+        # so a BUY/SELL could (and did) fire even when e.g. H4 was
+        # bullish, H1 was bullish, but M15 was bearish — the three "top
+        # down" timeframes disagreeing with each other, not just with a
+        # single regime reading. This gate closes that gap directly:
+        # H4, H1 and M15 trend readings (from
+        # analysis/timeframe.py:MultiTimeframeAnalyzer, threaded through
+        # via dec_out["mtf_trends"] in core/trader.py) must ALL agree
+        # with each other AND with the signal direction, or the trade is
+        # blocked outright — no confidence score or other gate can
+        # override this. Fails CLOSED (blocks) when data is simply
+        # missing for one of the three, since "unknown" is not the same
+        # as "aligned" — unlike the regime gate above, which fails open.
+        if ok and not decision_out.get("direct_lane"):
+            if _bypass_check("MTF trend alignment (H4/H1/M15)", bypass_checks):
+                checks.append({
+                    "check":  "MTF trend alignment (H4/H1/M15)",
+                    "passed": True,
+                    "detail": "BYPASSED via permission_bypass",
+                })
+                passed += 1
+                total += 1
+            else:
+                mtf_trends = decision_out.get("mtf_trends", {}) or {}
+
+                def _dir(tf_key: str) -> str:
+                    raw = str(mtf_trends.get(tf_key, "")).lower()
+                    if "bullish" in raw:
+                        return "BULLISH"
+                    if "bearish" in raw:
+                        return "BEARISH"
+                    return "UNKNOWN"
+
+                h4_dir, h1_dir, m15_dir = _dir("4h"), _dir("1h"), _dir("15m")
+                dirs = {h4_dir, h1_dir, m15_dir}
+
+                mtf_ok = (
+                    len(dirs) == 1
+                    and "UNKNOWN" not in dirs
+                    and ((sig == "BUY" and h4_dir == "BULLISH") or
+                         (sig == "SELL" and h4_dir == "BEARISH"))
+                )
+
+                if mtf_ok:
+                    mtf_detail = f"aligned: H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, signal={sig}"
+                else:
+                    mtf_detail = (
+                        f"NOT aligned — H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, "
+                        f"signal={sig} — all three must match the signal direction"
+                    )
+
+                checks.append({
+                    "check":  "MTF trend alignment (H4/H1/M15)",
+                    "passed": mtf_ok,
+                    "detail": mtf_detail,
+                })
+                if mtf_ok: passed += 1
+                total += 1
+                if not mtf_ok:
+                    ok = False
 
         # 1d. ZONE COOLDOWN / DUPLICATE-ENTRY GATE (added 2026-08-02,
         # Abdullah audit). Both the training-window backtest (3 SELL trades
@@ -1030,18 +1085,12 @@ class TradePermission:
             if raw_setup_q and raw_setup_q != setup_q
             else setup_q
         )
-        # Allow a high-confidence soft-override for thin confluence.
-        # When this triggers, record it so downstream gates (e.g. Min R:R)
-        # may also be relaxed for this decision (tests expect a high
-        # confidence single-voter override to permit borderline R:R).
-        confluence_soft_override = False
         if conf >= self.MIN_CONFIDENCE and (not ok_aligned or not ok_quality):
             _detail = (
                 f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
                 f" — soft override at {conf:.0f}% confidence"
             )
             _passed = True
-            confluence_soft_override = True
         elif _bypass_check("Confluence quality", bypass_checks):
             _detail = "BYPASSED via permission_bypass"
             _passed = True
@@ -1075,11 +1124,6 @@ class TradePermission:
             rr = risk_out.get("rr_ratio", 0)
             ok_rr = rr >= self.MIN_RR
             if _bypass_check("Min R:R", bypass_checks):
-                ok_rr = True
-            # Relax Min R:R if the confluence soft-override is active
-            # (high-confidence single-voter scenario) — this mirrors the
-            # intended policy that strong conviction can justify lower RR.
-            if confluence_soft_override and not ok_rr:
                 ok_rr = True
             checks.append({
                 "check":  "Min R:R",
@@ -1201,15 +1245,8 @@ class TradePermission:
         if allowed:
             blocked_reason = None
         else:
-            _failed_execution_filter = next(
-                (c for c in checks if not c.get("passed", True) and c.get("check", "").startswith("Execution filter:")),
-                None
-            )
-            if _failed_execution_filter is not None:
-                blocked_reason = _failed_execution_filter.get("detail", "Execution filter blocked")
-            else:
-                _failed = next((c for c in reversed(checks) if not c.get("passed", True)), None)
-                blocked_reason = _failed.get("detail") if _failed else "Multiple checks failed"
+            _failed = next((c for c in reversed(checks) if not c.get("passed", True)), None)
+            blocked_reason = _failed.get("detail") if _failed else "Multiple checks failed"
         failed_checks = [
             {"check": c.get("check", "?"), "detail": c.get("detail", "")}
             for c in checks if not c.get("passed", True)

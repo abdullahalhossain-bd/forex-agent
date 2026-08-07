@@ -166,6 +166,11 @@ class MTFAnalyzer:
         # Step 5: Conflict detection
         conflicts = self._detect_conflicts(tf_directions)
 
+        # Step 5b: CORE trend-alignment check — H4, H1, M15 must ALL
+        # agree (non-neutral, same direction). This is the hard gate
+        # that fixes trades firing when 1H/4H/M15 don't actually match.
+        core_alignment = self._check_core_alignment(tf_directions)
+
         # Step 6: H4 Override Rule check
         h4_override = self._check_h4_override(tf_directions, conflicts)
 
@@ -176,7 +181,7 @@ class MTFAnalyzer:
 
         # Step 8: Final decision
         decision = self._make_decision(
-            tf_directions, conflicts, h4_override, confidence
+            tf_directions, conflicts, h4_override, confidence, core_alignment
         )
 
         # Step 9: Global regime hard gate — overrides everything above
@@ -203,15 +208,17 @@ class MTFAnalyzer:
             'contexts':      tf_contexts,
             'conflicts':     conflicts,
             'h4_override':   h4_override,
+            'core_alignment': core_alignment,   # NEW: H4+H1+M15 hard gate
             'regime_gate':   regime_gate,
             'curve_gate':    curve_gate,        # NEW (REVIEW-C)
             'reason':        (
                 regime_gate['note'] if regime_gate['blocked'] else
                 curve_gate['note'] if curve_gate['blocked'] else
-                self._build_reason(
-                    decision, tf_directions, conflicts,
-                    h4_override, confidence
-                )
+                (core_alignment['note'] if not core_alignment['aligned'] else
+                 self._build_reason(
+                     decision, tf_directions, conflicts,
+                     h4_override, confidence
+                 ))
             ),
         }
 
@@ -220,6 +227,7 @@ class MTFAnalyzer:
             f"Conflicts: {len(conflicts)}"
             + (f" | REGIME-BLOCKED: {regime_gate['note']}" if regime_gate['blocked'] else "")
             + (f" | CURVE-BLOCKED: {curve_gate['note']}" if curve_gate['blocked'] else "")
+            + (f" | CORE-NOT-ALIGNED: {core_alignment['note']}" if not core_alignment['aligned'] else "")
         )
         return result
 
@@ -773,6 +781,38 @@ class MTFAnalyzer:
     # STEP 6: H4 OVERRIDE RULE
     # ═══════════════════════════════════════════════════════
 
+    # ── Core trend-alignment gate (H4 + H1 + M15 MUST agree) ────
+    _CORE_TFS = ('H4', 'H1', 'M15')
+
+    def _check_core_alignment(self, tf_directions: dict) -> dict:
+        """
+        Hard requirement: H4, H1 এবং M15 — এই তিনটা timeframe-এর direction
+        একই এবং non-neutral হতে হবে। M5 শুধু entry timing/confidence-এর
+        জন্য ব্যবহৃত হয়, কিন্তু কখনোই H4/H1/M15-এর কোনো একটাকে replace
+        করতে পারবে না।
+
+        আগে '3 out of 4 TF aligned' rule-এ M5 যদি H4+H1 এর সাথে align
+        করত, M15 disagree করলেও trade চলে যেত — এটা সেই bug fix করে।
+        """
+        dirs = {tf: tf_directions.get(tf, {}).get('direction', 'neutral')
+                for tf in self._CORE_TFS}
+
+        non_neutral = [d for d in dirs.values() if d != 'neutral']
+        aligned = (
+            len(non_neutral) == len(self._CORE_TFS)
+            and len(set(non_neutral)) == 1
+        )
+
+        return {
+            'aligned':   aligned,
+            'direction': non_neutral[0] if aligned else 'neutral',
+            'dirs':      dirs,
+            'note': (
+                f"H4={dirs['H4']}, H1={dirs['H1']}, M15={dirs['M15']} "
+                + ("— all aligned ✅" if aligned else "— NOT aligned ❌ (H4/H1/M15 must all match)")
+            ),
+        }
+
     def _h4_conviction_score(self, h4: dict) -> int:
         """
         Score H4's directional conviction on the same 0-{H4 weight} scale as
@@ -962,16 +1002,30 @@ class MTFAnalyzer:
         conflicts: list,
         h4_override: dict,
         confidence: int,
+        core_alignment: dict | None = None,
     ) -> str:
         """
+        Rule 0: H4 + H1 + M15 not ALL aligned (same, non-neutral) → WAIT
+                (hard gate — M5 can never substitute for H4/H1/M15)
         Rule 1: H4 Override active → WAIT
         Rule 2: CRITICAL conflict → WAIT
         Rule 3: Confidence < 45 → WAIT
         Rule 4: All 4 TF bullish + confidence ≥ 65 → BUY
         Rule 5: All 4 TF bearish + confidence ≥ 65 → SELL
-        Rule 6: 3/4 TF aligned + confidence ≥ 55 → BUY/SELL
-        Rule 7: else → WAIT
+        Rule 6: M5 also aligned with H4/H1/M15 + confidence ≥ 55 → BUY/SELL
+        Rule 7: H4+H1+M15 aligned but M5 diverges + confidence ≥ 65 → BUY/SELL
+                (M5 is only entry timing, not a required trend TF)
+        Rule 8: else → WAIT
         """
+        # Rule 0 — HARD GATE: H4, H1, M15 must ALL agree, non-neutral.
+        # This is checked first and overrides every other rule below —
+        # no confidence score or H4-override logic can force a trade
+        # through when the three core trend timeframes disagree.
+        if core_alignment is None:
+            core_alignment = self._check_core_alignment(tf_directions)
+        if not core_alignment.get('aligned'):
+            return 'WAIT'
+
         # H4 Override → WAIT
         if h4_override.get('active'):
             return 'WAIT'
@@ -985,22 +1039,18 @@ class MTFAnalyzer:
         if confidence < 45:
             return 'WAIT'
 
-        # Count aligned TFs
-        dirs   = [v.get('direction') for v in tf_directions.values()]
-        bull_c = dirs.count('bullish')
-        bear_c = dirs.count('bearish')
+        core_dir = core_alignment['direction']  # 'bullish' or 'bearish'
+        m5_dir   = tf_directions.get('M5', {}).get('direction', 'neutral')
+        m5_aligned = (m5_dir == core_dir)
 
-        # All 4 aligned
-        if bull_c == 4 and confidence >= 65:
-            return 'BUY'
-        if bear_c == 4 and confidence >= 65:
-            return 'SELL'
+        # All 4 (incl. M5) aligned — highest quality
+        if m5_aligned and confidence >= 65:
+            return 'BUY' if core_dir == 'bullish' else 'SELL'
 
-        # 3 out of 4 aligned
-        if bull_c >= 3 and confidence >= 55:
-            return 'BUY'
-        if bear_c >= 3 and confidence >= 55:
-            return 'SELL'
+        # H4+H1+M15 aligned, M5 not confirming yet — still valid, needs
+        # a higher confidence bar since entry timing isn't confirmed
+        if confidence >= 55:
+            return 'BUY' if core_dir == 'bullish' else 'SELL'
 
         return 'WAIT'
 

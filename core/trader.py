@@ -1238,6 +1238,17 @@ class AITrader:
         # the bias word — but that's fragile, not correct. Extract the
         # actual bias string explicitly.
         dec_out["mtf_bias"] = dec_out.get("mtf_bias") or (market_out.get("mtf_bias") or {}).get("bias", "NEUTRAL")
+        # 2026-08-07 fix: dec_out["mtf_bias"] above collapses the full MTF
+        # read down to a single bias STRING (BULLISH/BEARISH/NEUTRAL), which
+        # loses the per-timeframe breakdown. That per-TF breakdown ('4h',
+        # '1h', '15m' trend strings, from analysis/timeframe.py's
+        # MultiTimeframeAnalyzer.get_bias()) is exactly what's needed to
+        # enforce "only trade when H4, H1 and M15 actually agree" — without
+        # it, trade_permission.py has no way to see that e.g. H4 is
+        # bullish, H1 is bullish, but M15 is bearish; it only ever sees the
+        # single collapsed "BULLISH" bias. Thread the raw per-TF dict
+        # through separately so the new hard gate below can use it.
+        dec_out["mtf_trends"] = (market_out.get("mtf_bias") or {}).get("trends", {})
 
         # 2026-07-23: feed the advisory (log-only) entry-score /
         # institutional-entry-framework check in trade_permission with real
