@@ -1,21 +1,21 @@
 {
   "symbols": {
     "EURUSD": {
-      "trades": 0,
+      "trades": 1,
       "wins": 0,
-      "losses": 0,
+      "losses": 1,
       "gross_profit": 0.0,
-      "gross_loss": 0.0,
-      "net_pnl": 0.0
+      "gross_loss": -18.67,
+      "net_pnl": -18.67
     }
   },
-  "total_trades": 0,
+  "total_trades": 1,
   "wins": 0,
-  "losses": 0,
+  "losses": 1,
   "win_rate": 0.0,
   "gross_profit_usd": 0.0,
-  "gross_loss_usd": 0.0,
-  "net_pnl_usd": 0.0,
-  "current_equity_usd": 10000.0,
-  "updated_at": "2026-08-08T15:03:01+00:00"
+  "gross_loss_usd": -18.67,
+  "net_pnl_usd": -18.67,
+  "current_equity_usd": 9981.33,
+  "updated_at": "2026-08-08T16:10:28+00:00"
 }
