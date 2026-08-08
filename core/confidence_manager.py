@@ -34,11 +34,21 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
-from core.constants import MEMORY_DIR
+from core.constants import MEMORY_DIR, get_memory_path
 
 log = get_logger("confidence_manager")
 
+# Legacy module-level constant — kept for backward-compat references.
+# Runtime path resolution uses _db_path() so backtest mode redirects
+# to memory/_backtest/confidence_manager.db (isolated from live).
 DB_PATH = MEMORY_DIR / "confidence_manager.db"
+
+
+def _db_path() -> str:
+    """Runtime-resolved DB path. In backtest mode, redirects to
+    memory/_backtest/ so backtest-recorded outcomes don't pollute
+    live weight-rebalance state."""
+    return get_memory_path("confidence_manager.db")
 
 DEFAULT_WEIGHTS = {
     "rule_engine":  0.30,
@@ -60,8 +70,9 @@ class ConfidenceManager:
         self._init_db()
 
     def _init_db(self) -> None:
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(str(DB_PATH)) as c:
+        path = _db_path()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(path) as c:
             c.execute("""
                 CREATE TABLE IF NOT EXISTS layer_accuracy (
                     layer TEXT PRIMARY KEY,
@@ -88,7 +99,7 @@ class ConfidenceManager:
         """Record one layer's prediction outcome (WIN/LOSS)."""
         correct = 1 if predicted_signal.upper() == actual_result.upper() else 0
         ts = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        with self._lock, sqlite3.connect(str(DB_PATH)) as c:
+        with self._lock, sqlite3.connect(_db_path()) as c:
             c.execute(
                 "INSERT INTO decision_outcomes (pair, layer, predicted_signal, actual_result, correct, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
                 ("", layer, predicted_signal, actual_result, correct, ts),
@@ -119,7 +130,7 @@ class ConfidenceManager:
 
     def _recalculate_weights(self) -> None:
         """Adjust weights based on each layer's recent win rate."""
-        with self._lock, sqlite3.connect(str(DB_PATH)) as c:
+        with self._lock, sqlite3.connect(_db_path()) as c:
             rows = c.execute(
                 "SELECT layer, total_predictions, correct_predictions, win_rate FROM layer_accuracy"
             ).fetchall()

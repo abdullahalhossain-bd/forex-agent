@@ -120,11 +120,18 @@ class CircuitBreaker:
     def _state_path_for(self, symbol: str) -> str:
         """Per-symbol state file so one pair's losing streak can't trip
         the breaker for every other pair. symbol=None keeps the legacy
-        single shared file for backward compatibility."""
+        single shared file for backward compatibility.
+
+        PARITY FIX: uses core.constants.get_memory_path so that in
+        backtest mode the state file lives under memory/_backtest/
+        (isolated from live trading state). In live mode the path is
+        unchanged.
+        """
+        from core.constants import get_memory_path
         if symbol is None:
-            return CB_STATE_PATH
+            return get_memory_path("circuit_breaker_state.json")
         safe = "".join(c for c in symbol.upper() if c.isalnum() or c in ("_", "-"))
-        return os.path.join(CB_STATE_DIR, "circuit_breaker", f"{safe}.json")
+        return get_memory_path("circuit_breaker", f"{safe}.json")
 
     # ── Main Gate ──────────────────────────────────────────────
 

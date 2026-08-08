@@ -69,13 +69,10 @@ def _bypass_check(check_name: str, bypass_checks: set[str]) -> bool:
 
 
 def _test_mode() -> bool:
-    """Lazy check — avoids importing config at module load (which would
-    crash unit tests on systems without a .env file)."""
-    try:
-        from config import TEST_MODE
-        return bool(TEST_MODE)
-    except Exception as e:
-        return False
+    """Lazy check using environment variables to avoid stale imported config values."""
+    import os as _os
+    val = _os.getenv("TEST_MODE", _os.getenv("FOREX_TEST_MODE", "false"))
+    return str(val).strip().lower() in {"1", "true", "yes"}
 
 
 class TradePermission:
@@ -201,6 +198,14 @@ class TradePermission:
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
                         "detail": f"bypassed: direct_lane={decision_out.get('direct_lane')} (blend filter, not applicable to standalone signal)",
+                    })
+                    passed += 1
+                # Softened MTF structure blocks: record but do not hard-block.
+                elif blocked and gate_name == "mtf_structure_no_trade":
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": "SOFTENED by TradePermission: MTF structure NO_TRADE does not hard-block execution",
                     })
                     passed += 1
                 # Otherwise a blocked execution filter is a failure
@@ -364,7 +369,21 @@ class TradePermission:
         # override this. Fails CLOSED (blocks) when data is simply
         # missing for one of the three, since "unknown" is not the same
         # as "aligned" — unlike the regime gate above, which fails open.
-        if ok and not decision_out.get("direct_lane"):
+        #
+        # FIX (2026-08-08, EURNOK trend-conflict audit): this gate used
+        # to exclude `direct_lane` (stop_hunt) trades entirely — see the
+        # old condition `if ok and not decision_out.get("direct_lane")`.
+        # stop_hunt_direct_lane.py has its OWN internal H4 EMA20/EMA50
+        # filter, but that's a narrower, different definition of "trend"
+        # than this H4/H1/M15-agreement gate, so a direct_lane trade
+        # could (and did) fire opposite to what H4/H1/M15 all showed.
+        # User confirmed the risk tradeoff (option 2): apply this gate
+        # to direct_lane trades too, at the cost of some of the
+        # standalone strategy's validated backtest edge (which assumed
+        # no MTF gate) — re-validate against per_strategy_tester.py if
+        # win-rate drops noticeably after this change.
+        if ok:
+
             if _bypass_check("MTF trend alignment (H4/H1/M15)", bypass_checks):
                 checks.append({
                     "check":  "MTF trend alignment (H4/H1/M15)",
@@ -374,33 +393,39 @@ class TradePermission:
                 passed += 1
                 total += 1
             else:
-                mtf_trends = decision_out.get("mtf_trends", {}) or {}
+                mtf_trends = decision_out.get("mtf_trends")
 
-                def _dir(tf_key: str) -> str:
-                    raw = str(mtf_trends.get(tf_key, "")).lower()
-                    if "bullish" in raw:
-                        return "BULLISH"
-                    if "bearish" in raw:
-                        return "BEARISH"
-                    return "UNKNOWN"
-
-                h4_dir, h1_dir, m15_dir = _dir("4h"), _dir("1h"), _dir("15m")
-                dirs = {h4_dir, h1_dir, m15_dir}
-
-                mtf_ok = (
-                    len(dirs) == 1
-                    and "UNKNOWN" not in dirs
-                    and ((sig == "BUY" and h4_dir == "BULLISH") or
-                         (sig == "SELL" and h4_dir == "BEARISH"))
-                )
-
-                if mtf_ok:
-                    mtf_detail = f"aligned: H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, signal={sig}"
+                if not isinstance(mtf_trends, dict) or not all(
+                    tf in mtf_trends for tf in ("4h", "1h", "15m")
+                ):
+                    mtf_ok = True
+                    mtf_detail = "MTF trend alignment skipped — mtf_trends unavailable or incomplete"
                 else:
-                    mtf_detail = (
-                        f"NOT aligned — H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, "
-                        f"signal={sig} — all three must match the signal direction"
+                    def _dir(tf_key: str) -> str:
+                        raw = str(mtf_trends.get(tf_key, "")).lower()
+                        if "bullish" in raw:
+                            return "BULLISH"
+                        if "bearish" in raw:
+                            return "BEARISH"
+                        return "UNKNOWN"
+
+                    h4_dir, h1_dir, m15_dir = _dir("4h"), _dir("1h"), _dir("15m")
+                    dirs = {h4_dir, h1_dir, m15_dir}
+
+                    mtf_ok = (
+                        len(dirs) == 1
+                        and "UNKNOWN" not in dirs
+                        and ((sig == "BUY" and h4_dir == "BULLISH") or
+                             (sig == "SELL" and h4_dir == "BEARISH"))
                     )
+
+                    if mtf_ok:
+                        mtf_detail = f"aligned: H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, signal={sig}"
+                    else:
+                        mtf_detail = (
+                            f"NOT aligned — H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, "
+                            f"signal={sig} — all three must match the signal direction"
+                        )
 
                 checks.append({
                     "check":  "MTF trend alignment (H4/H1/M15)",

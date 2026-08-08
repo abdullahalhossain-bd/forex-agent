@@ -17,12 +17,27 @@ import os
 from datetime import datetime, timezone
 
 from utils.logger import get_logger
-from core.constants import MEMORY_DIR
+from core.constants import MEMORY_DIR, get_memory_path
 
 log = get_logger("learning.lesson_memory")
 
+# Legacy defaults — kept for backward-compat references; live code uses these.
+# Backtest code should call get_memory_path() at runtime so the path is
+# redirected to memory/_backtest/ when is_backtest_mode() is True.
 LESSON_DB_PATH   = str(MEMORY_DIR / "lesson_memory.json")
 PATTERN_STATS_PATH = str(MEMORY_DIR / "pattern_stats.json")
+
+
+def _lesson_db_path() -> str:
+    """Runtime-resolved lesson memory path — uses backtest-isolated
+    directory when is_backtest_mode() is True."""
+    return get_memory_path("lesson_memory.json")
+
+
+def _pattern_stats_path() -> str:
+    """Runtime-resolved pattern stats path — uses backtest-isolated
+    directory when is_backtest_mode() is True."""
+    return get_memory_path("pattern_stats.json")
 
 
 class LessonMemory:
@@ -309,14 +324,15 @@ class LessonMemory:
     # ──────────────────────────────────────────────────────────
 
     def _load(self) -> list:
-        if not os.path.exists(LESSON_DB_PATH):
+        path = _lesson_db_path()
+        if not os.path.exists(path):
             return []
         try:
-            with open(LESSON_DB_PATH, encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return []
 
     def _save(self, lessons: list) -> None:
-        with open(LESSON_DB_PATH, "w", encoding="utf-8") as f:
+        with open(_lesson_db_path(), "w", encoding="utf-8") as f:
             json.dump(lessons[-1000:], f, indent=2, default=str)

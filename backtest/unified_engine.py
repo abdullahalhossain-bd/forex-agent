@@ -205,8 +205,8 @@ def run_unified_backtest(
     df: "pd.DataFrame",
     timeframe: str = "H1",
     starting_balance: float = 10000.0,
-    warmup_bars: int = 50,
-    max_open_trades: int = 3,
+    warmup_bars: int = 300,
+    max_open_trades: int | None = None,
     max_hold_bars: int = 100,
     spread_pips: Optional[float] = None,
     commission_per_lot: float | None = None,
@@ -225,6 +225,10 @@ def run_unified_backtest(
     position, risk-engine reject) gets rejected here too, for the same
     reason, via the same code.
 
+    Parity defaults (vs config.py):
+      - warmup_bars: 300 (matches live MarketAgent's limit=300 lookback)
+      - max_open_trades: config.MAX_OPEN_TRADES (default 10) — same cap as live
+
     save_forensics: if True (default), write a per-trade forensic log to
     `forensics_path` (default: backtest/results/{symbol}_{timeframe}_
     trade_forensics.json) capturing, for every trade: the FULL
@@ -239,7 +243,23 @@ def run_unified_backtest(
     from backtest.metrics import calculate_metrics
     from core.data_provider import HistoricalMT5Provider
     from core.execution_adapter import HistoricalExecutionAdapter
-    from core.constants import set_backtest_mode, COMMISSION_USD_PER_LOT as _DEF_COMMISSION, BROKER_SLIPPAGE_PIPS as _DEF_SLIPPAGE
+    from core.constants import (
+        set_backtest_mode, reset_backtest_memory,
+        COMMISSION_USD_PER_LOT as _DEF_COMMISSION,
+        BROKER_SLIPPAGE_PIPS as _DEF_SLIPPAGE,
+    )
+
+    # ── Parity: max_open_trades defaults to config.MAX_OPEN_TRADES ──
+    # Previously hardcoded to 3, which capped backtest at 3 concurrent
+    # trades while live allows 10. Now both read from the same source.
+    if max_open_trades is None:
+        try:
+            from config import MAX_OPEN_TRADES as _CFG_MAX_OPEN
+            max_open_trades = int(_CFG_MAX_OPEN)
+        except Exception:
+            # config import failed (e.g. unit test) — keep safe fallback
+            max_open_trades = 3
+            log.warning("[unified_engine] config.MAX_OPEN_TRADES unavailable — falling back to 3")
 
     # Resolve cost defaults from shared constants (single source of truth)
     _commission = commission_per_lot if commission_per_lot is not None else _DEF_COMMISSION
@@ -250,6 +270,13 @@ def run_unified_backtest(
     # live session, so they skip their network calls entirely instead of
     # retrying an unreachable/irrelevant live API on every single bar.
     set_backtest_mode(True)
+
+    # ── Parity Fix #3: wipe backtest-isolated memory dir so this run
+    # starts from a clean slate (no stale circuit-breaker state, no
+    # confidence calibration bleed-through from a previous backtest run).
+    # CRITICAL: this ONLY touches memory/_backtest/ — the live memory/
+    # directory is never affected.
+    reset_backtest_memory()
 
     # CRITICAL FIX (reproducibility -- same bug as run_backtest.py's legacy
     # loop): BrokerSimulator draws slippage from np.random.normal() and
@@ -279,7 +306,31 @@ def run_unified_backtest(
     # abstraction the target architecture calls for, wrapping the same
     # objects rather than duplicating their logic.
     adapter = HistoricalExecutionAdapter(broker)
-    provider = HistoricalMT5Provider(df, symbol, timeframe)
+    # ── PARITY (CSV provider support): use HistoricalCSVProvider when CSV
+    # files exist for this symbol/timeframe; fall back to HistoricalMT5Provider
+    # (df-based) when they don't. The factory handles the selection logic.
+    # Pass the existing df as a fallback for cases where CSVs aren't available
+    # (e.g. unit tests with synthetic data).
+    try:
+        from core.provider_factory import make_backtest_provider
+        provider = make_backtest_provider(
+            symbol=symbol, timeframe=timeframe, df=df, prefer="auto",
+        )
+        log.info(f"[unified_engine] Provider: {type(provider).__name__}")
+    except Exception as e_provider:
+        log.warning(f"[unified_engine] Provider factory failed ({e_provider}) — "
+                    f"falling back to HistoricalMT5Provider(df)")
+        provider = HistoricalMT5Provider(df, symbol, timeframe)
+
+    # ── PARITY (CSV provider support): when using HistoricalCSVProvider,
+    # the provider has its OWN primary_df loaded from CSV. Use that as the
+    # authoritative bar source for the main loop (so the loop iterates over
+    # the CSV's bars, not whatever df was passed in). For HistoricalMT5Provider
+    # (fallback), keep using the passed df as before.
+    primary_df = getattr(provider, "primary_df", None) or df
+    total_bars = len(primary_df)
+    log.info(f"[unified_engine] Primary bars: {total_bars} (source: "
+             f"{'CSV' if hasattr(provider, 'primary_df') else 'passed df'})")
 
     open_trades, closed_trades, equity_curve = [], [], [starting_balance]
     entry_bar: dict = {}
@@ -290,26 +341,26 @@ def run_unified_backtest(
     rejection_stats = {"WAIT": 0, "NO_TRADE_ANALYSIS": 0, "risk_rejected": 0,
                         "permission_blocked": 0, "engine_error": 0, "max_trades": 0,
                         "total_bars": 0}
-    total_bars = len(df)
+    total_bars = len(primary_df)
     log.info(f"[unified_engine] Starting: {symbol} {timeframe} | {total_bars} bars | "
              f"balance=${starting_balance} | pipeline=shared(AnalysisAgent+DecisionAgent+RiskEngine+PositionSizer)")
 
     for i in range(warmup_bars, total_bars):
-        current_time = df.index[i]
+        current_time = primary_df.index[i]
         rejection_stats["total_bars"] += 1
 
         # Exits first — bar high/low sweep against open trades.
         still_open = []
         for trade in open_trades:
             opened_at = entry_bar.get(trade.trade_id, i)
-            result = broker.check_exit(trade, float(df.iloc[i]["high"]),
-                                        float(df.iloc[i]["low"]), float(df.iloc[i]["close"]),
+            result = broker.check_exit(trade, float(primary_df.iloc[i]["high"]),
+                                        float(primary_df.iloc[i]["low"]), float(primary_df.iloc[i]["close"]),
                                         current_time)
             if result:
                 result.hold_bars = i - opened_at
                 closed_trades.append(result)
                 entry_bar.pop(trade.trade_id, None)
-                _record_forensic_exit(trade_forensics, trade.trade_id, df, opened_at, i,
+                _record_forensic_exit(trade_forensics, trade.trade_id, primary_df, opened_at, i,
                                        current_time, result.exit_reason, result.exit_price,
                                        result.pnl_usd, result.pnl_pips, result.hold_bars)
                 # FIX (visibility gap): previously only OPEN was logged, never
@@ -324,11 +375,11 @@ def run_unified_backtest(
             else:
                 trade.hold_bars = i - opened_at
                 if trade.hold_bars > max_hold_bars:
-                    closed = broker.close_trade(trade, float(df.iloc[i]["close"]), current_time, "timeout")
+                    closed = broker.close_trade(trade, float(primary_df.iloc[i]["close"]), current_time, "timeout")
                     closed.hold_bars = trade.hold_bars
                     closed_trades.append(closed)
                     entry_bar.pop(trade.trade_id, None)
-                    _record_forensic_exit(trade_forensics, trade.trade_id, df, opened_at, i,
+                    _record_forensic_exit(trade_forensics, trade.trade_id, primary_df, opened_at, i,
                                            current_time, closed.exit_reason, closed.exit_price,
                                            closed.pnl_usd, closed.pnl_pips, closed.hold_bars)
                     if verbose:
@@ -396,7 +447,7 @@ def run_unified_backtest(
             equity_curve.append(broker.get_balance())
             continue
 
-        entry = dec_out.get("entry") or float(df.iloc[i]["close"])
+        entry = dec_out.get("entry") or float(primary_df.iloc[i]["close"])
         sl = risk_out.get("sl_price")
         tp = risk_out.get("tp_price")
         lot = risk_out.get("lot") or 0.01
@@ -412,6 +463,14 @@ def run_unified_backtest(
                                     confidence=int(confidence) if confidence else 0,
                                     strategy="unified_decision_core",
                                     confluence_factors=0, quality_grade="B")
+        # ── Parity: BrokerSimulator.open_trade may return None when the
+        # assumed spread exceeds broker.spread_monitor.MAX_SPREAD_PIPS
+        # (mirrors live OrderManager spread rejection). Treat as a
+        # permission-blocked rejection, not a crash.
+        if trade is None:
+            rejection_stats["permission_blocked"] += 1
+            equity_curve.append(broker.get_balance())
+            continue
         entry_bar[trade.trade_id] = i
         open_trades.append(trade)
         if save_forensics:
@@ -441,14 +500,14 @@ def run_unified_backtest(
                       f"lot={lot} conf={confidence}")
         equity_curve.append(broker.get_balance())
 
-    last_close = float(df.iloc[-1]["close"])
-    last_time = df.index[-1]
-    last_idx = len(df) - 1
+    last_close = float(primary_df.iloc[-1]["close"])
+    last_time = primary_df.index[-1]
+    last_idx = len(primary_df) - 1
     for trade in open_trades:
         opened_at = entry_bar.get(trade.trade_id, last_idx)
         closed = broker.close_trade(trade, last_close, last_time, "end_of_backtest")
         closed_trades.append(closed)
-        _record_forensic_exit(trade_forensics, trade.trade_id, df, opened_at, last_idx,
+        _record_forensic_exit(trade_forensics, trade.trade_id, primary_df, opened_at, last_idx,
                                last_time, closed.exit_reason, closed.exit_price,
                                closed.pnl_usd, closed.pnl_pips, last_idx - opened_at)
 

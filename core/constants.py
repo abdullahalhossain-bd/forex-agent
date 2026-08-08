@@ -5,6 +5,7 @@
 # ALL other modules MUST import from here — no local duplicates.
 # ============================================================
 
+import shutil
 from pathlib import Path
 
 # ── Project Root ────────────────────────────────────────────
@@ -448,3 +449,23 @@ def set_backtest_mode(enabled: bool = True) -> None:
 
 def is_backtest_mode() -> bool:
     return _BACKTEST_MODE
+
+
+def get_memory_path(*path_parts: str) -> str:
+    """Resolve a memory path, isolating backtest mode under memory/_backtest."""
+    if is_backtest_mode():
+        return str(PROJECT_ROOT / "memory" / "_backtest" / Path(*path_parts))
+    return str(MEMORY_DIR.joinpath(*path_parts))
+
+
+def reset_backtest_memory() -> None:
+    """Clear and recreate the isolated backtest memory directory.
+
+    Backtests must not reuse live-memory state. This helper removes the
+    backtest-specific memory directory and recreates it empty so every
+    run starts from a clean slate.
+    """
+    backtest_memory_dir = PROJECT_ROOT / "memory" / "_backtest"
+    if backtest_memory_dir.exists():
+        shutil.rmtree(backtest_memory_dir)
+    backtest_memory_dir.mkdir(parents=True, exist_ok=True)

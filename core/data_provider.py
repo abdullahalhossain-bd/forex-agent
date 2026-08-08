@@ -9,16 +9,22 @@ is allowed to live on the *input* side.
 DataProvider.get_market_out(symbol, timeframe) -> MarketAgentResult-shaped
 dict is the single contract. Nothing downstream inspects `mode`.
 
-- LiveMT5Provider   wraps agents.market_agent.MarketAgent.run() (the exact
+- LiveMT5Provider         wraps agents.market_agent.MarketAgent.run() (the exact
   object AITrader already builds live) — zero new logic, pure wrapper.
-- HistoricalMT5Provider wraps the indicator-registry chain unified_engine.py
+- HistoricalMT5Provider   wraps the indicator-registry chain unified_engine.py
   already uses (data.indicator_registry -> indicators_ext -> indicators),
   moved here verbatim so it has one home instead of living inline in the
   backtest loop.
+- HistoricalCSVProvider   lives in core/csv_data_provider.py — multi-timeframe
+  CSV-based provider for when MT5 isn't available. Loads local CSVs once,
+  serves per-bar market_out dicts with the SAME shape. This is the
+  preferred backtest provider when running on a machine without MT5
+  (CI, audit envs) — but requires CSVs to be downloaded first via
+  scripts/download_historical_data.py on the production VPS.
 
-Both return the same dict shape. Building a NEW analysis/indicator path for
-either mode is a parity violation — don't do it. If you need a new field on
-market_out, add it to both providers, not one.
+All three return the same dict shape. Building a NEW analysis/indicator path
+for any mode is a parity violation — don't do it. If you need a new field on
+market_out, add it to all providers, not one.
 """
 from __future__ import annotations
 
@@ -79,13 +85,13 @@ class HistoricalMT5Provider(DataProvider):
     indicator values match bar-for-bar — this function is moved verbatim
     from backtest/unified_engine.py._build_market_out, not rewritten.
 
-    KNOWN PARITY GAP (flagged, not hidden): `mtf_bias` is returned as a
-    static NEUTRAL/LOW placeholder because computing a true historical MTF
-    bias needs synchronized higher-timeframe slices at every bar — that is
-    tracked follow-up work (see PARITY_GAPS.md), not silently papered over.
-    Any confidence number that depends on MTF bias will NOT match what
-    Demo would have produced on the same historical timestamp until this
-    is closed.
+    PARITY (Phase 2 fix): `mtf_bias` is now computed via causal H1→4H/1D
+    resampling (see `_compute_mtf_bias`). Previously this returned a
+    static NEUTRAL/LOW placeholder, which caused SignalEngine.generate()
+    to never add the MTF bias vote it adds in live trading. The computed
+    bias uses the same EMA-trend agreement logic live
+    MultiTimeframeAnalyzer uses; only the data source differs (resampled
+    H1 vs live-fetched 4H/1D bars).
     """
 
     def __init__(self, df, symbol: str, timeframe: str):
@@ -159,14 +165,116 @@ class HistoricalMT5Provider(DataProvider):
             log.debug(f"[HistoricalMT5Provider] regime detection unavailable: {e}")
             regime_result, regime_ctx = {}, {}
 
+        # ── PARITY FIX (audit Issue #8 / #9): real mtf_bias from causal resample.
+        # Previously this returned a hardcoded NEUTRAL/LOW placeholder, which
+        # caused SignalEngine.generate() in backtest to NEVER add the MTF bias
+        # vote (1-2 points of bull/bear score) it adds in live trading —
+        # a real parity violation affecting final signal direction.
+        #
+        # Fix: compute a real MTF bias from the H1 df_slice by causally
+        # resampling to 4H and 1D (no look-ahead — each resampled bar at
+        # time T only uses H1 bars with timestamp <= T), then derive a
+        # bias using the same EMA-trend logic live MultiTimeframeAnalyzer
+        # uses (just on a different timeframe's EMA stack).
+        #
+        # If resampling fails (e.g. insufficient bars), we fall back to
+        # the previous NEUTRAL/LOW placeholder — same as live's failure
+        # path in MarketAgent when MTF fetch returns None.
+        mtf_bias = self._compute_mtf_bias(df_slice, symbol, timeframe)
+
         return {
             "df": df_slice,
             "ind_ctx": ind_ctx,
             "regime": regime_result,
             "regime_ctx": regime_ctx,
-            # PARITY GAP — see class docstring.
-            "mtf_bias": {"bias": "NEUTRAL", "confidence": "LOW"},
+            "mtf_bias": mtf_bias,
             "symbol": symbol,
             "timeframe": timeframe,
             "data_source": "historical_replay",
         }
+
+    def _compute_mtf_bias(self, df_slice: "pd.DataFrame", symbol: str, timeframe: str) -> dict:
+        """Compute a real MTF bias from the H1 df_slice via causal resampling.
+
+        Mirrors what live `MultiTimeframeAnalyzer.analyze()` +
+        `get_bias()` produce: a {'bias': BULLISH/BEARISH/NEUTRAL,
+        'confidence': HIGH/MEDIUM/LOW} dict derived from EMA-trend
+        agreement across higher timeframes.
+
+        Causal: at cursor time T, the 4H and 1D bars we look at are
+        those whose OPEN time is <= T. We never look at a 4H/1D bar
+        that opens after T. (A 4H bar opening at T-2h and closing at
+        T+2h would be partially forming in live — here we use its
+        last-known state, which is exactly what live trading does
+        too: live evaluates mid-bar.)
+
+        Falls back to {"bias":"NEUTRAL","confidence":"LOW"} if there
+        isn't enough data to compute EMAs (matches live's failure path).
+        """
+        try:
+            if df_slice is None or len(df_slice) < 50:
+                return {"bias": "NEUTRAL", "confidence": "LOW"}
+            # Resample H1 → 4H and 1D, causal (closed bars only at each step).
+            # Use label='left' closed='left' so each 4H bar covers [t, t+4h)
+            # and we only use bars whose open is <= cursor time.
+            current_time = df_slice.index[-1]
+            ohlc = df_slice[["open", "high", "low", "close"]].copy()
+            # Ensure volume column exists (resample needs it for some ops)
+            if "volume" not in ohlc.columns:
+                ohlc["volume"] = 0.0
+
+            bias_votes = []  # list of (bias, confidence) per tf
+
+            for tf_label, rule in [("4h", "4h"), ("1d", "1D")]:
+                try:
+                    resampled = ohlc.resample(rule, label="left", closed="left").agg({
+                        "open": "first", "high": "max", "low": "min",
+                        "close": "last", "volume": "sum",
+                    }).dropna(subset=["open", "high", "low", "close"])
+                    # Causal: only 4H/1D bars that have CLOSED by current_time
+                    # (i.e. their open was at least 4h/1d ago).
+                    if tf_label == "4h":
+                        cutoff = current_time - pd.Timedelta(hours=4)
+                    else:
+                        cutoff = current_time - pd.Timedelta(days=1)
+                    resampled = resampled[resampled.index <= cutoff]
+                    if len(resampled) < 50:
+                        continue
+                    # EMA trend: 20 vs 50 vs 200 (or however many bars we have)
+                    ema_fast = resampled["close"].ewm(span=20, adjust=False).mean()
+                    ema_slow = resampled["close"].ewm(span=50, adjust=False).mean()
+                    last_close = float(resampled["close"].iloc[-1])
+                    last_fast = float(ema_fast.iloc[-1])
+                    last_slow = float(ema_slow.iloc[-1])
+                    if last_close > last_fast > last_slow:
+                        bias_votes.append(("BULLISH", "HIGH"))
+                    elif last_close > last_fast:
+                        bias_votes.append(("BULLISH", "MEDIUM"))
+                    elif last_close < last_fast < last_slow:
+                        bias_votes.append(("BEARISH", "HIGH"))
+                    elif last_close < last_fast:
+                        bias_votes.append(("BEARISH", "MEDIUM"))
+                    else:
+                        bias_votes.append(("NEUTRAL", "LOW"))
+                except Exception:
+                    continue
+
+            if not bias_votes:
+                return {"bias": "NEUTRAL", "confidence": "LOW"}
+
+            # Aggregate: ≥75% agreement → HIGH, ≥50% → MEDIUM, else NEUTRAL/LOW
+            bullish = sum(1 for b, _ in bias_votes if b == "BULLISH")
+            bearish = sum(1 for b, _ in bias_votes if b == "BEARISH")
+            total = len(bias_votes)
+            if bullish >= 0.75 * total:
+                return {"bias": "BULLISH", "confidence": "HIGH" if bullish == total else "MEDIUM"}
+            if bearish >= 0.75 * total:
+                return {"bias": "BEARISH", "confidence": "HIGH" if bearish == total else "MEDIUM"}
+            if bullish > bearish:
+                return {"bias": "BULLISH", "confidence": "LOW"}
+            if bearish > bullish:
+                return {"bias": "BEARISH", "confidence": "LOW"}
+            return {"bias": "NEUTRAL", "confidence": "LOW"}
+        except Exception as e:
+            log.debug(f"[HistoricalMT5Provider] MTF bias computation failed: {e}")
+            return {"bias": "NEUTRAL", "confidence": "LOW"}

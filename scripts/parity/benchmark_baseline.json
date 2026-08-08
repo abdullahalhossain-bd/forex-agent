@@ -1,0 +1,7 @@
+{
+  "symbol": "EURUSD",
+  "bars": 500,
+  "warmup": 50,
+  "error": "run_unified_backtest failed: cannot import name 'reset_backtest_memory' from 'core.constants' (D:\\Projects\\forex\\core\\constants.py)",
+  "elapsed_sec": 0.024055899993982166
+}
