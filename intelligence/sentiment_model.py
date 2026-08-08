@@ -223,6 +223,19 @@ class SentimentModel:
                 confidence=0.0, source="rule_based",
             )
 
+        # PERF FIX: unlike agents/master_analyst.py, this class never checked
+        # is_backtest_mode() before hitting the live Groq API — every single
+        # bar of a backtest was paying a real network round-trip (~seconds)
+        # for a sentiment score that, per-bar historically, can't reflect
+        # actual news-at-the-time anyway. Skip straight to the rule-based
+        # path during backtests, matching how MasterAnalyst already behaves.
+        try:
+            from core.constants import is_backtest_mode
+            if is_backtest_mode():
+                return self._analyze_with_rules(text)
+        except Exception:
+            pass
+
         # Bug fix: once the per-cycle LLM budget is exhausted, skip the LLM
         # path entirely instead of calling into it (and its "skipped" log)
         # for every remaining item this cycle.

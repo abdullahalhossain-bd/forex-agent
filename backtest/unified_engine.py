@@ -460,6 +460,7 @@ def run_unified_backtest(
 
         trade = adapter.open_trade(symbol=symbol, direction=action, entry_price=entry,
                                     sl=sl, tp=tp, lot=lot, bar_time=current_time,
+                                    spread_pips=market_out.get("ind_ctx", {}).get("spread_pips"),
                                     confidence=int(confidence) if confidence else 0,
                                     strategy="unified_decision_core",
                                     confluence_factors=0, quality_grade="B")

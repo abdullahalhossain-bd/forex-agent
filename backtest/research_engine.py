@@ -298,6 +298,7 @@ def run_research_backtest(
             tp=tp,
             lot=lot,
             bar_time=current_time,
+            spread_pips=market_out.get("ind_ctx", {}).get("spread_pips"),
             confidence=int(confidence) if confidence else 0,
             strategy=_extract_strategy(dec_out, analysis_out),
         )

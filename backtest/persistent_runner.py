@@ -474,9 +474,11 @@ class SymbolWorker:
             self.rejection_stats["engine_error"] += 1
             return
 
+        spread_pips = market_out.get("ind_ctx", {}).get("spread_pips")
         trade = self.adapter.open_trade(
             symbol=self.symbol, direction=action, entry_price=entry,
             sl=sl, tp=tp, lot=lot, bar_time=current_time,
+            spread_pips=spread_pips,
             confidence=int(confidence) if confidence else 0,
             strategy="persistent_runner",
             confluence_factors=0, quality_grade="B",

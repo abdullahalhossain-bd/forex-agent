@@ -155,6 +155,21 @@ class MT5Connection:
     # ==========================================================
 
     def connect(self) -> bool:
+        # PERF FIX: backtests never need a live MT5 connection (all price
+        # data comes from the CSV provider), but nothing here checked
+        # is_backtest_mode() — so AITrader construction paid a full
+        # connect-retry-fail cycle (MAX_RETRIES x RETRY_DELAY_SEC, ~12s per
+        # trader.log evidence) once per run even though it always fails on
+        # a headless/CI machine, and even on the real Windows box it's pure
+        # dead weight during backtesting. Fail fast instead.
+        try:
+            from core.constants import is_backtest_mode
+            if is_backtest_mode():
+                log.debug("[MT5Connection] backtest mode — skipping live MT5 connect")
+                return False
+        except Exception:
+            pass
+
         if not MT5_AVAILABLE:
             log.error("MetaTrader5 package not installed")
             return False

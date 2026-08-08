@@ -76,17 +76,16 @@ class SentimentDataProvider:
                 "source": "live" | "cached" | "fallback"
             }
         """
-        # P1 perf fix (2026-08-03, parity investigation): a historical bar
-        # has no "today's sentiment" to fetch — skip the entire network
-        # chain (retail positioning via OANDA/Myfxbook, Fear & Greed via
-        # alternative.me, DXY via Yahoo, currency strengths via 28-pair
-        # fetch) in backtest mode. Profiling showed this module alone
-        # cost ~3.7s/bar via urllib HTTPS calls to alternative.me that
-        # returned TODAY's fear_greed value misapplied to historical bars
-        # — a parity bug as well as a perf bug. Mirror the contract of
-        # the other backtest-short-circuited modules (economic_calendar_api,
-        # retail_sentiment, news_api_provider, macro_data): return neutral
-        # fallback data so downstream consumers see a valid-shaped dict.
+        # PERF + PARITY FIX: this module has a duplicate at
+        # data/sentiment_data.py that already skips live fetches in
+        # backtest mode — but agents/analysis_agent.py actually imports
+        # THIS copy (analysis.sentiment_data), which never got the same
+        # fix. Result: every backtest bar was making live network calls
+        # (retail positioning, Fear & Greed via alternative.me, DXY via
+        # Yahoo, currency strengths) — ~3-6s/bar per trader.log evidence,
+        # and a parity bug too (today's live sentiment applied to
+        # historical bars). Mirror the other short-circuited modules
+        # (economic_calendar_api, fred_data, sentiment_model) here.
         from core.constants import is_backtest_mode
         if is_backtest_mode():
             log.debug(

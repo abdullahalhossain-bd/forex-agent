@@ -88,9 +88,19 @@ class SimulatedTrade:
     confidence: int = 0; strategy: str = ""
     exit_time: str = ""; exit_price: float = 0.0; exit_reason: str = ""
     pnl_pips: float = 0.0; pnl_usd: float = 0.0; commission_usd: float = 0.0
+    spread_pips: float = 0.0; spread_cost_usd: float = 0.0
     slippage_pips: float = 0.0; hold_bars: int = 0
     confluence_factors: int = 0; quality_grade: str = "F"
     def to_dict(self): return {k: v for k, v in self.__dict__.items()}
+
+
+def _spread_cost_usd(symbol: str, lot: float, spread_pips: float) -> float:
+    pip_value = pip_value_usd_per_lot(symbol)
+    return round(spread_pips * pip_value * lot, 2)
+
+
+def _half_spread_price(spread_pips: float, symbol: str) -> float:
+    return _pip_to_price(spread_pips / 2.0, symbol)
 
 
 class BrokerSimulator:
@@ -139,7 +149,7 @@ class BrokerSimulator:
             return DEFAULT_SPREAD_PIPS.get(symbol, 2.0)
         return self.spread_pips.get(symbol, DEFAULT_SPREAD_PIPS.get(symbol, 2.0))
 
-    def _check_spread_limit(self, symbol: str) -> tuple[bool, str]:
+    def _check_spread_limit(self, symbol: str, spread_pips: float | None = None) -> tuple[bool, str]:
         """Mirror live OrderManager spread rejection. Returns (allowed, reason).
         Live source: broker/spread_monitor.MAX_SPREAD_PIPS table.
         """
@@ -147,7 +157,7 @@ class BrokerSimulator:
             return True, ""
         try:
             from broker.spread_monitor import MAX_SPREAD_PIPS, get_spread_limit
-            spread = self._get_spread_pips(symbol)
+            spread = spread_pips if spread_pips is not None else self._get_spread_pips(symbol)
             limit = get_spread_limit(symbol) if hasattr(globals().get("spread_monitor"), "get_spread_limit") else MAX_SPREAD_PIPS.get(symbol, 3.0)
             if spread > limit:
                 return False, f"Spread too wide ({spread:.2f} pips > {limit:.2f} pips limit)"
@@ -160,18 +170,24 @@ class BrokerSimulator:
         return True, ""
 
     def open_trade(self, symbol, direction, entry_price, sl, tp, lot, bar_time,
+                   spread_pips: float | None = None,
                    confidence=0, strategy="", confluence_factors=0, quality_grade="F"):
         # ── Spread limit enforcement (parity with live OrderManager) ──
-        allowed, reason = self._check_spread_limit(symbol)
+        actual_spread_pips = spread_pips if spread_pips is not None else self._get_spread_pips(symbol)
+        allowed, reason = self._check_spread_limit(symbol, actual_spread_pips)
         if not allowed:
             log.info(f"[BrokerSimulator] {symbol} {direction} REJECTED — {reason}")
             return None
 
         self._tc += 1
         pip = _pip_value(symbol)
-        slip_p = max(0, np.random.normal(self.slippage_pips, self.slippage_stdev))
-        slip = _pip_to_price(slip_p, symbol)
-        fp = entry_price + slip if direction.upper() == "BUY" else entry_price - slip
+        slew_p = max(0, np.random.normal(self.slippage_pips, self.slippage_stdev))
+        slip = _pip_to_price(slew_p, symbol)
+        half_spread = _half_spread_price(actual_spread_pips, symbol)
+        if direction.upper() == "BUY":
+            fp = entry_price + slip + half_spread
+        else:
+            fp = entry_price - slip - half_spread
         comm = self.commission_per_lot * lot
         al = lot
         if random.random() < self.partial_fill_prob:
@@ -185,12 +201,16 @@ class BrokerSimulator:
             take_profit=_round_price(tp, symbol),
             lot_size=al, confidence=confidence, strategy=strategy,
             commission_usd=round(comm, 2),
-            slippage_pips=round(slip_p, 1),
+            spread_pips=round(actual_spread_pips, 1),
+            spread_cost_usd=_spread_cost_usd(symbol, al, actual_spread_pips),
+            slippage_pips=round(slew_p, 1),
             confluence_factors=confluence_factors, quality_grade=quality_grade,
         )
 
     def check_exit(self, trade, bar_high, bar_low, bar_close, bar_time):
         pip = _pip_value(trade.symbol)
+        spread_pips = getattr(trade, "spread_pips", 0.0) or self._get_spread_pips(trade.symbol)
+        half_spread = _half_spread_price(spread_pips, trade.symbol)
         slip_p = max(0, np.random.normal(self.slippage_pips * 0.5, self.slippage_stdev * 0.5))
         slip = _pip_to_price(slip_p, trade.symbol)
         if trade.direction == "BUY":
@@ -198,11 +218,11 @@ class BrokerSimulator:
             if sl_hit and tp_hit:
                 # Heuristic: assume the level closer to entry was hit first
                 if abs(trade.entry_price - trade.take_profit) < abs(trade.entry_price - trade.stop_loss):
-                    ep, er = trade.take_profit - slip, "TP"
+                    ep, er = trade.take_profit - half_spread - slip, "TP"
                 else:
-                    ep, er = trade.stop_loss - slip, "SL"
-            elif sl_hit: ep, er = trade.stop_loss - slip, "SL"
-            elif tp_hit: ep, er = trade.take_profit - slip, "TP"
+                    ep, er = trade.stop_loss - half_spread - slip, "SL"
+            elif sl_hit: ep, er = trade.stop_loss - half_spread - slip, "SL"
+            elif tp_hit: ep, er = trade.take_profit - half_spread - slip, "TP"
             else: return None
             pnl_p = (ep - trade.entry_price) / pip
         else:
@@ -210,11 +230,11 @@ class BrokerSimulator:
             if sl_hit and tp_hit:
                 # Heuristic: assume the level closer to entry was hit first
                 if abs(trade.entry_price - trade.take_profit) < abs(trade.entry_price - trade.stop_loss):
-                    ep, er = trade.take_profit + slip, "TP"
+                    ep, er = trade.take_profit + half_spread + slip, "TP"
                 else:
-                    ep, er = trade.stop_loss + slip, "SL"
-            elif sl_hit: ep, er = trade.stop_loss + slip, "SL"
-            elif tp_hit: ep, er = trade.take_profit + slip, "TP"
+                    ep, er = trade.stop_loss + half_spread + slip, "SL"
+            elif sl_hit: ep, er = trade.stop_loss + half_spread + slip, "SL"
+            elif tp_hit: ep, er = trade.take_profit + half_spread + slip, "TP"
             else: return None
             pnl_p = (trade.entry_price - ep) / pip
         cs = _contract_size(trade.symbol)
@@ -230,13 +250,15 @@ class BrokerSimulator:
 
     def close_trade(self, trade, close_price, bar_time, reason="manual"):
         pip = _pip_value(trade.symbol)
+        spread_pips = getattr(trade, "spread_pips", 0.0) or self._get_spread_pips(trade.symbol)
+        half_spread = _half_spread_price(spread_pips, trade.symbol)
         slip_p = max(0, np.random.normal(self.slippage_pips * 0.5, self.slippage_stdev * 0.5))
         slip = _pip_to_price(slip_p, trade.symbol)
         if trade.direction == "BUY":
-            ep = close_price - slip
+            ep = close_price - half_spread - slip
             pnl_p = (ep - trade.entry_price) / pip
         else:
-            ep = close_price + slip
+            ep = close_price + half_spread + slip
             pnl_p = (trade.entry_price - ep) / pip
         pvu = pip_value_usd_per_lot(trade.symbol)
         pnl_u = pnl_p * pvu * trade.lot_size - trade.commission_usd

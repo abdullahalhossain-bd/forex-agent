@@ -146,6 +146,22 @@ class FREDApi:
         if not self.available:
             return self._empty_result("FRED_API_KEY not set")
 
+        # PERF + CORRECTNESS FIX: this was never gated on is_backtest_mode(),
+        # so every single bar of a backtest made a live network round-trip
+        # for CURRENT-DAY macro data (a multi-second cost, and one of the
+        # dominant per-bar delays reported alongside SentimentModel/MT5).
+        # It's also a look-ahead-bias bug on top of being slow: FRED series
+        # like CPI/Unemployment update monthly, so "today's" live snapshot
+        # was being applied to bars from months/years in the past. Backtests
+        # get one static empty/neutral snapshot instead — cheap, and doesn't
+        # leak future macro data into historical decisions.
+        try:
+            from core.constants import is_backtest_mode
+            if is_backtest_mode():
+                return self._empty_result("backtest mode — live FRED fetch skipped")
+        except Exception:
+            pass
+
         series_data = {}
         success_count = 0
         for series_id, (label, category, desc) in TRACKED_SERIES.items():

@@ -533,6 +533,24 @@ class DataFetcher:
             return None
         timeframe = norm_timeframe
 
+        # PERF FIX: this had no is_backtest_mode() check, so every backtest
+        # bar that needed MTF data (e.g. H4 bias) tried to reach a live MT5
+        # terminal — connect, health-check (4 retries), then disconnect —
+        # before finally failing over. That retry/backoff sequence (~3s+ per
+        # attempt per the trader.log evidence) was one of the dominant
+        # per-bar costs, on top of being pointless: a live terminal can't
+        # serve historical candles for a date the backtest is replaying
+        # anyway. Backtests must get MTF data from the CSV provider (see
+        # csv_data_provider.py) — fail fast here instead of retrying network
+        # I/O that was never going to succeed usefully.
+        try:
+            from core.constants import is_backtest_mode
+            if is_backtest_mode():
+                log.debug(f"[DataFetcher] backtest mode — skipping live fetch for {symbol} {timeframe}")
+                return None
+        except Exception:
+            pass
+
         log.info(f"Fetching {symbol} | {timeframe} | {limit} candles...")
 
         # P4c FIX: per-fetch fallback chain instead of single-source dispatch.
