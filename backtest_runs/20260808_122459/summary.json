@@ -1,0 +1,21 @@
+{
+  "symbols": {
+    "EURUSD": {
+      "trades": 0,
+      "wins": 0,
+      "losses": 0,
+      "gross_profit": 0.0,
+      "gross_loss": 0.0,
+      "net_pnl": 0.0
+    }
+  },
+  "total_trades": 0,
+  "wins": 0,
+  "losses": 0,
+  "win_rate": 0.0,
+  "gross_profit_usd": 0.0,
+  "gross_loss_usd": 0.0,
+  "net_pnl_usd": 0.0,
+  "current_equity_usd": 10000.0,
+  "updated_at": "2026-08-08T12:25:00+00:00"
+}

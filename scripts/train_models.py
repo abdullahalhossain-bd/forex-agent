@@ -27,8 +27,8 @@ def main():
     parser = argparse.ArgumentParser(description="Train ML models for Forex AI bot")
     parser.add_argument("--pair", type=str, default=None,
                         help="Train only this pair (e.g. EURUSD). Default: all pairs.")
-    parser.add_argument("--timeframe", type=str, default="15m",
-                        help="Timeframe (default: 15m)")
+    parser.add_argument("--timeframe", "--tf", type=str, default="15m",
+                        help="Timeframe (default: 15m). --tf is an alias.")
     parser.add_argument("--min-samples", type=int, default=100,
                         help="Minimum samples required to train (default: 100)")
     args = parser.parse_args()

@@ -63,7 +63,21 @@ class AIAnalyst:
         # 2026-07-25: _ollama_client kept as None stub for backward-compat
         # with external code that may inspect it. Ollama is no longer used.
         self._ollama_client = None
-        self._init_clients()
+
+        # Perf fix: AIAnalyst() is constructed fresh every single bar in
+        # the backtest loop (see agents/analysis_agent.py), and analyze()
+        # already unconditionally bypasses the LLM call in backtest mode
+        # (see "BACKTEST MODE OPTIMIZATION" below) — so client init here
+        # was pure wasted work: an LLMKeyManager lookup + Groq/Gemini SDK
+        # client construction on every bar, for clients that then never
+        # get used. Measured to add several seconds per bar. Skip it
+        # entirely when backtesting; the None clients are never touched
+        # because analyze() returns before reaching them.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            self._key_manager = None
+        else:
+            self._init_clients()
 
         # ── Day 92 — token usage / cost tracking ────────────────────
         # BUGFIX (audit follow-up): analyze() previously had no visibility

@@ -169,6 +169,18 @@ class NewsSources:
 
     def fetch_economic_calendar(self, hours_ahead: int = 24) -> List[NewsItem]:
         """Fetch HIGH-impact events from Forex Factory for the next `hours_ahead` hours."""
+        # Perf + parity fix (mirrors currency_strength.py / sentiment_data.py):
+        # a historical backtest bar has no "this week" — the FF endpoint always
+        # returns events relative to today's real-world date, which is wrong
+        # for a bar from the past, and (worse) the DNS lookup for
+        # nfs.faireconomy.media routinely fails in sandboxed/offline backtest
+        # environments, costing a ~10s timeout on every cache-miss bar. Skip
+        # the live fetch during backtest and rely on the local calendar file
+        # only (still fully functional, no network).
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            return self._fetch_local_calendar(hours_ahead)
+
         # BUGFIX (log audit): module-level throttle flag for the FF
         # status warning — see _FF_WARN_LAST_TS definition above.
         global _FF_WARN_LAST_TS

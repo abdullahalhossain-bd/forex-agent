@@ -28,7 +28,7 @@ from data.indicators import Indicators
 from analysis.strength_calculator import StrengthCalculator
 from analysis.currency_ranker import CurrencyRanker
 from utils.logger import get_logger
-from core.constants import MEMORY_DIR
+from core.constants import MEMORY_DIR, is_backtest_mode
 
 log = get_logger("currency_strength")
 
@@ -121,6 +121,34 @@ class CurrencyStrengthEngine:
         if self._strength_cache and (now - self._strength_cache_time) < ttl:
             log.debug(f"[CurrencyStrength] Using cached strength matrix (ttl={ttl:.0f}s, tf={self.timeframe})")
             return self._strength_cache
+
+        # Perf + parity fix (mirrors data/sentiment_data.py, myfxbook_sentiment.py,
+        # news_filter.py): a historical backtest bar has no "right now" — fetching
+        # LIVE data for all 28 CROSS_PAIRS here would (a) apply TODAY's currency
+        # strength to a bar from the past (parity bug — not what a live bot would
+        # have seen at that historical timestamp), and (b) cost several seconds of
+        # real network I/O on every bar (perf bug — this was measured at 100+
+        # sec/bar during backtest runs, making a full 6000+ bar run take days).
+        # Return a neutral fallback with the same dict shape instead.
+        if is_backtest_mode():
+            log.debug(
+                "[CurrencyStrength] backtest mode — live 28-pair fetch skipped, "
+                "returning neutral fallback"
+            )
+            neutral = {c: 50.0 for c in MAJOR_CURRENCIES}
+            result = {
+                "strengths":    neutral,
+                "raw_scores":   {c: 0.0 for c in MAJOR_CURRENCIES},
+                "pair_details": {},
+                "timeframe":    self.timeframe,
+                "pairs_used":   0,
+                "pairs_failed": [],
+                "timestamp":    datetime.utcnow().isoformat(),
+                "source":       "backtest_skipped",
+            }
+            self._strength_cache      = result
+            self._strength_cache_time = now
+            return result
 
         raw_scores     = {c: 0.0 for c in MAJOR_CURRENCIES}
         counts         = {c: 0   for c in MAJOR_CURRENCIES}

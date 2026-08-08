@@ -273,6 +273,15 @@ class HistoricalCSVDataProvider(DataProvider):
         """
         try:
             import data.indicator_registry  # noqa: F401
+            # `indicator_registry` itself doesn't import pandas_ta at module
+            # level — it lazily imports `data.indicators_ext` (which DOES
+            # need pandas_ta) inside add_canonical_indicators(), which runs
+            # once PER BAR. So a bare import of indicator_registry can
+            # succeed even when pandas_ta is missing, which used to cause
+            # "registry" mode to be selected and then fail (and log an
+            # ERROR) on every single bar. Probe the real dependency here,
+            # once, so we fall back correctly instead of spamming.
+            import data.indicators_ext  # noqa: F401
             return "registry"
         except Exception as e_registry:
             log.warning(f"[CSVProvider] indicator_registry unavailable ({e_registry}) — "

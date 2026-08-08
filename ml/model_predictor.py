@@ -457,7 +457,7 @@ class ModelPredictor:
                         f"Diagnostic: pair_dir={pair_dir} (exists={pair_dir_exists}) | "
                         f"registry={REGISTRY_PATH.name} (exists={registry_exists}, "
                         f"has_pair_entry={registry_has_pair}). "
-                        f"To fix: run `python scripts/train_models.py --pair {pair} --tf {timeframe}` "
+                        f"To fix: run `python scripts/train_models.py --pair {pair} --timeframe {timeframe}` "
                         f"to train and register models. "
                         f"(This warning is logged once per process — further "
                         f"NOT_READY results for {pair} {timeframe} will be silent.)"
@@ -575,7 +575,7 @@ class ModelPredictor:
                                 f"schema mismatch (expects {expected_count} features, "
                                 f"got {X.shape[1]}) for {pair}/{timeframe}. "
                                 f"Retrain with: python scripts/train_models.py "
-                                f"--pair {pair} --tf {timeframe} "
+                                f"--pair {pair} --timeframe {timeframe} "
                                 f"(warning logged once per session)"
                             )
                         # Record as WAIT with explanation, but don't break the loop

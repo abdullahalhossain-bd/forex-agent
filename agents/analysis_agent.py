@@ -985,12 +985,26 @@ class AnalysisAgent:
             corr_engine = CorrelationEngine()
             # Get live open pairs from PaperTrader
             open_pairs = []
-            try:
-                from execution.paper_trader import PaperTrader
-                pt = PaperTrader()
-                open_pairs = [t.get("pair") for t in pt.get_open_positions() if t.get("pair")]
-            except Exception:
-                pass
+            # Perf + correctness fix: PaperTrader() connects to the LIVE
+            # trading database (database/trader.db) and restores the
+            # real account's balance + open positions. Calling it here
+            # unconditionally meant every single backtest bar reconnected
+            # to that live DB and then MT5-fetched live candles for
+            # whatever pairs happened to be open in LIVE trading (e.g.
+            # CADCHF, EURNOK) — completely unrelated to this historical
+            # backtest bar, and a major source of the ~100+ sec/bar
+            # slowdown (plus repeated MT5 connect/disconnect noise).
+            # A backtest has its own simulated open positions (tracked by
+            # persistent_runner/BrokerSimulator) — it must never reach
+            # into the live PaperTrader's state. Skip entirely here.
+            from core.constants import is_backtest_mode
+            if not is_backtest_mode():
+                try:
+                    from execution.paper_trader import PaperTrader
+                    pt = PaperTrader()
+                    open_pairs = [t.get("pair") for t in pt.get_open_positions() if t.get("pair")]
+                except Exception:
+                    pass
             # FIX: atr column নিশ্চিত করুন — missing হলে on-the-fly compute
             if "atr" not in df.columns and all(c in df.columns for c in ["high", "low", "close"]):
                 try:
