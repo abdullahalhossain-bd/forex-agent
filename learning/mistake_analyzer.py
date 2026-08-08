@@ -12,6 +12,69 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 
+class _LLMKeyManagerAdapter:
+    """Adapts core.llm_key_manager.LLMKeyManager (Groq primary, Gemini
+    fallback) to the simple `.generate(prompt) -> str` interface this
+    module expects. Mirrors the exact provider-fallback pattern already
+    used by core/devils_advocate.py, so loss analysis benefits from the
+    same multi-key rotation/failover the rest of the stack relies on.
+    """
+
+    def __init__(self, timeout_sec: int = 8):
+        self.timeout_sec = timeout_sec
+
+    def generate(self, prompt: str) -> str:
+        import time
+        from core.llm_key_manager import get_llm_key_manager, log_llm_call_failure
+        manager = get_llm_key_manager()
+        deadline = time.monotonic() + self.timeout_sec
+        last_error = None
+
+        for provider in ("groq", "gemini"):
+            if time.monotonic() >= deadline:
+                break
+            try:
+                if provider == "groq":
+                    client = manager.get_groq_client()
+                    if client is None:
+                        continue
+                    resp = client.chat.completions.create(
+                        model="llama-3.1-8b-instant",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1,
+                        max_tokens=400,
+                        response_format={"type": "json_object"},
+                    )
+                    usage = getattr(resp, "usage", None)
+                    tokens = ((getattr(usage, "prompt_tokens", 0) or 0)
+                              + (getattr(usage, "completion_tokens", 0) or 0)) if usage else 0
+                    try:
+                        manager.mark_groq_success(tokens_used=tokens, client=client)
+                    except Exception:
+                        pass
+                    return resp.choices[0].message.content
+                else:  # gemini
+                    if (deadline - time.monotonic()) < 10.0:
+                        continue  # Gemini rejects sub-10s deadlines
+                    client = manager.get_gemini_client()
+                    if client is None:
+                        continue
+                    resp = client.models.generate_content(
+                        model="gemini-flash-lite-latest", contents=prompt
+                    )
+                    try:
+                        manager.mark_gemini_success(client=client)
+                    except Exception:
+                        pass
+                    return resp.text
+            except Exception as exc:
+                last_error = exc
+                log_llm_call_failure(log, provider, "llama-3.1-8b-instant", 0, 1, exc)
+                continue
+
+        raise last_error or RuntimeError("MistakeAnalyzer: no LLM provider available")
+
+
 class AdvancedMistakeAnalyzer:
     """
     LLM এবং ভেক্টর মেমোরির সমন্বয়ে গঠিত ক্লোজড ট্রেড অ্যানালাইসিস লুপ।
@@ -20,7 +83,30 @@ class AdvancedMistakeAnalyzer:
 
     def __init__(self, llm_client=None):
         self.memory = TradeMemory(seed_rules=False)
-        self.llm = llm_client  # আপনার প্রজেক্টের LLM/Gemini ক্লায়েন্ট এখানে পাস হবে
+        # Audit fix (2026-08-09): this was always constructed with
+        # llm_client=None at the only real call site (core/trader.py),
+        # which silently made `if self.llm and hasattr(self.llm,
+        # 'generate')` false on every single loss — the LLM root-cause
+        # analysis this class is named/designed for NEVER actually ran;
+        # every closed loss got the same generic templated fallback
+        # ("Market Variance ... market invalidated the setup") with no
+        # log line indicating a real LLM was never consulted. Default to
+        # a working adapter (same Groq/Gemini rotation devils_advocate.py
+        # uses) unless the caller explicitly passes False/a client to
+        # keep it disabled (e.g. in unit tests).
+        if llm_client is None:
+            try:
+                self.llm = _LLMKeyManagerAdapter()
+            except Exception as e:
+                log.warning(
+                    f"[MistakeAnalyzer] Could not construct default LLM "
+                    f"adapter — falling back to heuristic analysis only: {e}"
+                )
+                self.llm = None
+        elif llm_client is False:
+            self.llm = None
+        else:
+            self.llm = llm_client
 
     def _has_vector_memory(self) -> bool:
         """Check if vector memory (sentence-transformers) is available."""
@@ -88,6 +174,22 @@ class AdvancedMistakeAnalyzer:
                     lines.append(f"- Past Lesson: {m}")
             similar_past_failures = "\n".join(lines)
 
+        # Audit fix (2026-08-09): log the full decision context for every
+        # loss up front, regardless of whether the LLM call below succeeds
+        # — this is the trace the user's audit asked for (signal, market
+        # conditions, entry, SL/TP, spread, decision factors) and must not
+        # depend on LLM availability.
+        spread = trade.get("spread", trade_snapshot.get("spread"))
+        log.info(
+            f"[MistakeAnalyzer] LOSS context for Trade #{trade.get('id')} "
+            f"{trade.get('pair')}: signal={trade.get('signal')} "
+            f"entry={trade.get('entry')} sl={trade.get('sl')} tp={trade.get('tp')} "
+            f"rr=1:{trade.get('rr_ratio')} spread={spread} "
+            f"confidence_at_entry={trade.get('confidence')}% pnl={pnl} | "
+            f"trend={trade_snapshot.get('trend')} regime={trade_snapshot.get('regime')} "
+            f"rsi={trade_snapshot.get('rsi')} pattern={trade_snapshot.get('pattern')}"
+        )
+
         # ২. LLM এর জন্য প্রম্পট রেডি করা (রুট কজ বের করতে)
         prompt = f"""
         You are the Post-Trade Audit Engine of an AI Trading Bot.
@@ -97,6 +199,7 @@ class AdvancedMistakeAnalyzer:
         Pair: {trade.get('pair')}
         Signal: {trade.get('signal')}
         Entry: {trade.get('entry')} | SL: {trade.get('sl')} | TP: {trade.get('tp')}
+        Spread at entry: {spread}
         Risk-Reward: 1:{trade.get('rr_ratio')}
         Bot Confidence: {trade.get('confidence')}%
         PnL: {pnl}
@@ -121,15 +224,38 @@ class AdvancedMistakeAnalyzer:
 
         # ৩. LLM এক্সিকিউশন এবং মেমোরি আপডেট
         try:
+            analysis = None
             if self.llm and hasattr(self.llm, 'generate'):
-                response = self.llm.generate(prompt)
                 try:
-                    analysis = json.loads(response)
-                except json.JSONDecodeError:
-                    log.warning("[MistakeAnalyzer] LLM response not valid JSON, using fallback")
+                    response = self.llm.generate(prompt)
+                    try:
+                        analysis = json.loads(response)
+                    except json.JSONDecodeError:
+                        log.warning(
+                            "WARNING: LLM loss analysis skipped/reduced to fallback "
+                            "because the LLM response was not valid JSON\n"
+                            "SOURCE: learning/mistake_analyzer.py:_process_loss_trade\n"
+                            "IMPACT: using generic heuristic explanation instead of "
+                            "model-generated root cause"
+                        )
+                        analysis = None
+                except Exception as llm_exc:
+                    log.warning(
+                        f"WARNING: LLM loss analysis skipped/reduced to fallback "
+                        f"because the LLM call failed ({llm_exc})\n"
+                        f"SOURCE: learning/mistake_analyzer.py:_process_loss_trade\n"
+                        f"IMPACT: using generic heuristic explanation instead of "
+                        f"model-generated root cause"
+                    )
                     analysis = None
             else:
-                analysis = None
+                log.warning(
+                    "WARNING: LLM loss analysis skipped/reduced to fallback "
+                    "because no LLM client is available\n"
+                    "SOURCE: learning/mistake_analyzer.py:_process_loss_trade\n"
+                    "IMPACT: using generic heuristic explanation instead of "
+                    "model-generated root cause"
+                )
 
             if not analysis:
                 analysis = {

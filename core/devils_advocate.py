@@ -33,7 +33,24 @@ class DevilsAdvocateGate:
     """
 
     def __init__(self, enabled: Optional[bool] = None, fail_mode: Optional[str] = None):
-        self.enabled = enabled if enabled is not None else self._env_flag("DEVILS_ADVOCATE_ENABLED", False)
+        # Audit fix (2026-08-09): this gate was fully implemented and
+        # correctly wired into core/trader.py at the right pipeline
+        # position (after ALL mandatory gates pass, immediately before
+        # execution) but defaulted to OFF via DEVILS_ADVOCATE_ENABLED.
+        # Zero occurrences of "devils_advocate"/"DevilsAdvocate" appeared
+        # anywhere in trader.log or execution.log for the 218-bar audit
+        # run — the review step the user's spec requires simply never
+        # ran. Per the audit requirement ("if ALL mandatory trade gates
+        # pass, call the existing LLM Devil's Advocate before execution"),
+        # default this ON. Safety is unaffected: review() already
+        # fail-opens to EXECUTE when the LLM provider is unreachable
+        # (fail_mode defaults to "fail_open"), and _should_run() only
+        # triggers a review after every other gate (risk, permission,
+        # confidence, entry quality, S/R, confluence, etc.) already
+        # passed — this can only add an extra veto opportunity, never
+        # bypass an existing block. Explicit env override or constructor
+        # arg still takes precedence for anyone who wants it off.
+        self.enabled = enabled if enabled is not None else self._env_flag("DEVILS_ADVOCATE_ENABLED", True)
         self.fail_mode = (fail_mode or os.getenv("DEVILS_ADVOCATE_FAIL_MODE", "fail_open")).lower()
         self.timeout_sec = int(os.getenv("DEVILS_ADVOCATE_TIMEOUT_SEC", "6"))
         self.model_name = os.getenv("DEVILS_ADVOCATE_MODEL", "gpt-4.1-mini")

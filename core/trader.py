@@ -2300,6 +2300,22 @@ class AITrader:
                     )
                     result["devils_advocate"] = review
                     dec_out["devils_advocate"] = review
+                    # Audit fix (2026-08-09): make the independent challenge
+                    # and its final decision visible in the human-readable
+                    # log using the TAKE_TRADE/REJECT_TRADE vocabulary the
+                    # trade-decision spec calls for. The structured EXECUTE/
+                    # VETO strings are kept as-is everywhere else (tests,
+                    # execution_logger schema, DevilsAdvocateGate contract)
+                    # to avoid an unnecessary breaking rename of a working,
+                    # tested API — this is purely an additional log line.
+                    _da_final = "REJECT_TRADE" if review.get("decision") == "VETO" else "TAKE_TRADE"
+                    log.info(
+                        f"[Trader] {self.symbol}: Devil's Advocate reviewed "
+                        f"{result.get('final_action')} -> {_da_final} "
+                        f"(conf={review.get('confidence', 0):.0f}%) | "
+                        f"reasoning: {review.get('risk_summary', 'n/a')} | "
+                        f"concerns={review.get('reasons_for_concern', [])}"
+                    )
                     if review.get("decision") == "VETO":
                         result["trade_allowed"] = False
                         result["final_action"] = "NO TRADE"
