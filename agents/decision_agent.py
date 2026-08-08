@@ -1175,20 +1175,33 @@ class DecisionAgent:
                 # penalties from silently turning a clear BUY into a weak
                 # WAIT and breaking downstream gating expectations in
                 # integration tests.
+                # 2026-08-08 fix: this used to clamp adj_conf to the bare
+                # floor value itself (60 / MIN_TRADE_CONFIDENCE / 55) instead
+                # of restoring _preserved_conf. That pinned confidence to
+                # EXACTLY 60% on every strong-aggregate signal (confirmed in
+                # live logs: confidence_pre_penalty == 60 on every single
+                # BUY/SELL for hours), leaving zero headroom before the
+                # downstream entry-quality/session/confluence penalties ran
+                # — so "Min confidence" failed on ~100% of otherwise-good
+                # signals. Restoring the real preserved value (still capped
+                # at 99) keeps the original safety intent (don't let a
+                # transient ConfidenceEngine penalty crush a strong
+                # aggregate signal down to WAIT) while giving downstream
+                # penalties actual room to apply without auto-failing.
                 try:
                     if _preserved_conf >= 60 and adj_conf < 60:
-                        adj_conf = 60
+                        adj_conf = min(99, _preserved_conf)
                         reasons.append(
-                            "ℹ️ ConfidenceEngine reduction clamped to 60% (strong aggregate support)"
+                            f"ℹ️ ConfidenceEngine reduction clamped to preserved {adj_conf:.0f}% (strong aggregate support)"
                         )
                     elif _preserved_conf >= self.MIN_TRADE_CONFIDENCE and adj_conf < self.MIN_TRADE_CONFIDENCE:
-                        adj_conf = self.MIN_TRADE_CONFIDENCE
+                        adj_conf = min(99, _preserved_conf)
                         reasons.append(
-                            f"ℹ️ ConfidenceEngine reduction clamped to {self.MIN_TRADE_CONFIDENCE:.0f}% (aggregate support)"
+                            f"ℹ️ ConfidenceEngine reduction clamped to preserved {adj_conf:.0f}% (aggregate support)"
                         )
                     elif _preserved_conf >= 55 and adj_conf < 55:
-                        adj_conf = 55
-                        reasons.append("ℹ️ ConfidenceEngine reduction clamped to 55% (aggregate support)")
+                        adj_conf = min(99, _preserved_conf)
+                        reasons.append(f"ℹ️ ConfidenceEngine reduction clamped to preserved {adj_conf:.0f}% (aggregate support)")
                 except Exception:
                     pass
                 reasons.append(

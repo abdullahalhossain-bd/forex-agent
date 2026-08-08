@@ -1,0 +1,32 @@
+{
+  "cursor": 500,
+  "symbol": "GBPUSD",
+  "open_trades": [],
+  "closed_trades_count": 1,
+  "entry_bar": {
+    "1": 428
+  },
+  "broker_balance": 9978.89,
+  "broker_tc": 1,
+  "rejection_stats": {
+    "WAIT": 59,
+    "NO_TRADE_ANALYSIS": 0,
+    "risk_rejected": 24,
+    "permission_blocked": 116,
+    "engine_error": 0,
+    "max_trades": 0,
+    "total_bars": 200
+  },
+  "per_symbol_stats": {
+    "GBPUSD": {
+      "trades": 1,
+      "wins": 0,
+      "losses": 1,
+      "gross_profit": 0.0,
+      "gross_loss": -21.11,
+      "net_pnl": -21.11
+    }
+  },
+  "snapshot_at": "2026-08-08T18:54:18+00:00",
+  "updated_at": "2026-08-08T18:54:18+00:00"
+}

@@ -284,6 +284,11 @@ class TradePermission:
                     else:
                         sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
                                      f"dist_to_resistance={dist_res:.1f}p")
+                else:
+                    log.warning(
+                        "[TradePermission] S/R zone alignment skipped — support/resistance "
+                        "distance data missing; not evaluated"
+                    )
                 checks.append({
                     "check":  "S/R zone alignment",
                     "passed": sr_ok,
@@ -400,6 +405,10 @@ class TradePermission:
                 ):
                     mtf_ok = True
                     mtf_detail = "MTF trend alignment skipped — mtf_trends unavailable or incomplete"
+                    log.warning(
+                        "[TradePermission] MTF trend alignment skipped — mtf_trends "
+                        "data missing or incomplete; cannot evaluate hard block"
+                    )
                 else:
                     def _dir(tf_key: str) -> str:
                         raw = str(mtf_trends.get(tf_key, "")).lower()
