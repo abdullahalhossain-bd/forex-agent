@@ -259,7 +259,7 @@ class SupportResistance:
                 low_dtype = f"error:{_e}"
                 low_shape = None
             try:
-                log.info(
+                log.debug(
                     "[SR-INSTR] _count_valid_rejections zone_top=%r (%s) band=%r (%s) df['low'].dtype=%r shape=%r",
                     zone_top,
                     type(zone_top).__name__,
@@ -270,7 +270,7 @@ class SupportResistance:
                 )
             except Exception:
                 # Best-effort instrumentation — do not raise
-                log.info("[SR-INSTR] _count_valid_rejections instrumentation skipped due to logging error")
+                log.debug("[SR-INSTR] _count_valid_rejections instrumentation skipped due to logging error")
             # We want candles that touched the zone (wick reached it)
             if direction == "resistance":
                 touched = df[(df["high"] >= zone_bottom - band) &
@@ -836,7 +836,7 @@ class SupportResistance:
             _src_counts_r[z.get("source", "?")] = _src_counts_r.get(z.get("source", "?"), 0) + 1
         for z in all_support:
             _src_counts_s[z.get("source", "?")] = _src_counts_s.get(z.get("source", "?"), 0) + 1
-        log.info(f"[SR-DIAG] {symbol}: resistance={len(all_resistance)} {_src_counts_r} | support={len(all_support)} {_src_counts_s}")
+        log.debug(f"[SR-DIAG] {symbol}: resistance={len(all_resistance)} {_src_counts_r} | support={len(all_support)} {_src_counts_s}")
 
         # 3. Pivot
         try:

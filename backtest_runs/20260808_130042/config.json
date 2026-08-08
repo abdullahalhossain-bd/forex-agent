@@ -1,0 +1,15 @@
+{
+  "run_id": "20260808_130042",
+  "symbols": [
+    "EURUSD"
+  ],
+  "timeframe": "H1",
+  "starting_balance": 10000.0,
+  "warmup_bars": 300,
+  "max_open_trades": 20,
+  "max_hold_bars": 100,
+  "workers": 1,
+  "checkpoint_every": 100,
+  "enable_llm": false,
+  "started_at": "2026-08-08T13:00:42.171627+00:00"
+}

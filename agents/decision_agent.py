@@ -304,7 +304,14 @@ class DecisionAgent:
             adaptive = unified_ctx.get("adaptive_decision", {}) or {}
             if not adaptive.get("error"):
                 a_action = adaptive.get("action", "NO_TRADE")
-                a_score = float(adaptive.get("score", 0) or 0) * 100
+                # BUG FIX: AdaptiveDecisionEngine.decide()'s "score" field is a
+                # raw confluence point-total (docstring example: score=8.5) —
+                # NOT a 0-1 confidence fraction. Multiplying it by 100 produced
+                # nonsensical aggregate-confidence inputs like 180% (prod log:
+                # score=1.80 -> 180%), inflating the weighted-average aggregate
+                # confidence even when the engine's own label was "Low". Reuse
+                # the Low/Medium/High label mapping instead of rescaling score.
+                a_score = _label_conf.get(adaptive.get("confidence", "Low"), 30.0)
                 sources.append(("adaptive_decision", a_score, 1.0, a_action in ("BUY", "SELL")))
 
         # ── EXECUTION-PROOF AUDIT FIX: wire previously-dead outputs ──
