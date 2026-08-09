@@ -1,0 +1,2 @@
+2026-08-09 01:53:15,997 - root - INFO - [Backtest] Unified engine — pairs=['EURJPY'] timeframe=H1 balance=$10000.0
+2026-08-09 01:53:17,098 - indicators - INFO - All indicators added successfully | Total columns: 25

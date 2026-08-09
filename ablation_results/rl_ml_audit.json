@@ -1,0 +1,1987 @@
+{
+  "generated_at": "2026-08-08T20:36:04+00:00",
+  "ml_models": {
+    "expected_pair_count": 48,
+    "trained_pair_count": 43,
+    "missing_pairs": [
+      "USDCNH",
+      "USDHKD",
+      "USDSGD",
+      "USDMXN",
+      "USDTHB"
+    ],
+    "incomplete_pairs": [
+      {
+        "pair": "MXNJPY",
+        "missing": [
+          "random_forest"
+        ]
+      }
+    ],
+    "per_pair": {
+      "AUDCAD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 550293,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 240138,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 18301437,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 579447,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "AUDCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 397356,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 81523,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19942109,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 511583,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "AUDJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 343999,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 102244,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21828125,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 480959,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "AUDNZD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 314878,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17846,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 18979389,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 577375,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "AUDSGD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 498850,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 209021,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20670045,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 544115,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "AUDUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 435701,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 92040,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20025533,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 520391,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "CADCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 573734,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 113434,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21523293,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 575151,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "CADJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 328921,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17707,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22639309,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 470007,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "CHFJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 328927,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17818,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20933165,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 555434,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURAUD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 312089,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 49611,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21835693,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 524735,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURCAD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 430290,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 112744,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21567997,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 555482,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 380985,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 60132,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19646781,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 559791,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURGBP": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 717202,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 134319,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20805565,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 625487,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 486903,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 197350,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22291885,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 544091,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURNOK": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 772001,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 207765,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21213005,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 568460,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURNZD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 313721,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17806,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19161021,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 502847,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURSEK": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 1087413,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 554766,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21632765,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 767692,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "EURUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 318074,
+            "normalizer_exists": true,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 102260,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22684893,
+            "normalizer_exists": true,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 515580,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPAUD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 316577,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17859,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20585213,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 540095,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPCAD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 412288,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 102346,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21249085,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 551114,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 563489,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 81281,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21557789,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 546663,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 368702,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17830,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22203181,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 533495,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPNOK": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 1066920,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 345712,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21017469,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 570620,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPNZD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 309643,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17790,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19769629,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 529178,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPSEK": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 838679,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 344372,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20501261,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 610084,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "GBPUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 547536,
+            "normalizer_exists": true,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 112879,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22298221,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 528716,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "HKDJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 426956,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 60154,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21786941,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 496481,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "MXNJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "xgboost"
+        ],
+        "missing_types": [
+          "random_forest"
+        ],
+        "complete": false,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 591562,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 176562,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 606067,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "NZDCAD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 304743,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 39175,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19874877,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 599231,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "NZDCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 353968,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17859,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19339485,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 487527,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "NZDJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 369993,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 165326,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 21496189,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 472199,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "NZDSGD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 314399,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17858,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19495949,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 511639,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "NZDUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 324098,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 39139,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 19222797,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 485335,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "SGDJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 313856,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17854,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22791197,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 531297,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "USDCAD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 482686,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 102372,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20699613,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 737191,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "USDCHF": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 368502,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 60253,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 20838829,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 511631,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "USDJPY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 459821,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 70628,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 22345741,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 502871,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "USDTRY": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 1564304,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 829266,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 23975501,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 721882,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "USDZAR": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 587785,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 133522,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 23315149,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 511586,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "XAGUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 387863,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 60074,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 13682241,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 538302,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "XAUUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 419468,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 59965,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 17645837,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 612436,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "XPDUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 399666,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 102258,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 18006813,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 583586,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      },
+      "XPTUSD": {
+        "model_types_found": [
+          "catboost",
+          "lightgbm",
+          "random_forest",
+          "xgboost"
+        ],
+        "missing_types": [],
+        "complete": true,
+        "model_files": {
+          "xgboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 346208,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "lightgbm": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 70493,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "random_forest": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 18397181,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          },
+          "catboost": {
+            "model_pkl_exists": true,
+            "model_pkl_size": 581227,
+            "normalizer_exists": false,
+            "metadata_exists": true,
+            "issues": []
+          }
+        }
+      }
+    },
+    "issues": [],
+    "coverage_pct": 89.6
+  },
+  "rl_policy_store": {
+    "rl_policy_dir": "/home/z/my-project/download/forex-agent/ml/rl_policy",
+    "policy_files": [
+      {
+        "name": "ppo_forex_best.zip",
+        "size_bytes": 157821,
+        "meta": null
+      },
+      {
+        "name": "ppo_forex_latest.zip",
+        "size_bytes": 157810,
+        "meta": null
+      },
+      {
+        "name": "ppo_forex_latest_meta.json",
+        "size_bytes": 1218,
+        "meta": {
+          "episodes": 60000,
+          "win_rate": 0.017,
+          "avg_reward": -9140.96,
+          "trained_on": "2026-08-05T16:20:27.926499+00:00",
+          "timesteps": 200000,
+          "symbol": "GBPUSD",
+          "timeframe": "H1",
+          "engine_version": "v2",
+          "eval_history": [
+            {
+              "timestep": 10000,
+              "avg_eval_reward": 0.029999999329447746,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 0
+            },
+            {
+              "timestep": 20000,
+              "avg_eval_reward": 0.029999999329447746,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 0
+            },
+            {
+              "timestep": 30000,
+              "avg_eval_reward": 0.029999999329447746,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 0
+            },
+            {
+              "timestep": 40000,
+              "avg_eval_reward": 0.029999999329447746,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 0
+            },
+            {
+              "timestep": 50000,
+              "avg_eval_reward": -150.0,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 10
+            },
+            {
+              "timestep": 60000,
+              "avg_eval_reward": -150.0,
+              "avg_eval_pnl": 0.0,
+              "eval_win_rate": 0.0,
+              "eval_trades": 10
+            }
+          ],
+          "best_eval_reward": 0.03
+        }
+      }
+    ],
+    "latest_meta": {
+      "episodes": 60000,
+      "win_rate": 0.017,
+      "avg_reward": -9140.96,
+      "trained_on": "2026-08-05T16:20:27.926499+00:00",
+      "timesteps": 200000,
+      "symbol": "GBPUSD",
+      "timeframe": "H1",
+      "engine_version": "v2",
+      "eval_history": [
+        {
+          "timestep": 10000,
+          "avg_eval_reward": 0.029999999329447746,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 0
+        },
+        {
+          "timestep": 20000,
+          "avg_eval_reward": 0.029999999329447746,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 0
+        },
+        {
+          "timestep": 30000,
+          "avg_eval_reward": 0.029999999329447746,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 0
+        },
+        {
+          "timestep": 40000,
+          "avg_eval_reward": 0.029999999329447746,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 0
+        },
+        {
+          "timestep": 50000,
+          "avg_eval_reward": -150.0,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 10
+        },
+        {
+          "timestep": 60000,
+          "avg_eval_reward": -150.0,
+          "avg_eval_pnl": 0.0,
+          "eval_win_rate": 0.0,
+          "eval_trades": 10
+        }
+      ],
+      "best_eval_reward": 0.03
+    },
+    "quality_gate": {
+      "episodes": 60000,
+      "win_rate": 0.017,
+      "avg_reward": -9140.96,
+      "MIN_EPISODES_TO_TRUST": 5,
+      "MIN_WIN_RATE_TO_TRUST": 0.01,
+      "gate_passes": true,
+      "gate_passes_episodes": true,
+      "gate_passes_win_rate": true,
+      "audit_note": "rl_agent._passes_quality_gate() checks episodes + win_rate but NOT avg_reward. A model with avg_reward=-9140 (massive consistent losses) PASSES the gate as long as win_rate>=0.01 and episodes>=5. This is a SAFETY BUG \u2014 a catastrophically bad model can be loaded as 'trusted'."
+    },
+    "rl_training_status": {
+      "train_rl_script": "ml/train_rl.py",
+      "iterates_48_pairs": false,
+      "explanation": "ml/train_rl.py's CLI takes a single --pair arg and trains ONE pair per invocation. There is NO loop over config.SYMBOLS, NO progress.json / completed_pairs file, and NO --resume flag. If interrupted midway through a 48-pair batch, the next run has no way to know which pairs were already done \u2014 it would either start from pair 0 again or rely on the operator to pass the right --pair arg. This is a critical missing feature.",
+      "per_pair_model_files": false,
+      "explanation_per_pair": "train_rl.py saves to a SINGLE hardcoded path ml/rl_policy/ppo_forex_latest.zip regardless of --pair. Training GBPUSD then EURUSD OVERWRITES the same file. The meta JSON records the pair trained on, but the model file itself has no per-pair naming. There is NO way to have 48 separate RL policies loaded simultaneously.",
+      "progress_persistence": false,
+      "explanation_progress": "RLPolicyStore (_registry.json) tracks versions v1/v2/v3... but each version is a SNAPSHOT of whatever pair was last trained. There is no field for 'which pairs have been trained' \u2014 only 'what is the latest version'. A resume from interrupted 48-pair training is impossible.",
+      "corruption_detection": false,
+      "explanation_corruption": "RLPolicyStore.load_policy() only checks if the file exists at line 108-109 \u2014 it does NOT validate the .zip integrity, does NOT verify the model can be deserialized, and does NOT compare the meta's pair field to the requested pair. A truncated/corrupt .zip would silently fail at PPO.load() time inside rl_agent.load_model(), which is wrapped in try/except and falls back to heuristic mode \u2014 hiding the corruption from the operator.",
+      "training_failure_logging": "partial",
+      "explanation_failure_logging": "train_rl_agent() returns {'error': ...} on data-load failure and logs stage errors at ERROR level. But the CLI exit code is always 0 (no sys.exit(non-zero) on training error), so a CI/cron wrapper cannot detect failure from exit code alone."
+    },
+    "issues": []
+  },
+  "model_loading_in_backtest": {
+    "findings": [
+      {
+        "check": "persistent_runner calls evaluate_decision_core",
+        "status": "PASS",
+        "evidence": "backtest/persistent_runner.py invokes trader.evaluate_decision_core(market_out, session_ctx)"
+      },
+      {
+        "check": "evaluate_decision_core invokes AnalysisAgent.run",
+        "status": "PASS",
+        "evidence": "core/trader.py evaluate_decision_core calls self._analysis.run(market_out)"
+      },
+      {
+        "check": "AnalysisAgent imports ml.model_predictor",
+        "status": "PASS",
+        "evidence": "agents/analysis_agent.py imports ModelPredictor (Day 69 ML ensemble)"
+      },
+      {
+        "check": "AnalysisAgent imports ml.rl_agent",
+        "status": "PASS",
+        "evidence": "agents/analysis_agent.py imports RLAgent (Day 71 RL filter)"
+      },
+      {
+        "check": "RLAgent loads ppo_forex_latest.zip via PPO.load",
+        "status": "PASS",
+        "evidence": "ml/rl_agent.py load_model() calls PPO.load(model_path) on the singleton init"
+      },
+      {
+        "check": "stable_baselines3 available for PPO.load",
+        "status": "WARN",
+        "evidence": "stable_baselines3 is NOT installed in this env \u2014 RLAgent._check_sb3() returns False, load_model() returns False immediately, and predict() falls back to the heuristic path (source='heuristic'). The 'loaded' RL model has ZERO effect on trading decisions. Check that the production env has stable_baselines3 + torch installed.",
+        "sb3_available": false
+      },
+      {
+        "check": "RL model pair matches backtest pair",
+        "status": "FAIL",
+        "evidence": "The single existing PPO model was trained on GBPUSD H1, but ml/rl_agent.get_rl_agent() is a SINGLETON with NO pair-awareness. When backtesting EURUSD H1, this GBPUSD-H1 model is loaded and its predict() output is fed into DecisionAgent's weighted vote as the 'rl_agent' signal. This is a SILENT PAIR MISMATCH \u2014 the model has never seen EURUSD H1 features during training, so its predictions are essentially noise dressed up as RL wisdom. Either train per-pair models (with per-pair filenames) or skip RL load entirely when the current pair != trained_on pair.",
+        "trained_on_pair": "GBPUSD",
+        "trained_on_timeframe": "H1",
+        "audit_finding": "The single existing PPO model was trained on GBPUSD H1, but ml/rl_agent.get_rl_agent() is a SINGLETON with NO pair-awareness. When backtesting EURUSD H1, this GBPUSD-H1 model is loaded and its predict() output is fed into DecisionAgent's weighted vote as the 'rl_agent' signal. This is a SILENT PAIR MISMATCH \u2014 the model has never seen EURUSD H1 features during training, so its predictions are essentially noise dressed up as RL wisdom. Either train per-pair models (with per-pair filenames) or skip RL load entirely when the current pair != trained_on pair."
+      },
+      {
+        "check": "ModelPredictor falls back to data/trained_models/ when memory/ml_models empty",
+        "status": "PASS",
+        "evidence": "ModelPredictor._load_models() first checks memory/ml_models/{PAIR}_{TF}/ (empty in this repo \u2014 that dir is gitignored). If empty AND caller passes df_recent, falls back to _predict_institutional() which globs data/trained_models/{PAIR}/*/production/metadata.json. WARNING: AnalysisAgent passes df_recent (verified in source) so the fallback IS active \u2014 but only for pairs that have a 'production/' subdir, which is NOT how train_historical.py saves them (it saves directly to {PAIR}/{model_type}/, no production/ subdir). The institutional fallback therefore NEVER finds a model and ML ensemble returns NOT_READY \u2014 silently degrading to rule-based logic."
+      },
+      {
+        "check": "data/trained_models/EURUSD/xgboost/production/ subdir exists",
+        "status": "FAIL",
+        "evidence": "model_predictor._predict_institutional() looks for data/trained_models/{PAIR}/*/production/metadata.json. EURUSD/xgboost/production/ exists: False. If False, the institutional fallback will NOT find the model even though it exists at data/trained_models/EURUSD/xgboost/model.pkl."
+      }
+    ],
+    "summary": {
+      "total": 9,
+      "pass": 6,
+      "warn": 1,
+      "fail": 2
+    }
+  },
+  "progress_persistence": {
+    "checks": [
+      {
+        "requirement": "Train RL iterates over all 48 pairs",
+        "status": "FAIL",
+        "evidence": "ml/train_rl.py CLI takes --pair (single) arg. There is NO loop over config.SYMBOLS. To train 48 pairs the operator must invoke train_rl.py 48 times manually, with no tracking of which were done."
+      },
+      {
+        "requirement": "ML retraining iterates over all 48 pairs",
+        "status": "PASS",
+        "evidence": "ai/automated_retraining._retrain_models() loops over self.config.FOREX_PAIRS (which == config.SYMBOLS, 48 pairs)."
+      },
+      {
+        "requirement": "Progress persistence file exists",
+        "status": "FAIL",
+        "evidence": "ai/automated_retraining.py has NO progress.json, NO completed_pairs set, NO --resume flag. If interrupted midway, the next run starts from pair 0 again \u2014 retraining already-trained pairs."
+      },
+      {
+        "requirement": "Progress printed as '0/48' \u2192 '48/48'",
+        "status": "FAIL",
+        "evidence": "Neither ml/train_rl.py nor ai/automated_retraining.py prints 'Training pairs: N/48' progress. The operator has no way to see at-a-glance how far through the 48-pair batch the training is."
+      },
+      {
+        "requirement": "'Training pairs: N/48' pattern anywhere in codebase",
+        "status": "FAIL",
+        "evidence": "Pattern not found anywhere. The user's expected progress output is NOT implemented."
+      }
+    ],
+    "summary": {
+      "total": 5,
+      "pass": 1,
+      "fail": 4
+    }
+  }
+}

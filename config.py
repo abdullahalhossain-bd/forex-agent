@@ -136,11 +136,12 @@ SYMBOLS = [
     "AUDSGD", "NZDSGD",          # Singapore Dollar crosses
     "SGDJPY",                    # HK/Singapore cross (CADHKD removed 2026-07-23 — same fetch-failure issue)
     "HKDJPY", "MXNJPY",          # HK/Mexico Yen crosses
-    # ── ASIA PACIFIC (7) ──
+    # ── ASIA PACIFIC (5) ──
     "USDCNH", "USDHKD", "USDSGD",  # China offshore, HK, Singapore
-    "USDMXN", "USDTHB",            # Mexico, Thailand            # Saudi Arabia, UAE
+    "USDMXN", "USDTHB",            # Mexico, Thailand
 ]
-# Total: 7 + 21 + 4 + 2 + 7 + 7 = 48 pairs
+# Total: 7 + 21 + 4 + 2 + 9 + 5 = 48 pairs
+# (majors + minors + metals + exotic + additional crosses + Asia Pacific)
 # (11 pairs removed 2026-07-23: USOUSD, UKOUSD, BTCUSD, ETHUSD, LTCUSD,
 #  XRPUSD, US30USD, NAS100USD, SPX500USD, GER40USD, CADHKD — all were
 #  repeatedly failing "Could not fetch" / "NO_TRADE — Market data fetch
@@ -704,8 +705,10 @@ class Config:
     LOG_MAX_SIZE = LOG_MAX_SIZE
     LOG_BACKUP_COUNT = LOG_BACKUP_COUNT
 
-    # Forex pairs for scanner/data updater — full 28-pair universe
-    FOREX_PAIRS = SYMBOLS  # Reuse the SYMBOLS list (28 pairs)
+    # Forex pairs for scanner/data updater — full 48-pair universe
+    # (SYMBOLS is defined at module top: 7 majors + 21 minors + 4 metals
+    #  + 2 exotic + 9 additional crosses + 5 Asia Pacific = 48)
+    FOREX_PAIRS = SYMBOLS  # Reuse the SYMBOLS list (48 pairs)
 
     # Data update configuration
     DATA_UPDATE_TIME = "06:00"

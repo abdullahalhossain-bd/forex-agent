@@ -85,6 +85,20 @@ class RLAgent:
     # episodes=1, win_rate=0.0 for a "trained" policy.
     MIN_EPISODES_TO_TRUST = 5
     MIN_WIN_RATE_TO_TRUST = 0.01  # >0: must have won at least once, ever
+    # ── AUDIT FIX (2026-08-09) ──────────────────────────────────────────
+    # The existing quality gate checked episodes + win_rate but NOT
+    # avg_reward. The shipped ppo_forex_latest_meta.json records
+    # avg_reward=-9140.96 (massive consistent losses) with win_rate=0.017
+    # and 60000 episodes — and PASSES the old gate because all three
+    # thresholds were satisfied. Loading a model that consistently LOST
+    # money in training as "trusted" and then letting it vote on live
+    # trades is a safety bug. Add a hard floor on avg_reward: if the
+    # model's average reward during training was strongly negative, it
+    # has not learned a profitable policy and must NOT be loaded as
+    # trusted. Conservative threshold: any avg_reward < -10.0 (i.e.
+    # worse than losing ~$10/episode on a $10k account) is rejected.
+    # Existing model with avg_reward=-9140.96 will now correctly FAIL.
+    MAX_AVG_REWARD_TO_REJECT = -10.0
 
     def _load_policy_metadata(self, model_path: Path) -> Optional[Dict[str, Any]]:
         meta_path = model_path.parent / f"{model_path.stem}_meta.json"
@@ -102,11 +116,20 @@ class RLAgent:
             return False, "no training metadata found alongside model file — cannot verify quality, treating as unverified"
         episodes = meta.get("episodes", 0)
         win_rate = meta.get("win_rate", 0.0)
+        avg_reward = float(meta.get("avg_reward", 0.0) or 0.0)
         if episodes < self.MIN_EPISODES_TO_TRUST:
             return False, f"only {episodes} training episode(s) recorded (need >= {self.MIN_EPISODES_TO_TRUST}) — undertrained"
         if win_rate < self.MIN_WIN_RATE_TO_TRUST:
             return False, f"recorded win_rate={win_rate:.1%} in its own training run — no evidence this policy ever won"
-        return True, f"passed: {episodes} episodes, {win_rate:.1%} win_rate"
+        # AUDIT FIX: reject catastrophically-bad models (avg_reward << 0)
+        if avg_reward < self.MAX_AVG_REWARD_TO_REJECT:
+            return False, (
+                f"recorded avg_reward={avg_reward:.2f} in its own training run "
+                f"(threshold: > {self.MAX_AVG_REWARD_TO_REJECT}) — model consistently "
+                f"LOST money during training; loading it as 'trusted' would let an "
+                f"unprofitable policy vote on live trades"
+            )
+        return True, f"passed: {episodes} episodes, {win_rate:.1%} win_rate, avg_reward={avg_reward:.2f}"
 
     def load_model(self, model_path: Optional[Path] = None) -> bool:
         """Load a trained PPO model from disk."""

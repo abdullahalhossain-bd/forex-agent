@@ -271,7 +271,89 @@ class SymbolWorker:
         self._start_time: float | None = None
         self._bars_processed_since_start: int = 0
 
+        # ── AUDIT ADDITION (gate-ablation harness) ─────────────────────
+        # Read comma-separated gate names from env var FOREX_BYPASS_CHECKS.
+        # When unset/empty, behavior is byte-identical to baseline (no bypass).
+        # When set, the named gates are bypassed in TradePermission.check()
+        # for THIS run only — never persisted, never affects the live path.
+        # Valid names: see risk/trade_permission._BYPASS_CHECK_ALIASES
+        # (e.g. "Min confidence", "Session quality", "Confluence quality",
+        #  "Risk approved", "S/R zone alignment", "Valid signal",
+        #  "Trend alignment (regime)", or aliases like "min_confidence").
+        self._bypass_checks: set[str] = self._read_bypass_checks_from_env()
+        # Per-gate stats aggregated from perm_out["checks"] on EVERY bar that
+        # reached the permission stage. Records how often each gate passed
+        # vs failed, regardless of early-exit ordering — this is what the
+        # operator needs to judge "is this gate usefully filtering or just
+        # redundantly blocking?". NOT used by any trading decision.
+        self._gate_stats: dict[str, dict[str, int]] = {}
+        # Per-bar record of which gates blocked the trade (for the JSON
+        # result's "remaining_blockers" field). Reset each bar.
+        self._gate_first_blocker: str = ""
+
     # ── Setup ────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _read_bypass_checks_from_env() -> set[str]:
+        """Read FOREX_BYPASS_CHECKS env var (comma-separated gate names).
+
+        Returns an empty set when the env var is unset or empty — in that
+        case `bypass_checks` passed to `evaluate_decision_core()` is None-
+        equivalent and TradePermission runs every gate normally (baseline
+        behavior, byte-identical to pre-audit).
+
+        The env var is the ONLY way bypasses are injected — there is no
+        CLI flag, no config-file persistence, nothing written to disk.
+        This guarantees a bypass can ONLY be enabled by an explicit,
+        ephemeral env var on a single process invocation, and CANNOT
+        leak into the live trading path (which doesn't read this env var).
+        """
+        raw = os.environ.get("FOREX_BYPASS_CHECKS", "").strip()
+        if not raw:
+            return set()
+        names = {s.strip() for s in raw.split(",") if s.strip()}
+        log.warning(
+            f"[AUDIT] FOREX_BYPASS_CHECKS is set — bypassing {len(names)} gate(s): "
+            f"{sorted(names)}  (THIS RUN ONLY — does NOT affect live path)"
+        )
+        return names
+
+    def _record_gate_stats(self, perm_out: dict) -> None:
+        """Aggregate per-gate pass/fail counts from perm_out['checks'].
+
+        Called on every bar that reaches the permission stage (i.e. analysis
+        did not error, decision was BUY/SELL, risk approved). For each gate
+        listed in perm_out['checks'], increments:
+            self._gate_stats[gate_name]['passed'] += 1   (passed=True)
+            self._gate_stats[gate_name]['failed'] += 1   (passed=False)
+
+        Also records the FIRST failing gate (closest to top of the checks
+        list) as `self._gate_first_blocker` for this bar — useful for the
+        "remaining_blockers" field in the per-experiment JSON result.
+
+        IMPORTANT: this method is OBSERVATION-ONLY. It does not influence
+        any trading decision. The bypass itself happens inside
+        TradePermission.check() via the `bypass_checks` argument — this
+        method just records what the gate *would have* decided, so the
+        operator can compare bypass vs baseline.
+        """
+        checks = perm_out.get("checks") if isinstance(perm_out, dict) else None
+        if not isinstance(checks, list):
+            return
+        first_blocker = ""
+        for chk in checks:
+            if not isinstance(chk, dict):
+                continue
+            name = chk.get("check", "?")
+            passed = bool(chk.get("passed", False))
+            slot = self._gate_stats.setdefault(name, {"passed": 0, "failed": 0})
+            if passed:
+                slot["passed"] += 1
+            else:
+                slot["failed"] += 1
+                if not first_blocker:
+                    first_blocker = name
+        self._gate_first_blocker = first_blocker
 
     def _setup_provider_and_broker(self):
         """Build provider, broker, adapter. Called once at start or resume."""
@@ -433,7 +515,15 @@ class SymbolWorker:
                 "gmt_time": str(current_time),
                 "session_strategy": "n/a",
             }
-            core = trader.evaluate_decision_core(market_out, session_ctx)
+            # AUDIT: forward env-var-driven bypass_checks so TradePermission
+            # can skip the named gate(s) for THIS run only. When the env
+            # var is unset, self._bypass_checks is empty and the call is
+            # equivalent to the original `evaluate_decision_core(market_out,
+            # session_ctx)` — baseline behavior is preserved exactly.
+            bypass = self._bypass_checks or None
+            core = trader.evaluate_decision_core(
+                market_out, session_ctx, bypass_checks=bypass,
+            )
         except Exception as e:
             self.rejection_stats["engine_error"] += 1
             if self.verbose:
@@ -458,6 +548,13 @@ class SymbolWorker:
         if not risk_out.get("approved"):
             self.rejection_stats["risk_rejected"] += 1
             return
+
+        # AUDIT: record per-gate pass/fail BEFORE the early-exit on
+        # perm_out['allowed'] — this captures the FULL picture of which
+        # gates would have blocked the trade, even when the bypass
+        # flipped the final 'allowed' to True. Without this, an
+        # ablation run can't tell us which OTHER gates still failed.
+        self._record_gate_stats(perm_out)
 
         if not perm_out.get("allowed"):
             self.rejection_stats["permission_blocked"] += 1
@@ -693,6 +790,23 @@ class SymbolWorker:
         """Build the final stats dict for this symbol."""
         elapsed = (time.perf_counter() - self._start_time) if self._start_time else 0
         bars_per_sec = self._bars_processed_since_start / max(elapsed, 0.001)
+        trades = self.per_symbol_stats["trades"]
+        wins = self.per_symbol_stats["wins"]
+        losses = self.per_symbol_stats["losses"]
+        gross_profit = self.per_symbol_stats["gross_profit"]
+        gross_loss = self.per_symbol_stats["gross_loss"]
+        net_pnl = self.per_symbol_stats["net_pnl"]
+        # AUDIT: compute profit_factor + max_drawdown + average_trade here
+        # so the per-experiment JSON has the full metrics the operator
+        # asked for, without needing a separate metrics module.
+        profit_factor = (
+            round(gross_profit / abs(gross_loss), 4)
+            if gross_loss < 0 else 0.0
+        )
+        avg_trade = round(net_pnl / trades, 2) if trades > 0 else 0.0
+        # Max drawdown from the closed-trade equity curve (per-trade, not
+        # per-bar — simpler, conservative vs. intrabar drawdown)
+        max_dd = self._compute_max_drawdown()
         return {
             "symbol": self.symbol,
             "timeframe": self.timeframe,
@@ -700,17 +814,60 @@ class SymbolWorker:
             "bars_processed": self.cursor - self.warmup_bars,
             "elapsed_sec": round(elapsed, 2),
             "bars_per_sec": round(bars_per_sec, 2),
-            "trades": self.per_symbol_stats["trades"],
-            "wins": self.per_symbol_stats["wins"],
-            "losses": self.per_symbol_stats["losses"],
-            "win_rate": round(100.0 * self.per_symbol_stats["wins"] / max(self.per_symbol_stats["trades"], 1), 2),
-            "gross_profit": round(self.per_symbol_stats["gross_profit"], 2),
-            "gross_loss": round(self.per_symbol_stats["gross_loss"], 2),
-            "net_pnl": round(self.per_symbol_stats["net_pnl"], 2),
+            "trades": trades,
+            "wins": wins,
+            "losses": losses,
+            "win_rate": round(100.0 * wins / max(trades, 1), 2),
+            "gross_profit": round(gross_profit, 2),
+            "gross_loss": round(gross_loss, 2),
+            "net_pnl": round(net_pnl, 2),
+            "profit_factor": profit_factor,
+            "max_drawdown": round(max_dd, 2),
+            "average_trade": avg_trade,
             "final_balance": round(self.broker.get_balance() if self.broker else self.starting_balance, 2),
             "rejection_stats": dict(self.rejection_stats),
+            # AUDIT: per-gate pass/fail counts (only for bars that reached
+            # the permission stage). Lets the operator see which gates
+            # blocked trades even when a bypass was active.
+            "gate_stats": dict(self._gate_stats),
+            # AUDIT: which gates were bypassed in this run (empty for baseline)
+            "bypassed_gates": sorted(self._bypass_checks),
+            "blocked_trades": (
+                self.rejection_stats.get("permission_blocked", 0)
+                + self.rejection_stats.get("risk_rejected", 0)
+                + self.rejection_stats.get("WAIT", 0)
+                + self.rejection_stats.get("NO_TRADE_ANALYSIS", 0)
+            ),
             "completed": self.cursor >= self.total_bars,
         }
+
+    def _compute_max_drawdown(self) -> float:
+        """Compute max drawdown from the closed-trade equity curve.
+
+        Walks the persisted trades JSONL for this symbol, reconstructs the
+        equity curve (starting_balance + cumulative pnl_usd per closed
+        trade), and returns the largest peak-to-trough drop as a positive
+        number. Returns 0.0 if no trades or no JSONL (e.g. SKIP-ANALYSIS
+        mode where no trades were opened).
+        """
+        try:
+            trades = list(self.run_dir.read_trades(self.symbol))
+        except Exception:
+            return 0.0
+        if not trades:
+            return 0.0
+        equity = self.starting_balance
+        peak = equity
+        max_dd = 0.0
+        for t in trades:
+            pnl = float(t.get("pnl_usd", 0.0))
+            equity += pnl
+            if equity > peak:
+                peak = equity
+            dd = peak - equity
+            if dd > max_dd:
+                max_dd = dd
+        return max_dd
 
 
 # ── Multi-symbol runner ──────────────────────────────────────────────────

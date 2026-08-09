@@ -764,26 +764,44 @@ class AITrader:
                 pass
 
             if not sizing.approved and _test_mode_sizer:
-                log.info(
-                    f"[Day 76 Sizer] REJECTED {self.symbol} {direction} — {sizing.reject_reason} — "
-                    f"BUT TEST_MODE=true, force-approving with lot=0.01"
-                )
-                risk_out["approved"] = True
-                risk_out["lot"] = 0.01
-                try:
-                    from core.constants import get_live_pip_value_per_lot
-                    mt5_conn = self._resolve_mt5_connection() if hasattr(self, "_resolve_mt5_connection") else None
-                    _pip_value = get_live_pip_value_per_lot(self.symbol, mt5_conn=mt5_conn)
-                except Exception:
+                # ── SAFETY GUARD (2026-08-09 audit) ───────────────────────
+                # TEST_MODE force-approve exists ONLY for MT5 connectivity /
+                # integration testing on demo accounts. It must NEVER fire
+                # when execution_mode == "mt5_live" — that would bypass risk
+                # management on a REAL-MONEY account. Fail-closed: if the
+                # operator somehow has TEST_MODE=true AND mt5_live, log a
+                # CRITICAL error and respect the sizer's rejection.
+                # This guard is purely additive — when execution_mode !=
+                # "mt5_live", behavior is byte-identical to pre-audit.
+                if self.execution_mode == "mt5_live":
+                    log.error(
+                        f"[SAFETY] {self.symbol} — TEST_MODE=true force-approve "
+                        f"REFUSED in mt5_live mode (real-money). Sizer rejection "
+                        f"stands: {sizing.reject_reason}. Set TEST_MODE=false "
+                        f"before trading live."
+                    )
+                else:
+                    log.info(
+                        f"[Day 76 Sizer] REJECTED {self.symbol} {direction} — {sizing.reject_reason} — "
+                        f"BUT TEST_MODE=true, force-approving with lot=0.01 "
+                        f"(execution_mode={self.execution_mode} — DEMO/backtest only)"
+                    )
+                    risk_out["approved"] = True
+                    risk_out["lot"] = 0.01
                     try:
-                        from core.constants import get_pip_value_usd
-                        _pip_value = get_pip_value_usd(self.symbol)
+                        from core.constants import get_live_pip_value_per_lot
+                        mt5_conn = self._resolve_mt5_connection() if hasattr(self, "_resolve_mt5_connection") else None
+                        _pip_value = get_live_pip_value_per_lot(self.symbol, mt5_conn=mt5_conn)
                     except Exception:
-                        _pip_value = 10.0  # last-resort fallback ~EURUSD pip value
-                _sl_pips = float(risk_out.get("sl_pips", 30) or 30)
-                risk_out["risk_usd"] = round(0.01 * _sl_pips * _pip_value, 2)
-                risk_out["risk_pc"] = 1.0
-                risk_out["reject_reason"] = None
+                        try:
+                            from core.constants import get_pip_value_usd
+                            _pip_value = get_pip_value_usd(self.symbol)
+                        except Exception:
+                            _pip_value = 10.0  # last-resort fallback ~EURUSD pip value
+                    _sl_pips = float(risk_out.get("sl_pips", 30) or 30)
+                    risk_out["risk_usd"] = round(0.01 * _sl_pips * _pip_value, 2)
+                    risk_out["risk_pc"] = 1.0
+                    risk_out["reject_reason"] = None
             elif not sizing.approved:
                 log.info(
                     f"[Day 76 Sizer] REJECTED {self.symbol} {direction} — {sizing.reject_reason}"

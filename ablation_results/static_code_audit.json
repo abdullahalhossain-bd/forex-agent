@@ -1,0 +1,2189 @@
+{
+  "generated_at": "2026-08-08T20:36:05+00:00",
+  "files_scanned": [
+    "backtest/persistent_runner.py",
+    "backtest/unified_engine.py",
+    "backtest/broker_sim.py",
+    "backtest/gating_bridge.py",
+    "backtest/symbol_specs.py",
+    "core/trader.py",
+    "core/csv_data_provider.py",
+    "core/data_provider.py",
+    "core/execution_adapter.py",
+    "core/constants.py",
+    "core/devils_advocate.py",
+    "core/regime_suppression.py",
+    "core/signal_persistence.py",
+    "core/confidence_manager.py",
+    "core/confidence_breakdown.py",
+    "core/signal_scorer.py",
+    "core/entry_safety_filters.py",
+    "core/master_decision.py",
+    "core/fusion_engine_v3.py",
+    "agents/analysis_agent.py",
+    "agents/decision_agent.py",
+    "agents/market_agent.py",
+    "risk/trade_permission.py",
+    "risk/risk_engine.py",
+    "risk/live_risk_manager.py",
+    "risk/usd_tp_sl_calculator.py",
+    "risk/atr_risk_manager.py",
+    "risk/strict_risk_manager.py",
+    "risk/position_sizer.py",
+    "risk/position_allocator.py",
+    "risk/correlation_manager.py",
+    "risk/drawdown_controller.py",
+    "risk/kill_switch.py",
+    "risk/circuit_breaker.py",
+    "risk/trade_frequency.py",
+    "risk/entry_quality_guardrails.py",
+    "risk/confirmation_bias_defense.py",
+    "risk/revenge_trading_detector.py",
+    "risk/book_guardrails.py",
+    "risk/advanced_risk_orchestrator.py",
+    "learning/confidence_engine.py",
+    "ml/rl_agent.py",
+    "ml/rl_policy_store.py",
+    "ml/model_predictor.py",
+    "ml/model_store.py",
+    "ml/ensemble.py",
+    "ml/feature_engineer.py",
+    "ml/confidence_fusion.py",
+    "execution/paper_trader.py",
+    "execution/simulated_executor.py",
+    "broker/spread_monitor.py",
+    "data/fetcher.py",
+    "data/indicators.py",
+    "data/indicators_ext.py",
+    "data/indicator_registry.py",
+    "analysis/market_regime.py",
+    "analysis/support_resistance.py",
+    "analysis/stop_hunt_direct_lane.py",
+    "analysis/timeframe.py",
+    "analysis/session_analyzer.py",
+    "main.py",
+    "config.py",
+    "utils/logger.py"
+  ],
+  "files_missing": [
+    "execution/order_manager.py",
+    "analysis/confluence_engine.py"
+  ],
+  "total_findings": 73,
+  "by_severity": {
+    "CRITICAL": 5,
+    "HIGH": 22,
+    "MEDIUM": 14,
+    "LOW": 8,
+    "INFO": 21,
+    "PASS": 3
+  },
+  "findings": {
+    "bare_excepts": [],
+    "silent_fallbacks": [
+      {
+        "file": "backtest/persistent_runner.py",
+        "line": 117,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "rt HistoricalExecutionAdapter except Exception:     HistoricalExecutionAdapter = None  # will create a minimal fallback below   # \u2500\u2500 Graceful shutdown handler \u2500"
+      },
+      {
+        "file": "backtest/persistent_runner.py",
+        "line": 527,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "bypass,             )         except Exception as e:             self.rejection_stats[\"engine_error\"] += 1             if self.verbose:                 log.debu"
+      },
+      {
+        "file": "backtest/unified_engine.py",
+        "line": 118,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "        return obj.item()     except Exception:         pass     try:         return str(o"
+      },
+      {
+        "file": "backtest/broker_sim.py",
+        "line": 165,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": " spread_monitor unavailable \u2014 fail open (don't block backtest        "
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 86,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ENGINE = ConfidenceEngine     except Exception as e:         log.warning(             f\"[BacktestGate] ConfidenceEngine import failed \u2014 gate will \"             "
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 330,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                )             except Exception as e:                 log.debug(f\"[BacktestGate] LRM error (no"
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 381,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "meframe, regime, won)         except Exception as e:             log.debug(f\"[BacktestGate] record_outcom"
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 390,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "e_result(won=won)             except Exception as e:                 log.debug(f\"[BacktestGate] LRM record_tr"
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 403,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "sed_trades, win_rate)         except Exception as e:             log.debug(f\"[BacktestGate] maybe_promote"
+      },
+      {
+        "file": "backtest/gating_bridge.py",
+        "line": 332,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "ing): {e}\")                 # Fail-open in backtest (don't block the "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 72,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "dule     MT5_AVAILABLE = True except (ImportError, OSError, Exception):     MT5_AVAILABLE = False     _mt5_module = None  # \u2500\u2500 Runtime infrastructure (Day 37+ r"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 3899,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "tonomous_trader\")             except Exception as e:                 log.warning(f\"Suppressed exception at line 1779: {e}\")                 pass          try:  "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 3944,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "symbols))                     except Exception as e:                         log.warning(f\"Suppressed exception at line 1801: {e}\")                         pass"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 3988,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ns())                         except Exception:                             pass                     weekend_check = should_close_for_weekend(_weekend_positions"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4041,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " continue                     except Exception:                         pass                      trader = self.traders.get(symbol) or self._spawn_trader(symbol"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4146,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "o {dst}\")                     except Exception as e:                         log.warning(f\"[System] DB backup failed: {e}\")                  # KILL SHOT FIX: Em"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 703,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "                              except Exception:                                             pass                              "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 1614,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ")                             except Exception:                                 pass                             i"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 1973,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "e data\"))                     except Exception:                         pass                     result = "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 2001,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "etAgent\")                     except Exception:                         pass                     result = "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 2088,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ng\"))                         except Exception:                             pass                         resul"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 2462,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "\"\\n\")                         except Exception:                             pass  # best-effort spool; do not "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 3332,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "close\"].iloc[-1])             except Exception:                 pass         if _price is None:   "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 3988,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ns())                         except Exception:                             pass                     weekend_c"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4013,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "                              except Exception:                                             pass                              "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4023,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ")                             except Exception:                                 pass                     elif week"
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4041,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": " continue                     except Exception:                         pass                      trader ="
+      },
+      {
+        "file": "core/trader.py",
+        "line": 4175,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "                              except Exception:                                             pass                              "
+      },
+      {
+        "file": "core/trader.py",
+        "line": 859,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "s e:             # Audit fix (fail-open risk bug): this used to log a"
+      },
+      {
+        "file": "core/csv_data_provider.py",
+        "line": 90,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ROJECT_ROOT) / \"data\"         except Exception:             data_dir = Path(__file__).resolve().parents[1] / \"data\"      sym = symbol.upper()     tf = timeframe"
+      },
+      {
+        "file": "core/csv_data_provider.py",
+        "line": 483,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " \"confidence\": \"LOW\"}         except Exception as e:             log.debug(f\"[CSVProvider] MTF bias compu"
+      },
+      {
+        "file": "core/data_provider.py",
+        "line": 144,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " = _get_ctx(df_slice)         except Exception as e_registry:             log.warning(f\"[HistoricalMT5Provider] indicator_registry unavailable \"                "
+      },
+      {
+        "file": "core/data_provider.py",
+        "line": 259,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "RAL\", \"LOW\"))                 except Exception:                     continue              if not bias_votes:                 return {\"bias\": \"NEUTRAL\", \"confide"
+      },
+      {
+        "file": "core/devils_advocate.py",
+        "line": 226,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "s, client=client)             except Exception:                 pass             return resp.choic"
+      },
+      {
+        "file": "core/devils_advocate.py",
+        "line": 245,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "s, client=client)             except Exception:                 pass             return resp.text "
+      },
+      {
+        "file": "core/devils_advocate.py",
+        "line": 31,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "d concerns are strong       - Fail-open by default so trading is not "
+      },
+      {
+        "file": "core/devils_advocate.py",
+        "line": 46,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "d: review() already         # fail-opens to EXECUTE when the LLM prov"
+      },
+      {
+        "file": "core/devils_advocate.py",
+        "line": 110,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "0, [], \"Reviewer unavailable; fail-open\", [])      def _should_run(se"
+      },
+      {
+        "file": "core/master_decision.py",
+        "line": 42,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": ": define `log` BEFORE the try/except that uses # it. Previously, if the `analysis.decision_bridge` import failed, the # except block tried to call `log.debug(.."
+      },
+      {
+        "file": "core/master_decision.py",
+        "line": 205,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "col} {col_type}\")             except Exception as e:                 log.debug(f\"[MasterDecision] DB migratio"
+      },
+      {
+        "file": "core/master_decision.py",
+        "line": 281,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "_available = True             except Exception as e:                 log.warning(f\"[MasterDecision] StrategySelector failed: {e}\")                 strategy_choi"
+      },
+      {
+        "file": "core/master_decision.py",
+        "line": 515,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                )             except Exception as _e_adaptive_run:                 log.debug(f\"[MasterDecision] Adaptive ad"
+      },
+      {
+        "file": "core/master_decision.py",
+        "line": 544,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "on_id = cur.lastrowid         except Exception as e:             log.debug(f\"[MasterDecision] DB save fai"
+      },
+      {
+        "file": "core/fusion_engine_v3.py",
+        "line": 406,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "tc - ts).total_seconds())     except (TypeError, ValueError):         pass      # ISO string     try:   "
+      },
+      {
+        "file": "core/fusion_engine_v3.py",
+        "line": 415,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "tc - ts).total_seconds())     except (TypeError, ValueError):         pass      return 0.0 "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 76,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "in.append((stage, value))     except Exception:         pass   def _apply_confidence_penalty(signal_result: dict, amount: float, reason: str, source: str = \"ana"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 467,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "compute             )         except Exception as e:             log.warning(f\"[AnalysisAgent] Advanced Patterns error: {e}\")          # \u2500\u2500 4. Fibonacci Engine "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 531,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "\", []),             }         except Exception as e:             log.debug(f\"[AnalysisAgent] Trendline en"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 544,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "pply\"),             }         except Exception as e:             log.debug(f\"[AnalysisAgent] Supply/Deman"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 557,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ontext,             }         except Exception as e:             log.debug(f\"[AnalysisAgent] Volume confi"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 585,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "_result             )         except Exception as e:             log.warning(f\"[AnalysisAgent] Currency Strength Engine error: {e}\")          # \u2500\u2500 7. Sentiment "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 675,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ext(structure_result)         except Exception as e:             log.warning(f\"[AnalysisAgent] Market Structure error: {e}\")          # \u2500\u2500 8.15 FollowThroughEng"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 713,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "xt(divergence_result)         except Exception as e:             log.warning(f\"[AnalysisAgent] Divergence Engine error: {e}\")          # \u2500\u2500 8.3 Ichimoku Engine "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 763,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "xt(volatility_result)         except Exception as e:             log.warning(f\"[AnalysisAgent] Volatility Engine error: {e}\")          # \u2500\u2500 8.5 Volume Profile ("
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 801,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " not set \u2014 skipping\")         except Exception as e:             log.warning(f\"[AnalysisAgent] NewsAPI provider error: {e}\")          # \u2500\u2500 Day 63: Re-run Sessio"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 878,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " df_h4 = None                 except Exception as _h4_csv_err:                     log.debug(f\"[AnalysisAgent] H4 CSV load "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 888,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "4)} candles\")                 except Exception as _h4_err:                     log.debug(f\"[AnalysisAgent] H4 fetch for"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 898,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "mtf_structure_result)         except Exception as e:             log.warning(f\"[AnalysisAgent] MTF Structure error: {e}\")          # \u2500\u2500 8.85 Economic Calendar ("
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1013,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "tion engine\")                 except Exception as _atr_err:                     log.debug(f\"[AnalysisAgent] ATR compute "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1019,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "t(correlation_result)         except Exception as e:             log.warning(f\"[AnalysisAgent] Correlation engine error: {e}\")          # \u2500\u2500 8.96 Institutional "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1856,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "re save failed: {e}\")         except Exception as e:             log.warning(f\"[AnalysisAgent] Day 68 FeatureEngineering failed: {e}\")             feature_vecto"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2444,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                    )         except Exception as _e_mtf:             log.debug(f\"[AnalysisAgent] MTF structur"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 76,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "in.append((stage, value))     except Exception:         pass   def _apply_confidence_penal"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 102,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ce\": new_conf,         })     except Exception:         pass   class AnalysisAgent:     \"\""
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 245,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "one = bool(TEST_MODE)         except Exception:             pass          if _skip_dead_zone a"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1006,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ".get(\"pair\")]                 except Exception:                     pass             # FIX: atr column"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1294,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ode = bool(TEST_MODE)         except Exception:             pass          rule_sig_raw = signa"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1583,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "rs(list(SYMBOLS))             except Exception:                 pass              # 1. Block check"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1668,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ce\"])                         except Exception:                             pass                 else:        "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1681,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "est.blocked_pairs             except Exception:                 pass         except Exception as e"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1718,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "est.blocked_pairs             except Exception:                 pass              decision = engin"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1783,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "n.confidence)                 except Exception:                     pass         except Exception as e"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1989,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "on_multiplier                 except Exception:                     pass                 log.info(    "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2152,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "on_multiplier                 except Exception:                     pass                 log.info(    "
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 31,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "):             atr = None     except (TypeError, ValueError):         atr = None      if atr is None:         # Same last-resort ratio analysis._engine_utils.at"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 1046,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "\", {}),             )         except Exception as e:             log.debug(f\"[DecisionAgent] Confidence b"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 558,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ode = bool(TEST_MODE)         except Exception:             pass          if _test_mode and fi"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 1205,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "te support)\")                 except Exception:                     pass                 reasons.appen"
+      },
+      {
+        "file": "agents/market_agent.py",
+        "line": 138,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "is_symbol_unavailable         except ImportError as exc:             if not _symbol_check_import_warning_logged:                 log.error(                     "
+      },
+      {
+        "file": "agents/market_agent.py",
+        "line": 283,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "i_context(df)                 except Exception as e_legacy:                     log.error(                         f\"[MarketAgent] All three indicator tiers fai"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 253,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "nified_engine's         # try/except caught as `engine_error` (46/150 bars on EURUSD). This         # silently killed evaluate_decision_core BEFORE the direct_l"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1260,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ent_entries[-50:]             except Exception:                 pass          # \u2500\u2500 ARCHITECTURAL F"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 526,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "# Day 97+ FIX: fail-safe (not fail-open). If news_ctx is empty/None  "
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 528,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "Previously defaulted to True (fail-open) which         # meant news A"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 973,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "n as _ev_e:                 # Fail-open (non-fatal), matching the pat"
+      },
+      {
+        "file": "risk/risk_engine.py",
+        "line": 45,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "(INITIAL_BALANCE)             except Exception:                 balance = 1000.0         self.balance = balance         self.symbol  = clean_symbol(symbol)     "
+      },
+      {
+        "file": "risk/risk_engine.py",
+        "line": 412,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ".unlink(tmp_path)             except (OSError, UnboundLocalError):                 pass             raise      def re"
+      },
+      {
+        "file": "risk/risk_engine.py",
+        "line": 396,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "lently treat as 'no history' (fail-open).         Now: write to temp "
+      },
+      {
+        "file": "risk/live_risk_manager.py",
+        "line": 66,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " get_max_trades_per_day()     except Exception:         return 20   def _build_tiers() -> dict:     \"\"\"Bug #14 fix: lazy TIERS construction.      Previously TIE"
+      },
+      {
+        "file": "risk/live_risk_manager.py",
+        "line": 374,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "                }             except Exception:                 pass          # Source 2: circuit "
+      },
+      {
+        "file": "risk/live_risk_manager.py",
+        "line": 392,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "                    }         except Exception:             pass          return None      def"
+      },
+      {
+        "file": "risk/position_sizer.py",
+        "line": 54,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "MAX_LOT = float(_CFG_MAX_LOT) except Exception as e:     # P1 fix (audit \u00a76): this used to fail silently to a hardcoded 0.20     # with only a code comment mark"
+      },
+      {
+        "file": "risk/drawdown_controller.py",
+        "line": 47,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "S_LIMIT_PCT = float(_CFG_DLL) except Exception as e:     # P0 fix: fail-closed on safety-critical config (mirrors circuit_breaker.py:54).     # Previously silen"
+      },
+      {
+        "file": "risk/drawdown_controller.py",
+        "line": 479,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ".unlink(tmp_path)             except (OSError, UnboundLocalError):                 pass             raise "
+      },
+      {
+        "file": "risk/kill_switch.py",
+        "line": 160,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ink(tmp_path)                 except OSError:                     pass      def check(         self,"
+      },
+      {
+        "file": "risk/kill_switch.py",
+        "line": 133,
+        "severity": "INFO",
+        "issue": "fail-open behavior documented in comment (intentional, but verify it's only backtest)",
+        "evidence": "Combined with         the old fail-open _load(), this would silently "
+      },
+      {
+        "file": "risk/circuit_breaker.py",
+        "line": 482,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "_seconds() / 3600             except ValueError:                 continue             if age_hours <= self.RESULTS_MAX_AGE_HOURS:                 fresh.append(e"
+      },
+      {
+        "file": "risk/circuit_breaker.py",
+        "line": 599,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ink(tmp_path)                 except OSError:                     pass             raise      def _s"
+      },
+      {
+        "file": "learning/confidence_engine.py",
+        "line": 528,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "n False, None                 except Exception:                     pass             return True, d.ge"
+      },
+      {
+        "file": "ml/rl_policy_store.py",
+        "line": 44,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ncoding=\"utf-8\"))             except Exception:                 pass         return {\"versions\": ["
+      },
+      {
+        "file": "ml/rl_policy_store.py",
+        "line": 96,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "h), str(latest_path))         except Exception:             pass          log.info(f\"[RLPolicy"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 181,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "t_proba(X)[0]                 except Exception:                     proba = None              label = {0: \"WAIT\", 1: \"BUY\", 2: \"SELL\"}.get(pred, \"WAIT\")        "
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 305,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "        return model          except Exception as e:             log.debug(f\"[Predictor] _try_load_newer_"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 327,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "      return True             except Exception:                 pass         return False      def is_ready(self, pair: Optional[str] = None, timeframe: str = \""
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 450,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "els_dict)                     except Exception:                         pass                 # One-shot suppression per pair/tf so we don't spam logs           "
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 471,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                )             except Exception as _diag_e:                 # Diagnostic failed \u2014 fall back to old generic message                 log.warning(  "
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 634,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "iction\"], proba)              except Exception as e:                 log.debug(f\"[Predictor] {model_type} pre"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 327,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "      return True             except Exception:                 pass         return False      def"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 450,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "els_dict)                     except Exception:                         pass                 # One-shot su"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 505,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "rocessor.transform(X)         except Exception:             pass  # scaler may not have all co"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 675,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "es)                 ]         except Exception:             pass          # Record ensemble pr"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 692,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "           c.commit()         except Exception:             pass      def _record_ensemble(sel"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 705,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "           c.commit()         except Exception:             pass      def update_actual_result"
+      },
+      {
+        "file": "ml/model_predictor.py",
+        "line": 717,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "           c.commit()         except Exception:             pass      def prediction_stats(sel"
+      },
+      {
+        "file": "ml/model_store.py",
+        "line": 109,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "      return self             except FileExistsError:                 try:                     age = time.time() - self.lock_path.stat().st_mtime               "
+      },
+      {
+        "file": "ml/model_store.py",
+        "line": 235,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ncoding=\"utf-8\"))             except Exception:                 pass         return {\"models\": {}}"
+      },
+      {
+        "file": "ml/ensemble.py",
+        "line": 357,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "_id = decision_id             except Exception as _e:                 log.debug(f\"[Ensemble] rules-only store "
+      },
+      {
+        "file": "ml/ensemble.py",
+        "line": 395,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "n_confidence\", 50.0))         except Exception:             min_conf = 50.0  # conservative fallback if config is unreadable         if decision_str in (\"BUY\", "
+      },
+      {
+        "file": "ml/ensemble.py",
+        "line": 524,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "_id, result, pnl_usd)         except Exception as e:             log.debug(f\"[Ensemble] outcome update fa"
+      },
+      {
+        "file": "ml/ensemble.py",
+        "line": 547,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "el_name, correct)             except Exception as e:                 log.debug(f\"[Ensemble] per-model perform"
+      },
+      {
+        "file": "ml/ensemble.py",
+        "line": 561,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                    )         except Exception as e:             log.debug(f\"[Ensemble] weight update fai"
+      },
+      {
+        "file": "ml/confidence_fusion.py",
+        "line": 92,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "nce(v, (int, float))}         except Exception:             pass         return {}      def up"
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 56,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " mt5     MT5_AVAILABLE = True except ImportError:     mt5 = None     MT5_AVAILABLE = False     log.info(         \"MetaTrader5 package not installed \u2014 DataFetche"
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 1584,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ata = resp.json()             except Exception as e:                 log.error(f\"[Polygon] response parse failed: {e}\")                 return None         exce"
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 1683,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ata = resp.json()             except Exception as e:                 log.error(f\"[Finnhub] response parse failed: {e}\")                 return None         exce"
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 438,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "     return \"mt5\"             except Exception:                 pass          # TradingView fallba"
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 497,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "    return \"yfinance\"         except ImportError:             pass          log.warning(        "
+      },
+      {
+        "file": "data/fetcher.py",
+        "line": 551,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "          return None         except Exception:             pass          log.info(f\"Fetching "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 146,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "]         return df_clean     except Exception:         return None   def _safe_set(df: pd.DataFrame, key: str, value) -> None:     \"\"\"Safely assign a pandas-ta"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 235,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " return cached.copy()         except Exception as e:             log.debug(f\"[IndicatorsExt] indicator_ca"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 274,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ash_k, df.copy())             except Exception as e:                 log.debug(f\"[IndicatorsExt] indicator_ca"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 312,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ume\"], length=20)             except Exception:                 pass          return df      # \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500     # M"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 350,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "w, close, length=14))         except Exception:             pass          # Rate of Change (ROC)         try:             _safe_set(df, \"roc_10\", ta.roc(close, "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 383,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "(df, \"uo\", uo_result)         except Exception as e:             log.debug(f\"[IndicatorsExt] UO failed: {"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 450,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "er\"]  = bb.iloc[:, 2]         except Exception as e:             log.debug(f\"[IndicatorsExt] BBands faile"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 460,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "er\"]  = kc.iloc[:, 2]         except Exception as e:             log.debug(f\"[IndicatorsExt] KC failed: {"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 469,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "per\"] = dc.iloc[:, 2]         except Exception as e:             log.debug(f\"[IndicatorsExt] DC failed: {"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 475,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ev(close, length=20))         except Exception:             pass          return df      # \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500     # VOLUM"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 575,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "us\"] = adx.iloc[:, 2]         except Exception as e:             log.debug(f\"[IndicatorsExt] ADX failed: "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 585,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "]  = aroon.iloc[:, 2]         except Exception as e:             log.debug(f\"[IndicatorsExt] Aroon failed"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 591,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "w, close, length=20))         except Exception as e:             log.debug(f\"[IndicatorsExt] CCI failed: "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 641,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "d (period={period})\")         except Exception as e:             log.debug(f\"[IndicatorsExt] Volume RSI f"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 662,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " = ich_df[col].values         except Exception as e:             log.debug(f\"[IndicatorsExt] Ichimoku fai"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 745,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "rns_renamed], axis=1)         except Exception as e:             log.debug(f\"[IndicatorsExt] Candlestick "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 170,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "      df[key] = value         except Exception:             pass   class ExtendedIndicators:  "
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 312,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ume\"], length=20)             except Exception:                 pass          return df      # \u2500\u2500\u2500"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 350,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "w, close, length=14))         except Exception:             pass          # Rate of Change (RO"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 357,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "oc(close, length=20))         except Exception:             pass          # MFI \u2014 Money Flow I"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 364,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ume\"], length=14)             except Exception:                 pass          # TSI \u2014 True Strengt"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 475,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "ev(close, length=20))         except Exception:             pass          return df      # \u2500\u2500\u2500"
+      },
+      {
+        "file": "data/indicators_ext.py",
+        "line": 536,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "lose, vol, length=20)         except Exception:             pass          return df      # \u2500\u2500\u2500"
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 92,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "return float(atr / price)     except Exception as e:         log.debug(f\"[SR] _atr_pct fallback to 0."
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 223,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ick_body_ratio * body         except Exception as e:             log.debug(f\"[SR] _is_valid_rejection fai"
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 258,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "l, \"shape\", None)             except Exception as _e:                 low_dtype = f\"error:{_e}\"                 low_shape = None             try:               "
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 271,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "                )             except Exception:                 # Best-effort instrumentation \u2014 do not raise                 log.debug(\"[SR-INSTR] _count_valid_"
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 297,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "rn int(np.sum(valid))         except Exception as e:             log.debug(f\"[SR] _count_valid_rejections"
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 844,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "f.calculate_pivot(df)         except Exception as e:             pivot = {}          # 4. Current price         current_price = float(df[\"close\"].iloc[-1])     "
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 18,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "swallowed by the surrounding `except Exception as _e_shdl: log.debug(...)` at line 1049-1050. As a "
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 172,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": " = engine.analyze(window)     except Exception as e:         log.debug(f\"[stop_hunt_direct_lane] engi"
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 230,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ance().analyze(sr_window)     except Exception as e:         log.debug(f\"[stop_hunt_direct_lane] S/R "
+      },
+      {
+        "file": "analysis/timeframe.py",
+        "line": 55,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "ness_available = True         except Exception as e:             log.debug(f\"MTF: staleness check unavail"
+      },
+      {
+        "file": "analysis/timeframe.py",
+        "line": 81,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "     continue                 except Exception as e:                     log.debug(f\"MTF: staleness check failed "
+      },
+      {
+        "file": "analysis/session_analyzer.py",
+        "line": 457,
+        "severity": "MEDIUM",
+        "issue": "exception caught but only logged at debug level (invisible in INFO logs)",
+        "evidence": "owed)\",             )         except Exception as e:             log.debug(f\"[SessionAnalyzer] confidence"
+      },
+      {
+        "file": "main.py",
+        "line": 213,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": ")             print()         except Exception:             pass          # Override config-dr"
+      },
+      {
+        "file": "main.py",
+        "line": 250,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": " router._mt5_conn             except Exception:                 pass             paper_trader = No"
+      },
+      {
+        "file": "main.py",
+        "line": 255,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "e(\"paper_trader\")             except Exception:                 pass             reconciled = reco"
+      },
+      {
+        "file": "main.py",
+        "line": 387,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "e=\"main\")                     except Exception:                         pass                     self._not"
+      },
+      {
+        "file": "main.py",
+        "line": 522,
+        "severity": "HIGH",
+        "issue": "silent except + pass (error swallowed with no logging)",
+        "evidence": "     loop.close()             except Exception:                 pass          # Tear down the runt"
+      }
+    ],
+    "lookahead": [
+      {
+        "file": "backtest/unified_engine.py",
+        "line": 222,
+        "severity": "PASS",
+        "issue": "iloc[:i+1] (correct causal slice \u2014 record as PASS)",
+        "evidence": "ahead: bar i only ever sees df.iloc[:i+1]. Confidence/risk/     sizing/"
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 44,
+        "severity": "PASS",
+        "issue": "iloc[:i+1] (correct causal slice \u2014 record as PASS)",
+        "evidence": ".py line 209) is the slice `df.iloc[:i+1]` for the current bar i. So df"
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 143,
+        "severity": "PASS",
+        "issue": "iloc[:i+1] (correct causal slice \u2014 record as PASS)",
+        "evidence": " is the no-look-ahead slice df.iloc[:i+1].         symbol: Trading pair"
+      }
+    ],
+    "pip_point_spread": [
+      {
+        "file": "backtest/symbol_specs.py",
+        "line": 34,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "rokerSimulator matches the rounding OrderManager # would have applied. # # Standard MT5 conventions: #   5-digit FX majors (EURUSD, GBPUSD, ...) \u2192 5 digits (point = 0.00001, pip = 0.0001) #   3-digit "
+      },
+      {
+        "file": "backtest/symbol_specs.py",
+        "line": 34,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "atches the rounding OrderManager # would have applied. # # Standard MT5 conventions: #   5-digit FX majors (EURUSD, GBPUSD, ...) \u2192 5 digits (point = 0.00001, pip = 0.0001) #   3-digit JPY crosses (USD"
+      },
+      {
+        "file": "backtest/symbol_specs.py",
+        "line": 34,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "he rounding OrderManager # would have applied. # # Standard MT5 conventions: #   5-digit FX majors (EURUSD, GBPUSD, ...) \u2192 5 digits (point = 0.00001, pip = 0.0001) #   3-digit JPY crosses (USDJPY, GBP"
+      },
+      {
+        "file": "backtest/symbol_specs.py",
+        "line": 42,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": " = 1.0,     pip = 0.01 \u2014 index pip varies by broker) DIGITS: dict[str, int] = {     # 5-digit FX majors     \"EURUSD\": 5, \"GBPUSD\": 5, \"AUDUSD\": 5, \"NZDUSD\": 5, \"USDCAD\": 5, \"USDCHF\": 5,     # 3-digit "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 25,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PIP_SIZE: dict[str, float] = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 26,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 PIP_SIZE: dict[str, float] = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 26,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": ": dict[str, float] = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBP"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 26,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": " = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   \"EUR"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 27,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "s     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   \"EURJPY\": 0.01,     \"AUD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 27,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   \"EURJPY\": 0.01,     \"AUDJPY\": 0.01,   \"NZD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 27,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   \"EURJPY\": 0.01,     \"AUDJPY\": 0.01,   \"NZDJPY\": 0.01,   \"CAD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 28,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "01,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   \"EURJPY\": 0.01,     \"AUDJPY\": 0.01,   \"NZDJPY\": 0.01,   \"CADJPY\": 0.01,     \"CHF"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 50,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "roximate) PIP_VALUE_USD: dict[str, float] = {     # USD majors (pip = 0.0001, lot = 100k)     \"EURUSD\": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 50,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "ajors (pip = 0.0001, lot = 100k)     \"EURUSD\": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 51,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "0.0001, lot = 100k)     \"EURUSD\": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 51,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "0k)     \"EURUSD\": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBP"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 51,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": ": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6.50, \"EUR"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 52,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": ".0, \"AUDUSD\": 10.0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6.50, \"EURJPY\": 6.50,     \"AUD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 52,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": ".0,     \"NZDUSD\": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6.50, \"EURJPY\": 6.50,     \"AUDJPY\": 6.50, \"NZD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 52,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": ": 10.0, \"USDCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6.50, \"EURJPY\": 6.50,     \"AUDJPY\": 6.50, \"NZDJPY\": 6.50, \"CAD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 53,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6.50, \"EURJPY\": 6.50,     \"AUDJPY\": 6.50, \"NZDJPY\": 6.50, \"CADJPY\": 6.50,     \"CHF"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 82,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "the duplicate-risk     # case shown in production logs (EURUSD BUY + GBPUSD BUY same session).     [\"EURUSD\", \"GBPUSD\", \"AUDUSD\", \"NZDUSD\"],   # USD-quoted (long foreign / short USD)     # BUGFIX: NZD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 82,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "icate-risk     # case shown in production logs (EURUSD BUY + GBPUSD BUY same session).     [\"EURUSD\", \"GBPUSD\", \"AUDUSD\", \"NZDUSD\"],   # USD-quoted (long foreign / short USD)     # BUGFIX: NZDJPY, CAD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 82,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "sk     # case shown in production logs (EURUSD BUY + GBPUSD BUY same session).     [\"EURUSD\", \"GBPUSD\", \"AUDUSD\", \"NZDUSD\"],   # USD-quoted (long foreign / short USD)     # BUGFIX: NZDJPY, CADJPY, CHF"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 84,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "GFIX: NZDJPY, CADJPY, CHFJPY are defined in PIP_SIZE/PIP_VALUE_USD     # above but were missing from this group, so the correlation filter     # could not catch duplicate-risk combinations such as USD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 85,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": "Y, CHFJPY are defined in PIP_SIZE/PIP_VALUE_USD     # above but were missing from this group, so the correlation filter     # could not catch duplicate-risk combinations such as USDJPY BUY +     # CAD"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 85,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": " PIP_SIZE/PIP_VALUE_USD     # above but were missing from this group, so the correlation filter     # could not catch duplicate-risk combinations such as USDJPY BUY +     # CADJPY BUY (both are \"long "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 191,
+        "severity": "INFO",
+        "issue": "JPY pair pip size handling detected (verify = 0.01)",
+        "evidence": " MT5 source (symbol_info(), which     always reports in the account's actual deposit currency/unit)     removes the mismatch entirely \u2014 this works correctly whether the     account is Standard, Cent, "
+      },
+      {
+        "file": "backtest/broker_sim.py",
+        "line": 36,
+        "severity": "INFO",
+        "issue": "DEFAULT_SPREAD_PIPS table \u2014 verify per-symbol values match live broker spreads",
+        "evidence": "{     \"EURUSD\": 1.5, \"GBPUSD\": 2.0, \"USDJPY\": 1.5, \"AUDUSD\": 1.8,     \"USDCAD\": 2.0, \"USDCHF\": 2.0, \"NZDUSD\": 2.0, \"XAUUSD\": 25.0, }"
+      },
+      {
+        "file": "risk/book_guardrails.py",
+        "line": 58,
+        "severity": "INFO",
+        "issue": "DEFAULT_SPREAD_PIPS table \u2014 verify per-symbol values match live broker spreads",
+        "evidence": "{     \"EURUSD\": 1.0, \"USDJPY\": 1.2, \"GBPUSD\": 1.5, \"USDCHF\": 1.8,     \"AUDUSD\": 1.5, \"USDCAD\": 2.0, \"NZDUSD\": 1.8,     \"XAUUSD\": 25.0,  # gold spread in pips (0.1 = 1 pip) }"
+      },
+      {
+        "file": "backtest/broker_sim.py",
+        "line": 53,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": " Replaces the old hardcoded     {JPY:0.01, XAUUSD:0.1, else:0.0001} table that was 10\u00d7 wrong for XAUUSD.     \"\"\"     return ge"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 23,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "P_SIZE: dict[str, float] = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 23,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "float] = {     # USD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 23,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "SD majors     \"EURUSD\": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 24,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"GBPUSD\": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 24,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"AUDUSD\": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 24,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001,     \"NZDUSD\": 0.0001, \"USDCAD\": 0.0001, \"USDCHF\": 0.0001,     # JPY crosses     \"USDJPY\": 0.01,   \"GBPJPY\": 0.01,   "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 30,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "0.01,     \"CHFJPY\": 0.01,     # Minor crosses     \"EURGBP\": 0.0001, \"EURAUD\": 0.0001, \"EURNZD\": 0.0001,     \"EURCAD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 30,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.01,     # Minor crosses     \"EURGBP\": 0.0001, \"EURAUD\": 0.0001, \"EURNZD\": 0.0001,     \"EURCAD\": 0.0001, \"EURCHF\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 30,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "r crosses     \"EURGBP\": 0.0001, \"EURAUD\": 0.0001, \"EURNZD\": 0.0001,     \"EURCAD\": 0.0001, \"EURCHF\": 0.0001,     \"GBPAUD\": 0.00"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 31,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"EURAUD\": 0.0001, \"EURNZD\": 0.0001,     \"EURCAD\": 0.0001, \"EURCHF\": 0.0001,     \"GBPAUD\": 0.0001, \"GBPNZD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 31,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"EURNZD\": 0.0001,     \"EURCAD\": 0.0001, \"EURCHF\": 0.0001,     \"GBPAUD\": 0.0001, \"GBPNZD\": 0.0001, \"GBPCAD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 32,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "0001,     \"EURCAD\": 0.0001, \"EURCHF\": 0.0001,     \"GBPAUD\": 0.0001, \"GBPNZD\": 0.0001, \"GBPCAD\": 0.0001,     \"GBPCHF\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 32,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"EURCHF\": 0.0001,     \"GBPAUD\": 0.0001, \"GBPNZD\": 0.0001, \"GBPCAD\": 0.0001,     \"GBPCHF\": 0.0001,     \"AUDCAD\": 0.00"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 32,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001,     \"GBPAUD\": 0.0001, \"GBPNZD\": 0.0001, \"GBPCAD\": 0.0001,     \"GBPCHF\": 0.0001,     \"AUDCAD\": 0.0001, \"AUDCHF\": 0.00"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 33,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"GBPNZD\": 0.0001, \"GBPCAD\": 0.0001,     \"GBPCHF\": 0.0001,     \"AUDCAD\": 0.0001, \"AUDCHF\": 0.0001, \"AUDNZD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 34,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "0001, \"GBPCAD\": 0.0001,     \"GBPCHF\": 0.0001,     \"AUDCAD\": 0.0001, \"AUDCHF\": 0.0001, \"AUDNZD\": 0.0001,     \"NZDCAD\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 34,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "0001,     \"GBPCHF\": 0.0001,     \"AUDCAD\": 0.0001, \"AUDCHF\": 0.0001, \"AUDNZD\": 0.0001,     \"NZDCAD\": 0.0001, \"NZDCHF\": 0.0001, "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 34,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001,     \"AUDCAD\": 0.0001, \"AUDCHF\": 0.0001, \"AUDNZD\": 0.0001,     \"NZDCAD\": 0.0001, \"NZDCHF\": 0.0001,     \"CADCHF\": 0.00"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 35,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"AUDCHF\": 0.0001, \"AUDNZD\": 0.0001,     \"NZDCAD\": 0.0001, \"NZDCHF\": 0.0001,     \"CADCHF\": 0.0001,     # Commodities "
+      },
+      {
+        "file": "core/constants.py",
+        "line": 35,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": ": 0.0001, \"AUDNZD\": 0.0001,     \"NZDCAD\": 0.0001, \"NZDCHF\": 0.0001,     \"CADCHF\": 0.0001,     # Commodities     \"XAUUSD\": 0.01"
+      },
+      {
+        "file": "core/constants.py",
+        "line": 36,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "0001,     \"NZDCAD\": 0.0001, \"NZDCHF\": 0.0001,     \"CADCHF\": 0.0001,     # Commodities     \"XAUUSD\": 0.01,   \"XAGUSD\": 0.001,  "
+      },
+      {
+        "file": "risk/usd_tp_sl_calculator.py",
+        "line": 249,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "USD ask = 1.1000 \u2192 TP = 1.1000 + 10/(100000*1.0) = 1.1000 + 0.0001 = 1.1001     tp = tp_long(\"EURUSD\", lot_size=1.0, usd_profi"
+      },
+      {
+        "file": "risk/usd_tp_sl_calculator.py",
+        "line": 254,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "    # EURUSD short SL for $10 loss at 1.1000: SL = 1.1000 + 0.0001 = 1.10010     sl = sl_short(\"EURUSD\", lot_size=1.0, usd_los"
+      },
+      {
+        "file": "risk/usd_tp_sl_calculator.py",
+        "line": 260,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "fit, ask=150.00     # TP = (1 + 10/(100000*1)) * 150 = (1 + 0.0001) * 150 = 150.015     tp = tp_long(\"USDJPY\", lot_size=1.0, u"
+      },
+      {
+        "file": "risk/usd_tp_sl_calculator.py",
+        "line": 268,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "    # TP = (0.8500 / 1.2500 + 10/100000) * 1.2500 = (0.68 + 0.0001) * 1.2500 = 0.850125     tp = tp_long(\"EURGBP\", lot_size=1."
+      },
+      {
+        "file": "risk/entry_quality_guardrails.py",
+        "line": 103,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": " 0.01     if sym == \"XAUUSD\":         return 0.1     return 0.0001   def _atr(df: pd.DataFrame, period: int = 14) -> float:   "
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 741,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": " there) while get_ai_context()         separately hardcoded 0.0001 for distance-to-support/resistance,         which is ~100x "
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 747,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "FDs use 1.0, all other         FX majors/crosses default to 0.0001.         \"\"\"         s = (symbol or \"\").upper()         if "
+      },
+      {
+        "file": "analysis/support_resistance.py",
+        "line": 1125,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "ed\" side of the level.         # FIX (C-3): was hardcoded / 0.0001, ~100x wrong on JPY pairs and         # wrong for XAUUSD/in"
+      },
+      {
+        "file": "analysis/stop_hunt_direct_lane.py",
+        "line": 112,
+        "severity": "LOW",
+        "issue": "hardcoded 0.0001 (may be pip size for non-JPY \u2014 verify not a magic number)",
+        "evidence": "AU\" in pair or \"XAG\" in pair:         return 0.1     return 0.0001   def _atr(df: pd.DataFrame, idx: int, period: int = ATR_PE"
+      }
+    ],
+    "duplicate_filters": [
+      {
+        "file": "(multiple)",
+        "line": 0,
+        "severity": "MEDIUM",
+        "issue": "confluence logic spread across 6 files \u2014 risk of duplicate/contradictory filters",
+        "evidence": "[{'file': 'backtest/gating_bridge.py', 'mentions': 11}, {'file': 'core/trader.py', 'mentions': 37}, {'file': 'agents/analysis_agent.py', 'mentions': 26}, {'file': 'agents/decision_agent.py', 'mentions': 19}, {'file': 'risk/entry_quality_guardrails.py', 'mentions': 36}]"
+      },
+      {
+        "file": "(multiple)",
+        "line": 0,
+        "severity": "MEDIUM",
+        "issue": "session quality logic in 6 files \u2014 verify no contradictions",
+        "evidence": "['core/trader.py', 'core/regime_suppression.py', 'core/signal_scorer.py', 'agents/decision_agent.py', 'risk/trade_permission.py', 'analysis/session_analyzer.py']"
+      }
+    ],
+    "backtest_live_mismatch": [
+      {
+        "file": "core/trader.py",
+        "line": 768,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "zer:                 # \u2500\u2500 SAFETY GUARD (2026-08-09 audit) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500                 # TEST_MODE force-approve exists ONLY for MT5 connectivity /                 # integration testing on demo accounts. It must NEVER fire                 # when execution_mode == \"mt5_live\" \u2014 that would b"
+      },
+      {
+        "file": "core/csv_data_provider.py",
+        "line": 47,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "y isolation (memory/_backtest/)   - Explicit backtest news bypass   - Real MTF bias computation   - TEST_MODE fix (institutional_backtest.py)  - The provider REUSES the same indicator chain (add_canonical_indicators \u2192   ExtendedIndicators \u2192 Indicators) as MarketAgent and HistoricalMT5Provider.   No "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 238,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "et_ai_context(session_result)          # Dead zone guard \u2014 trade block         # Day 81+ hotfix: in TEST_MODE, we bypass the dead zone so the         # bot actually places trades during off-hours for MT5 verification.         # Production should keep this block \u2014 dead zones are real risk.         _s"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 243,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "ad zones are real risk.         _skip_dead_zone = False         try:             from config import TEST_MODE             _skip_dead_zone = bool(TEST_MODE)         except Exception:             pass          if _skip_dead_zone and session_result[\"session_info\"][\"is_dead_zone\"]:             log.info("
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 244,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "ne = False         try:             from config import TEST_MODE             _skip_dead_zone = bool(TEST_MODE)         except Exception:             pass          if _skip_dead_zone and session_result[\"session_info\"][\"is_dead_zone\"]:             log.info(                 f\"[AnalysisAgent] \u26a0\ufe0f DEAD ZO"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 251,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "        f\"[AnalysisAgent] \u26a0\ufe0f DEAD ZONE at {session_ctx['gmt_time']} \u2014 \"                 f\"BYPASSED (TEST_MODE=true). Pipeline continues for MT5 testing.\"             )             # Mark session_ctx so downstream consumers know we're in dead-zone-bypass             session_ctx[\"dead_zone_bypassed\"] "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1283,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "gate adds: {\"blocked\": bool, \"reason\": str, \"details\": ...}         }          # Day 81+ AGGRESSIVE TEST_MODE: If TEST_MODE is true and the rule engine         # has a tradeable signal (BUY/SELL/STRONG_BUY/STRONG_SELL with conf >= 10),         # USE IT DIRECTLY. Skip ALL gates - MasterAnalyst/news/s"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1283,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "locked\": bool, \"reason\": str, \"details\": ...}         }          # Day 81+ AGGRESSIVE TEST_MODE: If TEST_MODE is true and the rule engine         # has a tradeable signal (BUY/SELL/STRONG_BUY/STRONG_SELL with conf >= 10),         # USE IT DIRECTLY. Skip ALL gates - MasterAnalyst/news/session/conflic"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1309,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "ized             log.info(                 f\"[AnalysisAgent] -> {final_signal} \"                 f\"(TEST_MODE AGGRESSIVE: Rule={rule_sig_raw} {rule_conf}% \u2014 \"                 f\"BYPASSING all gates for MT5 verification)\"             )              # \u2500\u2500 /DEBUG \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1398,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "ice,                 \"final_signal\":      final_signal,                 \"execution_filters\": {},  # TEST_MODE bypass \u2014 no execution gates applied                 \"test_mode_bypass\":  True,  # Flag for downstream debugging             }          # Day 63: Session dead zone / strategy gate         # A"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1553,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "   2. ADJUST confidence based on news bias alignment         #         # Day 81+ hotfix: previously TEST_MODE alone was enough to skip         # the news block. The news intelligence module fetches         # central-bank events from a hardcoded schedule which can produce         # false-positive \"CP"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1562,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": " 2026-07-20): `_skip_news_block` was being OR'd together with         # `_is_false_block` below, so TEST_MODE bypassed CONFIRMED real         # news-window blocks too, not just false positives \u2014 this session         # bypassed a genuine \"CPI 11min ago \u2014 post-event block window\"         # block 11 ti"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1567,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "se         # money in exactly the post-CPI volatility spike the block existed         # to prevent. TEST_MODE is for MT5 connectivity/integration         # testing friction, not for overriding a real detected news event.         # It no longer participates in the block/bypass decision at all \u2014      "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1604,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "the live-calendar safety check was a no-op. This is a separate,             # standing bug from the TEST_MODE bypass a few lines below (which             # is intentional and logged); this one silently fired even in live             # trading whenever `intelligence.news_ai` fell back to its hardcode"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1744,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "etup should not be traded. It must hard-block, and             # unlike softer quality tiers below, TEST_MODE must NOT bypass it:             # TEST_MODE exists to unblock false-positive/off-hours friction             # for MT5 connectivity testing, not to override an explicit             # do-not-t"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1745,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "k, and             # unlike softer quality tiers below, TEST_MODE must NOT bypass it:             # TEST_MODE exists to unblock false-positive/off-hours friction             # for MT5 connectivity testing, not to override an explicit             # do-not-trade verdict from the confluence engine itse"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1758,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": " 'failed validation'}) \u2014 signal downgraded \"                         f\"to NO TRADE (not bypassed by TEST_MODE)\"                     )                 elif _test_mode:                     log.info(                         f\"[AnalysisAgent] Day 67 Confluence: {final_signal} quality={decision.setup_qua"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1763,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "Confluence: {final_signal} quality={decision.setup_quality} \u2014 \"                         f\"BYPASSED (TEST_MODE=true)\"                     )                 else:                     _apply_confidence_penalty(signal_result, 6, \"confluence_quality\", \"analysis\")                     log.info(            "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1951,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "                       f\"{ensemble_decision.abstain_reason} \u2014 \"                         f\"BYPASSED (TEST_MODE=true), keeping {final_signal}\"                     )                 else:                     log.warning(                         f\"[AnalysisAgent] Day 70 Ensemble ABSTAINED: \"            "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2050,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "gent can VETO a trade \u2014 but only if confidence is very low (< 40%)             # Day 81+ hotfix: In TEST_MODE, never let RL VETO block a trade.             if final_signal in (\"BUY\", \"SELL\") and rl_action.action_name == \"HOLD\":                 if _test_mode:                     log.info(            "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2055,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "                  f\"[AnalysisAgent] Day 71 RL suggests HOLD \u2014 \"                         f\"BYPASSED (TEST_MODE=true), keeping {final_signal}\"                     )                 elif ensemble_conf < 40:                     _apply_confidence_penalty(signal_result, 10, \"rl_hold\", \"analysis\")         "
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 549,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "gime\", \"UNKNOWN\")          reasons  = []         decision = \"WAIT\"          # \u2500\u2500 Day 81+ AGGRESSIVE TEST_MODE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500         # If TEST_MODE is true and analysis_agent already decided BUY/SELL,         # use that DIRECTLY. Skip the voting (which requires MIN_CONSENSUS=2,         #"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 550,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "ecision = \"WAIT\"          # \u2500\u2500 Day 81+ AGGRESSIVE TEST_MODE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500         # If TEST_MODE is true and analysis_agent already decided BUY/SELL,         # use that DIRECTLY. Skip the voting (which requires MIN_CONSENSUS=2,         # but when LLM is rate-limited, only 1 agent votes "
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 575,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "\"Confidence: {adj_conf}% (base={base_conf}%)\",             ]             log.info(f\"[DecisionAgent] TEST_MODE AGGRESSIVE: {decision} {adj_conf}% (bypassing voting)\")             _tm_entry = master_ctx.get(\"master_entry\") or risk_out.get(\"entry\") or fallback_price             _tm_sl = master_ctx.get("
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 676,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "False,         # is_dead_zone=True) hold, we NO-TRADE immediately, with a         # precise reason. TEST_MODE still bypasses this gate so the         # operator can force trades during integration tests.         session_ctx = analysis_out.get(\"session_ctx\", {}) or {}         sess_trade_allowed = boo"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 720,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "                 _preserved_conf = max(0, min(99, _preserved_conf - 3))         else:             # TEST_MODE bypass: log but don't block. Preserve the old             # narrow conflict-check behavior so TEST_MODE trades are             # not silently blocked by the new hard gate.             if fin"
+      },
+      {
+        "file": "agents/decision_agent.py",
+        "line": 721,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "_MODE bypass: log but don't block. Preserve the old             # narrow conflict-check behavior so TEST_MODE trades are             # not silently blocked by the new hard gate.             if final_signal == \"NO TRADE\" and has_conflict:                 return self._result(\"NO TRADE\", _preserved_con"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 71,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "bypass_checks or alias_target.lower() in bypass_checks):         return True     return False   def _test_mode() -> bool:     \"\"\"Lazy check using environment variables to avoid stale imported config values.\"\"\"     import os as _os     val = _os.getenv(\"TEST_MODE\", _os.getenv(\"FOREX_TEST_MODE\", \"fals"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 152,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "R(self) -> float:         from risk.rr_policy import get_min_rr         return get_min_rr(test_mode=_test_mode())      def check(         self,         decision_out: dict,         risk_out:     dict,         news_ctx:     dict,         session_ctx:  dict | None = None,         execution_filters: dic"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1073,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "OW\"}.get(_grade, \"LOW\")                 conf = decision_out.get(\"confidence\", 0)                 if _test_mode():                     ok = True   # always pass in test mode                     detail = f\"{quality} (TEST_MODE: allowed)\"                 else:                     ok = quality in (\"HIGH"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1075,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "                   ok = True   # always pass in test mode                     detail = f\"{quality} (TEST_MODE: allowed)\"                 else:                     ok = quality in (\"HIGH\", \"MEDIUM\")                     if not ok and quality == \"LOW\":                         ok = conf >= self.SESSION_"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1198,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "tring so the operator can see how close it was.         #         # Round-10 audit fix: REMOVED the TEST_MODE bypass. The operator's         # audit found that live trading was running with TEST_MODE=true         # (set during initial development), which silently bypassed this         # gate. SMC+Se"
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1199,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "MOVED the TEST_MODE bypass. The operator's         # audit found that live trading was running with TEST_MODE=true         # (set during initial development), which silently bypassed this         # gate. SMC+Session fusion is a STRUCTURAL risk gate \u2014 it should         # NOT be bypassed even in test "
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 1212,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "sues = fusion.get(\"issues\", []) or []              # Round-10: explicit env-var bypass (NOT tied to TEST_MODE)             import os as _os             _bypass_fusion = _os.getenv(\"BYPASS_FUSION_GATE\", \"false\").lower() == \"true\"             if _bypass_fusion or _bypass_check(\"SMC+Session fusion\", by"
+      },
+      {
+        "file": "learning/confidence_engine.py",
+        "line": 752,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "[\"final_confidence\"]         should_skip = score[\"should_skip\"]          # Decision logic         # TEST_MODE: disable auto-skip entirely, lower WAIT threshold to 10.         # Production: should_skip respected, WAIT threshold = 25.         if should_skip and not _test_mode():             final_sign"
+      },
+      {
+        "file": "learning/confidence_engine.py",
+        "line": 754,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "0.         # Production: should_skip respected, WAIT threshold = 25.         if should_skip and not _test_mode():             final_signal = \"NO TRADE\"             decision     = \"SKIP\"         elif final_conf < (10 if _test_mode() else 25):             final_signal = \"WAIT\"             decision    "
+      },
+      {
+        "file": "learning/confidence_engine.py",
+        "line": 757,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "       final_signal = \"NO TRADE\"             decision     = \"SKIP\"         elif final_conf < (10 if _test_mode() else 25):             final_signal = \"WAIT\"             decision     = \"WAIT\"         else:             final_signal = signal             decision     = signal          return {          "
+      },
+      {
+        "file": "main.py",
+        "line": 185,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "       print(BANNER)         print(\"  Booting runtime (24 phases)...\\n\")          # Day 81+ hotfix: TEST_MODE warning banner.         # TEST_MODE bypasses MasterAnalyst, Confluence, Ensemble, RL, and         # MasterDecision gates.  It also lowers TradePermission confidence         # threshold to 10"
+      },
+      {
+        "file": "main.py",
+        "line": 186,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "  Booting runtime (24 phases)...\\n\")          # Day 81+ hotfix: TEST_MODE warning banner.         # TEST_MODE bypasses MasterAnalyst, Confluence, Ensemble, RL, and         # MasterDecision gates.  It also lowers TradePermission confidence         # threshold to 10% and force-approves PositionSizer r"
+      },
+      {
+        "file": "main.py",
+        "line": 193,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "om config import TEST_MODE, SIMULATION_MODE, MAX_LOT, APPROVAL_MODE, MAX_OPEN_TRADES             if TEST_MODE:                 print(\"=\" * 60)                 print(\"  \u26a0\ufe0f  TEST_MODE = True  \u26a0\ufe0f\")                 print(\"  All safety gates are PERMISSIVE:\")                 print(\"    \u2022 MasterAnalyst/Co"
+      },
+      {
+        "file": "main.py",
+        "line": 195,
+        "severity": "HIGH",
+        "issue": "TEST_MODE branch that disables a safety check \u2014 must never be True in production",
+        "evidence": "_OPEN_TRADES             if TEST_MODE:                 print(\"=\" * 60)                 print(\"  \u26a0\ufe0f  TEST_MODE = True  \u26a0\ufe0f\")                 print(\"  All safety gates are PERMISSIVE:\")                 print(\"    \u2022 MasterAnalyst/Confluence/Ensemble/RL bypassed\")                 print(\"    \u2022 TradePermis"
+      }
+    ],
+    "confidence_penalties": [
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1460,
+        "severity": "LOW",
+        "issue": "confidence penalty of 8 applied for 'sentiment_conflict'",
+        "evidence": "nt_result.get(\"confidence\", 0) >= 70:             _apply_confidence_penalty(signal_result, 8, \"sentiment_conflict\", \"analysis\")             log.info(                 \"[AnalysisAgent] Confidence penalt"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1467,
+        "severity": "LOW",
+        "issue": "confidence penalty of 10 applied for 'fusion_conflict'",
+        "evidence": "esult.get(\"adjusted_conf\", 100) < 45:             _apply_confidence_penalty(signal_result, 10, \"fusion_conflict\", \"analysis\")             log.info(                 \"[AnalysisAgent] Confidence penalty:"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1536,
+        "severity": "LOW",
+        "issue": "confidence penalty of 6 applied for 'master_wait'",
+        "evidence": "ignal in (\"BUY\", \"SELL\"):                         _apply_confidence_penalty(signal_result, 6, \"master_wait\", \"analysis\")                         log.info(                             f\"[AnalysisAgent]"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1766,
+        "severity": "LOW",
+        "issue": "confidence penalty of 6 applied for 'confluence_quality'",
+        "evidence": "      )                 else:                     _apply_confidence_penalty(signal_result, 6, \"confluence_quality\", \"analysis\")                     log.info(                         f\"[AnalysisAgent] "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1959,
+        "severity": "LOW",
+        "issue": "confidence penalty of 10 applied for 'ensemble_abstain'",
+        "evidence": "ignal in (\"BUY\", \"SELL\"):                         _apply_confidence_penalty(signal_result, 10, \"ensemble_abstain\", \"analysis\")                         log.info(                             f\"[Analysis"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 1968,
+        "severity": "LOW",
+        "issue": "confidence penalty of 8 applied for 'ensemble_wait'",
+        "evidence": "ignal in (\"BUY\", \"SELL\"):                         _apply_confidence_penalty(signal_result, 8, \"ensemble_wait\", \"analysis\")                         log.info(                             f\"[AnalysisAgen"
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2058,
+        "severity": "LOW",
+        "issue": "confidence penalty of 10 applied for 'rl_hold'",
+        "evidence": "     elif ensemble_conf < 40:                     _apply_confidence_penalty(signal_result, 10, \"rl_hold\", \"analysis\")                     log.warning(                         f\"[AnalysisAgent] Day 71 "
+      },
+      {
+        "file": "agents/analysis_agent.py",
+        "line": 2176,
+        "severity": "LOW",
+        "issue": "confidence penalty of 8 applied for 'master_decision_wait'",
+        "evidence": "ignal in (\"BUY\", \"SELL\"):                         _apply_confidence_penalty(signal_result, 8, \"master_decision_wait\", \"analysis\")                         log.info(                             f\"[Analy"
+      }
+    ],
+    "min_confidence_thresholds": [
+      {
+        "file": "core/entry_safety_filters.py",
+        "line": 68,
+        "severity": "INFO",
+        "issue": "MIN_CONFIDENCE = 60.0",
+        "evidence": "       # never let usable confidence hit 100% RULE_OVERRIDE_MIN_CONFIDENCE = 60.0   # stricter than the old 30% floor it replaces  # TP-side "
+      },
+      {
+        "file": "risk/trade_permission.py",
+        "line": 139,
+        "severity": "INFO",
+        "issue": "MIN_CONFIDENCE = 60.0",
+        "evidence": "ugh to trade even in a LOW session.     SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60      @property     def MIN_CONFIDENCE(self) -> int:        "
+      },
+      {
+        "file": "main.py",
+        "line": 198,
+        "severity": "INFO",
+        "issue": "MIN_CONFIDENCE = 10.0",
+        "evidence": "/RL bypassed\")                 print(\"    \u2022 TradePermission MIN_CONFIDENCE = 10 (prod=60)\")                 print(\"    \u2022 PositionSizer reje"
+      },
+      {
+        "file": "config.py",
+        "line": 373,
+        "severity": "INFO",
+        "issue": "MIN_CONFIDENCE = 10.0",
+        "evidence": " so the system actually places trades. #  - TradePermission MIN_CONFIDENCE = 10 (instead of 60) #  - Session quality check becomes warning "
+      }
+    ],
+    "risk_management_bypass": [
+      {
+        "file": "core/trader.py",
+        "line": 789,
+        "severity": "CRITICAL",
+        "issue": "hardcoded risk_out['approved'] = True \u2014 possible risk bypass",
+        "evidence": "                 f\"BUT TEST_MODE=true, force-approving with lot=0.01 \"                         f\"(execution_mode={self.execution_mode} \u2014 DEMO/backtest only)\"                     )                     "
+      }
+    ],
+    "unrealistic_backtest_assumptions": [],
+    "real_money_safety": [
+      {
+        "file": "execution/simulated_executor.py",
+        "line": 6,
+        "severity": "CRITICAL",
+        "issue": "order send without explicit SL in nearby code (order_send)",
+        "evidence": "simulated_executor.py \u2014 Dry-run order executor.  Mirrors the public interface of broker.order_manager.OrderManager but does NOT contact MT5.  Every \"order\" is logged to logs/execution.log as a broker."
+      },
+      {
+        "file": "execution/simulated_executor.py",
+        "line": 23,
+        "severity": "CRITICAL",
+        "issue": "order send without explicit SL in nearby code (order_send)",
+        "evidence": " the bug is upstream of MT5. \"\"\" from __future__ import annotations  import time import random from typing import Any  from utils.logger import get_logger from core.execution_logger import log_broker_"
+      },
+      {
+        "file": "execution/simulated_executor.py",
+        "line": 79,
+        "severity": "CRITICAL",
+        "issue": "order send without explicit SL in nearby code (order_send)",
+        "evidence": "lt = {             \"success\": True,             \"ticket\": ticket,             \"retcode\": self.RETCODE_DONE,             \"price\": filled_price,             \"volume\": lot,         }          log_broker_"
+      },
+      {
+        "file": "config.py",
+        "line": 287,
+        "severity": "CRITICAL",
+        "issue": "order send without explicit SL in nearby code (order_send)",
+        "evidence": "\u2500\u2500\u2500\u2500 # When True, ExecutionRouter uses SimulatedExecutor instead of real MT5. # The full signal \u2192 risk \u2192 approval \u2192 router chain runs, but the final # order is logged to logs/execution.log as \"broker."
+      },
+      {
+        "file": "core/constants.py",
+        "line": 47,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=100.0 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": "E_USD: dict[str, float] = {     # USD majors (pip = 0.0001, lot = 100k)     \"EURUSD\": 10.0, \"GBPUSD\": 10.0, \"AUDUSD\": 10.0,     \""
+      },
+      {
+        "file": "core/constants.py",
+        "line": 50,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=100.0 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": "DCAD\": 7.40, \"USDCHF\": 8.90,     # JPY crosses (pip = 0.01, lot = 100k, value depends on USDJPY)     \"USDJPY\": 6.50, \"GBPJPY\": 6."
+      },
+      {
+        "file": "core/constants.py",
+        "line": 63,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=100.0 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": " 8.90,     # Commodities     \"XAUUSD\": 1.0,  # pip = $0.01, lot = 100 oz \u2192 $1/pip     \"XAGUSD\": 5.0,     # Indices     \"US30\":   "
+      },
+      {
+        "file": "risk/atr_risk_manager.py",
+        "line": 157,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=100.0 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": "pip_value_per_lot)      if return_units:         # OANDA: 1 lot = 100,000 units         return max(1, int(position_size_lots * 10"
+      },
+      {
+        "file": "risk/position_sizer.py",
+        "line": 48,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=1.8 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": "\u00d7 conf \u00d7 # corr multipliers can compound to 2-3x, producing lot=1.8-2.5 which # is 2.7-4% risk per trade.  This caused the $435"
+      },
+      {
+        "file": "risk/advanced_risk_orchestrator.py",
+        "line": 36,
+        "severity": "HIGH",
+        "issue": "hardcoded lot=10.0 (>=1.0) \u2014 verify this is sized from balance, not fixed",
+        "evidence": "s=1.0,         stop_distance_pips=20,         pip_value_per_lot=10.0,     )     if lot == 0:         return  # no edge \u2014 skip   "
+      }
+    ]
+  }
+}
