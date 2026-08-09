@@ -105,11 +105,22 @@ class NetworkMonitor:
 
         Returns: dict with ping, mt5_ping, status, etc.
         """
+        # PERF + CORRECTNESS FIX: same class of bug already fixed for the
+        # correlation engine, FRED macro data, and the microstructure
+        # engine — _ping_mt5() below calls mt5.initialize() (and even
+        # mt5.shutdown(), which kills the connection for the whole
+        # process — see the warning in analysis/microstructure.py)
+        # on EVERY bar during a backtest, purely to measure "live"
+        # latency that has no meaning for a historical replay. When the
+        # MT5 terminal isn't reachable this stalls each bar.
+        from core.constants import is_backtest_mode
+        _backtest = is_backtest_mode()
+
         # 1. Internet ping
         ping_ms = self._ping_host(self.PING_TARGETS[0])
 
-        # 2. MT5 broker ping (if available)
-        mt5_ping_ms = self._ping_mt5()
+        # 2. MT5 broker ping (skip entirely during backtest — see above)
+        mt5_ping_ms = None if _backtest else self._ping_mt5()
 
         # 3. Get last execution latency from ExecutionQualityMonitor
         exec_latency = self._get_execution_latency()

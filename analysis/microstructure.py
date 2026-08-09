@@ -40,6 +40,17 @@ class MicrostructureEngine:
 
     def analyze(self, symbol: str) -> Dict[str, Any]:
         """Analyze tick microstructure for a symbol."""
+        # PERF + CORRECTNESS FIX: this was never gated on is_backtest_mode(),
+        # same class of bug already fixed for the correlation engine and
+        # FRED macro data (see analysis_agent.py ~line 988 and
+        # fundamental/fred_data.py). Every backtest bar was calling
+        # mt5.initialize() to fetch live tick data — a historical bar has
+        # no "live ticks" to speak of, and when the MT5 terminal isn't
+        # reachable this stalls each bar waiting on the MT5 API to give up.
+        from core.constants import is_backtest_mode
+        if is_backtest_mode():
+            return self._fallback_result(symbol, "backtest mode — live MT5 ticks skipped")
+
         tick_data = self._fetch_ticks(symbol)
 
         if tick_data is None:

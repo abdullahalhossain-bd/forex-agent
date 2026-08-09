@@ -51,6 +51,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -241,31 +242,67 @@ def run_one_experiment(
     print(f"[ablation]   bypass: {bypassed_gate or '(none — baseline)'}")
     print(f"[ablation]   run_id: {run_id}")
     print(f"[ablation]   cmd: {' '.join(cmd)}")
-    print(f"{'='*70}")
+    print(f"{'='*70}", flush=True)
+
+    # Force the child's own stdout to be unbuffered even though it's
+    # connected to a pipe (not a real tty). persistent_runner's logging
+    # handler already calls flush() on every record, but this belts-
+    # and-braces it and covers any plain print() calls in the child too.
+    child_env = dict(env)
+    child_env.setdefault("PYTHONUNBUFFERED", "1")
 
     t0 = time.perf_counter()
+    output_lines: list[str] = []
+    timed_out = {"hit": False}
+    returncode: int
+
     try:
-        proc = subprocess.run(
+        # NOTE: capture_output=True on subprocess.run() buffers ALL
+        # child stdout/stderr in memory and only returns it after the
+        # process exits — that's why nothing appeared on screen while
+        # baseline/each bypass experiment was running. Popen + line-by-
+        # line reading streams output live while still letting us keep
+        # the full text for the JSON result / failure diagnostics.
+        proc = subprocess.Popen(
             cmd,
             cwd=str(project_root),
-            env=env,
-            capture_output=True,
+            env=child_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # merge so live errors show too
             text=True,
-            timeout=timeout_sec,
+            bufsize=1,  # line-buffered on our end
         )
-        returncode = proc.returncode
-        stdout_tail = proc.stdout or ""
-        stderr_tail = proc.stderr or ""
-        if returncode != 0:
-            print(f"[ablation] FAILED (rc={returncode})")
-            print(f"[ablation] stderr tail:\n{stderr_tail[-2000:]}")
-    except subprocess.TimeoutExpired as e:
-        returncode = -1
-        stdout_tail = (e.stdout or b"").decode("utf-8", errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
-        print(f"[ablation] TIMEOUT after {timeout_sec}s")
+
+        def _kill_on_timeout():
+            if proc.poll() is None:
+                timed_out["hit"] = True
+                proc.kill()
+
+        watchdog = threading.Timer(timeout_sec, _kill_on_timeout)
+        watchdog.daemon = True
+        watchdog.start()
+
+        try:
+            for line in proc.stdout:
+                print(f"[{experiment_name}] {line}", end="", flush=True)
+                output_lines.append(line)
+        finally:
+            proc.wait()
+            watchdog.cancel()
+
+        stdout_tail = "".join(output_lines)
+
+        if timed_out["hit"]:
+            returncode = -1
+            print(f"[ablation] TIMEOUT after {timeout_sec}s")
+        else:
+            returncode = proc.returncode
+            if returncode != 0:
+                print(f"[ablation] FAILED (rc={returncode})")
+                print(f"[ablation] output tail:\n{stdout_tail[-2000:]}")
     except Exception as e:
         returncode = -2
-        stdout_tail = f"exception: {e}"
+        stdout_tail = "".join(output_lines) + f"\nexception: {e}"
         print(f"[ablation] EXCEPTION: {e}")
 
     elapsed = time.perf_counter() - t0
