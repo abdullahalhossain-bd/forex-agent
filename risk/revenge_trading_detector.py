@@ -5,8 +5,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from utils.logger import get_logger
 log = get_logger("revenge_detector")
-COOLDOWN_AFTER_LOSS_MINUTES = 15; MAX_TRADES_PER_HOUR = 3; MAX_LOSSES_PER_HOUR = 2
-REVENGE_LOT_INCREASE_MULT = 1.5
+COOLDOWN_AFTER_LOSS_MINUTES = 30; MAX_TRADES_PER_HOUR = 3; MAX_LOSSES_PER_HOUR = 2
+REVENGE_LOT_INCREASE_MULT = 1.35
 
 @dataclass
 class RevengeTradingResult:

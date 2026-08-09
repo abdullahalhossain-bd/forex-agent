@@ -51,7 +51,7 @@ def _env_int(name: str, default: int) -> int:
 
 # Defaults — overridable via .env
 DEFAULT_MIN_DAILY_TRADES = 3
-DEFAULT_MAX_DAILY_TRADES = 20
+DEFAULT_MAX_DAILY_TRADES = 35
 
 
 @dataclass

@@ -452,6 +452,9 @@ class SupportResistance:
         # price is actually likely to sweep next.
         recent = sorted(swing_points, key=lambda p: p["index"], reverse=True)[:max_levels]
 
+        price_ref = float(df["close"].iloc[-1]) if len(df) else 0.0
+        atr_abs = atr_pct * price_ref
+
         levels = []
         for p in recent:
             price = float(p["price"])
@@ -462,6 +465,18 @@ class SupportResistance:
             zone_top = round(price + band, 5)
             zone_bottom = round(price - band, 5)
             valid_rej = self._count_valid_rejections(df, zone_top, zone_bottom, direction=direction)
+            # FIX: mirror _build_zone()'s thin-zone check here too — this
+            # method used to build its dict directly and skip it entirely,
+            # so raw_swing zones always silently reported is_thin_zone=False
+            # (via callers' .get(..., False)) regardless of actual width.
+            # elevated_breakout_risk is left False explicitly: touches=1 here
+            # always classifies as "Weak" strength, and that flag's formula
+            # only fires on "Medium", so it can never be True for this tier —
+            # but it's now set explicitly instead of silently missing, so
+            # every zone dict (cluster / eqh_eql / raw_swing) has the same
+            # shape.
+            zone_width = zone_top - zone_bottom
+            is_thin_zone = bool(atr_abs > 0 and zone_width < 0.5 * atr_abs)
             levels.append({
                 "zone_top": zone_top,
                 "zone_bottom": zone_bottom,
@@ -474,6 +489,8 @@ class SupportResistance:
                 "last_touch_index": idx,
                 "source": "raw_swing",
                 "is_equal_level": False,
+                "is_thin_zone": is_thin_zone,
+                "elevated_breakout_risk": False,
             })
         return levels
 

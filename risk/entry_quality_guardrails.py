@@ -46,7 +46,32 @@ DEFAULT_PULLBACK_MIN_PIPS   = 10      # need ≥10-pip pullback within window
 DEFAULT_PULLBACK_MIN_PCT    = 0.10    # OR ≥10% retracement of the move
 
 # Flag 2 — SL swing anchor
-DEFAULT_SL_SWING_LOOKBACK   = 20      # check last 20 bars for swing low
+#
+# BUG FIX (2026-08-09, log-driven investigation — execution.log/trader.log
+# showed "SL Swing Anchor FAIL" + "Structure Compound FAIL (-10)" firing on
+# nearly every ICT/AMD-style signal): this was 20 bars. analysis/
+# ict_amd_signal_engine.py anchors its stop-loss to manipulation.wick_extreme
+# — the liquidity-sweep wick from the Manipulation phase of the Accumulation
+# → Manipulation → Distribution sequence. By the time a trade actually
+# fires (after Distribution/MSS confirmation, several bars later), that
+# sweep wick is routinely OLDER than 20 bars back. _find_swing_lows()/
+# _find_swing_highs() below only searches the last `lookback` bars
+# (`df.iloc[-lookback:]`), so it simply never saw the bar the SL was
+# genuinely anchored to — it compared against whatever unrelated swing
+# WAS inside the 20-bar window, got a large distance, and flagged a
+# perfectly structure-anchored ICT stop as "appears to be a fixed-pip
+# stop, not structure-anchored". This wasn't a real quality problem with
+# the stop, only a lookback window too short for that strategy's
+# Accumulation+Manipulation+Distribution cycle length.
+#
+# Raised 20 -> 50 bars — enough to comfortably cover a full H1 AMD cycle
+# (Asian accumulation ~8-9 bars + manipulation sweep + wait for MSS
+# confirmation) while still being "recent structure", not the entire
+# dataset. This only widens what counts as a valid anchor (fewer false
+# "unanchored" flags); it cannot cause a previously-failing genuinely
+# unanchored stop to newly fail, so it's a strictly safer direction to
+# move this constant.
+DEFAULT_SL_SWING_LOOKBACK   = 50      # check last 50 bars for swing low/high
 DEFAULT_SL_PROXIMITY_ATR    = 0.5     # SL within 0.5×ATR of a swing = "anchored"
 
 # Flag 3 — TP structure validation
@@ -358,12 +383,19 @@ def check_sl_swing_anchor(
 
     if direction.upper() == "BUY":
         swings = _find_swing_lows(df, lookback=lookback)
-        # SL should be below entry AND near a swing low
-        nearest_swing = max(swings) if swings else None
+        # SL should be below entry AND near a swing low.
+        # FIX: previously took max(swings) — the highest swing low in the
+        # whole lookback window — instead of the swing actually nearest to
+        # stop_loss. When the window contains multiple swing lows (some
+        # possibly above entry, e.g. during a pullback), max(swings) could
+        # select one far from — or even on the wrong side of — the actual
+        # SL, producing a meaningless anchor distance. Now mirrors Flag 3's
+        # (TP structure validation) correct nearest-by-distance approach.
+        nearest_swing = min(swings, key=lambda s: abs(s - stop_loss)) if swings else None
         sl_correct_side = stop_loss < entry_price
     else:
         swings = _find_swing_highs(df, lookback=lookback)
-        nearest_swing = min(swings) if swings else None
+        nearest_swing = min(swings, key=lambda s: abs(s - stop_loss)) if swings else None
         sl_correct_side = stop_loss > entry_price
 
     if not swings or nearest_swing is None:

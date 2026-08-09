@@ -117,6 +117,11 @@ class TradePermission:
     # (e.g. lone RSI oversold) kept reaching MT5.
     MIN_CONFIDENCE_PROD  = 60  # Operator-requested floor: trade when confidence >= 60%
     MIN_CONFIDENCE_TEST  = 10
+    MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
+    MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
+    MIN_CONFIDENCE_MAX_ADJUSTMENT = 15
+    LOSS_STREAK_CONFIDENCE_BUMP = 5
+    LOSS_STREAK_COOLDOWN_TRADES = 2
 
     # Co-founder fix: raised thresholds for institutional-grade entries
     MIN_ALIGNED_FACTORS_PROD = 2
@@ -270,17 +275,51 @@ class TradePermission:
                 dist_res = sr_ctx.get("dist_to_resistance_pips")
                 sr_ok = True
                 sr_detail = "no S/R zone data — not evaluated"
+                # Audit fix (§5.2 / §14 Decision Table — "EDIT, re-tune, not
+                # REMOVE"): the original rule blocked on ANY margin, even a
+                # razor-thin one (e.g. 4.0 vs 4.1 pips), which the EURUSD
+                # ablation showed filters out roughly as many WINNING trades
+                # as losing ones (57.5% block rate; no_sr_alignment ablation:
+                # +2 wins AND +2 losses). Require the "wrong side" distance to
+                # be meaningfully closer — not just nominally closer — before
+                # blocking, so genuine near-the-midpoint setups aren't vetoed
+                # by noise-level differences.
+                SR_ALIGNMENT_MARGIN_PIPS = 3.0   # absolute buffer
+                SR_ALIGNMENT_MARGIN_RATIO = 1.15 # unfavorable side must be
+                                                  # >=15% closer than favorable
                 if dist_sup is not None and dist_res is not None:
-                    if sig == "SELL" and dist_sup < dist_res:
-                        sr_ok = False
-                        sr_detail = (f"SELL is {dist_sup:.1f} pips from support vs "
-                                     f"{dist_res:.1f} pips from resistance — closer "
-                                     f"to support, wrong side for a SELL")
-                    elif sig == "BUY" and dist_res < dist_sup:
-                        sr_ok = False
-                        sr_detail = (f"BUY is {dist_res:.1f} pips from resistance vs "
-                                     f"{dist_sup:.1f} pips from support — closer to "
-                                     f"resistance, wrong side for a BUY")
+                    if sig == "SELL":
+                        margin_ok = (dist_res - dist_sup) >= SR_ALIGNMENT_MARGIN_PIPS or (
+                            dist_sup > 0 and dist_res / max(dist_sup, 1e-9) < (1 / SR_ALIGNMENT_MARGIN_RATIO)
+                        )
+                        if dist_sup < dist_res and margin_ok:
+                            sr_ok = False
+                            sr_detail = (f"SELL is {dist_sup:.1f} pips from support vs "
+                                         f"{dist_res:.1f} pips from resistance — clearly "
+                                         f"closer to support, wrong side for a SELL")
+                        elif dist_sup < dist_res:
+                            sr_detail = (f"borderline: dist_to_support={dist_sup:.1f}p, "
+                                         f"dist_to_resistance={dist_res:.1f}p — within "
+                                         f"re-tuned margin, not blocked")
+                        else:
+                            sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
+                                         f"dist_to_resistance={dist_res:.1f}p")
+                    elif sig == "BUY":
+                        margin_ok = (dist_sup - dist_res) >= SR_ALIGNMENT_MARGIN_PIPS or (
+                            dist_res > 0 and dist_sup / max(dist_res, 1e-9) < (1 / SR_ALIGNMENT_MARGIN_RATIO)
+                        )
+                        if dist_res < dist_sup and margin_ok:
+                            sr_ok = False
+                            sr_detail = (f"BUY is {dist_res:.1f} pips from resistance vs "
+                                         f"{dist_sup:.1f} pips from support — clearly closer "
+                                         f"to resistance, wrong side for a BUY")
+                        elif dist_res < dist_sup:
+                            sr_detail = (f"borderline: dist_to_support={dist_sup:.1f}p, "
+                                         f"dist_to_resistance={dist_res:.1f}p — within "
+                                         f"re-tuned margin, not blocked")
+                        else:
+                            sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
+                                         f"dist_to_resistance={dist_res:.1f}p")
                     else:
                         sr_detail = (f"aligned: dist_to_support={dist_sup:.1f}p, "
                                      f"dist_to_resistance={dist_res:.1f}p")
@@ -322,40 +361,40 @@ class TradePermission:
                     total += 1
                 else:
                     regime = decision_out.get("regime", {}) or {}
-                # Accept either a dict (with keys) or a simple string
-                if isinstance(regime, dict):
-                    r_regime = str(regime.get("regime", "")).upper()
-                    r_direction = str(regime.get("direction", "")).upper()
-                    r_strength = str(regime.get("strength", "")).upper()
-                else:
-                    # If regime is a plain string, treat it as the regime name
-                    r_regime = str(regime).upper()
-                    r_direction = ""
-                    r_strength = ""
-                trend_ok = True
-                trend_detail = "no regime data — not evaluated"
-                if r_regime and r_direction:
-                    is_trending = r_regime == "TRENDING" and r_strength in ("STRONG", "MODERATE")
-                    if is_trending:
-                        if sig == "SELL" and r_direction == "BULLISH":
-                            trend_ok = False
-                            trend_detail = (f"SELL against a {r_strength} BULLISH trending "
-                                             f"regime — counter-trend fade, blocked")
-                        elif sig == "BUY" and r_direction == "BEARISH":
-                            trend_ok = False
-                            trend_detail = (f"BUY against a {r_strength} BEARISH trending "
-                                             f"regime — counter-trend fade, blocked")
-                        else:
-                            trend_detail = f"aligned: regime={r_regime}/{r_direction}/{r_strength}"
+                    # Accept either a dict (with keys) or a simple string
+                    if isinstance(regime, dict):
+                        r_regime = str(regime.get("regime", "")).upper()
+                        r_direction = str(regime.get("direction", "")).upper()
+                        r_strength = str(regime.get("strength", "")).upper()
                     else:
-                        trend_detail = f"not trending: regime={r_regime}/{r_direction}/{r_strength}"
-                checks.append({
-                    "check":  "Trend alignment (regime)",
-                    "passed": trend_ok,
-                    "detail": trend_detail,
-                })
-                if trend_ok: passed += 1
-                total += 1
+                        # If regime is a plain string, treat it as the regime name
+                        r_regime = str(regime).upper()
+                        r_direction = ""
+                        r_strength = ""
+                    trend_ok = True
+                    trend_detail = "no regime data — not evaluated"
+                    if r_regime and r_direction:
+                        is_trending = r_regime == "TRENDING" and r_strength in ("STRONG", "MODERATE")
+                        if is_trending:
+                            if sig == "SELL" and r_direction == "BULLISH":
+                                trend_ok = False
+                                trend_detail = (f"SELL against a {r_strength} BULLISH trending "
+                                                 f"regime — counter-trend fade, blocked")
+                            elif sig == "BUY" and r_direction == "BEARISH":
+                                trend_ok = False
+                                trend_detail = (f"BUY against a {r_strength} BEARISH trending "
+                                                 f"regime — counter-trend fade, blocked")
+                            else:
+                                trend_detail = f"aligned: regime={r_regime}/{r_direction}/{r_strength}"
+                        else:
+                            trend_detail = f"not trending: regime={r_regime}/{r_direction}/{r_strength}"
+                    checks.append({
+                        "check":  "Trend alignment (regime)",
+                        "passed": trend_ok,
+                        "detail": trend_detail,
+                    })
+                    if trend_ok: passed += 1
+                    total += 1
 
         # 1c-2. MTF TREND ALIGNMENT GATE (added 2026-08-07) — HARD BLOCK.
         # The "Trend alignment (regime)" gate above only looks at ONE
@@ -486,27 +525,27 @@ class TradePermission:
                     from datetime import datetime as _dt, timezone as _tz
                     _zc_now = _dt.now(_tz.utc)
                 from analysis.support_resistance import SupportResistance as _SR_pip
-            _zc_pip_value = _SR_pip()._resolve_pip_value(_zc_symbol) if _zc_entry else 0.0001
-            zone_ok = True
-            zone_detail = "no recent nearby entry"
-            for _e in self._recent_entries:
-                if _e["symbol"] != _zc_symbol or _e["direction"] != sig or _zc_entry <= 0:
-                    continue
-                hrs = abs((_zc_now - _e["time"]).total_seconds()) / 3600.0
-                pips = abs(_zc_entry - _e["price"]) / _zc_pip_value
-                if hrs <= ZONE_COOLDOWN_HOURS and pips <= ZONE_COOLDOWN_PIPS:
-                    zone_ok = False
-                    zone_detail = (f"{sig} {pips:.1f} pips from a {sig} entry taken "
-                                    f"{hrs:.1f}h ago — within cooldown "
-                                    f"({ZONE_COOLDOWN_HOURS}h / {ZONE_COOLDOWN_PIPS} pips)")
-                    break
-            checks.append({
-                "check":  "Zone cooldown (duplicate entry)",
-                "passed": zone_ok,
-                "detail": zone_detail,
-            })
-            if zone_ok: passed += 1
-            total += 1
+                _zc_pip_value = _SR_pip()._resolve_pip_value(_zc_symbol) if _zc_entry else 0.0001
+                zone_ok = True
+                zone_detail = "no recent nearby entry"
+                for _e in self._recent_entries:
+                    if _e["symbol"] != _zc_symbol or _e["direction"] != sig or _zc_entry <= 0:
+                        continue
+                    hrs = abs((_zc_now - _e["time"]).total_seconds()) / 3600.0
+                    pips = abs(_zc_entry - _e["price"]) / _zc_pip_value
+                    if hrs <= ZONE_COOLDOWN_HOURS and pips <= ZONE_COOLDOWN_PIPS:
+                        zone_ok = False
+                        zone_detail = (f"{sig} {pips:.1f} pips from a {sig} entry taken "
+                                        f"{hrs:.1f}h ago — within cooldown "
+                                        f"({ZONE_COOLDOWN_HOURS}h / {ZONE_COOLDOWN_PIPS} pips)")
+                        break
+                checks.append({
+                    "check":  "Zone cooldown (duplicate entry)",
+                    "passed": zone_ok,
+                    "detail": zone_detail,
+                })
+                if zone_ok: passed += 1
+                total += 1
 
         # 2. Risk approved
         ok = risk_out.get("approved", False)
@@ -1000,11 +1039,47 @@ class TradePermission:
         # path) feature not covered by this REMOVE decision.
 
         # 4. Confidence
-        ok   = conf >= self.MIN_CONFIDENCE
-        _conf_detail = f"{conf}% (min {self.MIN_CONFIDENCE}%)"
+        effective_min_confidence = self.MIN_CONFIDENCE
+        recent_win_rate = None
+        recent_trades = None
+        consecutive_losses = None
+        try:
+            recent_win_rate = float(decision_out.get("recent_win_rate", 0) or 0)
+            recent_trades = int(decision_out.get("recent_trades", 0) or 0)
+            consecutive_losses = int(decision_out.get("consecutive_losses", 0) or 0)
+        except (TypeError, ValueError):
+            recent_win_rate = None
+            recent_trades = None
+            consecutive_losses = None
+
+        if consecutive_losses is not None and consecutive_losses >= 3:
+            effective_min_confidence = max(
+                effective_min_confidence,
+                min(100, self.MIN_CONFIDENCE + self.LOSS_STREAK_CONFIDENCE_BUMP + 15),
+            )
+
+        if recent_win_rate is not None and recent_trades is not None and recent_trades >= 3:
+            if recent_win_rate < self.MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR:
+                effective_min_confidence = min(
+                    100,
+                    self.MIN_CONFIDENCE + self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                )
+            elif recent_win_rate >= 0.65:
+                effective_min_confidence = max(
+                    45,
+                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                )
+            elif recent_win_rate >= 0.55:
+                effective_min_confidence = max(
+                    50,
+                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_RECENT_WIN_RATE_STEP,
+                )
+
+        ok   = conf >= effective_min_confidence
+        _conf_detail = f"{conf}% (min {effective_min_confidence}%)"
         if _bypass_check("Min confidence", bypass_checks):
             ok = True
-            _conf_detail = f"{conf}% (min {self.MIN_CONFIDENCE}%) — BYPASSED via permission_bypass"
+            _conf_detail = f"{conf}% (min {effective_min_confidence}%) — BYPASSED via permission_bypass"
         elif not ok and decision_out.get("direct_lane"):
             # 2026-08-02: Stop Hunt Direct Lane signals carry the BLENDED
             # pipeline's stale confidence (it was WAIT before this lane

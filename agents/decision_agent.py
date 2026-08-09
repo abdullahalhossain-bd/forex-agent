@@ -763,10 +763,10 @@ class DecisionAgent:
                     ),
                     LayerSignal(
                         layer="llm_analyst",  # reuse llm_analyst slot for master
-                        signal=("BUY" if "BUY" in str(master_sig)
-                                else "SELL" if "SELL" in str(master_sig)
+                        signal=("BUY" if "BUY" in str(master_signal_for_vote)
+                                else "SELL" if "SELL" in str(master_signal_for_vote)
                                 else "WAIT"),
-                        confidence=_safe_conf(master_conf),
+                        confidence=_safe_conf(master_conf_for_vote),
                         weight=0.30,
                         reasoning="MasterAnalyst (LLM synthesized)",
                     ),

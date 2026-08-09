@@ -243,12 +243,113 @@ class TestHighConfidenceSoftOverride(unittest.TestCase):
             "aligned_factors": 1,
             "setup_quality": "B",
         }
-        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830, "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 1.2}
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830, "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 2.0}
         news_ctx = {"news_trade_allowed": True, "news_reason": "clear"}
 
         result = perm.check(decision_out=decision_out, risk_out=risk_out, news_ctx=news_ctx, session_ctx=None)
         self.assertTrue(result["execution_allowed"])
         self.assertEqual(result["execution_action"], "BUY")
+
+    def test_decision_agent_excludes_unavailable_master_vote_from_signal_fusion(self):
+        from agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent()
+        analysis_out = {
+            "final_signal": "WAIT",
+            "signal": {"signal": "WAIT", "confidence": 0},
+            "llm": {"signal": "WAIT", "confidence": 0, "_llm_unavailable": True},
+            "master_ctx": {"master_signal": "BUY", "master_confidence": 90, "_llm_unavailable": True},
+            "sentiment_ctx": {"sentiment_bias": "NEUTRAL", "sentiment_score": 0},
+            "conflict": {"has_conflict": False, "confidence_adjustment": 0},
+            "ensemble": {},
+            "rl_agent": {},
+            "unified_signal": {},
+            "session_ctx": {},
+            "confluence": {},
+            "news": {"trade_allowed": True},
+        }
+        market_out = {"symbol": "EURUSD", "timeframe": "M15", "regime": {"regime": "NORMAL"}, "ind_ctx": {"close": 1.0850}}
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830, "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 1.5, "is_placeholder": False}
+
+        result = agent.decide(market_out, analysis_out, risk_out)
+        self.assertEqual(result["decision"], "NO TRADE")
+        self.assertEqual(result["confidence"], 0)
+        self.assertTrue(any("SignalFusion gate" in r for r in result["reasons"]))
+
+
+class TestAdaptiveTradeGate(unittest.TestCase):
+    """Poor recent performance should raise the execution floor; strong recent performance should allow a lighter floor."""
+
+    def test_poor_recent_performance_raises_confidence_floor(self):
+        from risk.trade_permission import TradePermission
+
+        perm = TradePermission()
+        decision_out = {
+            "decision": "BUY",
+            "confidence": 65,
+            "aligned_factors": 2,
+            "setup_quality": "B",
+            "recent_win_rate": 0.2,
+            "recent_trades": 5,
+        }
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830,
+                    "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 2.0}
+        news_ctx = {"news_trade_allowed": True, "news_reason": "clear"}
+
+        result = perm.check(decision_out=decision_out, risk_out=risk_out,
+                            news_ctx=news_ctx, session_ctx=None)
+        self.assertFalse(result["execution_allowed"])
+        self.assertIn("Min confidence", [c["check"] for c in result["checks"]])
+
+    def test_strong_recent_performance_allows_lower_confidence_floor(self):
+        from risk.trade_permission import TradePermission
+
+        perm = TradePermission()
+        decision_out = {
+            "decision": "BUY",
+            "confidence": 55,
+            "aligned_factors": 2,
+            "setup_quality": "B",
+            "recent_win_rate": 0.7,
+            "recent_trades": 5,
+        }
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830,
+                    "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 2.0}
+        news_ctx = {"news_trade_allowed": True, "news_reason": "clear"}
+
+        result = perm.check(decision_out=decision_out, risk_out=risk_out,
+                            news_ctx=news_ctx, session_ctx=None)
+        self.assertTrue(result["execution_allowed"])
+        self.assertEqual(result["execution_action"], "BUY")
+
+    def test_loss_streak_requires_higher_confidence_floor(self):
+        from risk.trade_permission import TradePermission
+
+        perm = TradePermission()
+        decision_out = {
+            "decision": "BUY",
+            "confidence": 70,
+            "aligned_factors": 2,
+            "setup_quality": "B",
+            "consecutive_losses": 3,
+        }
+        risk_out = {"approved": True, "entry": 1.0850, "sl_price": 1.0830,
+                    "tp_price": 1.0890, "lot": 0.05, "rr_ratio": 2.0}
+        news_ctx = {"news_trade_allowed": True, "news_reason": "clear"}
+
+        result = perm.check(decision_out=decision_out, risk_out=risk_out,
+                            news_ctx=news_ctx, session_ctx=None)
+        self.assertFalse(result["execution_allowed"])
+        self.assertIn("Min confidence", [c["check"] for c in result["checks"]])
+
+
+class TestTradeFrequencyDefaults(unittest.TestCase):
+    def test_trade_frequency_default_cap_is_more_active(self):
+        from risk.trade_frequency import TradeFrequencyController
+
+        ctrl = TradeFrequencyController()
+        self.assertGreaterEqual(ctrl._max_daily, 30)
+        self.assertLessEqual(ctrl._max_daily, 40)
 
 
 class TestLiveRiskManagerTierPromotion(unittest.TestCase):
