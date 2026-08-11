@@ -784,10 +784,22 @@ def calculate_full_metrics(trades: List[Trade], starting_balance: float = 10000.
     yearly = {}
     if len(df_t):
         df_t = df_t.set_index("date")
+        # FIX (2026-08-11): compute monthly/yearly returns against the
+        # equity-at-start-of-period rather than the static starting_balance.
+        # Using starting_balance understates returns in growing accounts.
+        eq_running = float(starting_balance)
         for ym, grp in df_t.groupby(df_t.index.to_period("M")):
-            monthly[str(ym)] = round(float(grp["pnl_usd"].sum()) / starting_balance * 100, 2)
+            period_pnl = float(grp["pnl_usd"].sum())
+            denom = eq_running if eq_running > 0 else float(starting_balance)
+            monthly[str(ym)] = round(period_pnl / denom * 100, 2)
+            eq_running += period_pnl
+        # Reset for yearly
+        eq_running = float(starting_balance)
         for y, grp in df_t.groupby(df_t.index.to_period("Y")):
-            yearly[str(y)] = round(float(grp["pnl_usd"].sum()) / starting_balance * 100, 2)
+            period_pnl = float(grp["pnl_usd"].sum())
+            denom = eq_running if eq_running > 0 else float(starting_balance)
+            yearly[str(y)] = round(period_pnl / denom * 100, 2)
+            eq_running += period_pnl
 
     return {
         "starting_balance": starting_balance,

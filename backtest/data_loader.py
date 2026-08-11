@@ -45,7 +45,17 @@ class HistoricalDataLoader:
         # timestamps (e.g. "2024-01-01T00:00:00Z") by coercing them
         # to NaT, then dropna deleted those rows. utc=True normalizes
         # all timestamps to UTC so mixed-tz data is handled correctly.
-        df["time"] = pd.to_datetime(df["time"], utc=True, errors="coerce")
+        # FIX (2026-08-11): naive MT4/MT5 timestamps are in EET (UTC+2/+3).
+        # utc=True silently reinterprets them as UTC, shifting sessions 2-3h.
+        ts = pd.to_datetime(df["time"], errors="coerce", utc=False)
+        if ts.dt.tz is None:
+            try:
+                ts = ts.dt.tz_localize("EET").dt.tz_convert("UTC")
+            except Exception:
+                ts = ts.dt.tz_localize("Etc/GMT-2").dt.tz_convert("UTC")
+        else:
+            ts = ts.dt.tz_convert("UTC")
+        df["time"] = ts
         df = df.dropna(subset=["time"]).drop_duplicates(subset=["time"]).sort_values("time")
         df = df.set_index("time")
 

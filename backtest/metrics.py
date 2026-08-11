@@ -79,18 +79,49 @@ def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, ris
     m.max_drawdown_pct = round(float(np.max(dd)), 2); m.max_drawdown_usd = round(float(np.max(rm - eq)), 2)
     if len(trades) > 1:
         BARS_PER_DAY = {"M1": 960, "M5": 288, "M15": 96, "H1": 24, "H4": 6, "D1": 1}
-        bars_per_day = BARS_PER_DAY.get(timeframe or "M15", 96)
-        tpy = 252 * bars_per_day
-        rets = np.array([t.pnl_usd / starting_balance for t in trades])
-        ar = np.mean(rets); sr = np.std(rets, ddof=1)
-        if sr > 0: m.sharpe_ratio = round((ar * tpy - risk_free_rate) / sr * np.sqrt(tpy), 2)
+        # FIX (2026-08-11): returns are PER-TRADE, not per-bar. Annualize
+        # by trades_per_year (derived from real timestamps), not bars_per_year.
+        # Old formula multiplied by sqrt(tpy) — inflated Sharpe by ~24,000x
+        # for M15 (validation report showed Sharpe = -368,837).
+        try:
+            entry_times = [datetime.fromisoformat(t.entry_time) for t in trades if t.entry_time]
+            if len(entry_times) >= 2:
+                span_s = (max(entry_times) - min(entry_times)).total_seconds()
+                tpy = len(trades) * (365.25 * 86400) / span_s if span_s > 0 else float(len(trades))
+            else:
+                tpy = float(len(trades))
+        except Exception:
+            tpy = float(len(trades))
+        tpy = max(tpy, float(len(trades)))
+        # Per-trade fractional returns (pnl / equity-before-trade).
+        eq_curve = [starting_balance]
+        for t in trades: eq_curve.append(eq_curve[-1] + t.pnl_usd)
+        prev_eq = np.array(eq_curve[:-1])
+        prev_eq_safe = np.where(prev_eq > 0, prev_eq, 1.0)
+        rets = np.array([t.pnl_usd for t in trades]) / prev_eq_safe
+        ar = float(np.mean(rets)); sr = float(np.std(rets, ddof=1))
+        if sr > 0:
+            m.sharpe_ratio = round((ar * tpy - risk_free_rate) / (sr * np.sqrt(tpy)), 2)
         ds = rets[rets < 0]
         if len(ds) > 0:
-            dstd = np.std(ds, ddof=1)
-            if dstd > 0: m.sortino_ratio = round((ar * tpy - risk_free_rate) / dstd * np.sqrt(tpy), 2)
+            dstd = float(np.std(ds, ddof=1))
+            if dstd > 0:
+                m.sortino_ratio = round((ar * tpy - risk_free_rate) / (dstd * np.sqrt(tpy)), 2)
     if m.max_drawdown_pct > 0:
-        tr = (ending_balance - starting_balance) / starting_balance * 100
-        m.calmar_ratio = round(tr / m.max_drawdown_pct, 2)
+        # FIX (2026-08-11): Calmar = annualized_return / max_drawdown.
+        n_bars = int(np.sum([t.hold_bars for t in trades])) if trades else 0
+        if n_bars > 0 and starting_balance > 0 and ending_balance > 0:
+            bpy = 252 * {"M1":960,"M5":288,"M15":96,"H1":24,"H4":6,"D1":1}.get(timeframe or "M15", 96)
+            yrs = n_bars / bpy
+            if yrs > 0:
+                ar = (ending_balance / starting_balance) ** (1.0 / yrs) - 1.0
+                m.calmar_ratio = round(ar * 100 / m.max_drawdown_pct, 2)
+            else:
+                tr = (ending_balance - starting_balance) / starting_balance * 100
+                m.calmar_ratio = round(tr / m.max_drawdown_pct, 2)
+        else:
+            tr = (ending_balance - starting_balance) / starting_balance * 100
+            m.calmar_ratio = round(tr / m.max_drawdown_pct, 2)
     m.total_return_pct = round((ending_balance - starting_balance) / starting_balance * 100, 2)
     m.avg_hold_bars = int(np.mean([t.hold_bars for t in trades])) if trades else 0
     # Breakdowns
@@ -124,5 +155,17 @@ def calculate_metrics(trades, starting_balance=10000.0, ending_balance=None, ris
         try:
             mk = datetime.fromisoformat(t.entry_time).strftime("%Y-%m"); md[mk] += t.pnl_usd
         except Exception as e: pass
-    m.monthly_returns = {mk: round(p / starting_balance * 100, 2) for mk, p in md.items()}
+    # Compute month returns relative to equity at the START of that month,
+    # not the static starting_balance. Using starting_balance understates
+    # returns in growing accounts and overstates them in drawdowns.
+    sorted_months = sorted(md.keys())
+    month_equity_starts = {}
+    running_eq = starting_balance
+    for mk in sorted_months:
+        month_equity_starts[mk] = running_eq
+        running_eq += md[mk]
+    m.monthly_returns = {
+        mk: round(p / month_equity_starts[mk] * 100, 2) if month_equity_starts[mk] > 0 else 0.0
+        for mk, p in md.items()
+    }
     return m

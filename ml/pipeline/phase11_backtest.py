@@ -44,24 +44,9 @@ def run_backtests(
                     # pickle.load. The rest of the codebase uses safe_pickle
                     # for security (arbitrary code execution protection).
                     # This was the one outlier that bypassed the hardening.
-                    from utils.safe_pickle import safe_pickle_load, safe_pickle_dump
-                    try:
-                        model = safe_pickle_load(str(model_path))
-                    except ValueError as ve:
-                        if "No metadata file" not in str(ve):
-                            raise  # a real hash MISMATCH must still hard-fail
-                        # Legacy model.pkl saved before the safe_pickle_dump
-                        # fix (no .meta sidecar). It's a file our own pipeline
-                        # already wrote to local disk, not an untrusted
-                        # external file, so it's safe to back-fill its hash
-                        # once here and go through the verified path from now on.
-                        log.warning(f"  {symbol} {model_type}: legacy model.pkl has no "
-                                    f"integrity hash yet -- backfilling it (one-time)")
-                        import pickle as _pickle
-                        with model_path.open("rb") as _f:
-                            legacy_model = _pickle.load(_f)
-                        safe_pickle_dump(legacy_model, str(model_path), metadata={"migrated": True})
-                        model = safe_pickle_load(str(model_path))
+                    from utils.safe_pickle import safe_load
+                    with model_path.open("rb") as f:
+                        model = safe_load(f)
                     
                     predictions = model.predict(X_test)
                     metrics = _calculate_backtest_metrics(
@@ -147,16 +132,30 @@ def _calculate_backtest_metrics(df: pd.DataFrame, predictions, symbol: str, conf
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
     win_rate = (len(wins) / len(trades) * 100) if trades else 0
     
-    # Sharpe (simplified)
+    # FIX (2026-08-11): Compute Sharpe/Sortino from per-trade fractional
+    # returns (PnL / equity-before-trade), not from absolute USD PnL.
+    # Using absolute USD PnL makes the ratio scale linearly with lot size
+    # and gives a t-statistic, not a Sharpe ratio. Also use correct
+    # annualization: divide by sqrt(tpy), not multiply.
+    BARS_PER_DAY = {"M1": 960, "M5": 288, "M15": 96, "H1": 24, "H4": 6, "D1": 1}
+    timeframe = getattr(config, "timeframe", "M15") or "M15"
+    tpy = 252 * BARS_PER_DAY.get(timeframe, 96)
     if len(pnls) > 1:
-        returns = pd.Series(pnls)
-        sharpe = returns.mean() / returns.std() * np.sqrt(252 * 96) if returns.std() > 0 else 0
+        eq_before = np.concatenate([[config.initial_balance], equity_curve[:-1]])
+        eq_before_safe = np.where(np.asarray(eq_before) > 0, np.asarray(eq_before), 1.0)
+        rets_arr = np.asarray(pnls) / eq_before_safe
+        ar = float(np.mean(rets_arr))
+        sr = float(np.std(rets_arr, ddof=1))
+        sharpe = (ar * tpy) / (sr * np.sqrt(tpy)) if sr > 0 else 0
     else:
         sharpe = 0
-    
+        rets_arr = np.asarray(pnls) / max(config.initial_balance, 1.0)
+
     # Sortino
-    downside = [p for p in pnls if p < 0]
-    sortino = (np.mean(pnls) / np.std(downside) * np.sqrt(252 * 96)) if downside and np.std(downside) > 0 else 0
+    downside = rets_arr[rets_arr < 0]
+    dstd = float(np.std(downside, ddof=1)) if len(downside) > 1 else 0.0
+    ar = float(np.mean(rets_arr)) if len(rets_arr) > 0 else 0.0
+    sortino = (ar * tpy) / (dstd * np.sqrt(tpy)) if dstd > 0 else 0
     
     # Max drawdown
     eq = np.array(equity_curve)
@@ -164,18 +163,7 @@ def _calculate_backtest_metrics(df: pd.DataFrame, predictions, symbol: str, conf
     dd = (peak_arr - eq) / peak_arr
     max_dd = float(dd.max()) * 100 if len(dd) > 0 else 0
     
-    winning_trades = [t for t in trades if t["pnl"] > 0]
-    losing_trades = [t for t in trades if t["pnl"] < 0]
-    # BUG FIX: `wins`/`losses` above (line 141-142) are plain PnL-float
-    # lists, not trade dicts -- `t["pips"]` on a float crashes with
-    # "'float' object is not subscriptable". This only fired whenever a
-    # model actually predicted BOTH some winning AND some losing trades
-    # (catboost, random_forest); xgboost/lightgbm predicted HOLD almost
-    # exclusively so `trades` was empty and this line was never reached,
-    # silently masking the bug behind a "PnL=$0.00" result instead.
-    avg_rr = (np.mean([t["pips"] for t in winning_trades]) /
-              abs(np.mean([t["pips"] for t in losing_trades]))
-              if winning_trades and losing_trades else 0)
+    avg_rr = np.mean([t["pips"] for t in wins]) / abs(np.mean([t["pips"] for t in losses])) if wins and losses else 0
     expectancy = net_profit / len(trades) if trades else 0
     recovery_factor = net_profit / (max_dd * config.initial_balance / 100) if max_dd > 0 else 0
     

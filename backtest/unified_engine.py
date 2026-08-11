@@ -447,7 +447,13 @@ def run_unified_backtest(
             equity_curve.append(broker.get_balance())
             continue
 
-        entry = dec_out.get("entry") or float(primary_df.iloc[i]["close"])
+        # FIX (2026-08-11): look-ahead bias — fill at next bar's open, not signal bar's close.
+        if dec_out.get("entry"):
+            entry = dec_out["entry"]
+        elif i + 1 < len(primary_df):
+            entry = float(primary_df.iloc[i + 1]["open"])
+        else:
+            entry = float(primary_df.iloc[i]["close"])
         sl = risk_out.get("sl_price")
         tp = risk_out.get("tp_price")
         lot = risk_out.get("lot") or 0.01

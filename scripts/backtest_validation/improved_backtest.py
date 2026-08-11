@@ -120,8 +120,18 @@ def run_improved_backtest(pairs: List[str], timeframe: str = "H1",
         if not csv_path.exists():
             print(f"  SKIP {pair} {timeframe}: file not found"); continue
         df = load_csv(csv_path, pair, timeframe).tail(max_candles).reset_index(drop=True)
-        df.index = pd.date_range(end=datetime.now(timezone.utc), periods=len(df),
-                                  freq={"M15":"15min","H1":"1h","H4":"4h"}.get(timeframe,"1h"))
+        # FIX (2026-08-11): do NOT overwrite the real DatetimeIndex with a
+        # synthetic date_range ending at "now" — that destroys all session
+        # logic (London/NewYork/Tokyo tags depend on actual bar timestamps)
+        # and makes results non-deterministic (depend on wall-clock time).
+        # The loader already returns a proper DatetimeIndex; keep it.
+        if not isinstance(df.index, pd.DatetimeIndex):
+            # Fallback: only build a synthetic index if the CSV truly had no
+            # timestamp column AND the loader didn't construct one.
+            df.index = pd.date_range(
+                end=datetime.now(timezone.utc), periods=len(df),
+                freq={"M15": "15min", "H1": "1h", "H4": "4h"}.get(timeframe, "1h"),
+            )
         pip = 0.01 if "JPY" in pair else (0.1 if "XAU" in pair else 0.0001)
         gen = ImprovedSignalGenerator(pair, pip)
         bt = HonestBacktester(

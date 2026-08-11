@@ -279,7 +279,13 @@ def run_research_backtest(
             continue
 
         # --- Execute trade ---
-        entry = dec_out.get("entry") or float(df.iloc[i]["close"])
+        # FIX (2026-08-11): look-ahead bias — fill at next bar's open.
+        if dec_out.get("entry"):
+            entry = dec_out["entry"]
+        elif i + 1 < len(df):
+            entry = float(df.iloc[i + 1]["open"])
+        else:
+            entry = float(df.iloc[i]["close"])
         sl = risk_out.get("sl_price")
         tp = risk_out.get("tp_price")
         lot = risk_out.get("lot") or 0.01

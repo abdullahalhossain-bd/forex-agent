@@ -1,11 +1,24 @@
 """Layer 3: Out-of-Distribution Detector.
-Detects when current market conditions are outside training distribution.""" 
+Detects when current market conditions are outside training distribution."""
 from __future__ import annotations
 import logging, os, pickle, json, datetime
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# SECURITY FIX (2026-08-11): use RestrictedUnpickler instead of raw pickle.load
+# to prevent arbitrary code execution from tampered .pkl files.
+try:
+    from utils.safe_pickle import RestrictedUnpickler as _SafeUnpickler
+except Exception:  # pragma: no cover - fallback if utils not importable
+    _SafeUnpickler = pickle.Unpickler
+
+# FIX (2026-08-11): use RestrictedUnpickler for tamper resistance — raw pickle.load allows arbitrary code execution from tampered .pkl files.
+try:
+    from utils.safe_pickle import RestrictedUnpickler as _SafeUnpickler
+except Exception:
+    _SafeUnpickler = pickle.Unpickler
 
 try:
     import numpy as np
@@ -87,7 +100,7 @@ class OODDetector:
         if not self._path.exists(): return
         try:
             with open(self._path, "rb") as f:
-                saved = pickle.load(f)
+                saved = _SafeUnpickler(f).load()
             self._ref_features = deque(saved.get("features", []), maxlen=OOD_FEATURE_WINDOW)
             self._n_seen = saved.get("n_seen", 0)
             self._compute_stats()
@@ -108,7 +121,7 @@ class OODDetector:
             arr = np.array(self._ref_features)
             self._means = np.mean(arr, axis=0)
             self._stds = np.std(arr, axis=0).clip(min=1e-8)
-        except: pass
+        except Exception: pass
 
     def record_features(self, features: Dict[str, float]):
         vec = [features.get(k, 0.0) for k in self.OOD_FEATURES]

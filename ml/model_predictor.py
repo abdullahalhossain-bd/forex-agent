@@ -155,12 +155,13 @@ class ModelPredictor:
             model_type = meta_path.parent.parent.name
             model_dir = meta_path.parent.parent
 
-            from utils.safe_pickle import safe_pickle_load
+            from utils.safe_pickle import safe_pickle_load, RestrictedUnpickler
             model = safe_pickle_load(str(model_dir / "model.pkl"))
 
             feature_list = json.loads((model_dir / "feature_list.json").read_text(encoding="utf-8"))
             with (model_dir / "normalizer.pkl").open("rb") as f:
-                normalizer = pickle.load(f)
+                # SECURITY FIX: use RestrictedUnpickler for tamper resistance
+                normalizer = RestrictedUnpickler(f).load()
             means, stds = normalizer["means"], normalizer["stds"]
 
             feats = build_institutional_features(df_recent)

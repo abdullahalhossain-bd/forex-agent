@@ -561,7 +561,13 @@ class SymbolWorker:
             return
 
         # 6. Extract trade params + open
-        entry = dec_out.get("entry") or float(self.primary_df.iloc[i]["close"])
+        # FIX (2026-08-11): look-ahead bias — fill at next bar's open.
+        if dec_out.get("entry"):
+            entry = dec_out["entry"]
+        elif i + 1 < len(self.primary_df):
+            entry = float(self.primary_df.iloc[i + 1]["open"])
+        else:
+            entry = float(self.primary_df.iloc[i]["close"])
         sl = risk_out.get("sl_price")
         tp = risk_out.get("tp_price")
         lot = risk_out.get("lot") or 0.01

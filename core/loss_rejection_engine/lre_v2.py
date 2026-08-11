@@ -37,6 +37,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# FIX (2026-08-11): RestrictedUnpickler for tamper resistance.
+try:
+    from utils.safe_pickle import RestrictedUnpickler as _SafeUnpickler
+except Exception:
+    _SafeUnpickler = pickle.Unpickler
+
 log = logging.getLogger("lre_v2")
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -464,7 +470,7 @@ class MetaLabelerV2:
                 return
 
             with open(mp, "rb") as f:
-                artifacts = pickle.load(f)
+                artifacts = _SafeUnpickler(f).load()
 
             self._model = artifacts["model"]
             self._scaler_means = artifacts["scaler_means"]
@@ -1025,7 +1031,7 @@ class OODDetectorV2:
             return
         try:
             with open(rp, "rb") as f:
-                data = pickle.load(f)
+                data = _SafeUnpickler(f).load()
             self._means = data["means"]
             self._cov_inv = data["cov_inv"]
             self._n_seen = data["n_seen"]

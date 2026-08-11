@@ -5,6 +5,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# FIX (2026-08-11): RestrictedUnpickler for tamper resistance.
+try:
+    from utils.safe_pickle import RestrictedUnpickler as _SafeUnpickler
+except Exception:
+    _SafeUnpickler = pickle.Unpickler
+
 try:
     import numpy as np
 except ImportError:
@@ -43,7 +49,7 @@ def _atr_from_ctx(ind):
         elif isinstance(atr, (int, float)): v = atr
         if v is None: v = ind.get("ATR")
     try: return float(v)
-    except: return None
+    except Exception: return None
 
 
 def _rsi_from_ctx(ind):
@@ -54,7 +60,7 @@ def _rsi_from_ctx(ind):
         elif isinstance(rsi, (int, float)): v = rsi
         if v is None: v = ind.get("RSI")
     try: return float(v)
-    except: return None
+    except Exception: return None
 
 
 class MetaLabeler:
@@ -134,7 +140,7 @@ class MetaLabeler:
             return
         try:
             with open(self._model_path, "rb") as f:
-                saved = pickle.load(f)
+                saved = _SafeUnpickler(f).load()
             self._model = saved.get("model")
             self._scaler = saved.get("scaler")
             self._feature_names = saved.get("feature_names", [])
