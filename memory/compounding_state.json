@@ -1,0 +1,30 @@
+{
+  "initial_balance": 10000.0,
+  "current_balance": 9987.8,
+  "trade_history": [
+    {
+      "timestamp": "2026-08-07T07:59:42.495533+00:00",
+      "pair": "USDCAD",
+      "pnl_usd": -2.99,
+      "balance_after": 9997.01
+    },
+    {
+      "timestamp": "2026-08-07T07:59:43.541251+00:00",
+      "pair": "USDCAD",
+      "pnl_usd": -2.99,
+      "balance_after": 9994.02
+    },
+    {
+      "timestamp": "2026-08-07T12:21:12.792009+00:00",
+      "pair": "AUDCAD",
+      "pnl_usd": -3.11,
+      "balance_after": 9990.91
+    },
+    {
+      "timestamp": "2026-08-07T12:21:13.804036+00:00",
+      "pair": "AUDCAD",
+      "pnl_usd": -3.11,
+      "balance_after": 9987.8
+    }
+  ]
+}

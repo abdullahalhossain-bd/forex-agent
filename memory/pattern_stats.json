@@ -1,0 +1,846 @@
+{
+  "mt5_real_trade|EURUSD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "EURUSD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 50,
+    "wins": 14,
+    "losses": 30,
+    "win_rate": 28.0,
+    "weight": 0.3314,
+    "recent_results": [
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:06.945320+00:00",
+        "confidence": null,
+        "pnl": 8.2
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.108115+00:00",
+        "confidence": null,
+        "pnl": -4.16
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.300892+00:00",
+        "confidence": null,
+        "pnl": -4.04
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.398364+00:00",
+        "confidence": null,
+        "pnl": -3.88
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.488994+00:00",
+        "confidence": null,
+        "pnl": -3.92
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.105767+00:00",
+        "confidence": null,
+        "pnl": 7.81
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.286739+00:00",
+        "confidence": null,
+        "pnl": 7.97
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.333791+00:00",
+        "confidence": null,
+        "pnl": -2.93
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.770831+00:00",
+        "confidence": null,
+        "pnl": 11.05
+      },
+      {
+        "outcome": "BE",
+        "timestamp": "2026-08-05T15:39:09.499149+00:00",
+        "confidence": null,
+        "pnl": 0.0
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.499127+00:00"
+  },
+  "mt5_real_trade|GBPUSD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "GBPUSD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 34,
+    "wins": 10,
+    "losses": 24,
+    "win_rate": 29.4,
+    "weight": 0.3628,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.722383+00:00",
+        "confidence": null,
+        "pnl": -3.96
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.955387+00:00",
+        "confidence": null,
+        "pnl": -11.04
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.228894+00:00",
+        "confidence": null,
+        "pnl": -8.72
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.839727+00:00",
+        "confidence": null,
+        "pnl": -3.76
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.158401+00:00",
+        "confidence": null,
+        "pnl": -3.84
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:07.601131+00:00",
+        "confidence": null,
+        "pnl": 5.82
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.812168+00:00",
+        "confidence": null,
+        "pnl": -3.24
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.150477+00:00",
+        "confidence": null,
+        "pnl": -4.88
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.447586+00:00",
+        "confidence": null,
+        "pnl": 7.7
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.610076+00:00",
+        "confidence": null,
+        "pnl": 7.49
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:08.610061+00:00"
+  },
+  "mt5_real_trade|USDJPY|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "USDJPY",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 38,
+    "wins": 8,
+    "losses": 30,
+    "win_rate": 21.1,
+    "weight": 0.1513,
+    "recent_results": [
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:06.988493+00:00",
+        "confidence": null,
+        "pnl": 5.23
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:07.204961+00:00",
+        "confidence": null,
+        "pnl": 5.55
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.654949+00:00",
+        "confidence": null,
+        "pnl": -1.87
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.862275+00:00",
+        "confidence": null,
+        "pnl": -1.92
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.960641+00:00",
+        "confidence": null,
+        "pnl": -2.0
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.197116+00:00",
+        "confidence": null,
+        "pnl": -2.49
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.823417+00:00",
+        "confidence": null,
+        "pnl": -1.6
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.997093+00:00",
+        "confidence": null,
+        "pnl": -2.49
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.293359+00:00",
+        "confidence": null,
+        "pnl": -5.47
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:10.192302+00:00",
+        "confidence": null,
+        "pnl": -12.8
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:10.192283+00:00"
+  },
+  "mt5_real_trade|AUDUSD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "AUDUSD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 40,
+    "wins": 6,
+    "losses": 34,
+    "win_rate": 15.0,
+    "weight": 0.2868,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.715795+00:00",
+        "confidence": null,
+        "pnl": -2.85
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.007041+00:00",
+        "confidence": null,
+        "pnl": -3.0
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.242563+00:00",
+        "confidence": null,
+        "pnl": -4.04
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.515713+00:00",
+        "confidence": null,
+        "pnl": -2.69
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.669846+00:00",
+        "confidence": null,
+        "pnl": 6.430000000000001
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.248236+00:00",
+        "confidence": null,
+        "pnl": -3.95
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.333303+00:00",
+        "confidence": null,
+        "pnl": -4.19
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:10.037177+00:00",
+        "confidence": null,
+        "pnl": -14.440000000000001
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:10.088514+00:00",
+        "confidence": null,
+        "pnl": 21.41
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:10.251843+00:00",
+        "confidence": null,
+        "pnl": 1.5
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:10.251827+00:00"
+  },
+  "mt5_real_trade|USDCAD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "USDCAD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 24,
+    "wins": 6,
+    "losses": 18,
+    "win_rate": 25.0,
+    "weight": 0.3656,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.739990+00:00",
+        "confidence": null,
+        "pnl": -0.14
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.788878+00:00",
+        "confidence": null,
+        "pnl": -0.65
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.760375+00:00",
+        "confidence": null,
+        "pnl": -2.12
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:07.914568+00:00",
+        "confidence": null,
+        "pnl": -2.2
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.055664+00:00",
+        "confidence": null,
+        "pnl": -2.05
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.390337+00:00",
+        "confidence": null,
+        "pnl": -2.0799999999999996
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.558975+00:00",
+        "confidence": null,
+        "pnl": 5.25
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:08.721837+00:00",
+        "confidence": null,
+        "pnl": 4.36
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.052378+00:00",
+        "confidence": null,
+        "pnl": -2.1
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.374675+00:00",
+        "confidence": null,
+        "pnl": 5.430000000000001
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.374660+00:00"
+  },
+  "mt5_real_trade|XAUUSD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "XAUUSD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 18,
+    "wins": 2,
+    "losses": 16,
+    "win_rate": 11.1,
+    "weight": 0.2139,
+    "recent_results": [
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T14:29:35.750597+00:00",
+        "confidence": null,
+        "pnl": 16.44
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.421218+00:00",
+        "confidence": null,
+        "pnl": -31.86
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.612303+00:00",
+        "confidence": null,
+        "pnl": -51.09
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.832983+00:00",
+        "confidence": null,
+        "pnl": -41.24
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:05.892099+00:00",
+        "confidence": null,
+        "pnl": -51.96
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.007341+00:00",
+        "confidence": null,
+        "pnl": -25.93
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.172370+00:00",
+        "confidence": null,
+        "pnl": -32.25
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.417347+00:00",
+        "confidence": null,
+        "pnl": -29.31
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:06.514589+00:00",
+        "confidence": null,
+        "pnl": -54.85
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.979352+00:00",
+        "confidence": null,
+        "pnl": 16.44
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.979338+00:00"
+  },
+  "mt5_real_trade|NZDUSD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "NZDUSD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 4,
+    "wins": 2,
+    "losses": 2,
+    "win_rate": 50.0,
+    "weight": 0.5091,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:34.811684+00:00",
+        "confidence": null,
+        "pnl": -0.3
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T14:29:35.424239+00:00",
+        "confidence": null,
+        "pnl": 1.5
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.884733+00:00",
+        "confidence": null,
+        "pnl": -0.3
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.584749+00:00",
+        "confidence": null,
+        "pnl": 1.5
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.584733+00:00"
+  },
+  "mt5_real_trade|GBPNZD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "GBPNZD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:34.849421+00:00",
+        "confidence": null,
+        "pnl": -3.54
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:08.941331+00:00",
+        "confidence": null,
+        "pnl": -3.54
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:08.941317+00:00"
+  },
+  "mt5_real_trade|EURCHF|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "EURCHF",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:34.975127+00:00",
+        "confidence": null,
+        "pnl": -4.89
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.105267+00:00",
+        "confidence": null,
+        "pnl": -4.89
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.105253+00:00"
+  },
+  "mt5_real_trade|GBPCAD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "GBPCAD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.007505+00:00",
+        "confidence": null,
+        "pnl": -2.91
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.147791+00:00",
+        "confidence": null,
+        "pnl": -2.91
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.147777+00:00"
+  },
+  "mt5_real_trade|USDCNH|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "USDCNH",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 2,
+    "losses": 0,
+    "win_rate": 100.0,
+    "weight": 0.595,
+    "recent_results": [
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T14:29:35.048458+00:00",
+        "confidence": null,
+        "pnl": 2.25
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.197344+00:00",
+        "confidence": null,
+        "pnl": 2.25
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.197328+00:00"
+  },
+  "mt5_real_trade|EURGBP|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "EURGBP",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 4,
+    "wins": 2,
+    "losses": 2,
+    "win_rate": 50.0,
+    "weight": 0.5091,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.258773+00:00",
+        "confidence": null,
+        "pnl": -10.96
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T14:29:35.588057+00:00",
+        "confidence": null,
+        "pnl": 1.42
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.416825+00:00",
+        "confidence": null,
+        "pnl": -10.96
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.777102+00:00",
+        "confidence": null,
+        "pnl": 1.42
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.777082+00:00"
+  },
+  "mt5_real_trade|NZDCHF|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "NZDCHF",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.296440+00:00",
+        "confidence": null,
+        "pnl": -12.34
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.457954+00:00",
+        "confidence": null,
+        "pnl": -12.34
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.457939+00:00"
+  },
+  "mt5_real_trade|USDCHF|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "USDCHF",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 4,
+    "wins": 0,
+    "losses": 4,
+    "win_rate": 0.0,
+    "weight": 0.3281,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.381291+00:00",
+        "confidence": null,
+        "pnl": -4.93
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.868520+00:00",
+        "confidence": null,
+        "pnl": -12.0
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.541953+00:00",
+        "confidence": null,
+        "pnl": -4.93
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:10.141477+00:00",
+        "confidence": null,
+        "pnl": -12.0
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:10.141463+00:00"
+  },
+  "mt5_real_trade|EURJPY|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "EURJPY",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.456749+00:00",
+        "confidence": null,
+        "pnl": -7.51
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.634922+00:00",
+        "confidence": null,
+        "pnl": -7.51
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.634908+00:00"
+  },
+  "mt5_real_trade|GBPAUD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "GBPAUD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.509603+00:00",
+        "confidence": null,
+        "pnl": -7.98
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.676713+00:00",
+        "confidence": null,
+        "pnl": -7.98
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.676691+00:00"
+  },
+  "mt5_real_trade|AUDCHF|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "AUDCHF",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.551071+00:00",
+        "confidence": null,
+        "pnl": -6.4
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.726762+00:00",
+        "confidence": null,
+        "pnl": -6.4
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.726650+00:00"
+  },
+  "mt5_real_trade|CHFJPY|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "CHFJPY",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.634628+00:00",
+        "confidence": null,
+        "pnl": -7.31
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.828435+00:00",
+        "confidence": null,
+        "pnl": -7.31
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.828411+00:00"
+  },
+  "mt5_real_trade|EURCAD|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "EURCAD",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 0,
+    "losses": 2,
+    "win_rate": 0.0,
+    "weight": 0.405,
+    "recent_results": [
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T14:29:35.673188+00:00",
+        "confidence": null,
+        "pnl": -4.58
+      },
+      {
+        "outcome": "LOSS",
+        "timestamp": "2026-08-05T15:39:09.876190+00:00",
+        "confidence": null,
+        "pnl": -4.58
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.876172+00:00"
+  },
+  "mt5_real_trade|CADJPY|H1|UNKNOWN": {
+    "pattern": "mt5_real_trade",
+    "pair": "CADJPY",
+    "timeframe": "H1",
+    "market_regime": "UNKNOWN",
+    "total_trades": 2,
+    "wins": 2,
+    "losses": 0,
+    "win_rate": 100.0,
+    "weight": 0.595,
+    "recent_results": [
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T14:29:35.714142+00:00",
+        "confidence": null,
+        "pnl": 0.47
+      },
+      {
+        "outcome": "WIN",
+        "timestamp": "2026-08-05T15:39:09.926535+00:00",
+        "confidence": null,
+        "pnl": 0.47
+      }
+    ],
+    "last_updated": "2026-08-05T15:39:09.926515+00:00"
+  }
+}

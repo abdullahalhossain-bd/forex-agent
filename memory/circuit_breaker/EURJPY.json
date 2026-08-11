@@ -1,0 +1,28 @@
+{
+  "mode": "TRADING",
+  "consecutive_losses": 1,
+  "daily_loss_usd": 0.0,
+  "date": "2026-08-11",
+  "recent_results": [
+    {
+      "result": "WIN",
+      "ts": "2026-08-04T22:01:47.100257"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-08-06T19:15:33.614586"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-08-06T22:01:21.838049"
+    },
+    {
+      "result": "LOSS",
+      "ts": "2026-08-07T12:44:08.827146"
+    }
+  ],
+  "pause_reason": "",
+  "week": "2026-W33",
+  "weekly_loss_usd": 0.0,
+  "daily_loss_sync_stale": false
+}

@@ -1,0 +1,110 @@
+[
+  {
+    "ticket": 9861074932,
+    "pair": "USDJPY",
+    "direction": "SELL",
+    "requested": 157.588,
+    "executed": 157.588,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.2,
+    "latency_ms": 330,
+    "timestamp": "2026-08-04T16:46:59+00:00"
+  },
+  {
+    "ticket": 9863989287,
+    "pair": "AUDUSD",
+    "direction": "BUY",
+    "requested": 0.70439,
+    "executed": 0.70439,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.2,
+    "latency_ms": 360,
+    "timestamp": "2026-08-04T21:21:05+00:00"
+  },
+  {
+    "ticket": 9905348902,
+    "pair": "EURNZD",
+    "direction": "SELL",
+    "requested": 1.96408,
+    "executed": 1.96408,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.9,
+    "latency_ms": 267,
+    "timestamp": "2026-08-06T16:08:47+00:00"
+  },
+  {
+    "ticket": 9907794536,
+    "pair": "USDCAD",
+    "direction": "SELL",
+    "requested": 1.40152,
+    "executed": 1.40152,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.2,
+    "latency_ms": 321,
+    "timestamp": "2026-08-06T18:39:46+00:00"
+  },
+  {
+    "ticket": 9908108989,
+    "pair": "CHFJPY",
+    "direction": "SELL",
+    "requested": 194.968,
+    "executed": 194.967,
+    "slippage": 0.001,
+    "slippage_pips": 0.1,
+    "spread_pips": 0.7,
+    "latency_ms": 304,
+    "timestamp": "2026-08-06T19:07:26+00:00"
+  },
+  {
+    "ticket": 9908939706,
+    "pair": "AUDCHF",
+    "direction": "BUY",
+    "requested": 0.57134,
+    "executed": 0.57134,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.3,
+    "latency_ms": 349,
+    "timestamp": "2026-08-06T20:51:37+00:00"
+  },
+  {
+    "ticket": 9917739402,
+    "pair": "AUDCAD",
+    "direction": "BUY",
+    "requested": 0.98675,
+    "executed": 0.98675,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.3,
+    "latency_ms": 334,
+    "timestamp": "2026-08-07T10:42:35+00:00"
+  },
+  {
+    "ticket": 9926756941,
+    "pair": "CADCHF",
+    "direction": "BUY",
+    "requested": 0.57958,
+    "executed": 0.57956,
+    "slippage": -2e-05,
+    "slippage_pips": -0.2,
+    "spread_pips": 0.9,
+    "latency_ms": 437,
+    "timestamp": "2026-08-07T16:13:23+00:00"
+  },
+  {
+    "ticket": 9929121454,
+    "pair": "EURNOK",
+    "direction": "SELL",
+    "requested": 10.9791,
+    "executed": 10.9792,
+    "slippage": -0.0001,
+    "slippage_pips": -1.0,
+    "spread_pips": 11.0,
+    "latency_ms": 352,
+    "timestamp": "2026-08-07T19:01:18+00:00"
+  }
+]
