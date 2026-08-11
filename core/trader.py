@@ -2358,28 +2358,26 @@ class AITrader:
                     )
                     result["devils_advocate"] = review
                     dec_out["devils_advocate"] = review
-                    # Audit fix (2026-08-09): make the independent challenge
-                    # and its final decision visible in the human-readable
-                    # log using the TAKE_TRADE/REJECT_TRADE vocabulary the
-                    # trade-decision spec calls for. The structured EXECUTE/
-                    # VETO strings are kept as-is everywhere else (tests,
-                    # execution_logger schema, DevilsAdvocateGate contract)
-                    # to avoid an unnecessary breaking rename of a working,
-                    # tested API — this is purely an additional log line.
-                    _da_final = "REJECT_TRADE" if review.get("decision") == "VETO" else "TAKE_TRADE"
+                    # 2026-08-11 review fix: the gate's decision vocabulary is
+                    # now TAKE/REJECT/UNCERTAIN (UNCERTAIN is always resolved
+                    # to TAKE/REJECT before it reaches this point — see
+                    # DevilsAdvocateGate._resolve_uncertain/_resolve_failure).
+                    # The raw (pre-resolution) model verdict is preserved in
+                    # review["raw_decision"] for audit purposes.
+                    _da_final = "REJECT_TRADE" if review.get("decision") == "REJECT" else "TAKE_TRADE"
                     log.info(
                         f"[Trader] {self.symbol}: Devil's Advocate reviewed "
                         f"{result.get('final_action')} -> {_da_final} "
-                        f"(conf={review.get('confidence', 0):.0f}%) | "
+                        f"(raw={review.get('raw_decision', 'n/a')}, conf={review.get('confidence', 0):.0f}%) | "
                         f"reasoning: {review.get('risk_summary', 'n/a')} | "
                         f"concerns={review.get('reasons_for_concern', [])}"
                     )
-                    if review.get("decision") == "VETO":
+                    if review.get("decision") == "REJECT":
                         result["trade_allowed"] = False
                         result["final_action"] = "NO TRADE"
                         result["execution_action"] = "NO TRADE"
                         result["reject_reason"] = (
-                            f"Devil's Advocate veto: {review.get('risk_summary', 'high concern')}"
+                            f"Devil's Advocate reject: {review.get('risk_summary', 'high concern')}"
                         )
                         result["blocked_reason"] = result["reject_reason"]
                         result["reject_stage"] = "devils_advocate"
@@ -2406,11 +2404,18 @@ class AITrader:
                         from core.execution_logger import log_devils_advocate_result
                         log_devils_advocate_result(
                             symbol=self.symbol,
-                            decision=review.get("decision", "EXECUTE"),
+                            decision=review.get("decision", "TAKE"),
                             confidence=float(review.get("confidence", 0) or 0),
                             reasons=review.get("reasons_for_concern", []),
                             risk_summary=review.get("risk_summary", ""),
                             evidence=review.get("evidence", []),
+                            raw_decision=review.get("raw_decision"),
+                            thesis_quality=review.get("thesis_quality"),
+                            counter_evidence_strength=review.get("counter_evidence_strength"),
+                            expected_edge=review.get("expected_edge"),
+                            risk_level=review.get("risk_level"),
+                            data_quality=review.get("data_quality"),
+                            critical_failure=review.get("critical_failure"),
                         )
                     except Exception as e:
                         log.warning(f"Suppressed exception at line 1110: {e}")

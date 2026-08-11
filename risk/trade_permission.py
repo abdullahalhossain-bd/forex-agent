@@ -250,7 +250,21 @@ class TradePermission:
         else:
             detail = sig
         checks.append({"check": "Valid signal", "passed": ok, "detail": detail})
+        # 2026-08-11 log-audit fix: this check appended to `checks` and
+        # incremented `passed` on success, but NEVER incremented `total`.
+        # Since `allowed = passed == total` (see bottom of this method),
+        # a check whose outcome never touches `total` has ZERO effect on
+        # whether the trade is actually permitted -- whether it passes or
+        # fails, the passed==total equality is unaffected either way. That
+        # made "Valid signal" (arguably the single most important gate)
+        # purely cosmetic in the final allow/deny decision. Confirmed from
+        # execution.log: entries with raw_signal="WAIT" (a failed "Valid
+        # signal" check) still logged allowed=true, and passed/total pairs
+        # like 5/4 or 7/5 (passed > total, which should be impossible)
+        # appeared throughout. Root cause: total simply wasn't incremented
+        # here. Fixed by counting this check like every other one below.
         if ok: passed += 1
+        total += 1
 
         # 1b. S/R ALIGNMENT GATE (added 2026-08-02, Abdullah audit)
         # Backtest evidence: SELL trades entered within 5-55 pips of a
@@ -572,7 +586,12 @@ class TradePermission:
             "passed": ok,
             "detail": detail,
         })
+        # 2026-08-11 log-audit fix: see the identical note on the "Valid
+        # signal" check above -- `total` was never incremented here either,
+        # so a rejected RiskEngine result could not actually block
+        # execution via the passed==total gate.
         if ok: passed += 1
+        total += 1
 
         # 3. News safe
         # Day 97+ FIX: fail-safe (not fail-open). If news_ctx is empty/None
@@ -604,7 +623,10 @@ class TradePermission:
             "passed": ok,
             "detail": detail,
         })
+        # 2026-08-11 log-audit fix: same missing `total += 1` as the two
+        # checks above.
         if ok: passed += 1
+        total += 1
 
         # ── ENTRY QUALITY: SOFT SCORING ───────────────────────────
         # Runs BEFORE the confidence gate so penalties reduce the
@@ -1108,7 +1130,13 @@ class TradePermission:
             "passed": ok,
             "detail": _conf_detail,
         })
+        # 2026-08-11 log-audit fix: same missing `total += 1` as the checks
+        # above. This one is especially notable because the whole point of
+        # this gate is enforcing the MIN_CONFIDENCE floor -- without the
+        # total increment, a below-floor confidence could never actually
+        # deny the trade through the passed==total mechanism.
         if ok: passed += 1
+        total += 1
 
         # Log-transparency fix: capture the EXACT value compared against
         # MIN_CONFIDENCE above (post entry-quality-penalty), separately from
