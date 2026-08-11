@@ -55,6 +55,54 @@ log = logging.getLogger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
+def _bootstrap_zipped_data_dirs() -> None:
+    """Auto-extract data directories that are gitignored but shipped as
+    zip archives at the repo root (memory.zip, backtest_runs.zip, logs.zip).
+
+    BUG FIX (2026-08-11 audit): `.gitignore` excludes `memory/` (and only
+    un-ignores loose top-level *.json, not nested files), which is correct
+    for keeping runtime state/secrets out of version control — but the
+    actual `memory/*.py` SOURCE MODULES (trade_memory.py, database.py,
+    history.py, knowledge_store.py, learning.py) live inside that same
+    ignored directory. At least 10 files import from `memory.*`, including
+    core/runtime.py and core/trader.py — i.e. the boot path itself. Anyone
+    cloning this repo fresh only gets `memory.zip` (committed separately,
+    presumably as a manual backup workaround for the gitignore) with no
+    `memory/` directory and no extraction step, so `from memory.trade_memory
+    import TradeMemory` raises ModuleNotFoundError the moment the
+    persistence phase boots — the app cannot start at all from a clean
+    clone. This runs once at import time, before any phase (and therefore
+    before any `memory.*` import) executes, and extracts each zip only if
+    its target directory doesn't already exist — a real local `memory/`
+    (e.g. on the machine that already has live state) is never touched or
+    overwritten.
+    """
+    for name in ("memory", "backtest_runs", "logs"):
+        target = PROJECT_ROOT / name
+        archive = PROJECT_ROOT / f"{name}.zip"
+        if target.exists() or not archive.exists():
+            continue
+        try:
+            import zipfile
+            with zipfile.ZipFile(archive) as zf:
+                zf.extractall(PROJECT_ROOT)
+            log.info(
+                "[Bootstrap] %s/ was missing (gitignored, fresh clone) — "
+                "auto-extracted from %s",
+                name, archive.name,
+            )
+        except Exception as e:
+            log.error(
+                "[Bootstrap] failed to auto-extract %s: %s — the app will "
+                "likely fail to boot without this directory; extract it "
+                "manually.",
+                archive.name, e,
+            )
+
+
+_bootstrap_zipped_data_dirs()
+
+
 class Runtime:
     """Facade that bundles every runtime infrastructure service."""
 

@@ -1,0 +1,33 @@
+{
+  "cursor": 700,
+  "symbol": "EURUSD",
+  "open_trades": [],
+  "closed_trades_count": 2,
+  "entry_bar": {
+    "1": 382,
+    "2": 412
+  },
+  "broker_balance": 9960.29,
+  "broker_tc": 2,
+  "rejection_stats": {
+    "WAIT": 125,
+    "NO_TRADE_ANALYSIS": 0,
+    "risk_rejected": 19,
+    "permission_blocked": 254,
+    "engine_error": 0,
+    "max_trades": 0,
+    "total_bars": 400
+  },
+  "per_symbol_stats": {
+    "EURUSD": {
+      "trades": 2,
+      "wins": 0,
+      "losses": 2,
+      "gross_profit": 0.0,
+      "gross_loss": -39.71,
+      "net_pnl": -39.71
+    }
+  },
+  "snapshot_at": "2026-08-09T14:40:09+00:00",
+  "updated_at": "2026-08-09T14:40:09+00:00"
+}

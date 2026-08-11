@@ -1,678 +1,152 @@
-2026-08-11 14:35:47,227 - llm_key_manager - INFO - [LLM Keys] Loaded 14 Groq key(s)
-2026-08-11 14:35:47,227 - llm_key_manager - INFO - [LLM Keys] Loaded 13 Gemini key(s)
-2026-08-11 14:35:47,228 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
-2026-08-11 14:35:47,228 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
-2026-08-11 14:35:47,228 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
-2026-08-11 14:35:47,229 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
-2026-08-11 14:35:47,229 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
-2026-08-11 14:35:47,230 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude key(s)
-2026-08-11 14:35:47,230 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM key(s)
-2026-08-11 14:35:47,233 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
-2026-08-11 14:35:47,235 - llm_key_manager - INFO - [LLM Throttle] Loaded config parameters successfully.
-2026-08-11 14:35:47,237 - core.runtime - INFO - LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
-2026-08-11 14:36:37,584 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:37,844 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:38,329 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:38,567 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:39,032 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:39,267 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:39,723 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:39,955 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
-2026-08-11 14:36:40,434 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:40,672 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:41,126 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:41,361 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:41,860 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
-2026-08-11 14:36:42,334 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:36:42,571 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-08-11 14:36:47,622 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
-2026-08-11 14:36:47,717 - core.runtime - INFO - Day 67 ConfluenceEngine wired
-2026-08-11 14:36:47,790 - core.runtime - INFO - Day 68 FeatureStore wired (4477 feature rows, 1484 labels)
-2026-08-11 14:36:47,914 - core.runtime - INFO - Day 69 ModelStore wired (171 models on disk)
-2026-08-11 14:36:48,022 - core.runtime - ERROR - [ModelStore] Registry/disk MISMATCH: 46 of 171 registered model file(s) missing on disk — AUDCAD_15m/random_forest_v1 (expected AUDCAD_15m/model.pkl), AUDCAD_15m/xgboost_v1 (expected AUDCAD_15m/model.pkl), AUDCHF_15m/random_forest_v1 (expected AUDCHF_15m/model.pkl), AUDCHF_15m/xgboost_v1 (expected AUDCHF_15m/model.pkl), AUDJPY_15m/random_forest_v1 (expected AUDJPY_15m/model.pkl), AUDJPY_15m/xgboost_v1 (expected AUDJPY_15m/model.pkl), AUDNZD_15m/random_forest_v1 (expected AUDNZD_15m/model.pkl), AUDNZD_15m/xgboost_v1 (expected AUDNZD_15m/model.pkl), AUDUSD_15m/random_forest_v1 (expected AUDUSD_15m/model.pkl), AUDUSD_15m/xgboost_v1 (expected AUDUSD_15m/model.pkl), EURAUD_15m/random_forest_v1 (expected EURAUD_15m/model.pkl), EURAUD_15m/xgboost_v1 (expected EURAUD_15m/model.pkl), EURCAD_15m/random_forest_v1 (expected EURCAD_15m/model.pkl), EURCAD_15m/xgboost_v1 (expected EURCAD_15m/model.pkl), EURCHF_15m/random_forest_v1 (expected EURCHF_15m/model.pkl), EURCHF_15m/xgboost_v1 (expected EURCHF_15m/model.pkl), EURGBP_15m/random_forest_v1 (expected EURGBP_15m/model.pkl), EURGBP_15m/xgboost_v1 (expected EURGBP_15m/model.pkl), EURJPY_15m/random_forest_v1 (expected EURJPY_15m/model.pkl), EURJPY_15m/xgboost_v1 (expected EURJPY_15m/model.pkl), EURNZD_15m/random_forest_v1 (expected EURNZD_15m/model.pkl), EURNZD_15m/xgboost_v1 (expected EURNZD_15m/model.pkl), EURUSD_15m/random_forest_v1 (expected EURUSD_15m/model.pkl), EURUSD_15m/xgboost_v1 (expected EURUSD_15m/model.pkl), GBPAUD_15m/random_forest_v1 (expected GBPAUD_15m/model.pkl), GBPAUD_15m/xgboost_v1 (expected GBPAUD_15m/model.pkl), GBPCAD_15m/random_forest_v1 (expected GBPCAD_15m/model.pkl), GBPCAD_15m/xgboost_v1 (expected GBPCAD_15m/model.pkl), GBPCHF_15m/random_forest_v1 (expected GBPCHF_15m/model.pkl), GBPCHF_15m/xgboost_v1 (expected GBPCHF_15m/model.pkl), GBPJPY_15m/random_forest_v1 (expected GBPJPY_15m/model.pkl), GBPJPY_15m/xgboost_v1 (expected GBPJPY_15m/model.pkl), GBPNZD_15m/random_forest_v1 (expected GBPNZD_15m/model.pkl), GBPNZD_15m/xgboost_v1 (expected GBPNZD_15m/model.pkl), GBPUSD_15m/random_forest_v1 (expected GBPUSD_15m/model.pkl), GBPUSD_15m/xgboost_v1 (expected GBPUSD_15m/model.pkl), NZDUSD_15m/random_forest_v1 (expected NZDUSD_15m/model.pkl), NZDUSD_15m/xgboost_v1 (expected NZDUSD_15m/model.pkl), USDCAD_15m/random_forest_v1 (expected USDCAD_15m/model.pkl), USDCAD_15m/xgboost_v1 (expected USDCAD_15m/model.pkl), USDCHF_15m/random_forest_v1 (expected USDCHF_15m/model.pkl), USDCHF_15m/xgboost_v1 (expected USDCHF_15m/model.pkl), USDJPY_15m/random_forest_v1 (expected USDJPY_15m/model.pkl), USDJPY_15m/xgboost_v1 (expected USDJPY_15m/model.pkl), XAUUSD_15m/random_forest_v1 (expected XAUUSD_15m/model.pkl), XAUUSD_15m/xgboost_v1 (expected XAUUSD_15m/model.pkl)
-2026-08-11 14:36:48,025 - core.runtime - WARNING - [ModelStore] ML_MODEL_CONSISTENCY_ACTION=warn — continuing to boot with 46 model(s) unavailable; affected pairs will report NOT_READY until retrained
-2026-08-11 14:36:48,037 - core.runtime - INFO - [ModelStore] auto-cleaned 171 stale version(s) and 171 empty key(s) from registry after warn — subsequent boots will not re-log these missing-model warnings
-2026-08-11 14:36:48,076 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
-2026-08-11 14:36:48,116 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
-2026-08-11 14:36:48,880 - core.runtime - INFO - Day 71 RL Agent wired (source=heuristic, model_loaded=False)
-2026-08-11 14:36:48,922 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
-2026-08-11 14:37:37,481 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
-2026-08-11 14:37:37,646 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
-2026-08-11 14:37:37,647 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
-2026-08-11 14:37:37,688 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
-2026-08-11 14:37:37,701 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
-2026-08-11 14:37:39,054 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:39,106 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:39,472 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:39,522 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:39,852 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:39,910 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:40,250 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:40,310 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
-2026-08-11 14:37:40,638 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:40,812 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:41,144 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:41,195 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:41,531 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
-2026-08-11 14:37:41,936 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-11 14:37:41,998 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-08-11 14:37:43,838 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
-2026-08-11 14:37:44,555 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
-2026-08-11 14:37:45,062 - core.service_registry - INFO - Service 'market_scanner' initialized
-2026-08-11 14:37:45,064 - core.service_registry - INFO - Service 'circuit_breaker_factory' initialized
-2026-08-11 14:37:45,824 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
-2026-08-11 14:37:46,037 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getMe "HTTP/1.1 200 OK"
-2026-08-11 14:37:46,259 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/deleteWebhook "HTTP/1.1 200 OK"
-2026-08-11 14:37:46,266 - telegram.ext.Application - INFO - Application started
-2026-08-11 14:37:46,843 - core._orphan_integration - INFO - ============================================================
-2026-08-11 14:37:46,844 - core._orphan_integration - INFO - Phase 25 — Orphan Module Integration (wiring 83 modules)
-2026-08-11 14:37:46,844 - core._orphan_integration - INFO - ============================================================
-2026-08-11 14:37:46,864 - core._orphan_integration - INFO -   ✓ advanced_risk_orchestrator
-2026-08-11 14:37:46,873 - core._orphan_integration - INFO -   ✓ adversarial_defenses
-2026-08-11 14:37:46,878 - core._orphan_integration - INFO -   ✓ basket_exit_manager
-2026-08-11 14:37:46,885 - core._orphan_integration - INFO -   ✓ book_guardrails (as module)
-2026-08-11 14:37:46,888 - core._orphan_integration - INFO -   ✓ compounding_engine
-2026-08-11 14:37:46,891 - core._orphan_integration - INFO -   ✓ controlled_grid_scaler
-2026-08-11 14:37:46,900 - core._orphan_integration - INFO -   ✓ entry_quality_guardrails (as module)
-2026-08-11 14:37:46,913 - core._orphan_integration - INFO -   ✓ expectancy_calculator
-2026-08-11 14:37:46,921 - core._orphan_integration - INFO -   ✓ institutional_entry_framework
-2026-08-11 14:37:46,923 - core._orphan_integration - INFO -   ✓ monte_carlo_engine
-2026-08-11 14:37:46,928 - core._orphan_integration - INFO -   ✓ order_split_manager
-2026-08-11 14:37:46,934 - core._orphan_integration - INFO -   ✓ position_allocator
-2026-08-11 14:37:46,940 - core._orphan_integration - INFO -   ✓ probability_distribution (as module)
-2026-08-11 14:37:46,941 - core._orphan_integration - INFO -   ✓ rr_policy
-2026-08-11 14:37:46,945 - core._orphan_integration - INFO -   ✓ streak_tracker
-2026-08-11 14:37:46,949 - core._orphan_integration - INFO -   ✓ structure_stop (as module)
-2026-08-11 14:37:46,961 - core._orphan_integration - INFO -   ✓ symbol_lock
-2026-08-11 14:37:46,973 - core._orphan_integration - INFO -   ✓ trade_frequency_controller
-2026-08-11 14:37:46,981 - core._orphan_integration - INFO -   ✓ trading_controls
-2026-08-11 14:37:46,994 - core._orphan_integration - INFO -   ✓ channel_breakout_stops (as module)
-2026-08-11 14:37:46,996 - core._orphan_integration - INFO -   ✓ approval_mode
-2026-08-11 14:37:47,004 - core._orphan_integration - INFO -   ✓ audit_report
-2026-08-11 14:37:47,010 - core._orphan_integration - INFO -   ✓ confidence_manager
-2026-08-11 14:37:47,010 - core._orphan_integration - INFO -   ✓ data_provider_live
-2026-08-11 14:37:47,010 - core._orphan_integration - INFO -   ✓ decision_validator
-2026-08-11 14:37:47,011 - core._orphan_integration - INFO -   ✓ execution_adapter_mt5
-2026-08-11 14:37:47,017 - core._orphan_integration - INFO -   ✓ indicator_cache
-2026-08-11 14:37:47,043 - core._orphan_integration - INFO -   ✓ professional_tools
-2026-08-11 14:37:47,051 - core._orphan_integration - INFO -   ✓ regime_suppressor
-2026-08-11 14:37:47,058 - core._orphan_integration - INFO -   ✓ signal_persistence_filter
-2026-08-11 14:37:47,062 - core._orphan_integration - INFO -   ✓ signal_scorer
-2026-08-11 14:37:47,077 - core._orphan_integration - INFO -   ✓ unified_signal_schema (as module)
-2026-08-11 14:37:47,093 - core._orphan_integration - INFO -   ✓ adaptive_decision_engine
-2026-08-11 14:37:47,103 - core._orphan_integration - INFO -   ✓ adx_filters (as module)
-2026-08-11 14:37:47,116 - core._orphan_integration - INFO -   ✓ adx_trend_filter
-2026-08-11 14:37:47,128 - core._orphan_integration - INFO -   ✓ advanced_filters (as module)
-2026-08-11 14:37:47,136 - core._orphan_integration - INFO -   ✓ decision_bridge
-2026-08-11 14:37:47,175 - core._orphan_integration - INFO -   ✓ engulfing_bar_strategy
-2026-08-11 14:37:47,184 - core._orphan_integration - INFO -   ✓ global_filters
-2026-08-11 14:37:47,262 - core._orphan_integration - INFO -   ✓ high_reliability_patterns
-2026-08-11 14:37:47,285 - core._orphan_integration - INFO -   ✓ ict_amd_signal_engine
-2026-08-11 14:37:47,345 - core._orphan_integration - INFO -   ✓ liquidity_engine
-2026-08-11 14:37:47,347 - core._orphan_integration - INFO -   ✓ liquidity_zones
-2026-08-11 14:37:47,359 - core._orphan_integration - INFO -   ✓ market_state_memory
-2026-08-11 14:37:47,377 - core._orphan_integration - INFO -   ✓ megaphone_pennant_classifier
-2026-08-11 14:37:47,377 - core._orphan_integration - INFO -   ✓ mtf_analyzer
-2026-08-11 14:37:47,406 - core._orphan_integration - INFO -   ✓ multi_strategy_pa_engine
-2026-08-11 14:37:47,407 - core._orphan_integration - INFO -   ✓ order_block_detector
-2026-08-11 14:37:47,411 - core._orphan_integration - INFO -   ✓ pin_bar_strategy
-2026-08-11 14:37:47,427 - core._orphan_integration - INFO -   ✓ price_target_module (as module)
-2026-08-11 14:37:47,428 - core._orphan_integration - INFO -   ✓ session_analysis
-2026-08-11 14:37:47,474 - core._orphan_integration - INFO -   ✓ stop_hunt_signal_engine
-2026-08-11 14:37:47,475 - core._orphan_integration - INFO -   ✓ strength_calculator
-2026-08-11 14:37:47,479 - core._orphan_integration - INFO -   ✓ trend_level_signal
-2026-08-11 14:37:47,508 - core._orphan_integration - INFO -   ✓ cost_tracker
-2026-08-11 14:37:47,517 - core._orphan_integration - INFO -   ✓ signal_debugger
-2026-08-11 14:37:47,522 - core._orphan_integration - INFO -   ✓ system_watchdog
-2026-08-11 14:37:47,523 - core._orphan_integration - INFO -   ✓ network_monitor
-2026-08-11 14:37:47,527 - core._orphan_integration - INFO -   ✓ strategy_breakout
-2026-08-11 14:37:47,535 - core._orphan_integration - INFO -   ✓ strategy_ema_rsi_combo
-2026-08-11 14:37:47,545 - core._orphan_integration - INFO -   ✓ strategy_mean_reversion
-2026-08-11 14:37:47,555 - core._orphan_integration - INFO -   ✓ strategy_momentum
-2026-08-11 14:37:47,559 - core._orphan_integration - INFO -   ✓ strategy_pullback
-2026-08-11 14:37:47,562 - core._orphan_integration - INFO -   ✓ strategy_range_trading
-2026-08-11 14:37:47,568 - core._orphan_integration - INFO -   ✓ strategy_retest
-2026-08-11 14:37:47,571 - core._orphan_integration - INFO -   ✓ strategy_reversal
-2026-08-11 14:37:47,577 - core._orphan_integration - INFO -   ✓ strategy_scalping
-2026-08-11 14:37:47,579 - core._orphan_integration - INFO -   ✓ strategy_trend_follow
-2026-08-11 14:37:47,583 - core._orphan_integration - INFO -   ✓ decision_logger
-2026-08-11 14:37:47,588 - core._orphan_integration - INFO -   ✓ safe_json
-2026-08-11 14:37:47,593 - core._orphan_integration - INFO -   ✓ structured_logger
-2026-08-11 14:37:47,594 - core._orphan_integration - INFO -   ✓ pip_utils
-2026-08-11 14:37:47,600 - core._orphan_integration - INFO -   ✓ indicators_v5
-2026-08-11 14:37:47,633 - core._orphan_integration - INFO -   ✓ ported_indicators_registry
-2026-08-11 14:37:47,638 - core._orphan_integration - INFO -   ✓ ml_concept_drift_detector
-2026-08-11 14:37:47,638 - core._orphan_integration - INFO -   ✓ ml_online_learner
-2026-08-11 14:37:47,638 - core._orphan_integration - INFO -   ✓ ml_uncertainty_estimator
-2026-08-11 14:37:47,643 - core._orphan_integration - INFO -   ✓ ml_diagnostic
-2026-08-11 14:37:47,648 - core._orphan_integration - INFO -   ✓ ml_validation_framework
-2026-08-11 14:37:47,656 - core._orphan_integration - INFO -   ✓ ml_triple_barrier_labels (as module)
-2026-08-11 14:37:47,662 - core._orphan_integration - INFO -   ✓ trading_sessions_manager
-2026-08-11 14:37:47,709 - core._orphan_integration - INFO -   ✓ typed_config_loader (as module)
-2026-08-11 14:37:47,710 - core._orphan_integration - INFO -   ✓ typed_config_schemas (as module)
-2026-08-11 14:37:47,710 - core._orphan_integration - INFO -   ✓ expectancy_patch (PerformanceAnalyzer.summarize() corrected)
-2026-08-11 14:37:47,710 - core._orphan_integration - INFO - ------------------------------------------------------------
-2026-08-11 14:37:47,711 - core._orphan_integration - INFO - Phase 25 complete — 84/83 wired, 0 failed, 0 subscribed
-2026-08-11 14:37:47,711 - core._orphan_integration - INFO - ============================================================
-2026-08-11 14:37:47,727 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
-2026-08-11 14:37:47,759 - root - INFO - [System] Trading started | Mode: MT5_DEMO | Pairs: ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF', 'USDCAD', 'AUDUSD', 'NZDUSD', 'EURGBP', 'EURJPY', 'EURCHF', 'EURAUD', 'EURCAD', 'EURNZD', 'GBPJPY', 'GBPCHF', 'GBPAUD', 'GBPCAD', 'GBPNZD', 'AUDJPY', 'AUDCHF', 'AUDCAD', 'AUDNZD', 'NZDJPY', 'NZDCHF', 'NZDCAD', 'CADJPY', 'CADCHF', 'CHFJPY', 'XAUUSD', 'XAGUSD', 'XPTUSD', 'XPDUSD', 'USDTRY', 'USDZAR', 'EURNOK', 'EURSEK', 'GBPSEK', 'GBPNOK', 'AUDSGD', 'NZDSGD', 'SGDJPY', 'HKDJPY', 'MXNJPY', 'USDCNH', 'USDHKD', 'USDSGD', 'USDMXN', 'USDTHB'] | Balance: $99159.93 | Auto-restart: ON
-2026-08-11 14:37:48,578 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/sendMessage "HTTP/1.1 200 OK"
-2026-08-11 14:37:58,541 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:00,457 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:02,226 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:04,156 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:06,378 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:06,681 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:06,740 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:06,802 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:06,904 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:11,877 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:38:12,532 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:38:12.532373+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-493s | naive_input=False | is_closed=True
-2026-08-11 14:38:12,584 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:12,642 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:12,692 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:12,753 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,077 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:38:17,753 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,803 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,840 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,892 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,928 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:17,978 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,022 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,060 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,109 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,180 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,242 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,307 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,380 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,454 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,512 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,557 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,619 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,686 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,728 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,777 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,824 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,865 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,921 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:18,969 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:19,004 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:19,055 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:19,105 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:19,160 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,244 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,287 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,325 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,363 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,403 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,469 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,537 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,593 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,660 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,712 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,767 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,823 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,870 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,924 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:23,975 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,026 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,069 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,108 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,159 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,209 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,257 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,297 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,345 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,395 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,479 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,558 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,604 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:24,653 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:38:46,093 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:48,762 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:38:49,507 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:38:51,809 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Morning Star=BUY(High) voted weight=0.80 | Pattern:Shooting Star=SELL(High) voted weight=0.80
-2026-08-11 14:38:59,887 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: EURUSD | TF: 15m | Session: LONDON ║
-║ Trend: strong_bearish | Pattern: mt5_real_trade ║
-║ SMC: 44 (C) | Session: 73/100 (A) ║
-║ Technical: 90% | ML: 42% | RL: 50% | LLM: 92% ║
-║ Master: 42% | RuleFusion: 73% | Confluence: 42% (B) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Bonuses: Sentiment: BEARISH (score -15, adj +8%) ║
-║ Penalties: none ║
-║ Final Confidence: 46.8% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: MasterAnalyst: SELL | The current session is LONDON with high volatili... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:38:59,975 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,032 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,097 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,154 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,394 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:39:00,554 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:39:00.554872+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-541s | naive_input=False | is_closed=True
-2026-08-11 14:39:00,631 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,688 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,744 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:00,805 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,187 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,225 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,284 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,332 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,392 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,441 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,495 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,555 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,606 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,658 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,695 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,751 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,801 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,852 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,903 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:05,954 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,013 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,089 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,143 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,201 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,253 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,321 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,375 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,425 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,490 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,539 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,593 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:06,647 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:15,117 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:39:15,901 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-08-11 14:39:15,941 - llm_key_manager - WARNING - [LLM Keys] groq key #12 TPD (daily token budget) EXHAUSTED — disabled for 4844s (~1.3h). Rotating to next account.
-2026-08-11 14:39:15,941 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
-2026-08-11 14:39:21,779 - google_genai.models - INFO - AFC is enabled with max remote calls: 10.
-2026-08-11 14:39:21,908 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:39:36,644 - httpx - INFO - HTTP Request: POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent "HTTP/1.1 200 OK"
-2026-08-11 14:39:39,023 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 3 failed: No bullish FVG found in manipulation move | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Tweezer Bottom=BUY(High) voted weight=0.80 | Pattern:Morning Star=BUY(High) voted weight=0.80
-2026-08-11 14:39:39,053 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED GBPUSD SELL → WAIT (score=21/145, threshold=65, reason=Score 21 < threshold 65)
-2026-08-11 14:39:47,320 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: GBPUSD | TF: 15m | Session: LONDON ║
-║ Trend: bearish | Pattern: mt5_real_trade ║
-║ SMC: 17 (C) | Session: 28/100 (C) ║
-║ Technical: 44% | ML: 28% | RL: 50% | LLM: 72% ║
-║ Master: 28% | RuleFusion: 72% | Confluence: 28% (C) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 72.0% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: Confidence override: llm_analyst SELL 72% (SignalFusion consensus was ... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:39:47,433 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:47,562 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:47,702 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:47,886 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:48,185 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:39:48,319 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:39:48.319043+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-588s | naive_input=False | is_closed=True
-2026-08-11 14:39:48,383 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:48,436 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:48,493 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:48,584 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:53,869 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:53,938 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:53,991 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,036 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,077 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,137 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:39:54,149 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,208 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,256 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,318 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,404 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,459 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,525 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,620 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,679 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,730 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,781 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,838 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,891 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,937 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:54,991 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,039 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,101 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,148 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,217 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,271 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,326 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,369 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:39:55,421 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:06,967 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:40:09,184 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:40:11,946 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=BUY(Low) voted weight=2.10 (base=2.0, regime_x1.05, rr_x1.00, rr=1.0) | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=SELL(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Tweezer Bottom=BUY(High) voted weight=0.80 | Pattern:Bullish Harami=BUY(High) voted weight=0.80
-2026-08-11 14:40:13,851 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: USDJPY | TF: 15m | Session: LONDON ║
-║ Trend: strong_bullish | Pattern: mt5_real_trade ║
-║ SMC: 50 (B) | Session: 77/100 (A+) ║
-║ Technical: 66% | ML: 27% | RL: 50% | LLM: 90% ║
-║ Master: 27% | RuleFusion: 57% | Confluence: 27% (C) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Bonuses: Sentiment: NEUTRAL (score +6, adj +0%) ║
-║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 38.6% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: MasterAnalyst: BUY | The current price of USDJPY is 159.307, with a st... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:40:19,977 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,063 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,151 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,199 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,435 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:40:20,586 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:40:20.586085+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-621s | naive_input=False | is_closed=True
-2026-08-11 14:40:20,698 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,739 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,789 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:20,848 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,462 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:40:26,658 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,715 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,760 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,808 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,859 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,916 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:26,973 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,012 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,066 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,137 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,199 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,255 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,305 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,369 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,474 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,574 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,658 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,710 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,755 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,799 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,846 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,896 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:27,941 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:28,003 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:28,045 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:28,096 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:28,153 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:28,229 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:40,631 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:40:42,837 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:40:45,209 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Bullish Engulfing=BUY(High) voted weight=0.80 | Pattern:Tweezer Bottom=BUY(High) voted weight=0.80
-2026-08-11 14:40:47,039 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: AUDUSD | TF: 15m | Session: LONDON ║
-║ Trend: sideways | Pattern: mt5_real_trade ║
-║ SMC: 0 (C) | Session: 18/100 (C) ║
-║ Technical: 50% | ML: 37% | RL: 50% | LLM: 50% ║
-║ Master: 37% | RuleFusion: 0% | Confluence: 0% (AVOID) ║
-║ Risk: blocked:Signal is NO TRADE — no trade ║
-║ Penalties: signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 20.6% ║
-║ Decision: NO TRADE ║
-║ Reason: SignalFusion gate: WAIT (consensus=0/3, conf=0%) (analysis confidence ... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:40:53,100 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,133 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,165 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,196 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,315 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:40:53,414 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:40:53.414893+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-653s | naive_input=False | is_closed=True
-2026-08-11 14:40:53,459 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,490 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,528 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:53,566 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,479 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,508 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,541 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,573 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,605 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,638 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,661 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,697 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,725 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,765 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,796 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,829 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,874 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,936 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:57,973 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,007 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,045 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,086 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,123 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,209 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,240 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,273 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,316 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,355 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,392 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,434 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,461 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,490 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:40:58,833 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:41:04,303 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 429 Too Many Requests"
-2026-08-11 14:41:04,454 - llm_key_manager - WARNING - [LLM Keys] groq key #3 TPD (daily token budget) EXHAUSTED — disabled for 1019s (~0.3h). Rotating to next account.
-2026-08-11 14:41:04,455 - llm_key_manager - INFO - [Anti-Storm] Groq 429 caught. Cooling down IP for 4 seconds before next key rotation...
-2026-08-11 14:41:10,024 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:41:11,948 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:41:14,558 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Bearish Engulfing=SELL(High) voted weight=0.80 | Pattern:Tweezer Top=SELL(High) voted weight=0.80
-2026-08-11 14:41:22,689 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: USDCAD | TF: 15m | Session: LONDON ║
-║ Trend: sideways | Pattern: mt5_real_trade ║
-║ SMC: 24 (C) | Session: 49/100 (B) ║
-║ Technical: 57% | ML: 16% | RL: 50% | LLM: 0% ║
-║ Master: 16% | RuleFusion: 57% | Confluence: 16% (C) ║
-║ Risk: blocked:Signal is NO TRADE — no trade ║
-║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 57.0% ║
-║ Decision: NO TRADE ║
-║ Reason: SignalFusion gate: WAIT (consensus=0/3, conf=57%) (analysis confidence... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:41:22,792 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:22,848 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:22,903 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:22,961 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:23,207 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:41:23,331 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:41:23.331766+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-683s | naive_input=False | is_closed=True
-2026-08-11 14:41:23,458 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:23,524 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:23,581 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:23,636 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:31,111 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:41:36,264 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,290 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,322 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,356 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,389 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,420 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,472 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,529 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,589 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,669 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,773 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,808 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,851 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,886 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,924 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:36,959 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,001 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,036 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,070 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,109 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,148 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,190 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,225 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,272 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,304 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,340 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,385 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:37,419 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:44,915 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:41:47,840 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:41:50,988 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=BUY(Medium) voted weight=6.04 (base=3.0, regime_x1.15, rr_x1.75, rr=6.0) | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=BUY(Medium) voted weight=1.35 (base=1.3, regime_x0.90, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: Price not near a scored S/R zone | Pattern:Bullish Engulfing=BUY(High) voted weight=0.80 | Pattern:Tweezer Bottom=BUY(High) voted weight=0.80
-2026-08-11 14:41:51,068 - core.orphan_consumers - INFO - [OC] signal_scorer DOWNGRADED XAUUSD BUY → WAIT (score=0/145, threshold=65, reason=Score 0 < threshold 65)
-2026-08-11 14:41:59,057 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: XAUUSD | TF: 15m | Session: LONDON ║
-║ Trend: bearish | Pattern: mt5_real_trade ║
-║ SMC: 50 (B) | Session: 75/100 (A+) ║
-║ Technical: 61% | ML: 52% | RL: 60% | LLM: 80% ║
-║ Master: 53% | RuleFusion: 69% | Confluence: 52% (C) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Bonuses: Sentiment: BEARISH (score -15, adj +8%) ║
-║ Penalties: signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 62.3% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: MasterAnalyst: WAIT | The current session is LONDON with high volatili... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:41:59,149 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,209 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,268 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,331 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,551 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:41:59,689 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:41:59.689041+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-720s | naive_input=False | is_closed=True
-2026-08-11 14:41:59,749 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,817 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,877 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:41:59,943 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:03,626 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:42:06,914 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:06,966 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,021 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,074 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,131 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,184 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,224 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,286 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,358 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,392 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,439 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,485 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,530 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,587 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,637 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,679 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,723 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,761 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,805 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,862 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,927 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:07,983 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,037 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,090 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,153 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,206 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,432 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:08,573 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:17,094 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:42:19,576 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:42:21,900 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=SELL(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Evening Star=SELL(High) voted weight=0.80 | Pattern:Tweezer Top=SELL(High) voted weight=0.80
-2026-08-11 14:42:29,943 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: USDCHF | TF: 15m | Session: LONDON ║
-║ Trend: strong_bullish | Pattern: mt5_real_trade ║
-║ SMC: 47 (B) | Session: 64/100 (A) ║
-║ Technical: 48% | ML: 25% | RL: 50% | LLM: 80% ║
-║ Master: 25% | RuleFusion: 48% | Confluence: 25% (C) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Bonuses: Sentiment: NEUTRAL (score +6, adj +0%) ║
-║ Penalties: analysis:ensemble_wait(-8), analysis:rl_hold(-10), signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 40.9% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: MasterAnalyst: BUY | The current session is LONDON with high volatilit... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:42:30,063 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,178 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,336 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,385 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,572 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:42:30,696 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:42:30.696484+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-751s | naive_input=False | is_closed=True
-2026-08-11 14:42:30,748 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,803 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,853 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:30,913 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,094 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
-2026-08-11 14:42:36,193 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,250 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,311 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,364 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,420 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,459 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,515 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,574 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,639 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,695 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,739 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,780 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,830 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,874 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,908 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:36,953 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,008 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,043 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,097 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,157 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,215 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,250 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,301 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,342 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,393 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,450 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,509 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:37,557 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:46,396 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:42:48,642 - httpx - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
-2026-08-11 14:42:50,684 - analysis.unified_signal_engine - INFO - [Unified] Vote trail: StopHunt=NO_TRADE abstained: No stop hunt confirmed — wait for setup | ICT/AMD=NO_TRADE abstained: Step 2 failed: No sweep detected at Strong/Medium zones or accumulation range | PA=NO_TRADE abstained: Step 5: Lower timeframe (H2) confirmation failed | Liquidity=SELL(Medium) voted weight=1.72 (base=1.3, regime_x1.15, rr_x1.15, rr=2.0) | CCI=NO_TRADE abstained: CCI state machine: HOLD | Pattern:Morning Star=BUY(High) voted weight=0.80 | Pattern:Shooting Star=SELL(High) voted weight=0.80
-2026-08-11 14:42:52,701 - decision_logger - INFO - ╔══ DECISION AUDIT ═══════════════════════════════════════╗
-║ PAIR: NZDUSD | TF: 15m | Session: LONDON ║
-║ Trend: strong_bearish | Pattern: mt5_real_trade ║
-║ SMC: 58 (B) | Session: 47/100 (B) ║
-║ Technical: 88% | ML: 59% | RL: 60% | LLM: 92% ║
-║ Master: 57% | RuleFusion: 90% | Confluence: 59% (C) ║
-║ Risk: blocked:Signal is WAIT — no trade ║
-║ Bonuses: Sentiment: BEARISH (score -17, adj +8%) ║
-║ Penalties: signal_validator:soft penalties from gates: -5.(-5) ║
-║ Final Confidence: 61.1% ║
-║ Decision: WAIT -> Execution: NO TRADE ║
-║ Reason: MasterAnalyst: WAIT | The current session is LONDON with high volatili... ║
-╚═════════════════════════════════════════════════════════╝
-2026-08-11 14:42:58,813 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:58,873 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:58,934 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:58,984 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:59,135 - data.indicator_registry - INFO - [IndicatorRegistry] add_canonical_indicators: 140 columns total (ExtendedIndicators base 139 + legacy 'trend' derived = 140 expected)
-2026-08-11 14:42:59,254 - core.production_hardening - INFO - [is_candle_closed] tf=M15 | last_bar=2026-08-11T08:15:00+00:00 | current=2026-08-11T08:42:59.254136+00:00 | close=2026-08-11T08:30:00+00:00 | seconds_left=-779s | naive_input=False | is_closed=True
-2026-08-11 14:42:59,310 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:59,368 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:59,420 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:42:59,484 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,644 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,701 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,755 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,807 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,866 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:04,940 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,054 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,101 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,145 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,190 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,238 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,286 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,333 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,372 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,422 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,537 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,616 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,715 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,822 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,892 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:05,951 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,102 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,220 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,348 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,454 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,505 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,573 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:06,621 - indicators - INFO - All indicators added successfully | Total columns: 23
-2026-08-11 14:43:08,378 - httpx - INFO - HTTP Request: POST https://api.telegram.org/bot8909647364:AAGB6zSsenb_OgrcdVMhpuOPx9-DGglNj6A/getUpdates "HTTP/1.1 200 OK"
+2026-08-11 15:15:07,189 - llm_key_manager - INFO - [LLM Keys] Loaded 14 Groq key(s)
+2026-08-11 15:15:07,189 - llm_key_manager - INFO - [LLM Keys] Loaded 13 Gemini key(s)
+2026-08-11 15:15:07,190 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-08-11 15:15:07,190 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-08-11 15:15:07,190 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-08-11 15:15:07,190 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-08-11 15:15:07,191 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-08-11 15:15:07,191 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude key(s)
+2026-08-11 15:15:07,191 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM key(s)
+2026-08-11 15:15:07,193 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-08-11 15:15:07,193 - llm_key_manager - INFO - [LLM Throttle] Loaded config parameters successfully.
+2026-08-11 15:15:07,194 - core.runtime - INFO - LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
+2026-08-11 15:15:08,282 - core.runtime - WARNING - TradeMemory init failed (non-critical): name 'PatternMemory' is not defined
+2026-08-11 15:15:11,939 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-08-11 15:15:11,987 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-08-11 15:15:12,019 - core.runtime - INFO - Day 68 FeatureStore wired (4532 feature rows, 1529 labels)
+2026-08-11 15:15:14,899 - core.runtime - INFO - Day 69 ModelStore wired (171 models on disk)
+2026-08-11 15:15:14,917 - core.runtime - INFO - [ModelStore] registry/disk consistency OK (171 model file(s) verified)
+2026-08-11 15:15:14,924 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-08-11 15:15:14,946 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-08-11 15:15:18,809 - core.runtime - INFO - Day 71 RL Agent wired (source=heuristic, model_loaded=False)
+2026-08-11 15:15:18,829 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-08-11 15:15:32,319 - core.runtime - INFO - boot_hybrid: skipped (hybrid/ is legacy — system uses core/trader.py)
+2026-08-11 15:15:32,364 - core.runtime - INFO - Day 75 LiveRiskManager wired (tier=1, mode=NORMAL)
+2026-08-11 15:15:32,364 - core.runtime - INFO - Day 76 PositionSizer wired (Kelly×Vol×Conf×Corr×DD×Streak fusion)
+2026-08-11 15:15:32,380 - core.runtime - INFO - ExecutionRouter wired in MT5_DEMO mode (using shared MT5 connection)
+2026-08-11 15:15:32,386 - core.runtime - INFO - [Runtime] MT5 recovery: 0 open | 0 reconciled | 0 orphan
+2026-08-11 15:15:32,729 - core.runtime - WARNING - MistakeAnalyzer init failed: name 'PatternMemory' is not defined
+2026-08-11 15:15:33,675 - core.runtime - INFO - ✅ Telegram polling started (daemon thread)
+2026-08-11 15:15:34,106 - core.runtime - INFO - boot_webhook: skipped (webhook moved to legacy/ — security risk)
+2026-08-11 15:15:34,202 - core.service_registry - INFO - Service 'market_scanner' initialized
+2026-08-11 15:15:34,203 - core.service_registry - INFO - Service 'circuit_breaker_factory' initialized
+2026-08-11 15:15:34,261 - core.runtime - ERROR - CRITICAL: TradingEngine (trader) init failed: name 'PatternMemory' is not defined
+Traceback (most recent call last):
+  File "D:\Projects\forex\core\runtime.py", line 1605, in boot_runtime_phase
+    engine = TradingEngine(
+        symbols=symbols, timeframe=timeframe, balance=INITIAL_BALANCE,
+    ...<5 lines>...
+        registry=registry,
+    )
+  File "D:\Projects\forex\core\trading_engine.py", line 38, in __init__
+    super().__init__(*args, registry=registry, **kwargs)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\forex\core\trader.py", line 3836, in __init__
+    symbol: self._build_trader(symbol) for symbol in self.symbols
+            ~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "D:\Projects\forex\core\trader.py", line 3901, in _build_trader
+    return AITrader(
+        balance=self.balance,
+    ...<9 lines>...
+        paper_trader=self._shared_paper,
+    )
+  File "D:\Projects\forex\core\trader.py", line 264, in __init__
+    self._memory = TradeMemory(seed_rules=seed_rules)
+                   ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Projects\forex\memory\trade_memory.py", line 78, in __init__
+    self.pattern = PatternMemory(self._path.parent / "pattern_memory.json")
+                   ^^^^^^^^^^^^^
+NameError: name 'PatternMemory' is not defined
+2026-08-11 15:15:34,297 - core.service_registry - WARNING - mark('trader', ServiceStatus.FAILED) — service not registered
+2026-08-11 15:15:34,298 - core._orphan_integration - INFO - ============================================================
+2026-08-11 15:15:34,298 - core._orphan_integration - INFO - Phase 25 — Orphan Module Integration (wiring 83 modules)
+2026-08-11 15:15:34,299 - core._orphan_integration - INFO - ============================================================
+2026-08-11 15:15:34,302 - core._orphan_integration - INFO -   ✓ advanced_risk_orchestrator
+2026-08-11 15:15:34,306 - core._orphan_integration - INFO -   ✓ adversarial_defenses
+2026-08-11 15:15:34,310 - core._orphan_integration - INFO -   ✓ basket_exit_manager
+2026-08-11 15:15:34,314 - core._orphan_integration - INFO -   ✓ book_guardrails (as module)
+2026-08-11 15:15:34,316 - core._orphan_integration - INFO -   ✓ compounding_engine
+2026-08-11 15:15:34,319 - core._orphan_integration - INFO -   ✓ controlled_grid_scaler
+2026-08-11 15:15:34,323 - core._orphan_integration - INFO -   ✓ entry_quality_guardrails (as module)
+2026-08-11 15:15:34,328 - core._orphan_integration - INFO -   ✓ expectancy_calculator
+2026-08-11 15:15:34,332 - core._orphan_integration - INFO -   ✓ institutional_entry_framework
+2026-08-11 15:15:34,333 - core._orphan_integration - INFO -   ✓ monte_carlo_engine
+2026-08-11 15:15:34,337 - core._orphan_integration - INFO -   ✓ order_split_manager
+2026-08-11 15:15:34,339 - core._orphan_integration - INFO -   ✓ position_allocator
+2026-08-11 15:15:34,344 - core._orphan_integration - INFO -   ✓ probability_distribution (as module)
+2026-08-11 15:15:34,344 - core._orphan_integration - INFO -   ✓ rr_policy
+2026-08-11 15:15:34,347 - core._orphan_integration - INFO -   ✓ streak_tracker
+2026-08-11 15:15:34,349 - core._orphan_integration - INFO -   ✓ structure_stop (as module)
+2026-08-11 15:15:34,352 - core._orphan_integration - INFO -   ✓ symbol_lock
+2026-08-11 15:15:34,356 - core._orphan_integration - INFO -   ✓ trade_frequency_controller
+2026-08-11 15:15:34,364 - core._orphan_integration - INFO -   ✓ trading_controls
+2026-08-11 15:15:34,367 - core._orphan_integration - INFO -   ✓ channel_breakout_stops (as module)
+2026-08-11 15:15:34,368 - core._orphan_integration - INFO -   ✓ approval_mode
+2026-08-11 15:15:34,371 - core._orphan_integration - INFO -   ✓ audit_report
+2026-08-11 15:15:34,372 - core._orphan_integration - INFO -   ✓ confidence_manager
+2026-08-11 15:15:34,374 - core._orphan_integration - INFO -   ✓ data_provider_live
+2026-08-11 15:15:34,376 - core._orphan_integration - INFO -   ✓ decision_validator
+2026-08-11 15:15:34,381 - core._orphan_integration - INFO -   ✓ execution_adapter_mt5
+2026-08-11 15:15:34,387 - core._orphan_integration - INFO -   ✓ indicator_cache
+2026-08-11 15:15:34,396 - core._orphan_integration - INFO -   ✓ professional_tools
+2026-08-11 15:15:34,400 - core._orphan_integration - INFO -   ✓ regime_suppressor
+2026-08-11 15:15:34,406 - core._orphan_integration - INFO -   ✓ signal_persistence_filter
+2026-08-11 15:15:34,415 - core._orphan_integration - INFO -   ✓ signal_scorer
+2026-08-11 15:15:34,423 - core._orphan_integration - INFO -   ✓ unified_signal_schema (as module)
+2026-08-11 15:15:34,431 - core._orphan_integration - INFO -   ✓ adaptive_decision_engine
+2026-08-11 15:15:34,439 - core._orphan_integration - INFO -   ✓ adx_filters (as module)
+2026-08-11 15:15:34,443 - core._orphan_integration - INFO -   ✓ adx_trend_filter
+2026-08-11 15:15:34,449 - core._orphan_integration - INFO -   ✓ advanced_filters (as module)
+2026-08-11 15:15:34,453 - core._orphan_integration - INFO -   ✓ decision_bridge
+2026-08-11 15:15:34,457 - core._orphan_integration - INFO -   ✓ engulfing_bar_strategy
+2026-08-11 15:15:34,463 - core._orphan_integration - INFO -   ✓ global_filters
+2026-08-11 15:15:34,469 - core._orphan_integration - INFO -   ✓ high_reliability_patterns
+2026-08-11 15:15:34,475 - core._orphan_integration - INFO -   ✓ ict_amd_signal_engine
+2026-08-11 15:15:34,488 - core._orphan_integration - INFO -   ✓ liquidity_engine
+2026-08-11 15:15:34,488 - core._orphan_integration - INFO -   ✓ liquidity_zones
+2026-08-11 15:15:34,492 - core._orphan_integration - INFO -   ✓ market_state_memory
+2026-08-11 15:15:34,497 - core._orphan_integration - INFO -   ✓ megaphone_pennant_classifier
+2026-08-11 15:15:34,497 - core._orphan_integration - INFO -   ✓ mtf_analyzer
+2026-08-11 15:15:34,504 - core._orphan_integration - INFO -   ✓ multi_strategy_pa_engine
+2026-08-11 15:15:34,504 - core._orphan_integration - INFO -   ✓ order_block_detector
+2026-08-11 15:15:34,508 - core._orphan_integration - INFO -   ✓ pin_bar_strategy
+2026-08-11 15:15:34,513 - core._orphan_integration - INFO -   ✓ price_target_module (as module)
+2026-08-11 15:15:34,513 - core._orphan_integration - INFO -   ✓ session_analysis
+2026-08-11 15:15:34,517 - core._orphan_integration - INFO -   ✓ stop_hunt_signal_engine
+2026-08-11 15:15:34,518 - core._orphan_integration - INFO -   ✓ strength_calculator
+2026-08-11 15:15:34,520 - core._orphan_integration - INFO -   ✓ trend_level_signal
+2026-08-11 15:15:34,529 - core._orphan_integration - INFO -   ✓ cost_tracker
+2026-08-11 15:15:34,534 - core._orphan_integration - INFO -   ✓ signal_debugger
+2026-08-11 15:15:34,536 - core._orphan_integration - INFO -   ✓ system_watchdog
+2026-08-11 15:15:34,537 - core._orphan_integration - INFO -   ✓ network_monitor
+2026-08-11 15:15:34,541 - core._orphan_integration - INFO -   ✓ strategy_breakout
+2026-08-11 15:15:34,548 - core._orphan_integration - INFO -   ✓ strategy_ema_rsi_combo
+2026-08-11 15:15:34,552 - core._orphan_integration - INFO -   ✓ strategy_mean_reversion
+2026-08-11 15:15:34,555 - core._orphan_integration - INFO -   ✓ strategy_momentum
+2026-08-11 15:15:34,557 - core._orphan_integration - INFO -   ✓ strategy_pullback
+2026-08-11 15:15:34,561 - core._orphan_integration - INFO -   ✓ strategy_range_trading
+2026-08-11 15:15:34,564 - core._orphan_integration - INFO -   ✓ strategy_retest
+2026-08-11 15:15:34,566 - core._orphan_integration - INFO -   ✓ strategy_reversal
+2026-08-11 15:15:34,569 - core._orphan_integration - INFO -   ✓ strategy_scalping
+2026-08-11 15:15:34,579 - core._orphan_integration - INFO -   ✓ strategy_trend_follow
+2026-08-11 15:15:34,597 - core._orphan_integration - INFO -   ✓ decision_logger
+2026-08-11 15:15:34,614 - core._orphan_integration - INFO -   ✓ safe_json
+2026-08-11 15:15:34,618 - core._orphan_integration - INFO -   ✓ structured_logger
+2026-08-11 15:15:34,618 - core._orphan_integration - INFO -   ✓ pip_utils
+2026-08-11 15:15:34,622 - core._orphan_integration - INFO -   ✓ indicators_v5
+2026-08-11 15:15:34,648 - core._orphan_integration - INFO -   ✓ ported_indicators_registry
+2026-08-11 15:15:34,650 - core._orphan_integration - INFO -   ✓ ml_concept_drift_detector
+2026-08-11 15:15:34,650 - core._orphan_integration - INFO -   ✓ ml_online_learner
+2026-08-11 15:15:34,650 - core._orphan_integration - INFO -   ✓ ml_uncertainty_estimator
+2026-08-11 15:15:34,653 - core._orphan_integration - INFO -   ✓ ml_diagnostic
+2026-08-11 15:15:34,656 - core._orphan_integration - INFO -   ✓ ml_validation_framework
+2026-08-11 15:15:34,660 - core._orphan_integration - INFO -   ✓ ml_triple_barrier_labels (as module)
+2026-08-11 15:15:34,664 - core._orphan_integration - INFO -   ✓ trading_sessions_manager
+2026-08-11 15:15:34,686 - core._orphan_integration - INFO -   ✓ typed_config_loader (as module)
+2026-08-11 15:15:34,686 - core._orphan_integration - INFO -   ✓ typed_config_schemas (as module)
+2026-08-11 15:15:34,687 - core._orphan_integration - INFO -   ✓ expectancy_patch (PerformanceAnalyzer.summarize() corrected)
+2026-08-11 15:15:34,687 - core._orphan_integration - INFO - ------------------------------------------------------------
+2026-08-11 15:15:34,687 - core._orphan_integration - INFO - Phase 25 complete — 84/83 wired, 0 failed, 0 subscribed
+2026-08-11 15:15:34,688 - core._orphan_integration - INFO - ============================================================
+2026-08-11 15:15:34,689 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
+2026-08-11 15:15:34,703 - root - ERROR - Trading engine not initialized — cannot start

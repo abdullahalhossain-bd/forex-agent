@@ -1272,7 +1272,18 @@ class LLMKeyManager:
     @property
     def has_any_deepseek(self) -> bool: return any(k.is_available for k in self._deepseek_keys)
     @property
-    def has_any_llm(self) -> bool: return self.has_any_groq or self.has_any_gemini
+    def has_any_llm(self) -> bool:
+        # BUGFIX (audit): this previously only checked groq/gemini, so if
+        # both were TPD-exhausted but a viable fallback (cerebras,
+        # sambanova, openrouter, github, huggingface, claude, glm,
+        # deepseek) still had budget, callers relying on has_any_llm would
+        # wrongly conclude no LLM was available. No caller currently uses
+        # this property (verified via repo-wide search), so this was
+        # latent rather than actively causing the WAIT/NO_TRADE runs seen
+        # in production — but it's fixed now so it's correct if/when
+        # something starts relying on it. Delegates to
+        # any_provider_available() so there's a single source of truth.
+        return self.any_provider_available()
 
     def any_provider_available(self) -> bool:
         return (

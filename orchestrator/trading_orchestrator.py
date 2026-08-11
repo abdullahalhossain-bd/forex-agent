@@ -722,8 +722,25 @@ class TradingOrchestrator:
         """Stage 2: Technical analysis + SMC + LLM."""
         memory_ctx = {}
         try:
-            from memory.trade_memory import TradeMemory
-            tm = TradeMemory(seed_rules=False)
+            # BUG FIX (2026-08-11 audit): this used to unconditionally
+            # construct `TradeMemory(seed_rules=False)` on every single
+            # call — and this stage runs once per symbol per cycle (every
+            # ~30s x N symbols, continuously). TradeMemory.__init__ loads
+            # the full sentence-transformers embedding model from disk/
+            # network with no caching, so every analysis cycle for every
+            # symbol was reloading a ~90MB model and re-verifying it via
+            # HuggingFace Hub HEAD requests instead of reusing the one
+            # shared instance core/runtime.py already registers at boot
+            # (the same fix core/trader.py already applies for its own
+            # TradeMemory access). Now prefers the registry singleton and
+            # only falls back to constructing a fresh one if the registry
+            # doesn't have it yet (e.g. this stage runs before persistence
+            # boot finishes, or in a standalone/test context).
+            from core.service_registry import get_registry
+            tm = get_registry().try_resolve("trade_memory")
+            if tm is None:
+                from memory.trade_memory import TradeMemory
+                tm = TradeMemory(seed_rules=False)
             memory_ctx = tm.get_context_for_ai(market_out.get("symbol", "EURUSD"))
         except Exception:
             pass  # Non-critical

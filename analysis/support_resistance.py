@@ -59,39 +59,82 @@ def _atr_pct(df: pd.DataFrame, period: int = 14) -> float:
     merge artifact), and duplicate index labels turn the aligned
     subtraction `(l - c.shift())` into a cartesian-style expansion — either
     of which makes `.iloc[-1]` return a Series/row instead of a scalar.
-    Both are now defended against explicitly instead of silently falling
-    back to the 0.4% default on every single call (which made this
-    function's adaptive behavior a no-op in production).
+
+    BUG FIX (2026-08-11): the 2026-08-05 fix above defended against both
+    causes but a 6-day live log (72 occurrences in a single session) still
+    showed the exact same fallback firing on almost every call, confirming
+    label-based alignment is still an active risk somewhere in this path
+    (e.g. h/l/c retaining a duplicated index that survives the `.duplicated()`
+    check because it's introduced *after* that check by an upstream reindex,
+    or a third duplicate-column source the isinstance() guard doesn't catch).
+    Rather than continue patching individual symptoms, this rewrite drops
+    label-based alignment entirely: h/l/c are converted to raw numpy arrays
+    up front, so every subsequent operation is purely positional and no
+    pandas index — duplicated or not — can ever again cause a Series to leak
+    into a boolean/float context. If the function still fails, the except
+    branch now logs shape/dtype/duplicate-index diagnostics (once per
+    process) instead of just the exception string, so a *new* root cause is
+    identifiable from a single log line instead of blind guessing.
     """
+    global _atr_pct_diag_logged
     try:
         if len(df) < period + 1:
             return 0.004  # default 0.4%
         h, l, c = df["high"], df["low"], df["close"]
-        # Defensive: duplicate-labeled columns make df["col"] return a
-        # DataFrame, not a Series. Squeeze to the first column.
         if isinstance(h, pd.DataFrame):
             h = h.iloc[:, 0]
         if isinstance(l, pd.DataFrame):
             l = l.iloc[:, 0]
         if isinstance(c, pd.DataFrame):
             c = c.iloc[:, 0]
-        # Defensive: duplicate index labels break aligned subtraction into
-        # a cartesian-style expansion. Keep the last occurrence per label
-        # (most recent data wins) before doing any index-aligned math.
-        if df.index.duplicated().any():
-            keep = ~df.index.duplicated(keep="last")
-            h, l, c = h[keep], l[keep], c[keep]
-        tr = pd.concat(
-            [(h - l), (h - c.shift()).abs(), (l - c.shift()).abs()], axis=1
-        ).max(axis=1)
-        atr = float(tr.rolling(period, min_periods=1).mean().iloc[-1])
-        price = float(c.iloc[-1])
+        # Positional-only from here on — .to_numpy() strips the index so
+        # duplicate/misaligned labels can no longer trigger label-based
+        # alignment expansion anywhere downstream.
+        h_arr = h.to_numpy(dtype=float, copy=False)
+        l_arr = l.to_numpy(dtype=float, copy=False)
+        c_arr = c.to_numpy(dtype=float, copy=False)
+        if h_arr.ndim != 1 or l_arr.ndim != 1 or c_arr.ndim != 1:
+            raise ValueError(
+                f"non-1D array after extraction: h={h_arr.shape} "
+                f"l={l_arr.shape} c={c_arr.shape}"
+            )
+        c_prev = np.roll(c_arr, 1)
+        c_prev[0] = np.nan  # no prior close for the first bar
+        tr = np.nanmax(
+            np.vstack([
+                h_arr - l_arr,
+                np.abs(h_arr - c_prev),
+                np.abs(l_arr - c_prev),
+            ]),
+            axis=0,
+        )
+        window = tr[-period:]
+        atr = float(np.nanmean(window)) if window.size else float("nan")
+        price = float(c_arr[-1])
         if price <= 0 or not np.isfinite(atr):
             return 0.004
         return float(atr / price)
     except Exception as e:
-        log.debug(f"[SR] _atr_pct fallback to 0.004 default: {e}")
+        if not _atr_pct_diag_logged:
+            _atr_pct_diag_logged = True
+            try:
+                diag = (
+                    f"shape={df.shape} dup_index={df.index.duplicated().any()} "
+                    f"dup_columns={df.columns.duplicated().any()} "
+                    f"dtypes={df.dtypes.to_dict()}"
+                )
+            except Exception:
+                diag = "diagnostics unavailable"
+            log.warning(
+                f"[SR] _atr_pct fallback to 0.004 default (diagnostics logged "
+                f"once per process): {e} | {diag}"
+            )
+        else:
+            log.debug(f"[SR] _atr_pct fallback to 0.004 default: {e}")
         return 0.004
+
+
+_atr_pct_diag_logged = False
 
 
 class SupportResistance:
