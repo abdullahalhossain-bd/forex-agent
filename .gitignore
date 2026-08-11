@@ -1,35 +1,62 @@
-
+# =========================
+# Environment / Secrets
+# =========================
 .env
 .env.*
-.env
-.env.*
+!.env.example
 
-.env
-.env.*
-
+# =========================
+# Python virtual environments
+# =========================
 .venv/
 venv/
+env/
+
+# =========================
+# Python cache
+# =========================
 __pycache__/
+*.py[cod]
+*.pyo
 
-memory/
-data/history/
+# =========================
+# Local memory / runtime state
+# =========================
 
-.env
-.env.*
+# =========================
+# Databases
+# =========================
 *.db
+*.db*
+*.sqlite
+*.sqlite3
+
+# =========================
+# Model / binary artifacts
+# =========================
 *.bin
-data/pipeline_cache/
+*.pkl
+*.pickle
+*.joblib
+*.h5
+*.onnx
+
+# =========================
+# Large historical / cache data
+# =========================
 data/history/
-data/*.csv
-data/*.bin
-data/*.db
-data/*.parquet
-data/*.feather
-data/*.h5
 data/cache/
 data/pipeline_cache/
-data/history/
 
-memory/*
+# =========================
+# Large data files
+# =========================
+data/*.csv
+data/*.parquet
+data/*.feather
 
-!memory/*.json
+# =========================
+# General generated files
+# =========================
+
+*.tmp
