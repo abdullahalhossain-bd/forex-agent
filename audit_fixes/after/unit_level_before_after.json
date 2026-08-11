@@ -1,0 +1,14 @@
+{
+  "scenario": "Realistic borderline BUY setup (decent SMC/liquidity/currency-strength/technical, intermarket+news data unavailable, session structurally NEUTRAL as always)",
+  "MIN_CONFIDENCE_threshold_pct": 55,
+  "BEFORE_fix": {
+    "buy_score": 29.47,
+    "confidence_pct": 45.36,
+    "min_confidence_gate": "BLOCKED"
+  },
+  "AFTER_fix": {
+    "buy_score": 42.11,
+    "confidence_pct": 60.532,
+    "min_confidence_gate": "PASSED"
+  }
+}

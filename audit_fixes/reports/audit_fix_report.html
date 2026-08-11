@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Repository: forex-agent (abdullahalhossain-bd)" />
+  <meta name="dcterms.date" content="2026-08-11" />
+  <title>Trade Permission System Audit Report</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <link rel="stylesheet" href="" />
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Trade Permission System Audit Report</h1>
+<p class="author">Repository: forex-agent (abdullahalhossain-bd)</p>
+<p class="date">2026-08-11</p>
+</header>
+<h1 id="evidence-reviewed">1. Evidence Reviewed</h1>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Rows/Content</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>blocked_trade_analysis.csv</code></td>
+<td>1,022 blocked decision cycles, EURUSD, 2026-08-10 09:55–13:31
+UTC</td>
+</tr>
+<tr class="even">
+<td><code>filter_summary.csv</code></td>
+<td>Per-filter blocked counts (11 filters)</td>
+</tr>
+<tr class="odd">
+<td><code>filter_combo_summary.csv</code></td>
+<td>Filter co-occurrence / overlap counts</td>
+</tr>
+<tr class="even">
+<td><code>penalty_attribution.csv</code></td>
+<td>Entry-quality rule co-occurrence + average penalty</td>
+</tr>
+<tr class="odd">
+<td><code>confidence_counterfactual_summary.json</code></td>
+<td>Min-confidence failure classification (218 total)</td>
+</tr>
+<tr class="even">
+<td><code>scenario_comparison.csv</code></td>
+<td>8 executed backtest runs, 19 trades total, WR 10.5%, PF 0.18</td>
+</tr>
+<tr class="odd">
+<td><code>forensic_analysis_report.md</code></td>
+<td>Prior forensic pass (Bengali/English), documents that no OHLC price
+series was available for hypothetical win/loss reconstruction, so most
+outcome columns are <code>OUTCOME_NOT_AVAILABLE</code></td>
+</tr>
+</tbody>
+</table>
+<p>All original files are preserved unmodified in
+<code>audit_fixes/before/</code>.</p>
+<p><strong>Important scope caveat carried over from the prior
+report:</strong> without historical OHLC data for every blocked-trade
+timestamp, no hypothetical WIN/LOSS outcome could be reconstructed for
+blocked trades. That limitation still applies here — none of the
+findings below claim to know whether a <em>specific</em> blocked trade
+would have won or lost. Findings are instead based on (a) direct code
+inspection of the modules that produced the blocks, and (b) internal
+consistency of the audit data itself.</p>
+<hr />
+<h1 id="evidence-module-fix-mapping">2. Evidence → Module → Fix
+Mapping</h1>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+<col style="width: 14%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>#</th>
+<th>Finding</th>
+<th>Affected module</th>
+<th>Exact code path</th>
+<th>Evidence</th>
+<th>Severity</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1</td>
+<td>A structurally NEUTRAL factor’s weight was still added to the
+confidence-normalization denominator, mechanically deflating
+confidence/aligned% on every single decision</td>
+<td><code>intelligence/decision_score.py</code> →
+<code>DecisionScorer.score()</code></td>
+<td><code>decision_score.py:118-145</code> (pre-fix)</td>
+<td><code>confidence_counterfactual_summary.json</code>: 218
+Min-confidence failures, 158 (72.5%) “naturally low” pre-penalty. Code:
+<code>intelligence/confluence_engine.py:336</code> hardcodes
+<code>direction="NEUTRAL"</code> for the session factor (“Session is
+direction-neutral — it boosts the OTHER factors’ weight”) yet the old
+normalization added its weight to the denominator regardless,
+contradicting its own documented intent. Same effect hits
+<code>intermarket</code>/<code>news</code> whenever their upstream data
+is missing.</td>
+<td><strong>CONFIRMED BUG</strong></td>
+<td>Only add a factor’s weight to <code>total_weight_used</code> when
+<code>f.direction in ("BUY","SELL")</code>.
+<strong>Applied.</strong></td>
+</tr>
+<tr class="even">
+<td>2</td>
+<td>“Confluence quality” gate never fails independently of “Session
+quality” (100% subset: 136/136)</td>
+<td><code>risk/trade_permission.py</code> (gate) +
+<code>intelligence/confluence_engine.py</code>
+(<code>_session_factor</code>)</td>
+<td><code>trade_permission.py:1161-1284</code>,
+<code>confluence_engine.py:323-360</code></td>
+<td>Verified directly against <code>blocked_trade_analysis.csv</code>:
+<code>Confluence-fail ⊆ Session-fail</code> = 136/136 = 100%. Root
+cause: the session grade feeds the confluence score (as a
+permanently-NEUTRAL factor, see #1) <strong>and</strong> is checked
+again as a separate hard gate — the same signal penalizes the same
+decision twice.</td>
+<td><strong>STRONG EVIDENCE</strong> (root cause confirmed; whether to
+remove the <em>second</em> gate needs outcome data)</td>
+<td>Root numerical cause fixed by #1. The dual-gating itself is treated
+as a <strong>deliberate defense-in-depth design</strong> (not clearly a
+bug) — <strong>not removed</strong>, per “do not remove risk controls”
+and lack of outcome (WR/PF) data to justify removal. Flagged for review
+with real OHLC data.</td>
+</tr>
+<tr class="odd">
+<td>3</td>
+<td><code>sl_swing_anchor</code> + <code>tp_structure_validation</code>
+compound penalty (+10) contributes to 60/218 (27.5%) “penalty-created”
+Min-confidence blocks</td>
+<td><code>risk/entry_quality_guardrails.py</code></td>
+<td><code>entry_quality_guardrails.py:1867-1892</code></td>
+<td><code>penalty_attribution.csv</code>: <code>sl_swing_anchor</code>
+co-occurs in 488 cycles (avg total penalty 20.4),
+<code>tp_structure_validation</code> in 516 (avg 19.9);
+<code>confidence_counterfactual_summary.json</code>:
+<code>penalty_created_block: 60</code>. Code comment shows this exact
+compound rule was added deliberately after a <strong>real-money loss
+postmortem</strong> (Day 137, GBPCAD 2026-07-20).</td>
+<td><strong>STRONG EVIDENCE, BY DESIGN</strong> — not a bug</td>
+<td><strong>Not changed.</strong> Instructions explicitly forbid
+removing risk controls or tuning to this dataset; this rule has
+documented loss-prevention justification and there’s no outcome data
+here to show it’s net-harmful. Recommend keeping under observation with
+outcome-tagged data (see §12).</td>
+</tr>
+<tr class="even">
+<td>4</td>
+<td>“S/R zone alignment” is the single largest blocker (397/1,022 =
+38.8%) — prior report speculated some of this might be a missing-data
+artifact</td>
+<td><code>risk/trade_permission.py</code></td>
+<td><code>trade_permission.py:276-350</code></td>
+<td>Code inspection: <code>sr_ok</code> defaults to <code>True</code>
+(“no S/R zone data — not evaluated”) and is <strong>only</strong> set to
+<code>False</code> inside the branch that requires <strong>both</strong>
+<code>dist_sup</code> and <code>dist_res</code> to be present
+(<code>trade_permission.py:303</code>). The fail-open path never appends
+a failure.</td>
+<td><strong>INSUFFICIENT EVIDENCE for a bug</strong> (prior report’s
+suspicion refuted)</td>
+<td>No change. All 397 blocks are backed by real computed misalignment
+data, not missing-data artifacts. Threshold (3.0 pips / 1.15 ratio
+margin) was already re-tuned in a prior 2026-08-02 audit per the in-code
+comment.</td>
+</tr>
+<tr class="odd">
+<td>5</td>
+<td>“Risk approved” (329) and “Valid signal” (291) blocks almost
+perfectly co-occur (291/291)</td>
+<td><code>risk/trade_permission.py</code>,
+<code>risk/risk_engine.py</code></td>
+<td>n/a</td>
+<td><code>filter_combo_summary.csv</code>:
+<code>Risk approved + Valid signal = 291</code></td>
+<td><strong>EXPECTED, NOT A BUG</strong></td>
+<td>No change — a signal that never validated has nothing for the risk
+engine to approve; this is architecturally necessary sequencing, not
+redundant filtering.</td>
+</tr>
+<tr class="even">
+<td>6</td>
+<td>Session/Confluence/Min-confidence blocks only occur in the
+09:00–11:00 UTC window of the sampled log, then disappear entirely</td>
+<td>Upstream signal generation (not a specific gate)</td>
+<td>n/a</td>
+<td><code>blocked_trade_analysis.csv</code> hour-by-hour breakdown
+(independently reproduced)</td>
+<td><strong>POSSIBLE ISSUE, upstream</strong></td>
+<td>No code change — this is a signal-generation/regime question, not a
+filter-tuning question; flagged for further investigation with a longer
+log window.</td>
+</tr>
+<tr class="odd">
+<td>7</td>
+<td>Zone cooldown / Signal persistence / execution filters (news,
+confluence_avoid) — low block counts (34, 34, 8, 8)</td>
+<td>Various</td>
+<td>n/a</td>
+<td><code>filter_summary.csv</code></td>
+<td><strong>INSUFFICIENT EVIDENCE</strong> (too low volume to
+assess)</td>
+<td>No change.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1 id="confirmed-bug-full-detail">3. Confirmed Bug — Full Detail</h1>
+<h2 id="root-cause">3.1 Root cause</h2>
+<p><code>intelligence/decision_score.py</code>’s
+<code>DecisionScorer.score()</code> computes a 0–100 confidence score by
+summing each factor’s weighted contribution and dividing by the total
+weight available (<code>max_possible</code>). The bug:
+<strong>every</strong> factor’s weight was added to that denominator,
+even factors whose <code>direction</code> is <code>"NEUTRAL"</code> and
+can therefore <em>never</em> contribute to the numerator
+(<code>buy_weighted</code>/<code>sell_weighted</code>).</p>
+<p>Two distinct sources of NEUTRAL factors exist in
+<code>intelligence/confluence_engine.py</code>:</p>
+<ul>
+<li><strong>By design, always NEUTRAL:</strong> the <code>session</code>
+factor (<code>_session_factor</code>, line 336) is hardcoded
+<code>direction = "NEUTRAL"</code> — its own docstring says <em>“Session
+is direction-neutral — it boosts the OTHER factors’ weight”</em>, but
+the surrounding scoring code never implemented that boosting; it only
+added dead weight to the denominator.</li>
+<li><strong>Conditionally NEUTRAL from missing data:</strong>
+<code>intermarket</code> (15% weight) and <code>news</code> (10% weight)
+fall back to <code>NEUTRAL</code>/0 strength whenever their upstream
+context is unavailable or blocked
+(<code>confluence_engine.py:404</code>, <code>436</code>) — the
+identical dilution effect, but this time it’s a <strong>missing-data
+penalty</strong>, not a deliberate design choice.</li>
+</ul>
+<p>Net effect: confidence and the aligned-factor percentage were
+mechanically capped below their true value on every decision that
+included any NEUTRAL factor — which, because <code>session</code> is
+<em>always</em> present and <em>always</em> NEUTRAL, was every decision
+in the audited window.</p>
+<h2 id="fix-applied">3.2 Fix applied</h2>
+<p><strong>File:</strong> <code>intelligence/decision_score.py</code>
+<strong>Change:</strong> in the <code>score()</code> loop, only add
+<code>f.weight</code> to <code>total_weight_used</code> when
+<code>f.direction in ("BUY", "SELL")</code>. NEUTRAL factors still
+appear in <code>result.factors</code> / <code>total_factors</code> for
+transparency and downstream contradiction logic — they are only excluded
+from the confidence-normalization denominator, since they cannot
+mathematically earn a share of it.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode python"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> f.direction <span class="kw">in</span> (<span class="st">&quot;BUY&quot;</span>, <span class="st">&quot;SELL&quot;</span>):</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    total_weight_used <span class="op">+=</span> f.weight</span></code></pre></div>
+<p>This is the smallest change that corrects the normalization math. No
+thresholds, risk controls, or gate logic were touched.</p>
+<h2 id="regression-test">3.3 Regression test</h2>
+<p><code>tests/unit/test_decision_score_neutral_weight.py</code> (3
+tests, all passing):</p>
+<ul>
+<li>A “perfect” bullish setup with all directional factors maxed and a
+NEUTRAL session factor now reaches ~100% buy_score instead of being
+capped at 95%.</li>
+<li>A setup with <code>intermarket</code>/<code>news</code> missing
+(NEUTRAL/0) produces the <em>same</em> buy_score as the identical setup
+with those factors omitted entirely — presence of missing-data factors
+no longer changes the outcome.</li>
+<li>An all-NEUTRAL factor list still safely resolves to
+<code>NEUTRAL</code> direction / 0 scores (no divide-by-zero).</li>
+</ul>
+<pre><code>tests/unit/test_decision_score_neutral_weight.py::test_neutral_session_factor_does_not_deflate_a_perfect_setup PASSED
+tests/unit/test_decision_score_neutral_weight.py::test_missing_data_neutral_factor_does_not_deflate_confidence PASSED
+tests/unit/test_decision_score_neutral_weight.py::test_all_neutral_factors_do_not_divide_by_zero PASSED</code></pre>
+<p>Full <code>tests/unit</code> suite was also re-run: 8 pre-existing
+failures remain, all verified <strong>unrelated</strong> to this change
+(missing <code>typed_config</code> dependency module in this sandbox,
+and one news-bypass test whose fixture hardcodes
+<code>confidence=80</code> directly rather than deriving it from
+<code>DecisionScorer</code>).</p>
+<h2 id="before-vs-after-quantitative">3.4 Before vs after
+(quantitative)</h2>
+<p>A realistic borderline BUY setup — decent
+SMC/liquidity/currency-strength/technical factors,
+<code>intermarket</code> and <code>news</code> data unavailable,
+<code>session</code> present as it always is — was scored with both the
+pre-fix and post-fix normalization logic
+(<code>audit_fixes/after/unit_level_before_after.json</code>):</p>
+<table>
+<thead>
+<tr class="header">
+<th></th>
+<th>buy_score</th>
+<th>confidence</th>
+<th>vs. 55% Min-confidence gate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>BEFORE fix</strong></td>
+<td>29.47</td>
+<td>45.36%</td>
+<td><strong>BLOCKED</strong></td>
+</tr>
+<tr class="even">
+<td><strong>AFTER fix</strong></td>
+<td>42.11</td>
+<td>60.53%</td>
+<td><strong>PASSED</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Same inputs, same market data, same risk controls — the only
+difference is that dead weight from
+data-unavailable/structurally-neutral factors no longer counts against
+the denominator. This demonstrates the bug was capable of turning a
+legitimately-passing setup into a false “Min confidence” block,
+consistent with the 72.5%-naturally-low-confidence pattern in the audit
+evidence.</p>
+<h2 id="end-to-end-backtest-validation-environment-limitation">3.5
+End-to-end backtest validation — environment limitation</h2>
+<p>Per the validation instructions, I attempted:</p>
+<pre><code>py -3.13 -m backtest.persistent_runner --symbols EURUSD --timeframe H1 --workers 1 --no-llm</code></pre>
+<p>(adapted to <code>python3</code> in this Linux sandbox; ran against
+<code>data/EURUSD_H1.csv</code>, 6,197 bars.)</p>
+<p>The run completed end-to-end for both the pre-fix and post-fix code
+(checkpoints in
+<code>audit_fixes/before/backtest_before_metrics.json</code>), but in
+<strong>this sandboxed environment</strong> it produced <strong>zero
+decision cycles of any kind</strong> (0 trades, 0 WAIT, 0
+permission_blocked, 0 risk_rejected) for both versions — a verbose/debug
+run confirmed no
+<code>[TradePermission]</code>/<code>MinConfidenceDiagnostic</code> log
+lines were emitted at all. This indicates the offline harness here isn’t
+exercising the same analysis → decision → permission pipeline that
+produced the uploaded live-log evidence (most likely due to missing
+broker/API configuration not present in this sandbox,
+e.g. MT5/News/Intermarket data sources). Because the <em>before</em> and
+<em>after</em> runs behaved identically (both silent), this is an
+environment gap rather than something introduced by the fix.</p>
+<p><strong>Recommendation:</strong> re-run the exact validation command
+in your full environment (with MT5/data feeds configured) for both the
+pre-fix and post-fix code, and compare
+<code>blocked_trade_analysis</code>-style output the same way this audit
+did. The isolated unit-level before/after in §3.4 is real, reproducible,
+and directly targets the confirmed bug, but it is not a substitute for a
+live trade-level A/B run.</p>
+<hr />
+<h1 id="modules-disposition">4. Modules — Disposition</h1>
+<h2 id="keep-no-evidence-supports-changing">4.1 KEEP (no evidence
+supports changing)</h2>
+<ul>
+<li><strong>S/R zone alignment gate</strong>
+(<code>trade_permission.py</code>) — fail-open design confirmed correct
+in code; 397 blocks are all real computed misalignments, already
+re-tuned in a prior 2026-08-02 audit.</li>
+<li><strong>Risk approved / Valid signal sequencing</strong> —
+co-occurrence is architecturally expected, not redundant filtering.</li>
+<li><strong><code>sl_swing_anchor</code> +
+<code>tp_structure_validation</code> compound penalty</strong> —
+deliberate, postmortem-driven risk control (Day 137 GBPCAD loss). Not
+touched.</li>
+<li><strong>Zone cooldown, Signal persistence, execution filters
+(news_intelligence, confluence_avoid)</strong> — low volume (8–34 blocks
+each), no evidence either way.</li>
+</ul>
+<h2 id="edit-fixed-in-this-pass">4.2 EDIT (fixed in this pass)</h2>
+<ul>
+<li><strong><code>intelligence/decision_score.py</code> →
+<code>DecisionScorer.score()</code></strong> — neutral-factor
+weight-dilution bug. Fixed, tested.</li>
+</ul>
+<h2 id="weight-changes">4.3 WEIGHT changes</h2>
+<ul>
+<li>None applied. <code>FACTOR_WEIGHTS</code> (session 5%, intermarket
+15%, news 10%, etc.) were <strong>not</strong> retuned — the fix
+corrects how existing weights are <em>normalized</em>, not what the
+weights themselves are. Changing the weight values would be optimization
+against this specific dataset, which the brief explicitly rules
+out.</li>
+</ul>
+<h2 id="remove">4.4 REMOVE</h2>
+<ul>
+<li>None. No module was removed. The “Confluence quality” gate’s
+redundancy with “Session quality” (finding #2) is architecturally
+interesting but was <strong>not removed</strong> — that would be
+removing a risk control without outcome data to justify it.</li>
+</ul>
+<h2 id="requiring-more-evidence-outcomeohlc-data-needed">4.5 Requiring
+more evidence (outcome/OHLC data needed)</h2>
+<ul>
+<li>Whether “Confluence quality” as a <em>second</em>, independent gate
+on top of “Session quality” is net-beneficial or purely redundant (needs
+hypothetical WR/PF on the blocked-trade set).</li>
+<li>Whether the
+<code>sl_swing_anchor</code>/<code>tp_structure_validation</code>
+compound penalty is net-positive vs. simply reducing trade frequency
+(needs outcome-tagged data).</li>
+<li>Whether the post-11:00-UTC disappearance of
+Session/Confluence/Min-confidence blocks reflects a real regime shift or
+an upstream signal-generation issue (needs a longer log window across
+multiple sessions/days).</li>
+</ul>
+<h2 id="remaining-risks-issues">4.6 Remaining risks / issues</h2>
+<ul>
+<li>This sandbox could not reproduce the live decision pipeline for a
+true before/after trade-level backtest (§3.5) — the fix’s real-world
+trade-frequency and win-rate impact should be validated in the full
+environment before being treated as final.</li>
+<li>The neutral-factor-weight fix will, by construction,
+<strong>raise</strong> confidence values across many historical
+decisions (as shown in §3.4). This is a correctness fix, not a tuning
+knob, but it does mean the Min-confidence gate will now block fewer
+trades than before purely due to more accurate math — this should be
+monitored post-deployment, not assumed to be an unambiguous improvement,
+since higher confidence numbers alone don’t guarantee better trade
+outcomes.</li>
+<li><code>filter_summary.csv</code>/<code>filter_combo_summary.csv</code>/<code>blocked_trade_analysis.csv</code>
+still cannot answer the “which filter blocks the most <em>good</em>
+trades” question — that requires historical OHLC data per the original
+forensic report’s own conclusion, which still holds.</li>
+</ul>
+<hr />
+<h1 id="priority-list">5. Priority List</h1>
+<p><strong>P0 — Fix immediately</strong> - (Done) Neutral-factor
+weight-dilution bug in <code>intelligence/decision_score.py</code> —
+confirmed, fixed, tested.</p>
+<p><strong>P1 — Fix next</strong> - Re-run the full live-environment
+backtest (<code>persistent_runner</code>, with MT5/data feeds
+configured) before <strong>and</strong> after this fix, over a multi-day
+window, and compare <code>blocked_trade_analysis</code>-style output to
+confirm the real-world effect on block rate and (once OHLC-based outcome
+data is available) win rate/expectancy.</p>
+<p><strong>P2 — Investigate</strong> - Whether “Confluence quality”
+should remain a fully independent hard gate given its 100% overlap with
+“Session quality” (needs hypothetical-outcome data, not currently
+available). - Whether the
+<code>sl_swing_anchor + tp_structure_validation</code> compound penalty
+(and the broader entry-quality penalty map in general) is net-positive
+for expectancy, once outcome data exists. - The post-11:00-UTC
+disappearance of several filters’ block activity — likely an upstream
+signal-generation/regime question, not a filter-tuning one.</p>
+<p><strong>P3 — Leave unchanged</strong> - S/R zone alignment gate
+(fail-open behavior confirmed correct). - Risk approved / Valid signal
+sequencing. - Zone cooldown, Signal persistence, and low-volume
+execution filters (news_intelligence, confluence_avoid). -
+<code>FACTOR_WEIGHTS</code> values (session 5%, smc 25%, etc.) — not
+retuned.</p>
+<hr />
+<h1 id="files-in-this-delivery">6. Files in this delivery</h1>
+<pre><code>audit_fixes/
+  before/
+    blocked_trade_analysis.csv              (original, unmodified)
+    scenario_comparison.csv                 (original, unmodified)
+    filter_combo_summary.csv                (original, unmodified)
+    filter_summary.csv                      (original, unmodified)
+    penalty_attribution.csv                 (original, unmodified)
+    forensic_analysis_report.md             (original, unmodified)
+    confidence_counterfactual_summary.json  (original, unmodified)
+    backtest_before_metrics.json            (pre-fix full backtest run, this sandbox)
+  after/
+    decision_score_FIXED.py                 (fixed module, for diff reference)
+    test_decision_score_neutral_weight.py   (regression tests)
+    unit_level_before_after.json            (quantitative before/after evidence)
+  reports/
+    audit_fix_report.md / .pdf              (this report)</code></pre>
+</body>
+</html>

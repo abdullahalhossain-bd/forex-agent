@@ -1,0 +1,11 @@
+entry_quality_check,cooccurrence_count,avg_total_entry_quality_penalty_on_cooccurring_cycles
+rejection_psychology,665,17.81
+tp_structure_validation,516,19.88
+sl_swing_anchor,488,20.36
+indecision_candles,156,20.97
+tp_above_unconfirmed_spike,125,19.24
+round_number_tp,76,19.39
+exhaustion_filter,55,25.8
+rejection_wick_at_entry,41,24.98
+indicator_confluence,31,15.32
+fresh_high_rejection,16,28.38

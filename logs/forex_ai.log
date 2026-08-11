@@ -1,0 +1,36 @@
+2026-08-11 14:06:16,317 - llm_key_manager - INFO - [LLM Keys] Loaded 14 Groq key(s)
+2026-08-11 14:06:16,319 - llm_key_manager - INFO - [LLM Keys] Loaded 13 Gemini key(s)
+2026-08-11 14:06:16,321 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-08-11 14:06:16,324 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-08-11 14:06:16,326 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-08-11 14:06:16,327 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-08-11 14:06:16,329 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-08-11 14:06:16,334 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude key(s)
+2026-08-11 14:06:16,336 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM key(s)
+2026-08-11 14:06:16,342 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-08-11 14:06:16,343 - llm_key_manager - INFO - [LLM Throttle] Loaded config parameters successfully.
+2026-08-11 14:06:16,346 - core.runtime - INFO - LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
+2026-08-11 14:08:24,567 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:24,654 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:25,720 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:25,809 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:26,144 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:26,231 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:26,523 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:26,606 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-08-11 14:08:26,995 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:27,081 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:27,419 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:27,725 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:28,112 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-08-11 14:08:28,404 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-11 14:08:28,465 - httpx - INFO - HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-08-11 14:08:53,309 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-08-11 14:08:53,406 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-08-11 14:08:53,483 - core.runtime - INFO - Day 68 FeatureStore wired (4454 feature rows, 1472 labels)
+2026-08-11 14:08:53,548 - core.runtime - INFO - Day 69 ModelStore wired (171 models on disk)
+2026-08-11 14:08:53,661 - core.runtime - INFO - [ModelStore] registry/disk consistency OK (171 model file(s) verified)
+2026-08-11 14:08:53,675 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-08-11 14:08:53,727 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-08-11 14:08:55,798 - core.runtime - INFO - Day 71 RL Agent wired (source=heuristic, model_loaded=False)
+2026-08-11 14:08:55,855 - core.runtime - INFO - Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
