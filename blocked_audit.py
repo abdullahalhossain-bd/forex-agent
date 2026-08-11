@@ -84,6 +84,22 @@ for name in ['90-100', '80-89', '70-79', '60-69', 'Below 60']:
 print('COMBOS')
 for items, n in combo.most_common(20):
     print(' + '.join(items), n)
+eq_penalty_by_check = collections.Counter()
+eq_penalty_sum = 0.0
+eq_penalty_n = 0
+for b in blocked:
+    for flag in (b.get('entry_quality_failed_checks') or []):
+        eq_penalty_by_check[flag] += 1
+    if b.get('entry_quality_penalty') is not None:
+        eq_penalty_sum += float(b['entry_quality_penalty'])
+        eq_penalty_n += 1
+print('ENTRY_QUALITY_BREAKDOWN (only present on entries logged after the diagnostic fix)')
+if eq_penalty_n:
+    print('avg entry_quality_penalty', f'{eq_penalty_sum/eq_penalty_n:.2f}', 'over', eq_penalty_n, 'entries')
+    for c, n in eq_penalty_by_check.most_common():
+        print(' ', c, n)
+else:
+    print('  (no entries yet -- run again after new trades are logged)')
 print('DAYS')
 for day, n in sorted(byday.items()):
     print(day, n)

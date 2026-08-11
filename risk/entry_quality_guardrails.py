@@ -1830,6 +1830,13 @@ def run_all_entry_quality_checks(
 
     passed_count = sum(1 for r in results if r.passed)
     confidence_penalty = 0
+    # NEW — attribution: which rule contributed how much of the total
+    # penalty. Keyed by the same flag_name used in _PENALTY_MAP/_DISPLAY_NAMES
+    # (not a display string), so downstream code can match it reliably.
+    # Values are negative to mirror "confidence -= penalty" directly —
+    # this is purely additive bookkeeping; it does not change
+    # confidence_penalty or which checks fire.
+    penalty_by_rule: Dict[str, int] = {}
     per_check_report = []
     extreme_block_reason = None
     warning_reasons = []
@@ -1849,6 +1856,7 @@ def run_all_entry_quality_checks(
             else:
                 penalty = _PENALTY_MAP.get(r.flag_name, 3)
                 confidence_penalty += penalty
+                penalty_by_rule[r.flag_name] = penalty_by_rule.get(r.flag_name, 0) - penalty
                 per_check_report.append(f"{display:<22} FAIL (-{penalty})")
                 warning_reasons.append(r.reason)
 
@@ -1871,6 +1879,9 @@ def run_all_entry_quality_checks(
     if {"sl_swing_anchor", "tp_structure_validation"}.issubset(_failed_flags):
         _compound_penalty = 10
         confidence_penalty += _compound_penalty
+        penalty_by_rule["sl_tp_structure_compound"] = (
+            penalty_by_rule.get("sl_tp_structure_compound", 0) - _compound_penalty
+        )
         per_check_report.append(
             f"{'Structure Compound':<22} FAIL (-{_compound_penalty}, "
             f"SL + TP both unanchored)"
@@ -1897,8 +1908,13 @@ def run_all_entry_quality_checks(
         "warnings":             warning_reasons,
         "quality_score":        int(quality_score),
         # NEW soft-scoring fields
-        "confidence_penalty":   int(confidence_penalty),
+        "confidence_penalty":   int(confidence_penalty),   # unchanged — positive total, as before
         "per_check_report":     per_check_report,
+        # NEW — diagnostic-only attribution fields (do not change behavior).
+        # "total_penalty" is the same magnitude as confidence_penalty, just
+        # negative-signed to match penalty_by_rule's convention.
+        "penalty_by_rule":      penalty_by_rule,
+        "total_penalty":        -int(confidence_penalty),
     }
 
 

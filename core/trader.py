@@ -1202,6 +1202,26 @@ class AITrader:
                 log.error(f"[Risk] {self.symbol} — {risk_out['reject_reason']}")
 
         self._risk.print_summary(risk_out)
+
+        # Observability fix: RiskEngine's verdict was never reaching
+        # execution.log. log_risk_evaluated() has existed in
+        # core/execution_logger.py since Day 81 but nothing called it --
+        # every "Risk approved" block in blocked_audit.py's pareto was a
+        # black box (we knew it failed, never why). Log the FINAL risk_out
+        # (post fail-closed MT5-sync checks above), matching the pattern
+        # used for permission.checked below.
+        try:
+            from core.execution_logger import log_risk_evaluated
+            log_risk_evaluated(
+                symbol=self.symbol,
+                approved=risk_out.get("approved", False),
+                lot=risk_out.get("lot", 0),
+                sl=risk_out.get("sl_price"),
+                tp=risk_out.get("tp_price"),
+                reject_reason=risk_out.get("reject_reason"),
+            )
+        except Exception as e:
+            log.warning(f"Suppressed exception logging risk.evaluated: {e}")
         if debugger:
             risk_status = "OK" if risk_out.get("approved") else "REJECT"
             # Day 81+ crash fix: reject_reason can be None (not a string),
@@ -1367,7 +1387,10 @@ class AITrader:
             decision_out=dec_out,
             risk_out=risk_out,
             news_ctx=analysis_out.get("news_ctx", {}),
-            session_ctx=self._session_permission_context(session_ctx),
+            session_ctx=self._session_permission_context(
+                analysis_out.get("session_ctx") if isinstance(analysis_out, dict) else None,
+                fallback=session_ctx,
+            ),
             execution_filters=analysis_out.get("execution_filters", {}),
             bypass_checks=bypass_checks,
         )
@@ -1538,6 +1561,23 @@ class AITrader:
                     "confidence_pre_penalty", dec_out.get("confidence", 0)),
                 confidence_post_penalty=perm_out.get(
                     "confidence_post_penalty", dec_out.get("confidence", 0)),
+                # Diagnostic fix: entry_quality_detail carries WHICH specific
+                # guardrail checks fired and how much each one penalized
+                # confidence (see risk/entry_quality_guardrails.py _PENALTY_MAP),
+                # but until now that detail died inside perm_out and only the
+                # folded pre/post confidence numbers reached execution.log.
+                # That made it impossible to audit, from the log alone,
+                # whether blocks were driven by e.g. chasing_filter vs.
+                # sl_swing_anchor+tp_structure_validation compounding — you
+                # had to re-run the trade to see it. Surface the summary here.
+                entry_quality_penalty=(
+                    (perm_out.get("entry_quality_detail") or {}).get("confidence_penalty")
+                ),
+                entry_quality_failed_checks=[
+                    r.get("flag_name")
+                    for r in ((perm_out.get("entry_quality_detail") or {}).get("results") or [])
+                    if isinstance(r, dict) and not r.get("passed", True)
+                ],
             )
         except Exception as e:
             log.warning(f"Suppressed exception at line 881: {e}")
@@ -3601,17 +3641,29 @@ class AITrader:
             return "/".join(s.replace("_", " ").title() for s in active)
         return "Closed"
 
-    def _session_permission_context(self, session_ctx: dict | None) -> dict | None:
-        if not session_ctx:
+    def _session_permission_context(self, session_ctx: dict | None, fallback: dict | None = None) -> dict | None:
+        ctx = session_ctx or fallback
+        if not ctx:
             return None
-        trade_quality = (session_ctx.get("trade_quality") or "").upper()
-        if "BEST" in trade_quality or "GOOD" in trade_quality:
-            quality = "HIGH"
-        elif "CAUTION" in trade_quality:
-            quality = "MEDIUM"
-        else:
-            quality = "LOW"
-        return {"quality": quality}
+        # Pass session_grade straight through -- trade_permission.py already
+        # has the correct A+/A/B/C -> HIGH/HIGH/MEDIUM/LOW mapping (see its
+        # Session quality gate). Re-deriving "quality" here from the
+        # nonexistent "trade_quality" key was the bug: it always produced
+        # quality="LOW" and pre-empted that correct downstream fallback.
+        return {
+            "session_grade": ctx.get("session_grade"),
+            "session_score": ctx.get("session_score"),
+            # Bug fix: trade_permission.py's fusion gate requires this
+            # NESTED under "fusion" -- the flat fusion_allowed/fusion_score/
+            # fusion_grade keys get_ai_context() actually produces were
+            # never read anywhere, silently disabling this gate entirely.
+            "fusion": {
+                "fusion_allowed": ctx.get("fusion_allowed", True),
+                "fusion_score":   ctx.get("fusion_score", 0),
+                "fusion_grade":   ctx.get("fusion_grade", "?"),
+                "issues":         ctx.get("fusion_issues", []),
+            },
+        }
 
     def _notify_trade_open(self, trade: dict, result: dict, dec_out: dict) -> None:
         """Builds the Telegram payload from `result`, not `trade` — `trade`'s

@@ -1,5 +1,7 @@
 # risk/trade_permission.py  —  Day 13 | Final Trade Permission Gate
 
+import json
+
 from utils.logger import get_logger
 
 log = get_logger("trade_permission")
@@ -115,7 +117,18 @@ class TradePermission:
     # the gate was never actually enforcing the documented production
     # threshold, which is how single-indicator 42%-confidence trades
     # (e.g. lone RSI oversold) kept reaching MT5.
-    MIN_CONFIDENCE_PROD  = 60  # Operator-requested floor: trade when confidence >= 60%
+    # Conservative frequency tune (operator request: "best but no false
+    # trades" -- prioritize avoiding bad entries over volume). Moved from
+    # 60 to 55: a modest 5-point nudge, not a broad loosening. Deliberately
+    # left the entry_quality_guardrails penalty weights untouched -- those
+    # penalties are calibrated against a real live-loss postmortem
+    # (Day 137 GBPCAD, see risk/entry_quality_guardrails.py), so easing
+    # them would trade away exactly the false-trade protection requested.
+    # If this alone doesn't move frequency enough, the next lever to pull
+    # is entry_quality penalty weights -- NOT this floor again -- and that
+    # should only happen after reviewing the new ENTRY_QUALITY_BREAKDOWN
+    # diagnostics (blocked_audit.py) against a few weeks of live results.
+    MIN_CONFIDENCE_PROD  = 55  # was 60 -- see comment above
     MIN_CONFIDENCE_TEST  = 10
     MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
     MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
@@ -602,6 +615,7 @@ class TradePermission:
         # penalties.  Entry quality alone NEVER rejects the trade.
         _eq_penalty = 0
         _eq_result = None
+        _eq_penalty_by_rule: dict = {}
         _conf_before_eq = conf
         if risk_out.get("approved"):
             try:
@@ -624,6 +638,7 @@ class TradePermission:
                     )
                     _should_execute = _eq_result.get("should_execute", True)
                     _eq_penalty = _eq_result.get("confidence_penalty", 0)
+                    _eq_penalty_by_rule = _eq_result.get("penalty_by_rule", {}) or {}
                     _eq_report = _eq_result.get("per_check_report", [])
                     _block_reason = _eq_result.get("block_reason")
                     _quality_score = _eq_result.get("quality_score", 100)
@@ -1104,6 +1119,45 @@ class TradePermission:
         _confidence_pre_penalty  = decision_out.get("confidence", 0)
         _confidence_post_penalty = conf
 
+        # ── COUNTERFACTUAL DIAGNOSTIC (logging-only — does not alter `ok`,
+        # `conf`, `effective_min_confidence`, or any pass/fail decision) ──
+        # Purpose: for the 392 observed Min-confidence blocks, work out how
+        # many were "naturally" below threshold vs. blocks that only
+        # happened because entry_quality_guardrails penalties pushed an
+        # otherwise-passing confidence below the floor. This is read from
+        # execution logs / a future audit script, not consumed by any
+        # decision path here.
+        try:
+            _would_pass_before_penalty = bool(
+                _confidence_pre_penalty >= effective_min_confidence
+            )
+            _penalty_caused_block = bool(
+                _would_pass_before_penalty
+                and _confidence_post_penalty < effective_min_confidence
+            )
+            _min_conf_diagnostic = {
+                "confidence_pre_penalty":    _confidence_pre_penalty,
+                "confidence_post_penalty":   _confidence_post_penalty,
+                "effective_min_confidence":  effective_min_confidence,
+                "total_confidence_penalty":  -int(_eq_penalty),
+                "penalty_by_rule":           _eq_penalty_by_rule,
+                "would_pass_before_penalty": _would_pass_before_penalty,
+                "penalty_caused_block":      _penalty_caused_block,
+                "confidence_margin_before":  round(
+                    _confidence_pre_penalty - effective_min_confidence, 2
+                ),
+                "confidence_margin_after":   round(
+                    _confidence_post_penalty - effective_min_confidence, 2
+                ),
+            }
+            log.info(f"[MinConfidenceDiagnostic] {json.dumps(_min_conf_diagnostic)}")
+        except Exception as _diag_e:
+            # Diagnostic logging must never affect trade permission — if it
+            # fails for any reason (e.g. non-numeric confidence upstream),
+            # swallow it and continue exactly as before.
+            _min_conf_diagnostic = None
+            log.debug(f"[MinConfidenceDiagnostic] skipped — {_diag_e}")
+
         # 5. Session quality (optional)
         # In TEST_MODE: session quality is just a logged warning, NOT a
         # trade blocker. This lets the system place trades during off-hours
@@ -1127,7 +1181,7 @@ class TradePermission:
                     "detail": detail,
                 })
                 passed += 1
-                total += 5
+                total += 1
             else:
                 # BUG FIX: SessionAnalyzer.get_ai_context() never emits a
                 # "quality" key at all — it emits "session_grade" (values
@@ -1164,9 +1218,10 @@ class TradePermission:
                     "detail": detail,
                 })
                 if ok: passed += 1
-                total += 5
-        else:
-            total += 4
+                total += 1
+        # else: session_ctx missing or direct_lane -- no Session quality
+        # check is run, so (unlike the old code) nothing is added to total
+        # either. A skipped check must not silently inflate the denominator.
 
         # ARCHITECTURAL FIX: account for execution_filters checks already added
         # at the top of this method. Each execution filter that was checked
@@ -1384,6 +1439,10 @@ class TradePermission:
             # post-penalty number (see risk/trade_permission.py check()).
             "confidence_pre_penalty":  _confidence_pre_penalty,
             "confidence_post_penalty": _confidence_post_penalty,
+            # NEW — counterfactual diagnostic (logging/analysis-only; see
+            # [MinConfidenceDiagnostic] log line above). None if the block
+            # above hit an exception, which never affects execution_allowed.
+            "min_confidence_diagnostic": _min_conf_diagnostic,
             # NEW (pullback-limit-order routing, 2026-07-24): expose the
             # full entry-quality result so ExecutionRouter can see WHICH
             # specific flags failed (e.g. chasing_filter / atr_extension)
