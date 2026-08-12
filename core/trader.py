@@ -90,7 +90,8 @@ except Exception as e:
     RuntimeMetrics = None
     get_metrics = None
     ServiceRegistry = None
-    print(f"[WARN] Runtime infrastructure unavailable: {e}")
+    import logging as _logging
+    _logging.getLogger("trader").warning(f"Runtime infrastructure unavailable: {e}")
 
 try:
     import alerts.telegram_bot as telegram_module
@@ -99,19 +100,22 @@ except Exception as e:
     telegram_module = None
     TelegramNotifier = None
     start_telegram_bot_polling = None
-    print(f"[WARN] Telegram bot unavailable: {e}")
+    import logging as _logging
+    _logging.getLogger("trader").warning(f"Telegram bot unavailable: {e}")
 
 try:
     from learning.mistake_analyzer import AdvancedMistakeAnalyzer
 except Exception as e:
     AdvancedMistakeAnalyzer = None
-    print(f"[WARN] AdvancedMistakeAnalyzer unavailable: {e}")
+    import logging as _logging
+    _logging.getLogger("trader").warning(f"AdvancedMistakeAnalyzer unavailable: {e}")
 
 try:
     from scanner.market_scanner import MarketScanner
 except Exception as e:
     MarketScanner = None
-    print(f"[WARN] MarketScanner unavailable: {e}")
+    import logging as _logging
+    _logging.getLogger("trader").warning(f"MarketScanner unavailable: {e}")
 
 # ── Orphan consumers (Phase 25 follow-up) ─────────────────────────────
 # These four hooks actually *consume* the 83 services wired into the
@@ -136,7 +140,8 @@ except Exception as e:
     apply_signal_scoring = None
     apply_advanced_risk_gates = None
     final_decision_gate = None
-    print(f"[WARN] orphan_consumers unavailable: {e}")
+    import logging as _logging
+    _logging.getLogger("trader").warning(f"orphan_consumers unavailable: {e}")
 
 log = get_logger("ai_trader")
 
@@ -1723,17 +1728,21 @@ class AITrader:
                             f"in this same unit (see get_live_pip_value_per_lot)."
                         )
                         self._account_currency_logged = True
-                    if equity_ratio < 0.90:
+                    if equity_ratio < 0.85:
+                        # 2026-08-12 winrate audit: lowered 0.90 → 0.85.
+                        # 10% equity drawdown is normal intraday fluctuation
+                        # on active strategies; 0.90 was tripping frequently
+                        # and blocking recovery trades.
                         log.critical(
                             f"[Trader] EQUITY STOP: equity=${acct.equity:.0f} "
-                            f"< 90% of balance=${acct.balance:.0f} "
+                            f"< 85% of balance=${acct.balance:.0f} "
                             f"(ratio={equity_ratio:.3f}). HALTING all trading."
                         )
                         return {
                             "symbol": self.symbol,
                             "final_action": "WAIT",
                             "trade_allowed": False,
-                            "reject_reason": f"EQUITY STOP: equity ratio {equity_ratio:.3f} < 0.90",
+                            "reject_reason": f"EQUITY STOP: equity ratio {equity_ratio:.3f} < 0.85",
                             "error": "equity_stop_triggered",
                         }
             elif self.execution_mode != "mt5_demo":

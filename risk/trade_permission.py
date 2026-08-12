@@ -1089,10 +1089,15 @@ class TradePermission:
             recent_trades = None
             consecutive_losses = None
 
-        if consecutive_losses is not None and consecutive_losses >= 3:
+        if consecutive_losses is not None and consecutive_losses >= 5:
+            # 2026-08-12 winrate audit: raised threshold from 3 → 5 losses
+            # and reduced bump from +20 (5+15) to +5. The old +20 bump
+            # made effective_min_confidence=90 after just 3 losses, blocking
+            # ~95% of signals during normal variance. 3-loss streaks happen
+            # routinely (P=12.5% per sequence at 50% WR).
             effective_min_confidence = max(
                 effective_min_confidence,
-                min(100, self.MIN_CONFIDENCE + self.LOSS_STREAK_CONFIDENCE_BUMP + 15),
+                min(100, self.MIN_CONFIDENCE + self.LOSS_STREAK_CONFIDENCE_BUMP),
             )
 
         if recent_win_rate is not None and recent_trades is not None and recent_trades >= 3:

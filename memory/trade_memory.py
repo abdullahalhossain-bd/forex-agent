@@ -426,3 +426,150 @@ class TradeMemory:
                 )
         except Exception as e:
             log.warning("[TradeMemory] print_stats failed: %s", e)
+
+
+class PatternMemory:
+    """JSON-backed pattern win/loss memory.
+
+    Reconstructed 2026-08-12 to fix the NameError that prevented
+    TradingEngine from initializing (memory/trade_memory.py line 78
+    referenced PatternMemory but no class was defined).
+
+    Behavioral contract (from learning/mistake_analyzer.py caller):
+      - __init__(path: Path): load pattern_memory.json (empty list if missing)
+      - add_losing_pattern(symbol, regime, pattern, pnl_pips) -> None
+      - add_winning_pattern(symbol, regime, pattern, pnl_pips) -> None
+      - get_stats(symbol, regime, pattern) -> dict with wins/losses/total/win_rate
+
+    Persistence:
+      - File: memory/pattern_memory.json
+      - Format: list of dicts with keys: symbol, regime, pattern,
+        result (WIN/LOSS), pnl_pips, timestamp
+      - Atomic writes via tempfile + os.replace
+    """
+
+    def __init__(self, path: Path):
+        self._lock = threading.RLock()
+        self._path: Path = Path(path)
+        self._records: List[Dict[str, Any]] = []
+        self._load()
+
+    def _load(self) -> None:
+        """Load pattern memory from JSON file."""
+        try:
+            if self._path.exists():
+                with open(self._path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        self._records = data
+                    else:
+                        log.warning(
+                            "[PatternMemory] Unexpected JSON structure in %s, starting fresh",
+                            self._path,
+                        )
+        except Exception as e:
+            log.warning("[PatternMemory] Failed to load %s: %s", self._path, e)
+            self._records = []
+
+    def _save(self) -> None:
+        """Persist pattern memory to JSON file atomically."""
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                dir=str(self._path.parent),
+                suffix=".tmp",
+                delete=False,
+                encoding="utf-8",
+            ) as tmp:
+                json.dump(self._records, tmp, indent=2, default=str)
+                tmp_path = tmp.name
+            os.replace(tmp_path, str(self._path))
+        except Exception as e:
+            log.warning("[PatternMemory] Failed to save %s: %s", self._path, e)
+
+    def add_losing_pattern(
+        self, symbol: str, regime: str, pattern: str, pnl_pips: float = 0.0
+    ) -> None:
+        """Record a losing pattern occurrence."""
+        try:
+            with self._lock:
+                self._records.append(
+                    {
+                        "symbol": symbol,
+                        "regime": regime,
+                        "pattern": pattern,
+                        "result": "LOSS",
+                        "pnl_pips": float(pnl_pips),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                self._save()
+        except Exception as e:
+            log.warning("[PatternMemory] add_losing_pattern failed: %s", e)
+
+    def add_winning_pattern(
+        self, symbol: str, regime: str, pattern: str, pnl_pips: float = 0.0
+    ) -> None:
+        """Record a winning pattern occurrence."""
+        try:
+            with self._lock:
+                self._records.append(
+                    {
+                        "symbol": symbol,
+                        "regime": regime,
+                        "pattern": pattern,
+                        "result": "WIN",
+                        "pnl_pips": float(pnl_pips),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
+                self._save()
+        except Exception as e:
+            log.warning("[PatternMemory] add_winning_pattern failed: %s", e)
+
+    def get_stats(self, symbol: str, regime: str, pattern: str) -> Dict[str, Any]:
+        """Return win/loss stats for a (symbol, regime, pattern) tuple."""
+        try:
+            with self._lock:
+                matching = [
+                    r
+                    for r in self._records
+                    if r.get("symbol") == symbol
+                    and r.get("regime") == regime
+                    and r.get("pattern") == pattern
+                ]
+                wins = sum(1 for r in matching if r.get("result") == "WIN")
+                losses = sum(1 for r in matching if r.get("result") == "LOSS")
+                total = len(matching)
+                win_rate = (wins / total * 100) if total else 0.0
+                avg_pnl = (
+                    sum(r.get("pnl_pips", 0) for r in matching) / total
+                    if total
+                    else 0.0
+                )
+                return {
+                    "total": total,
+                    "wins": wins,
+                    "losses": losses,
+                    "win_rate": round(win_rate, 2),
+                    "avg_pnl_pips": round(avg_pnl, 2),
+                }
+        except Exception as e:
+            log.warning("[PatternMemory] get_stats failed: %s", e)
+            return {"total": 0, "wins": 0, "losses": 0, "win_rate": 0.0, "avg_pnl_pips": 0.0}
+
+    def print_stats(self) -> None:
+        """Print a one-line summary to logger."""
+        try:
+            with self._lock:
+                total = len(self._records)
+                wins = sum(1 for r in self._records if r.get("result") == "WIN")
+                losses = sum(1 for r in self._records if r.get("result") == "LOSS")
+                wr = (wins / (wins + losses) * 100) if (wins + losses) else 0.0
+                log.info(
+                    "[PatternMemory] %d patterns | WR: %.1f%% (%dW/%dL)",
+                    total, wr, wins, losses,
+                )
+        except Exception as e:
+            log.warning("[PatternMemory] print_stats failed: %s", e)

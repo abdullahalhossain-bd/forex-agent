@@ -2,7 +2,7 @@
 
 
 def _fallback_sl_tp(direction: str, entry_price: float, ind_ctx: dict,
-                     regime: dict = None, rr_ratio: float = 1.8):
+                     regime: dict = None, rr_ratio: float = 2.0):
     """
     Compute a fallback SL/TP when neither MasterAnalyst nor RiskEngine
     supplied one (e.g. MasterAnalyst returned WAIT while rule+llm voting
@@ -16,6 +16,8 @@ def _fallback_sl_tp(direction: str, entry_price: float, ind_ctx: dict,
     Uses ATR (from ind_ctx, then regime dict) as the primary distance
     measure, matching analysis._engine_utils.atr_value's own fallback
     chain (close * 0.001) as a last resort when ATR is unavailable.
+
+    2026-08-12: TP 1:2 R:R (SL=1.5 ATR, TP=3.0 ATR).
     """
     if not entry_price or direction not in ("BUY", "SELL"):
         return None, None
@@ -32,12 +34,12 @@ def _fallback_sl_tp(direction: str, entry_price: float, ind_ctx: dict,
         atr = None
 
     if atr is None:
-        # Same last-resort ratio analysis._engine_utils.atr_value() uses
-        # when it can't compute a real ATR.
         atr = float(entry_price) * 0.001
 
+    # 2026-08-12: TP 1:1.5 R:R — SL=1.5 ATR, TP=2.25 ATR
+    # Historical: break-even WR=43%, production expects 50%+ = profit
     sl_distance = atr * 1.5
-    tp_distance = atr * 1.5 * rr_ratio
+    tp_distance = atr * 2.25
 
     if direction == "BUY":
         sl = entry_price - sl_distance

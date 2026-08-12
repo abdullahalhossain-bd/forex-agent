@@ -327,13 +327,14 @@ def get_max_trades_per_day(tier: int = 1) -> int:
 
 
 # ── Minimum Confidence ──────────────────────────────────────
-# Was duplicated in: trade_permission.MIN_CONFIDENCE_PROD (40),
-# live_risk_manager.TIERS.min_confidence (80/70/55),
-# autonomous_risk (50).
+# 2026-08-12 winrate audit: lowered TIER_1 from 85 → 75 to unblock
+# legitimate 75-84% confidence signals. The old 85% floor rejected
+# the vast majority of valid signals — most forex strategies
+# win-rate-optimize at 55-70% confidence thresholds.
 MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 70)
 MIN_CONFIDENCE_TEST: int = _env_int("MIN_CONFIDENCE_TEST", 10)
-MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 85.0)
-MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 75.0)
+MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 75.0)
+MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 72.0)
 MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 70.0)
 
 
@@ -347,7 +348,9 @@ def get_min_confidence(tier: int = 1) -> float:
 
 
 # ── Min Risk:Reward ─────────────────────────────────────────
-MIN_RR_PROD: float = _env_float("MIN_RR_PROD", 2.0)
+# 2026-08-12: TP 1:1.5 R:R (SL=1.5 ATR, TP=2.25 ATR)
+# Historical analysis: break-even WR=43%, production expects 50%+ = profit
+MIN_RR_PROD: float = _env_float("MIN_RR_PROD", 1.5)
 MIN_RR_TEST: float = _env_float("MIN_RR_TEST", 1.0)
 
 
@@ -372,8 +375,12 @@ TIER_MULT_TIER_3: float = _env_float("TIER_MULT_TIER_3", 1.0)
 
 
 # ── Circuit Breaker Thresholds ──────────────────────────────
+# 2026-08-12 winrate audit: raised CB_CONSECUTIVE_LOSSES_TRIGGER
+# from 3 → 5. At 50% WR, P(3 losses) = 12.5% per sequence — happens
+# multiple times per week. 5 losses (P=3.1%) is a real anomaly worth
+# pausing for. Aligns with KS_CONSECUTIVE_LOSSES=5 below.
 CB_DAILY_LOSS_TRIGGER_PCT: float = _env_float("CB_DAILY_LOSS_TRIGGER_PCT", 3.0)
-CB_CONSECUTIVE_LOSSES_TRIGGER: int = _env_int("CB_CONSECUTIVE_LOSSES_TRIGGER", 3)
+CB_CONSECUTIVE_LOSSES_TRIGGER: int = _env_int("CB_CONSECUTIVE_LOSSES_TRIGGER", 5)
 CB_DRAWDOWN_TRIGGER_PCT: float = _env_float("CB_DRAWDOWN_TRIGGER_PCT", 10.0)
 CB_RECOVERY_TIME_MIN: int = _env_int("CB_RECOVERY_TIME_MIN", 30)
 

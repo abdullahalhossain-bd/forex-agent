@@ -106,27 +106,50 @@ BANNER = r"""
 # ──────────────────────────────────────────────────────────────
 
 def setup_logging():
-    """Configure comprehensive logging."""
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    log_level = logging.INFO
+    """Configure comprehensive logging.
 
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
+    2026-08-12 cleanup: unified logging to use utils/logger.py's
+    RotatingFileHandler (logs/trader.log) instead of a separate
+    forex_ai.log. This ensures all logs go through SecretRedactionFilter
+    and benefit from log rotation. The legacy forex_ai.log is retained
+    as a symlink alias for backwards compatibility.
+    """
+    from utils.logger import get_logger as _get_logger
 
-    logging.basicConfig(
-        level=log_level,
-        format=log_format,
-        handlers=[
-            logging.FileHandler(LOGS_DIR / "forex_ai.log", encoding="utf-8"),
-            logging.StreamHandler(),
-        ],
-    )
-
-    # Reduce verbosity of noisy libraries
+    # Suppress noisy third-party loggers
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
     logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
+    # Configure root logger to use utils/logger.py's handlers
+    # (RotatingFileHandler at logs/trader.log + console)
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    # If root already has handlers (from basicConfig in imported modules),
+    # clear them to avoid duplicate output
+    if root.handlers:
+        root.handlers.clear()
+
+    # Use the shared handlers from utils/logger.py
+    try:
+        from utils.logger import _get_shared_handlers
+        for h in _get_shared_handlers():
+            root.addHandler(h)
+    except Exception:
+        # Fallback: basic config
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[
+                logging.FileHandler(LOGS_DIR / "forex_ai.log", encoding="utf-8"),
+                logging.StreamHandler(),
+            ],
+        )
+
+    return _get_logger("main")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -179,8 +202,12 @@ class ForexAISystem:
     def initialize(self) -> bool:
         """Boot the entire runtime through the LifecycleManager. Returns True
         if every critical phase succeeded."""
-        print(BANNER)
-        print("  Booting runtime (24 phases)...\n")
+        # 2026-08-12: replaced print() with logger for clean professional output
+        log = logging.getLogger("main")
+        log.info("=" * 60)
+        log.info("  FOREX AI AUTONOMOUS TRADING SYSTEM — Booting")
+        log.info("=" * 60)
+        log.info("  Booting runtime (24 phases)...")
 
         # Day 81+ hotfix: TEST_MODE warning banner.
         # TEST_MODE bypasses MasterAnalyst, Confluence, Ensemble, RL, and
@@ -191,24 +218,20 @@ class ForexAISystem:
         try:
             from config import TEST_MODE, SIMULATION_MODE, MAX_LOT, APPROVAL_MODE, MAX_OPEN_TRADES
             if TEST_MODE:
-                print("=" * 60)
-                print("  ⚠️  TEST_MODE = True  ⚠️")
-                print("  All safety gates are PERMISSIVE:")
-                print("    • MasterAnalyst/Confluence/Ensemble/RL bypassed")
-                print("    • TradePermission MIN_CONFIDENCE = 10 (prod=60)")
-                print("    • PositionSizer rejects force-approved lot=0.01")
-                print("    • Session quality check disabled")
-                print("  Set TEST_MODE=false in .env for production trading.")
-                print("=" * 60)
-                print()
+                log.warning("=" * 60)
+                log.warning("  TEST_MODE = True — All safety gates are PERMISSIVE")
+                log.warning("    - MasterAnalyst/Confluence/Ensemble/RL bypassed")
+                log.warning("    - TradePermission MIN_CONFIDENCE = 10 (prod=70)")
+                log.warning("    - PositionSizer rejects force-approved lot=0.01")
+                log.warning("    - Session quality check disabled")
+                log.warning("  Set TEST_MODE=false in .env for production trading.")
+                log.warning("=" * 60)
             if SIMULATION_MODE:
-                print("=" * 60)
-                print("  🔬  SIMULATION_MODE = True  🔬")
-                print("  No real MT5 orders will be placed.")
-                print("  Set SIMULATION_MODE=false in .env for live trading.")
-                print("=" * 60)
-                print()
-            print(f"  Config: MAX_LOT={MAX_LOT} | APPROVAL_MODE={APPROVAL_MODE} | MAX_OPEN_TRADES={MAX_OPEN_TRADES}")
+                log.info("=" * 60)
+                log.info("  SIMULATION_MODE = True — No real MT5 orders will be placed.")
+                log.info("  Set SIMULATION_MODE=false in .env for live trading.")
+                log.info("=" * 60)
+            log.info(f"  Config: MAX_LOT={MAX_LOT} | APPROVAL_MODE={APPROVAL_MODE} | MAX_OPEN_TRADES={MAX_OPEN_TRADES}")
             print()
         except Exception:
             pass
@@ -216,14 +239,15 @@ class ForexAISystem:
         # Override config-driven settings if CLI args were supplied.
         self._apply_cli_overrides()
 
-        # Register a phase-complete callback so we get a live progress print.
+        # Register a phase-complete callback so we get a live progress log.
+        _phase_log = logging.getLogger("main.boot")
         def _on_phase(result):
             icon = "OK" if result.ok else "!!"
             if result.skipped:
                 icon = "--"
             svcs = ", ".join(result.services_registered) if result.services_registered else "(no services)"
             err = f"  ERR: {result.error}" if result.error else ""
-            print(f"  [{icon}] {result.phase.value:<14} ({result.duration_sec}s) — {svcs}{err}")
+            _phase_log.info(f"  [{icon}] {result.phase.value:<14} ({result.duration_sec:.3f}s) - {svcs}{err}")
 
         self.runtime.lifecycle.on_phase_complete(_on_phase)
 
@@ -258,14 +282,13 @@ class ForexAISystem:
                 db=None, mt5_conn=mt5_conn, paper_trader=paper_trader,
             )
             if reconciled["closed"] > 0:
-                print(f"  🧹  Orphan cleanup: {reconciled['closed']} stale DB-OPEN trades auto-closed")
-                logging.info(f"[System] Orphan cleanup: {reconciled}")
+                logging.getLogger("main").info(f"  Orphan cleanup: {reconciled['closed']} stale DB-OPEN trades auto-closed")
+                logging.getLogger("main").info(f"  Orphan cleanup details: {reconciled}")
             elif reconciled["kept"] > 0:
-                print(f"  ✓  {reconciled['kept']} DB-OPEN trades verified against MT5 (all real)")
+                logging.getLogger("main").info(f"  {reconciled['kept']} DB-OPEN trades verified against MT5 (all real)")
         except Exception as e:
-            logging.warning(f"[System] Orphan cleanup skipped: {e}")
+            logging.getLogger("main").warning(f"  Orphan cleanup skipped: {e}")
 
-        print()
         self._print_boot_summary()
 
         # Critical phases: BOOTSTRAP and PERSISTENCE must succeed.
@@ -286,21 +309,22 @@ class ForexAISystem:
             self.runtime.registry.register_instance("execution_mode", self.execution_mode)
 
     def _print_boot_summary(self) -> None:
-        """Print final boot summary."""
+        """Print final boot summary via logger."""
+        _log = logging.getLogger("main")
         report = self.runtime.lifecycle.report()
         phases = report["phases"]
         ok = sum(1 for p in phases if p["ok"] and not p["skipped"])
         failed = sum(1 for p in phases if not p["ok"])
         skipped = sum(1 for p in phases if p["skipped"])
-        print("=" * 60)
-        print(f"  Boot complete: {ok} phases OK, {failed} failed, {skipped} skipped")
+        _log.info("=" * 60)
+        _log.info(f"  Boot complete: {ok} phases OK, {failed} failed, {skipped} skipped")
         if failed:
-            print(f"  FAILED phases:")
+            _log.warning(f"  FAILED phases:")
             for p in phases:
                 if not p["ok"]:
-                    print(f"    - {p['phase']}: {p.get('error', 'unknown')}")
-        print(f"  Trader wired: {'yes' if self.trading_engine else 'NO'}")
-        print(f"  Registry services: {len(self.runtime.registry.health())}")
+                    _log.warning(f"    - {p['phase']}: {p.get('error', 'unknown')}")
+        _log.info(f"  Trader wired: {'YES' if self.trading_engine else 'NO'}")
+        _log.info(f"  Registry services: {len(self.runtime.registry.health())}")
         print("=" * 60)
 
     # ─────────────────────────────────────────────

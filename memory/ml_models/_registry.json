@@ -44,7 +44,7 @@
           "saved_at": "2026-08-04T19:29:42.300040+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCAD\\random_forest\\model.pkl",
+          "model_path": "AUDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCAD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -61,7 +61,7 @@
           "saved_at": "2026-08-04T19:29:15.234417+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCAD\\xgboost\\model.pkl",
+          "model_path": "AUDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCAD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -112,7 +112,7 @@
           "saved_at": "2026-08-04T19:29:12.225727+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCHF\\random_forest\\model.pkl",
+          "model_path": "AUDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -129,7 +129,7 @@
           "saved_at": "2026-08-04T19:28:53.551930+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCHF\\xgboost\\model.pkl",
+          "model_path": "AUDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -180,7 +180,7 @@
           "saved_at": "2026-08-04T19:28:50.894980+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDJPY\\random_forest\\model.pkl",
+          "model_path": "AUDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -197,7 +197,7 @@
           "saved_at": "2026-08-04T19:28:28.670775+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDJPY\\xgboost\\model.pkl",
+          "model_path": "AUDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -248,7 +248,7 @@
           "saved_at": "2026-08-04T19:30:10.743015+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDNZD\\random_forest\\model.pkl",
+          "model_path": "AUDNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDNZD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -265,7 +265,7 @@
           "saved_at": "2026-08-04T19:29:45.091128+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDNZD\\xgboost\\model.pkl",
+          "model_path": "AUDNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDNZD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -316,7 +316,7 @@
           "saved_at": "2026-08-04T19:38:55.175261+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDSGD\\random_forest\\model.pkl",
+          "model_path": "AUDSGD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDSGD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -333,7 +333,7 @@
           "saved_at": "2026-08-04T19:38:20.271104+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDSGD\\xgboost\\model.pkl",
+          "model_path": "AUDSGD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDSGD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -384,7 +384,7 @@
           "saved_at": "2026-08-04T19:22:56.721244+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDUSD\\random_forest\\model.pkl",
+          "model_path": "AUDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -401,7 +401,7 @@
           "saved_at": "2026-08-04T19:22:31.037334+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\AUDUSD\\xgboost\\model.pkl",
+          "model_path": "AUDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\AUDUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -452,7 +452,7 @@
           "saved_at": "2026-08-04T19:32:12.193911+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CADCHF\\random_forest\\model.pkl",
+          "model_path": "CADCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CADCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -469,7 +469,7 @@
           "saved_at": "2026-08-04T19:31:47.960204+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CADCHF\\xgboost\\model.pkl",
+          "model_path": "CADCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CADCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -520,7 +520,7 @@
           "saved_at": "2026-08-04T19:31:44.954777+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CADJPY\\random_forest\\model.pkl",
+          "model_path": "CADJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CADJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -537,7 +537,7 @@
           "saved_at": "2026-08-04T19:31:28.590448+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CADJPY\\xgboost\\model.pkl",
+          "model_path": "CADJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CADJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -588,7 +588,7 @@
           "saved_at": "2026-08-04T19:32:37.692558+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CHFJPY\\random_forest\\model.pkl",
+          "model_path": "CHFJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CHFJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -605,7 +605,7 @@
           "saved_at": "2026-08-04T19:32:14.509402+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\CHFJPY\\xgboost\\model.pkl",
+          "model_path": "CHFJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\CHFJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -656,7 +656,7 @@
           "saved_at": "2026-08-04T19:25:29.092534+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURAUD\\random_forest\\model.pkl",
+          "model_path": "EURAUD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURAUD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -673,7 +673,7 @@
           "saved_at": "2026-08-04T19:25:03.978381+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURAUD\\xgboost\\model.pkl",
+          "model_path": "EURAUD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURAUD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -724,7 +724,7 @@
           "saved_at": "2026-08-04T19:25:59.170786+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURCAD\\random_forest\\model.pkl",
+          "model_path": "EURCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURCAD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -741,7 +741,7 @@
           "saved_at": "2026-08-04T19:25:33.103772+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURCAD\\xgboost\\model.pkl",
+          "model_path": "EURCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURCAD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -792,7 +792,7 @@
           "saved_at": "2026-08-04T19:25:01.034258+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURCHF\\random_forest\\model.pkl",
+          "model_path": "EURCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -809,7 +809,7 @@
           "saved_at": "2026-08-04T19:24:34.631784+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURCHF\\xgboost\\model.pkl",
+          "model_path": "EURCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -860,7 +860,7 @@
           "saved_at": "2026-08-04T19:23:58.758864+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURGBP\\random_forest\\model.pkl",
+          "model_path": "EURGBP_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURGBP\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -877,7 +877,7 @@
           "saved_at": "2026-08-04T19:23:29.134141+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURGBP\\xgboost\\model.pkl",
+          "model_path": "EURGBP_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURGBP\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -928,7 +928,7 @@
           "saved_at": "2026-08-04T19:24:31.993803+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURJPY\\random_forest\\model.pkl",
+          "model_path": "EURJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -945,7 +945,7 @@
           "saved_at": "2026-08-04T19:24:02.959827+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURJPY\\xgboost\\model.pkl",
+          "model_path": "EURJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -996,7 +996,7 @@
           "saved_at": "2026-08-04T19:36:14.361465+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURNOK\\random_forest\\model.pkl",
+          "model_path": "EURNOK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURNOK\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1013,7 +1013,7 @@
           "saved_at": "2026-08-04T19:35:48.443505+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURNOK\\xgboost\\model.pkl",
+          "model_path": "EURNOK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURNOK\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1064,7 +1064,7 @@
           "saved_at": "2026-08-04T19:26:25.572426+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURNZD\\random_forest\\model.pkl",
+          "model_path": "EURNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURNZD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1081,7 +1081,7 @@
           "saved_at": "2026-08-04T19:26:01.579854+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURNZD\\xgboost\\model.pkl",
+          "model_path": "EURNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURNZD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1132,7 +1132,7 @@
           "saved_at": "2026-08-04T19:36:56.397612+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURSEK\\random_forest\\model.pkl",
+          "model_path": "EURSEK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURSEK\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1149,7 +1149,7 @@
           "saved_at": "2026-08-04T19:36:20.000716+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURSEK\\xgboost\\model.pkl",
+          "model_path": "EURSEK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURSEK\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1200,7 +1200,7 @@
           "saved_at": "2026-08-04T19:20:19.656833+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURUSD\\random_forest\\model.pkl",
+          "model_path": "EURUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1217,7 +1217,7 @@
           "saved_at": "2026-08-04T19:19:40.967892+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\EURUSD\\xgboost\\model.pkl",
+          "model_path": "EURUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\EURUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1268,7 +1268,7 @@
           "saved_at": "2026-08-04T19:27:46.619041+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPAUD\\random_forest\\model.pkl",
+          "model_path": "GBPAUD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPAUD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1285,7 +1285,7 @@
           "saved_at": "2026-08-04T19:27:27.906189+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPAUD\\xgboost\\model.pkl",
+          "model_path": "GBPAUD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPAUD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1336,7 +1336,7 @@
           "saved_at": "2026-08-04T19:28:03.949004+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCAD\\random_forest\\model.pkl",
+          "model_path": "GBPCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCAD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1353,7 +1353,7 @@
           "saved_at": "2026-08-04T19:27:48.521901+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCAD\\xgboost\\model.pkl",
+          "model_path": "GBPCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCAD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1404,7 +1404,7 @@
           "saved_at": "2026-08-04T19:27:24.508300+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCHF\\random_forest\\model.pkl",
+          "model_path": "GBPCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1421,7 +1421,7 @@
           "saved_at": "2026-08-04T19:26:57.740409+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCHF\\xgboost\\model.pkl",
+          "model_path": "GBPCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1472,7 +1472,7 @@
           "saved_at": "2026-08-04T19:26:53.228811+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPJPY\\random_forest\\model.pkl",
+          "model_path": "GBPJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1489,7 +1489,7 @@
           "saved_at": "2026-08-04T19:26:27.792469+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPJPY\\xgboost\\model.pkl",
+          "model_path": "GBPJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1540,7 +1540,7 @@
           "saved_at": "2026-08-04T19:38:14.659086+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNOK\\random_forest\\model.pkl",
+          "model_path": "GBPNOK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNOK\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1557,7 +1557,7 @@
           "saved_at": "2026-08-04T19:37:40.036992+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNOK\\xgboost\\model.pkl",
+          "model_path": "GBPNOK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNOK\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1608,7 +1608,7 @@
           "saved_at": "2026-08-04T19:28:24.949502+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNZD\\random_forest\\model.pkl",
+          "model_path": "GBPNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNZD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1625,7 +1625,7 @@
           "saved_at": "2026-08-04T19:28:05.450245+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNZD\\xgboost\\model.pkl",
+          "model_path": "GBPNZD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPNZD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1676,7 +1676,7 @@
           "saved_at": "2026-08-04T19:37:30.400751+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPSEK\\random_forest\\model.pkl",
+          "model_path": "GBPSEK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPSEK\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1693,7 +1693,7 @@
           "saved_at": "2026-08-04T19:37:01.302131+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPSEK\\xgboost\\model.pkl",
+          "model_path": "GBPSEK_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPSEK\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1744,7 +1744,7 @@
           "saved_at": "2026-08-04T19:20:53.645763+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPUSD\\random_forest\\model.pkl",
+          "model_path": "GBPUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1761,7 +1761,7 @@
           "saved_at": "2026-08-04T19:20:24.468178+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\GBPUSD\\xgboost\\model.pkl",
+          "model_path": "GBPUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\GBPUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1931,7 +1931,7 @@
           "saved_at": "2026-08-04T19:31:25.897404+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCAD\\random_forest\\model.pkl",
+          "model_path": "NZDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCAD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -1948,7 +1948,7 @@
           "saved_at": "2026-08-04T19:31:03.010896+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCAD\\xgboost\\model.pkl",
+          "model_path": "NZDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCAD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -1999,7 +1999,7 @@
           "saved_at": "2026-08-04T19:31:00.080226+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCHF\\random_forest\\model.pkl",
+          "model_path": "NZDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2016,7 +2016,7 @@
           "saved_at": "2026-08-04T19:30:37.465129+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCHF\\xgboost\\model.pkl",
+          "model_path": "NZDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2067,7 +2067,7 @@
           "saved_at": "2026-08-04T19:30:34.560796+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDJPY\\random_forest\\model.pkl",
+          "model_path": "NZDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2084,7 +2084,7 @@
           "saved_at": "2026-08-04T19:30:13.231381+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDJPY\\xgboost\\model.pkl",
+          "model_path": "NZDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2203,7 +2203,7 @@
           "saved_at": "2026-08-04T19:23:23.360920+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDUSD\\random_forest\\model.pkl",
+          "model_path": "NZDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2220,7 +2220,7 @@
           "saved_at": "2026-08-04T19:22:58.661018+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\NZDUSD\\xgboost\\model.pkl",
+          "model_path": "NZDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\NZDUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2339,7 +2339,7 @@
           "saved_at": "2026-08-04T19:22:27.421731+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDCAD\\random_forest\\model.pkl",
+          "model_path": "USDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDCAD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2356,7 +2356,7 @@
           "saved_at": "2026-08-04T19:21:54.997834+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDCAD\\xgboost\\model.pkl",
+          "model_path": "USDCAD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDCAD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2407,7 +2407,7 @@
           "saved_at": "2026-08-04T19:21:51.601888+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDCHF\\random_forest\\model.pkl",
+          "model_path": "USDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDCHF\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2424,7 +2424,7 @@
           "saved_at": "2026-08-04T19:21:25.393977+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDCHF\\xgboost\\model.pkl",
+          "model_path": "USDCHF_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDCHF\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2475,7 +2475,7 @@
           "saved_at": "2026-08-04T19:21:22.853805+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDJPY\\random_forest\\model.pkl",
+          "model_path": "USDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDJPY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2492,7 +2492,7 @@
           "saved_at": "2026-08-04T19:20:57.347524+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDJPY\\xgboost\\model.pkl",
+          "model_path": "USDJPY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDJPY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2543,7 +2543,7 @@
           "saved_at": "2026-08-04T19:35:14.178208+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDTRY\\random_forest\\model.pkl",
+          "model_path": "USDTRY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDTRY\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2560,7 +2560,7 @@
           "saved_at": "2026-08-04T19:34:37.996371+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDTRY\\xgboost\\model.pkl",
+          "model_path": "USDTRY_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDTRY\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2611,7 +2611,7 @@
           "saved_at": "2026-08-04T19:35:43.761418+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDZAR\\random_forest\\model.pkl",
+          "model_path": "USDZAR_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDZAR\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2628,7 +2628,7 @@
           "saved_at": "2026-08-04T19:35:18.795607+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\USDZAR\\xgboost\\model.pkl",
+          "model_path": "USDZAR_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\USDZAR\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2679,7 +2679,7 @@
           "saved_at": "2026-08-04T19:33:31.321625+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XAGUSD\\random_forest\\model.pkl",
+          "model_path": "XAGUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XAGUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2696,7 +2696,7 @@
           "saved_at": "2026-08-04T19:33:07.397490+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XAGUSD\\xgboost\\model.pkl",
+          "model_path": "XAGUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XAGUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2747,7 +2747,7 @@
           "saved_at": "2026-08-04T19:33:04.243389+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XAUUSD\\random_forest\\model.pkl",
+          "model_path": "XAUUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XAUUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2764,7 +2764,7 @@
           "saved_at": "2026-08-04T19:32:39.804036+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XAUUSD\\xgboost\\model.pkl",
+          "model_path": "XAUUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XAUUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2815,7 +2815,7 @@
           "saved_at": "2026-08-04T19:34:26.794585+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XPDUSD\\random_forest\\model.pkl",
+          "model_path": "XPDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XPDUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2832,7 +2832,7 @@
           "saved_at": "2026-08-04T19:33:59.038763+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XPDUSD\\xgboost\\model.pkl",
+          "model_path": "XPDUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XPDUSD\\xgboost\\metadata.json",
           "feature_names": []
         }
@@ -2883,7 +2883,7 @@
           "saved_at": "2026-08-04T19:33:56.371013+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XPTUSD\\random_forest\\model.pkl",
+          "model_path": "XPTUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XPTUSD\\random_forest\\metadata.json",
           "feature_names": []
         }
@@ -2900,7 +2900,7 @@
           "saved_at": "2026-08-04T19:33:33.719636+00:00",
           "metrics": {},
           "is_keras": false,
-          "model_path": "D:\\Projects\\forex\\data\\trained_models\\XPTUSD\\xgboost\\model.pkl",
+          "model_path": "XPTUSD_15m/model.pkl",
           "meta_path": "D:\\Projects\\forex\\data\\trained_models\\XPTUSD\\xgboost\\metadata.json",
           "feature_names": []
         }

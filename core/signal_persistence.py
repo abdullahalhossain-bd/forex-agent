@@ -49,7 +49,7 @@ class SignalPersistenceFilter:
     # Config
     WINDOW_BARS = 20          # look back this many signal records
     MAX_FLIPS = 3             # more than 3 direction changes in 20 bars = unstable
-    MIN_BARS_SAME_DIR = 2     # signal must persist for at least 2 bars before acting
+    MIN_BARS_SAME_DIR = 1     # 2026-08-12: lowered 2→1 (was delaying breakout entries by 30min on M15)
     MIN_CONFIDENCE_NEW = 50   # first-ever signal for a pair needs ≥50% confidence
 
     def __init__(self):

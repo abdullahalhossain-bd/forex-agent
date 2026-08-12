@@ -28,7 +28,7 @@ from __future__ import annotations
 # that live as an unexplained local constant, the exception is declared here,
 # by strategy name, so it stays visible and reviewable in one place.
 STRATEGY_OVERRIDES: dict[str, float] = {
-    "stop_hunt": 1.4,   # analysis/stop_hunt_signal_engine.py — fast scalp exits
+    "stop_hunt": 1.2,   # 2026-08-12: lowered 1.4→1.2 for TP 1:1.5 strategy
 }
 
 

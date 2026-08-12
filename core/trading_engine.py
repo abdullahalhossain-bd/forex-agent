@@ -42,25 +42,17 @@ class TradingEngine(AutonomousTraderSystem):
         return super().run()
 
     def _print_banner(self) -> None:
-        bar = "=" * 33
-        print(bar)
-        print("🤖 AUTONOMOUS FOREX AI TRADER")
-        print()
-        print("Mode:")
-        print(self.execution_mode.upper())
-        print()
-        print("Scanner:")
-        print("ON" if self.use_scanner else "OFF")
-        print()
-        print("Approval:")
-        print(self.approval.mode_name)
-        print()
-        print("Registry:")
-        print("yes" if self._registry else "no")
-        print()
-        print("Status:")
-        print("STARTING...")
-        print(bar)
+        """Log startup banner professionally (replaces print statements)."""
+        bar = "=" * 50
+        log.info(bar)
+        log.info("  AUTONOMOUS FOREX AI TRADER - STARTING")
+        log.info(bar)
+        log.info(f"  Mode      : %s", self.execution_mode.upper())
+        log.info(f"  Scanner   : %s", "ON" if self.use_scanner else "OFF")
+        log.info(f"  Approval  : %s", self.approval.mode_name)
+        log.info(f"  Registry  : %s", "yes" if self._registry else "no")
+        log.info(f"  Status    : STARTING")
+        log.info(bar)
 
     def pending_approvals(self) -> list[dict]:
         """Mode 2 (SUPERVISED) — trades waiting on a human approve()/reject()."""

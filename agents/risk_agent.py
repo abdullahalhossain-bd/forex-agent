@@ -27,8 +27,9 @@ class RiskAgent:
         DAILY_LOSS_LIMIT = float(_CFG_DLL)
     except Exception:
         DAILY_LOSS_LIMIT = 20.0
-    MIN_RR              = 1.5    # minimum risk:reward ratio
-    ATR_SL_MULTIPLIER   = 1.5   # SL = ATR * 1.5
+    # 2026-08-12: TP 1:1.5 R:R — SL=1.5 ATR (~25p), TP=2.25 ATR (~37p)
+    MIN_RR              = 1.5    # minimum risk:reward (break-even WR=43%)
+    ATR_SL_MULTIPLIER   = 1.5   # SL = ATR * 1.5 (~25 pips on EURUSD H1)
 
     def __init__(self, account_balance: float = 1000.0):
         self.balance       = account_balance

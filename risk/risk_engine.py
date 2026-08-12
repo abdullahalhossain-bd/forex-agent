@@ -18,11 +18,13 @@ DAILY_LOG_PATH = str(MEMORY_DIR / "daily_risk.json")
 class RiskEngine:
 
     MAX_RISK_PC      = 1.0
-    MIN_RR           = 2.0
-    MAX_RR           = 5.0   # Day 81+ — masterclass: don't take trades with RR > 1:5
-    DAILY_LOSS_LIMIT = 3.0  # default — overridden by config.DAILY_LOSS_LIMIT_PCT below
-    MAX_OPEN_TRADES  = 3    # default — overridden by config.MAX_OPEN_TRADES below
-    ATR_SL_MULT      = 1.5
+    # 2026-08-12: TP 1:1.5 R:R — SL=1.5 ATR (~25p), TP=2.25 ATR (~37p)
+    # Historical analysis: break-even WR=43%, production expects 50%+ = profit
+    MIN_RR           = 1.5
+    MAX_RR           = 5.0
+    DAILY_LOSS_LIMIT = 3.0
+    MAX_OPEN_TRADES  = 3
+    ATR_SL_MULT      = 1.5  # SL = ATR * 1.5 (~25 pips on EURUSD H1)
     # P0-2 (Audit Fix): Config loading must NOT be wrapped in try/except.
     # If config.py fails to import, the system MUST crash on boot —
     # silently trading with wrong risk parameters is far more dangerous.

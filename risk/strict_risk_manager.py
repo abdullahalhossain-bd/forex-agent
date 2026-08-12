@@ -60,7 +60,7 @@ MAX_WEEKLY_LOSS_PCT      = 5.0     # halt for week at -5%
 MAX_DRAWDOWN_PCT         = 10.0    # halt completely at -10% (was 20%)
 MAX_OPEN_POSITIONS       = 3       # max 3 trades at once
 MAX_TRADES_PER_DAY       = 20      # max 20 trades/day (synced with core.constants.MAX_TRADES_PER_DAY)
-MAX_CONSECUTIVE_LOSSES   = 3       # cooldown after 3 losses
+MAX_CONSECUTIVE_LOSSES   = 5       # 2026-08-12: raised 3→5 (was blocking normal variance)
 COOLDOWN_HOURS           = 4       # cooldown duration
 
 # Correlation control

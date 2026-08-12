@@ -52,7 +52,7 @@ class GuardrailResult:
 
 # ─── Constants ────────────────────────────────────────────────
 DEFAULT_CORRELATION_THRESHOLD = 0.70   # Page 136: avoid > 0.70 correlation
-DEFAULT_LOSS_STREAK_THRESHOLD = 3      # Page 138: 3+ consecutive losses
+DEFAULT_LOSS_STREAK_THRESHOLD = 5      # 2026-08-12: raised 3→5 (was over-blocking normal variance)
 DEFAULT_POSITION_ESCALATION_MULT = 1.25  # 25% above normal = "escalation"
 DEFAULT_MIN_NET_EV_PIPS = 1.0           # Net EV must be ≥ 1 pip after costs
 DEFAULT_SPREAD_PIPS = {

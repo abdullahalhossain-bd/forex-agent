@@ -1,62 +1,65 @@
-2026-08-11 15:15:08 | INFO     | database.db               | Database ready: D:\Projects\forex\database\trader.db
-2026-08-11 15:15:09 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-11 15:15:09 | INFO     | mt5_connection            |   🤖  AI TRADER — MT5 CONNECTION
-2026-08-11 15:15:09 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-11 15:15:09 | INFO     | mt5_connection            |   Connected : MetaQuotes-Demo
-2026-08-11 15:15:09 | INFO     | mt5_connection            |   Account   : 108647429
-2026-08-11 15:15:09 | INFO     | mt5_connection            |   Status    : ✅ Ready
-2026-08-11 15:15:09 | INFO     | mt5_connection            |   Balance   : $99113.92
-2026-08-11 15:15:09 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-11 15:15:09 | INFO     | data.fetcher              | [OK] DataFetcher initialized | source: mt5
-2026-08-11 15:15:11 | INFO     | sentiment_model           | [SentimentModel] Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-11 15:15:14 | INFO     | model_store               | [ModelStore] imported 171 historical trained model(s) into registry from data/trained_models/
-2026-08-11 15:15:18 | INFO     | rl_agent                  | [RL Agent] PPO model at D:\Projects\forex\ml\rl_policy\ppo_forex_latest.zip exists but FAILED the training-quality gate (recorded avg_reward=-9140.96 in its own training run (threshold: > -10.0) — model consistently LOST money during training; loading it as 'trusted' would let an unprofitable policy vote on live trades) — NOT loading it as trusted; falling back to heuristic mode instead of letting an unverified/undertrained policy vote on live trades.
-2026-08-11 15:15:19 | INFO     | ai_analyst                | Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-11 15:15:22 | INFO     | ai_analyst                | Gemini client initialized (fallback ready) | model=gemini-3.5-flash
-2026-08-11 15:15:22 | INFO     | master_analyst            | [MasterAnalyst] Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-11 15:15:32 | INFO     | drawdown_controller       | [DrawdownController] Initialized | Initial: $99,159.93 | Max DD: 15.0% | Daily Limit: 5.0% | Weekly Limit: 7.0%
-2026-08-11 15:15:32 | INFO     | execution_router          | [ExecutionRouter] Using shared/injected MT5Connection
-2026-08-11 15:15:32 | INFO     | execution_router          | [ExecutionRouter] Shared MT5 connection in use — skipping local HealthMonitor thread (relying on the central health monitor instead)
-2026-08-11 15:15:32 | INFO     | execution_router          | [ExecutionRouter] Mode: MT5_DEMO (real broker, demo account)
-2026-08-11 15:15:32 | INFO     | trade_recovery            | [TradeRecovery] Starting MT5 state recovery...
-2026-08-11 15:15:32 | INFO     | trade_recovery            | [TradeRecovery] Found 0 open MT5 position(s)
-2026-08-11 15:15:32 | INFO     | trade_recovery            | [TradeRecovery] No PositionManager — skipping seed step
-2026-08-11 15:15:32 | INFO     | trade_recovery            | [TradeRecovery] No learning DB — skipping close reconciliation
-2026-08-11 15:15:32 | INFO     | trade_recovery            | [TradeRecovery] Complete: 0 open | 0 closed-during-downtime reconciled | 0 orphan MT5 positions | PM seeded: False
-2026-08-11 15:15:32 | INFO     | strategy_tracker          | [StrategyTracker] DB ready: D:\Projects\forex\memory\strategy_tracker.db
-2026-08-11 15:15:32 | INFO     | learning.deep_analyzer    | [DeepAnalyzer] Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-11 15:15:34 | INFO     | daily_review              | [DailyReview] Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-11 15:15:34 | INFO     | approval_mode             | [ApprovalMode] Active: Mode 3 — AUTONOMOUS
-2026-08-11 15:15:34 | INFO     | database.db               | Database ready: D:\Projects\forex\database\trader.db
-2026-08-11 15:15:34 | INFO     | paper_trader              | [PaperTrader] Balance restored from DB: $99147.73 (based on 14 closed trades)
-2026-08-11 15:15:34 | INFO     | paper_trader              | PaperTrader ready | Balance: $99147.73 | Open positions restored: 0
-2026-08-11 15:15:34 | INFO     | decision_agent            | [DecisionAgent] MasterDecisionEngine cross-check ENABLED
-2026-08-11 15:15:34 | INFO     | decision_agent            | [DecisionAgent] SignalFusion authoritative gate ENABLED
-2026-08-11 15:15:34 | INFO     | compounding               | [Compounding] State loaded | initial=$10000.0 | current=$9987.80 | trades=4
-2026-08-11 15:15:34 | INFO     | monte_carlo               | [MonteCarlo] Engine initialized
-2026-08-11 15:15:34 | INFO     | position_allocator        | [PositionAllocator] Initialized | Balance: $99,159.93 | Kelly Fraction: 50% | Min RR: 1:2.0
-2026-08-11 15:15:34 | INFO     | trade_frequency           | [TradeFrequency] bounds: MIN=3 MAX=35 trades/day
-2026-08-11 15:15:34 | INFO     | approval_mode             | [ApprovalMode] Active: Mode 2 — SUPERVISED
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /positions
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /close
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /symbols
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /indicators
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /source
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] registered /account
-2026-08-11 15:15:34 | INFO     | signal_scorer             | [SignalScorer] base threshold = 80 (mode=SAFE)
-2026-08-11 15:15:34 | INFO     | telegram_ext              | [TelegramExt] 6 extension commands registered
-2026-08-11 15:15:34 | INFO     | telegram_bot              | 🤖 Telegram Bot Polling Started…
-2026-08-11 15:15:34 | INFO     | adaptive_decision         | [Adaptive] Calibrated 8 strategies from backtest (mode=confluence)
-2026-08-11 15:15:34 | INFO     | decision_bridge           | [Bridge] Loaded calibrated weights from D:\Projects\download\backtest_results\calibrated_weights.json
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: supertrend
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: utbot
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: andean_oscillator
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: nwe
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: daily_high_low
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: chandelier_exit
-2026-08-11 15:15:34 | DEBUG    | ported_indicators         | Registered ported indicator: atr_sl_finder
-2026-08-11 15:15:34 | INFO     | expectancy_calculator     | [Expectancy] Patched PerformanceAnalyzer.summarize() with proper expectancy formula
-2026-08-11 15:15:34 | INFO     | orphan_cleanup            | [OrphanCleanup] Starting reconciliation...
-2026-08-11 15:15:34 | INFO     | orphan_cleanup            | [OrphanCleanup] MT5 live positions: 0
-2026-08-11 15:15:34 | INFO     | orphan_cleanup            | [OrphanCleanup] DB open trades: 0
-2026-08-11 15:15:34 | INFO     | orphan_cleanup            | [OrphanCleanup] Synced daily_risk.json state: open_pairs=[]
+2026-08-12 20:39:18 | INFO     | main                      | ============================================================
+2026-08-12 20:39:18 | INFO     | main                      |   FOREX AI AUTONOMOUS TRADING SYSTEM — Booting
+2026-08-12 20:39:18 | INFO     | main                      | ============================================================
+2026-08-12 20:39:18 | INFO     | main                      |   Booting runtime (24 phases)...
+2026-08-12 20:39:18 | INFO     | main                      |   Config: MAX_LOT=0.1 | APPROVAL_MODE=3 | MAX_OPEN_TRADES=20
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 14 Groq key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 13 Gemini key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Cerebras key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 SambaNova key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 Claude key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GLM key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Throttle] Loaded config parameters successfully.
+2026-08-12 20:39:18 | INFO     | core.runtime              | LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
+2026-08-12 20:39:18 | INFO     | main.boot                 |   [OK] bootstrap      (0.014s) - config, paths, event_bus, metrics, health_monitor
+2026-08-12 20:39:25 | INFO     | database.db               | Database ready: D:\Projects\forex\database\trader.db
+2026-08-12 20:40:34 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
+2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
+2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
+2026-08-12 20:40:37 | INFO     | trade_memory              | [TradeMemory] Running without vector memory — sentence-transformers not installed; semantic search disabled. Install with pip install -U sentence-transformers to enable.
+2026-08-12 20:40:37 | INFO     | main.boot                 |   [OK] persistence    (78.717s) - db, trade_memory, learning_engine, analysis_history, knowledge_store
+2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-12 20:40:38 | INFO     | mt5_connection            |   🤖  AI TRADER — MT5 CONNECTION
+2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-12 20:40:38 | INFO     | mt5_connection            |   Connected : MetaQuotes-Demo
+2026-08-12 20:40:38 | INFO     | mt5_connection            |   Account   : 108647429
+2026-08-12 20:40:38 | INFO     | mt5_connection            |   Status    : ✅ Ready
+2026-08-12 20:40:38 | INFO     | mt5_connection            |   Balance   : $99113.92
+2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-12 20:40:38 | INFO     | data.fetcher              | [OK] DataFetcher initialized | source: mt5
+2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] data           (2.233s) - data_fetcher, data_validator, indicators, data_updater
+2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] market         (0.027s) - market_scanner, correlation_filter, opportunity_ranker, mt5_connection
+2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] research       (0.015s) - research_agent, hypothesis_engine, experiment_runner, research_report
+2026-08-12 20:40:40 | INFO     | sentiment_model           | [SentimentModel] Groq client initialized | model=llama-3.3-70b-versatile
+2026-08-12 20:40:40 | INFO     | core.runtime              | Day 66 NewsIntelligence engine wired
+2026-08-12 20:40:40 | INFO     | main.boot                 |   [OK] fundamental    (0.900s) - news_filter, fundamental_sentiment, news_intelligence
+2026-08-12 20:40:40 | INFO     | core.runtime              | Day 67 ConfluenceEngine wired
+2026-08-12 20:40:40 | INFO     | core.runtime              | Day 68 FeatureStore wired (4647 feature rows, 1599 labels)
+2026-08-12 20:40:43 | INFO     | model_store               | [ModelStore] imported 171 historical trained model(s) into registry from data/trained_models/
+2026-08-12 20:40:43 | INFO     | core.runtime              | Day 69 ModelStore wired (171 models on disk)
+2026-08-12 20:40:43 | INFO     | core.runtime              | [ModelStore] registry/disk consistency OK (171 model file(s) verified)
+2026-08-12 20:40:43 | INFO     | core.runtime              | Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-08-12 20:40:43 | INFO     | core.runtime              | Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-08-12 20:40:44 | INFO     | rl_agent                  | [RL Agent] PPO model at D:\Projects\forex\ml\rl_policy\ppo_forex_latest.zip exists but FAILED the training-quality gate (recorded avg_reward=-9140.96 in its own training run (threshold: > -10.0) — model consistently LOST money during training; loading it as 'trusted' would let an unprofitable policy vote on live trades) — NOT loading it as trusted; falling back to heuristic mode instead of letting an unverified/undertrained policy vote on live trades.
+2026-08-12 20:40:44 | INFO     | core.runtime              | Day 71 RL Agent wired (source=heuristic, model_loaded=False)
+2026-08-12 20:40:44 | INFO     | core.runtime              | Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-08-12 20:40:44 | INFO     | main.boot                 |   [OK] analysis       (3.561s) - intermarket_engine, session_analyzer_analytics, confluence_engine, feature_engineer, feature_store, label_generator, data_preprocessor, feature_selector, dataset_builder, model_evaluator, model_store, model_trainer, model_predictor, voting_engine, confidence_fusion, ensemble_store, ensemble_engine, reward_engine, rl_agent, rl_policy_store, cv_splitter, walk_forward_validator, monte_carlo_simulator, regime_tester, sensitivity_tester, validation_engine
+2026-08-12 20:40:44 | INFO     | ai_analyst                | Groq client initialized | model=llama-3.3-70b-versatile
+2026-08-12 20:40:49 | INFO     | ai_analyst                | Gemini client initialized (fallback ready) | model=gemini-3.5-flash
+2026-08-12 20:40:49 | INFO     | master_analyst            | [MasterAnalyst] Groq client initialized | model=llama-3.3-70b-versatile

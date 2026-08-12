@@ -1866,18 +1866,15 @@ def run_all_entry_quality_checks(
 
     # Day 137 safety fix (real-money loss postmortem — GBPCAD 2026-07-20):
     # sl_swing_anchor and tp_structure_validation failed TOGETHER (a stop
-    # with no structural reference AND a target with no prior test) and
-    # only cost -3 -3 = -6 combined — nowhere near enough to matter against
-    # a 70% base confidence. Individually each is a legitimate WARNING (a
-    # fixed-pip stop or an untested target isn't necessarily wrong), but
-    # together they mean the entry has NO structural basis on either side
-    # — a materially different, higher-risk situation than one isolated
-    # warning. Add a compounding penalty (not a hard block, to preserve the
-    # existing soft-scoring design) so this specific combination reliably
-    # pushes confidence below the downstream 60% trade-permission floor.
+    # with no structural reference AND a target with no prior test).
+    #
+    # 2026-08-12 winrate audit: reduced compound penalty from -10 → -5.
+    # The original -10 was calibrated for a 60% confidence floor. With
+    # the new 70% floor, a -10 compound on a 75% raw signal drops it to
+    # 65% → blocked. -5 keeps the structural warning without over-blocking.
     _failed_flags = {r.flag_name for r in results if not r.passed}
     if {"sl_swing_anchor", "tp_structure_validation"}.issubset(_failed_flags):
-        _compound_penalty = 10
+        _compound_penalty = 5
         confidence_penalty += _compound_penalty
         penalty_by_rule["sl_tp_structure_compound"] = (
             penalty_by_rule.get("sl_tp_structure_compound", 0) - _compound_penalty
