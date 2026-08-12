@@ -79,9 +79,9 @@ def _build_tiers() -> dict:
     """
     mt = _max_trades()
     return {
-        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 60.0, "manual", 0.5),
-        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 60.0, "semi_auto", 0.8),
-        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 60.0, "fully_auto", 1.0),
+        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 70.0, "manual", 0.5),
+        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 70.0, "semi_auto", 0.8),
+        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 70.0, "fully_auto", 1.0),
     }
 
 

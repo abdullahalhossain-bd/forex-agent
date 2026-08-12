@@ -150,3 +150,23 @@ NameError: name 'PatternMemory' is not defined
 2026-08-11 15:15:34,688 - core._orphan_integration - INFO - ============================================================
 2026-08-11 15:15:34,689 - core.health_monitor - INFO - HealthMonitor started (interval=30.0s)
 2026-08-11 15:15:34,703 - root - ERROR - Trading engine not initialized — cannot start
+2026-08-12 11:51:38,918 - llm_key_manager - INFO - [LLM Keys] Loaded 14 Groq key(s)
+2026-08-12 11:51:38,919 - llm_key_manager - INFO - [LLM Keys] Loaded 13 Gemini key(s)
+2026-08-12 11:51:38,920 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Cerebras key(s)
+2026-08-12 11:51:38,920 - llm_key_manager - INFO - [LLM Keys] Loaded 1 SambaNova key(s)
+2026-08-12 11:51:38,920 - llm_key_manager - INFO - [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-08-12 11:51:38,921 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-08-12 11:51:38,922 - llm_key_manager - INFO - [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-08-12 11:51:38,922 - llm_key_manager - INFO - [LLM Keys] Loaded 0 Claude key(s)
+2026-08-12 11:51:38,922 - llm_key_manager - INFO - [LLM Keys] Loaded 0 GLM key(s)
+2026-08-12 11:51:38,923 - llm_key_manager - INFO - [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-08-12 11:51:38,923 - llm_key_manager - INFO - [LLM Throttle] Loaded config parameters successfully.
+2026-08-12 11:51:38,925 - core.runtime - INFO - LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
+2026-08-12 11:51:44,330 - core.runtime - WARNING - TradeMemory init failed (non-critical): name 'PatternMemory' is not defined
+2026-08-12 11:51:58,938 - core.runtime - INFO - Day 66 NewsIntelligence engine wired
+2026-08-12 11:51:58,973 - core.runtime - INFO - Day 67 ConfluenceEngine wired
+2026-08-12 11:51:58,998 - core.runtime - INFO - Day 68 FeatureStore wired (4532 feature rows, 1529 labels)
+2026-08-12 11:51:59,040 - core.runtime - INFO - Day 69 ModelStore wired (171 models on disk)
+2026-08-12 11:51:59,048 - core.runtime - INFO - [ModelStore] registry/disk consistency OK (171 model file(s) verified)
+2026-08-12 11:51:59,097 - core.runtime - INFO - Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-08-12 11:51:59,116 - core.runtime - INFO - Day 70 EnsembleEngine wired (brain fusion layer ready)

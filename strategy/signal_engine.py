@@ -38,62 +38,140 @@ class SignalEngine:
         extended_ctx:     dict = None,    # 17-module integration pass
     ) -> dict:
         """
-        Rule-based signal generation।
+        Rule-based signal generation with HTF trend gate (2026-08-12 winrate audit).
         সব context দেখে BUY / SELL / WAIT / NO TRADE।
         """
         signals  = []
         warnings = []
         bull_score = 0
         bear_score = 0
+        bull_factors = 0
+        bear_factors = 0
+
+        # ── HTF TREND GATE (2026-08-12 winrate audit) ────────
+        # Hard requirement: price must be on the correct side of EMA200
+        # AND EMA50 must be aligned with EMA200. This prevents the
+        # counter-trend trades that caused the original BUY 14.9% vs
+        # SELL 92.5% asymmetry on EURUSD H1 backtests.
+        price   = ind_ctx.get('price', 0)
+        ema_50  = ind_ctx.get('ema_50') or ind_ctx.get('sma_50')
+        ema_200 = ind_ctx.get('ema_200') or ind_ctx.get('sma_200')
+        adx_val = ind_ctx.get('adx', 0) or 0
+
+        htf_bull = False
+        htf_bear = False
+        if price and ema_50 and ema_200:
+            try:
+                htf_bull = float(price) > float(ema_200) and float(ema_50) > float(ema_200)
+                htf_bear = float(price) < float(ema_200) and float(ema_50) < float(ema_200)
+            except (TypeError, ValueError):
+                pass
+
+        # ── ADX GATE (2026-08-12) ─────────────────────────────
+        # Skip choppy markets — ADX < 22 means no clear trend.
+        try:
+            adx_val = float(adx_val)
+        except (TypeError, ValueError):
+            adx_val = 0.0
+
+        if adx_val < 22 and adx_val > 0:
+            return {
+                'signal': 'WAIT', 'confidence': 0, 'bull_score': 0,
+                'bear_score': 0, 'net_score': 0, 'signals': [],
+                'warnings': [f"ADX too low ({adx_val:.0f}) — choppy market"],
+                'recommendation': "🟡 WAIT — ADX below threshold, no clear trend",
+                'fib_zone': None, 'fib_level': None, 'fib_in_golden': False,
+                'fib_tp1': None, 'fib_tp2': None,
+            }
 
         # ── Trend ─────────────────────────────────────────────
         trend = ind_ctx.get('trend', '')
         if 'strong_bullish' in trend:
-            bull_score += 2
+            bull_score += 2; bull_factors += 1
             signals.append(('bullish', 2, 'Strong bullish trend'))
         elif 'bullish' in trend:
-            bull_score += 1
+            bull_score += 1; bull_factors += 1
             signals.append(('bullish', 1, 'Bullish trend'))
         elif 'strong_bearish' in trend:
-            bear_score += 2
+            bear_score += 2; bear_factors += 1
             signals.append(('bearish', 2, 'Strong bearish trend'))
         elif 'bearish' in trend:
-            bear_score += 1
+            bear_score += 1; bear_factors += 1
             signals.append(('bearish', 1, 'Bearish trend'))
+
+        # ── HTF Bias vote (2026-08-12) ────────────────────────
+        if htf_bull:
+            bull_score += 2; bull_factors += 1
+            signals.append(('bullish', 2, 'HTF bull (price+EMA50 > EMA200)'))
+        elif htf_bear:
+            bear_score += 2; bear_factors += 1
+            signals.append(('bearish', 2, 'HTF bear (price+EMA50 < EMA200)'))
 
         # ── RSI ───────────────────────────────────────────────
         rsi_sig = ind_ctx.get('rsi_signal', '')
         rsi     = ind_ctx.get('rsi', 50)
-        if rsi_sig == 'oversold':
-            bull_score += 2
-            signals.append(('bullish', 2, f'RSI oversold ({rsi:.1f})'))
-        elif rsi_sig == 'overbought':
-            bear_score += 2
-            signals.append(('bearish', 2, f'RSI overbought ({rsi:.1f})'))
-        elif rsi_sig == 'bullish_zone':
-            bull_score += 1
+        if rsi_sig == 'oversold' and htf_bull:
+            bull_score += 2; bull_factors += 1
+            signals.append(('bullish', 2, f'RSI oversold in uptrend ({rsi:.1f})'))
+        elif rsi_sig == 'overbought' and htf_bear:
+            bear_score += 2; bear_factors += 1
+            signals.append(('bearish', 2, f'RSI overbought in downtrend ({rsi:.1f})'))
+        elif rsi_sig == 'bullish_zone' and (htf_bull or not htf_bear):
+            bull_score += 1; bull_factors += 1
             signals.append(('bullish', 1, f'RSI bullish zone ({rsi:.1f})'))
-        elif rsi_sig == 'bearish_zone':
-            bear_score += 1
+        elif rsi_sig == 'bearish_zone' and (htf_bear or not htf_bull):
+            bear_score += 1; bear_factors += 1
             signals.append(('bearish', 1, f'RSI bearish zone ({rsi:.1f})'))
 
         # ── MACD ──────────────────────────────────────────────
         macd_cross = ind_ctx.get('macd_cross', '')
-        if macd_cross == 'bullish_cross':
-            bull_score += 1
-            signals.append(('bullish', 1, 'MACD bullish cross'))
-        elif macd_cross == 'bearish_cross':
-            bear_score += 1
-            signals.append(('bearish', 1, 'MACD bearish cross'))
+        macd_val   = ind_ctx.get('macd', 0)
+        macd_sig   = ind_ctx.get('macd_signal', 0)
+        if macd_cross == 'bullish_cross' and (htf_bull or not htf_bear):
+            bull_score += 2; bull_factors += 1
+            signals.append(('bullish', 2, 'MACD bullish cross'))
+        elif macd_cross == 'bearish_cross' and (htf_bear or not htf_bull):
+            bear_score += 2; bear_factors += 1
+            signals.append(('bearish', 2, 'MACD bearish cross'))
+        elif macd_val and macd_sig and macd_val > macd_sig and macd_val > 0 and htf_bull:
+            bull_score += 1; bull_factors += 1
+            signals.append(('bullish', 1, 'MACD above signal + above zero'))
+        elif macd_val and macd_sig and macd_val < macd_sig and macd_val < 0 and htf_bear:
+            bear_score += 1; bear_factors += 1
+            signals.append(('bearish', 1, 'MACD below signal + below zero'))
+
+        # ── Stochastic confirmation (2026-08-12) ──────────────
+        stoch_k = ind_ctx.get('stoch_k', 50)
+        stoch_d = ind_ctx.get('stoch_d', 50)
+        try:
+            stoch_k = float(stoch_k) if stoch_k else 50.0
+            stoch_d = float(stoch_d) if stoch_d else 50.0
+        except (TypeError, ValueError):
+            stoch_k, stoch_d = 50.0, 50.0
+        if stoch_k > stoch_d and stoch_k < 35 and htf_bull:
+            bull_score += 1; bull_factors += 1
+            signals.append(('bullish', 1, f'Stoch bull cross in pullback ({stoch_k:.0f})'))
+        elif stoch_k < stoch_d and stoch_k > 65 and htf_bear:
+            bear_score += 1; bear_factors += 1
+            signals.append(('bearish', 1, f'Stoch bear cross in pullback ({stoch_k:.0f})'))
+
+        # ── ADX strength bonus (2026-08-12) ───────────────────
+        if adx_val > 30:
+            if bull_score > bear_score:
+                bull_score += 1
+                signals.append(('bullish', 1, f'ADX strong ({adx_val:.0f})'))
+            elif bear_score > bull_score:
+                bear_score += 1
+                signals.append(('bearish', 1, f'ADX strong ({adx_val:.0f})'))
 
         # ── Candlestick Pattern ───────────────────────────────
         pat_sig  = pat_ctx.get('pattern_signal', '')
         pat_name = pat_ctx.get('latest_pattern', 'none')
-        if 'Bullish' in pat_sig and pat_name != 'none':
-            bull_score += 2
+        if 'Bullish' in pat_sig and pat_name != 'none' and (htf_bull or not htf_bear):
+            bull_score += 2; bull_factors += 1
             signals.append(('bullish', 2, f'Bullish pattern: {pat_name}'))
-        elif 'Bearish' in pat_sig and pat_name != 'none':
-            bear_score += 2
+        elif 'Bearish' in pat_sig and pat_name != 'none' and (htf_bear or not htf_bull):
+            bear_score += 2; bear_factors += 1
             signals.append(('bearish', 2, f'Bearish pattern: {pat_name}'))
 
         # ── S/R Location — DISABLED 2026-07-30 ─────────────────
@@ -177,7 +255,7 @@ class SignalEngine:
         # 2026-07-29 and removed on 2026-08-04. No fib_bias-driven
         # warning is emitted anymore.
 
-        # ── Final Decision ────────────────────────────────────
+        # ── Final Decision (2026-08-12 winrate audit — stricter) ────
         total  = bull_score + bear_score
         net    = bull_score - bear_score
 
@@ -191,27 +269,40 @@ class SignalEngine:
             if warnings:
                 confidence = max(0, confidence - 10 * len(warnings))
 
-            # Day 96 bugfix: net>=2 let a single oversold/overbought RSI
-            # reading (weight +2) trigger BUY/SELL on its own, with no
-            # second confirming factor. Raised to 3 so at least two
-            # agreeing signals (or one strong + one weak) are required.
-            # Standalone-backtest audit fix (2026-07): an 8-day/14-pair
-            # sanity-check backtest of this exact engine found it firing on
-            # ~40-45% of bars at the old net>=3 threshold — far too
-            # trigger-happy for live trading once spread/slippage are
-            # accounted for — and that plain BUY/SELL (net==3, one strong +
-            # one weak factor) was the weakest-performing signal tier
-            # (+0.079R avg) versus STRONG_BUY (+0.196R). Raised by one point
-            # per tier so BUY/SELL now needs two solid confirming factors
-            # (e.g. trend+2 AND rsi+2, not trend+2 alone) rather than one.
-            # This will reduce trade frequency — that is the intended
-            # effect, not a bug; re-run the backtest after changing this if
-            # you want to confirm the new frequency/expectancy trade-off.
-            if net >= 6:    signal = 'STRONG_BUY'
-            elif net >= 4:  signal = 'BUY'
-            elif net <= -6: signal = 'STRONG_SELL'
-            elif net <= -4: signal = 'SELL'
-            else:           signal = 'WAIT'
+            # 2026-08-12 winrate audit: raised thresholds from net>=4/6 to
+            # net>=6/8 AND added minimum factor count requirement (4+ for
+            # BUY/SELL, 6+ for STRONG). This eliminates single-source signals
+            # (e.g. trend+2 alone) that produced 14.9% BUY winrate on EURUSD
+            # and forces true multi-factor confluence. Also requires HTF
+            # alignment — no BUY if htf_bear is True, no SELL if htf_bull
+            # is True (hard counter-trend block).
+            max_factors = max(bull_factors, bear_factors)
+
+            # Hard counter-trend block (2026-08-12)
+            if htf_bear and bull_score > bear_score and net >= 6:
+                # Block BUY signals against HTF bear trend
+                signal = 'WAIT'
+                confidence = max(0, confidence - 30)
+                warnings.append("⚠️  BUY blocked by HTF bear trend — counter-trend")
+            elif htf_bull and bear_score > bull_score and net <= -6:
+                # Block SELL signals against HTF bull trend
+                signal = 'WAIT'
+                confidence = max(0, confidence - 30)
+                warnings.append("⚠️  SELL blocked by HTF bull trend — counter-trend")
+            elif max_factors < 3:
+                # Need at least 3 confluence factors
+                signal = 'WAIT'
+            else:
+                if net >= 8 and max_factors >= 5:
+                    signal = 'STRONG_BUY'
+                elif net >= 6 and max_factors >= 4 and htf_bull:
+                    signal = 'BUY'
+                elif net <= -8 and max_factors >= 5:
+                    signal = 'STRONG_SELL'
+                elif net <= -6 and max_factors >= 4 and htf_bear:
+                    signal = 'SELL'
+                else:
+                    signal = 'WAIT'
 
         # Regime filter
         if regime:
@@ -256,25 +347,24 @@ class SignalEngine:
         }
 
     def _signal_recommendation(self, signal, confidence, warnings) -> str:
-        if warnings and confidence < 55:
+        # 2026-08-12: raised all confidence thresholds from 55 → 70 per
+        # operator request ("minimum confidence 60 → 70"). This filters
+        # out moderate-confidence setups that produced 33% WR on conf=60.
+        if warnings and confidence < 70:
             return "🟡 WAIT — Conflicting signals. Wait for confluence."
-        if signal == 'STRONG_BUY'  and confidence >= 70:
+        if signal == 'STRONG_BUY'  and confidence >= 80:
             return "🟢 STRONG BUY — High confidence. Look for entry."
-        # Round-13 audit fix: moderate-confidence STRONG_BUY (55-69%)
-        # was falling through to "WAIT — No clear edge" because only
-        # the ≥70% branch existed. Now shows the correct moderate label.
-        if signal == 'STRONG_BUY'  and confidence >= 55:
-            return "🟢 BUY — Moderate setup. Confirm entry."
-        if signal == 'BUY'         and confidence >= 55:
-            return "🟢 BUY — Moderate setup. Confirm entry."
-        if signal == 'STRONG_SELL' and confidence >= 70:
+        if signal == 'STRONG_BUY'  and confidence >= 70:
+            return "🟢 BUY — Strong setup. Confirm entry."
+        if signal == 'BUY'         and confidence >= 70:
+            return "🟢 BUY — Confirmed setup. Take entry."
+        if signal == 'STRONG_SELL' and confidence >= 80:
             return "🔴 STRONG SELL — High confidence. Look for entry."
-        # Round-13: same fix for STRONG_SELL moderate confidence.
-        if signal == 'STRONG_SELL' and confidence >= 55:
-            return "🔴 SELL — Moderate setup. Confirm entry."
-        if signal == 'SELL'        and confidence >= 55:
-            return "🔴 SELL — Moderate setup. Confirm entry."
-        return "🟡 WAIT — No clear edge. Stay out."
+        if signal == 'STRONG_SELL' and confidence >= 70:
+            return "🔴 SELL — Strong setup. Confirm entry."
+        if signal == 'SELL'        and confidence >= 70:
+            return "🔴 SELL — Confirmed setup. Take entry."
+        return "🟡 WAIT — Confidence below 70% threshold. Stay out."
 
     def get_ai_context(self, result: dict) -> dict:
         return {

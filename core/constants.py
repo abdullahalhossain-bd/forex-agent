@@ -330,11 +330,11 @@ def get_max_trades_per_day(tier: int = 1) -> int:
 # Was duplicated in: trade_permission.MIN_CONFIDENCE_PROD (40),
 # live_risk_manager.TIERS.min_confidence (80/70/55),
 # autonomous_risk (50).
-MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 40)
+MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 70)
 MIN_CONFIDENCE_TEST: int = _env_int("MIN_CONFIDENCE_TEST", 10)
-MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 80.0)
-MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 70.0)
-MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 55.0)
+MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 85.0)
+MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 75.0)
+MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 70.0)
 
 
 def get_min_confidence(tier: int = 1) -> float:

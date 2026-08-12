@@ -13,6 +13,8 @@ class Indicators:
         df = self.add_macd(df)
         df = self.add_bollinger_bands(df)
         df = self.add_atr(df)
+        df = self.add_adx(df)
+        df = self.add_stochastic(df)
         df = self.add_trend_signals(df)
         log.info("All indicators added successfully | Total columns: %d", len(df.columns))
         return df
@@ -23,6 +25,37 @@ class Indicators:
         df['sma_200'] = ta.trend.sma_indicator(df['close'], window=200)
         df['ema_9']   = ta.trend.ema_indicator(df['close'], window=9)
         df['ema_21']  = ta.trend.ema_indicator(df['close'], window=21)
+        # Added 2026-08-12 winrate audit: EMA50 + EMA200 for HTF trend gate
+        df['ema_50']  = ta.trend.ema_indicator(df['close'], window=50)
+        df['ema_200'] = ta.trend.ema_indicator(df['close'], window=200)
+        return df
+
+    def add_adx(self, df):
+        """ADX (Average Directional Index) — trend strength.
+        Added 2026-08-12: required for choppy-market gate in SignalEngine.
+        ADX > 25 = strong trend, ADX < 20 = choppy/ranging.
+        """
+        try:
+            df['adx'] = ta.trend.ADXIndicator(
+                df['high'], df['low'], df['close'], window=14
+            ).adx()
+        except Exception as e:
+            log.warning(f"ADX computation failed: {e}")
+            df['adx'] = 0.0
+        return df
+
+    def add_stochastic(self, df):
+        """Stochastic Oscillator — added 2026-08-12 for pullback confirmation."""
+        try:
+            stoch = ta.momentum.StochasticOscillator(
+                df['high'], df['low'], df['close'], window=14, smooth_window=3
+            )
+            df['stoch_k'] = stoch.stoch()
+            df['stoch_d'] = stoch.stoch_signal()
+        except Exception as e:
+            log.warning(f"Stochastic computation failed: {e}")
+            df['stoch_k'] = 50.0
+            df['stoch_d'] = 50.0
         return df
 
     def add_rsi(self, df):
@@ -96,12 +129,17 @@ class Indicators:
             "macd":       round(float(last['macd']), 5),
             "macd_cross": last['macd_cross'],
             "atr":        round(float(last['atr']), 5),
+            "adx":        round(float(last.get('adx', 0)), 2) if 'adx' in last else 0.0,
+            "stoch_k":    round(float(last.get('stoch_k', 50)), 2) if 'stoch_k' in last else 50.0,
+            "stoch_d":    round(float(last.get('stoch_d', 50)), 2) if 'stoch_d' in last else 50.0,
             "bb_upper":   round(float(last['bb_upper']), 5),
             "bb_lower":   round(float(last['bb_lower']), 5),
             "bb_pct":     round(float(last['bb_pct']), 2),
             "sma_20":     round(float(last['sma_20']), 5),
             "sma_50":     round(float(last['sma_50']), 5),
             "sma_200":    round(float(last['sma_200']), 5),
+            "ema_50":     round(float(last.get('ema_50', last['sma_50'])), 5),
+            "ema_200":    round(float(last.get('ema_200', last['sma_200'])), 5),
         }
 
     @staticmethod

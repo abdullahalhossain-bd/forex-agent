@@ -128,7 +128,7 @@ class TradePermission:
     # is entry_quality penalty weights -- NOT this floor again -- and that
     # should only happen after reviewing the new ENTRY_QUALITY_BREAKDOWN
     # diagnostics (blocked_audit.py) against a few weeks of live results.
-    MIN_CONFIDENCE_PROD  = 55  # was 60 -- see comment above
+    MIN_CONFIDENCE_PROD  = 70  # raised 2026-08-12 winrate audit (was 55)
     MIN_CONFIDENCE_TEST  = 10
     MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
     MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
