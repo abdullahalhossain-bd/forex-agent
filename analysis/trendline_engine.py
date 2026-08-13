@@ -97,7 +97,7 @@ class TrendlineEngine:
             parts.append(f"Channel: {channel['width_pips']:.0f} pips")
         if signals:
             parts.append(f"{len(signals)} signals")
-        log.info(f"[Trendline] {' | '.join(parts) if parts else 'No trendlines detected'}")
+        log.debug(f"[Trendline] {' | '.join(parts) if parts else 'No trendlines detected'}")
 
         return result
 

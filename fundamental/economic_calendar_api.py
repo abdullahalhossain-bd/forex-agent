@@ -114,13 +114,29 @@ class EconomicCalendarAPI:
 
         # ── All layers failed ──
         if not events:
+            # Default policy: a calendar OUTAGE (all sources unreachable)
+            # is NOT the same as "high-impact event in progress" — yet the
+            # previous default (ECONCAL_OUTAGE_ALLOWS_TRADES=false) treated
+            # them identically, hard-blocking all trading whenever the
+            # calendar API was unreachable. That produced endless
+            # "[EconCal] All calendar sources returned 0 events" warnings
+            # in trader.log with trades silently blocked even on quiet
+            # trading days. Now default to ALLOW trades during outage
+            # (calendar_unreliable=True is still flagged so downstream
+            # risk code can choose to apply extra caution). Operators
+            # who want the strict behavior can set
+            # ECONCAL_OUTAGE_ALLOWS_TRADES=false explicitly.
+            allow_trades_during_outage = os.getenv(
+                "ECONCAL_OUTAGE_ALLOWS_TRADES", "true"
+            ).lower() in ("1", "true", "yes")
             log.warning(
                 "[EconCal] All calendar sources returned 0 events — "
-                "marking calendar_outage=True."
+                "marking calendar_outage=True. trade_block=%s "
+                "(set ECONCAL_OUTAGE_ALLOWS_TRADES=false to hard-block "
+                "trading during outages).",
+                "False (allowing trades, calendar unreliable)" if allow_trades_during_outage
+                else "True (hard-blocking trades)",
             )
-            allow_trades_during_outage = os.getenv(
-                "ECONCAL_OUTAGE_ALLOWS_TRADES", "false"
-            ).lower() in ("1", "true", "yes")
             return self._empty_result(
                 "All calendar sources failed — calendar outage. "
                 "Trading blocked unless ECONCAL_OUTAGE_ALLOWS_TRADES=true.",

@@ -142,11 +142,22 @@ class NetworkMonitor:
             self._consecutive_failures = 0
         elif worst_latency <= self.LATENCY_SLOW:
             status = "SLOW"
-            log.warning(f"[NetMonitor] SLOW — ping={ping_ms}ms mt5={mt5_ping_ms}ms exec={exec_latency}ms")
+            # Coalesce None → "n/a" so the log doesn't read "ping=Nonems"
+            # when the ping subprocess failed entirely (common on Windows
+            # where `ping` may be missing or blocked).
+            log.warning(
+                f"[NetMonitor] SLOW — ping={ping_ms if ping_ms is not None else 'n/a'}ms "
+                f"mt5={mt5_ping_ms if mt5_ping_ms is not None else 'n/a'}ms "
+                f"exec={exec_latency if exec_latency is not None else 'n/a'}ms"
+            )
         else:
             status = "BAD"
             self._consecutive_failures += 1
-            log.error(f"[NetMonitor] BAD — ping={ping_ms}ms mt5={mt5_ping_ms}ms exec={exec_latency}ms")
+            log.error(
+                f"[NetMonitor] BAD — ping={ping_ms if ping_ms is not None else 'n/a'}ms "
+                f"mt5={mt5_ping_ms if mt5_ping_ms is not None else 'n/a'}ms "
+                f"exec={exec_latency if exec_latency is not None else 'n/a'}ms"
+            )
 
         result = {
             "timestamp":           datetime.now(timezone.utc).isoformat(timespec="seconds"),

@@ -253,7 +253,7 @@ class MarketAgent:
             from data.indicator_registry import add_canonical_indicators, get_ai_context as _get_ctx
             df = add_canonical_indicators(df, include_patterns=True)
             ind_ctx = _get_ctx(df)
-            log.info(f"[MarketAgent] Used canonical indicator_registry ({len(df.columns)} cols)")
+            log.debug(f"[MarketAgent] Used canonical indicator_registry ({n_cols} cols)")
         except Exception as e_registry:
             log.warning(f"[MarketAgent] indicator_registry failed ({e_registry}) — falling back to ExtendedIndicators")
             try:

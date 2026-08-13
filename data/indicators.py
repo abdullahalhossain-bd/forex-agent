@@ -16,7 +16,7 @@ class Indicators:
         df = self.add_adx(df)
         df = self.add_stochastic(df)
         df = self.add_trend_signals(df)
-        log.info("All indicators added successfully | Total columns: %d", len(df.columns))
+        log.debug("All indicators added | columns: %d", len(df.columns))
         return df
 
     def add_moving_averages(self, df):

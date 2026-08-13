@@ -224,7 +224,7 @@ class OrderBlockDetector:
 
         deduped = self._dedupe_keep_best(raw)
         deduped.sort(key=lambda r: (r['quality_score'], r['impulse_index']), reverse=True)
-        log.info(f"[OrderBlock] Detected {len(deduped)} order blocks "
+        log.debug(f"[OrderBlock] Detected {len(deduped)} order blocks "
                  f"(mode={self.mode}, require_structure={self.require_structure_break}, "
                  f"require_fvg={self.require_fvg}, regime={'on' if self.use_regime_filter else 'off'})")
         # Day-46 fix, same pattern as fvg_detector.py: MAX_RESULTS=10 is correct

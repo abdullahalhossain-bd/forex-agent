@@ -551,7 +551,14 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
                 f"(expected {m['expected_path']})"
                 for m in audit["missing"]
             )
-            log.error(
+            # Demote to WARNING unless we are about to hard-fail — the
+            # fallback branches below (auto_retrain / warn) all keep
+            # booting successfully, so logging this at ERROR level was
+            # producing scary "Registry/disk MISMATCH" alerts in trader.log
+            # for a condition the system actually handles gracefully.
+            # Only hard_fail (which raises) deserves ERROR.
+            _log_level = log.error if ML_MODEL_CONSISTENCY_ACTION == "hard_fail" else log.warning
+            _log_level(
                 "[ModelStore] Registry/disk MISMATCH: %d of %d registered model "
                 "file(s) missing on disk — %s",
                 len(audit["missing"]), audit["checked"], missing_desc,
@@ -568,6 +575,30 @@ def boot_analysis(registry: ServiceRegistry) -> PhaseResult:
                 )
 
             elif ML_MODEL_CONSISTENCY_ACTION == "auto_retrain" and not is_backtest_mode():
+                # Before kicking off background retraining, prune the
+                # stale registry entries immediately — otherwise a failed
+                # retrain (e.g. broker doesn't offer the symbol) leaves
+                # the dangling entry in the registry and the same
+                # "Registry/disk MISMATCH" error gets re-logged on every
+                # subsequent boot. Pruning is idempotent: any pair that
+                # DOES get successfully retrained below will get a fresh
+                # registry entry written by ModelStore.save_model.
+                try:
+                    _pre_cleanup = store.cleanup_registry()
+                    if _pre_cleanup["removed_versions"] > 0 or _pre_cleanup["removed_keys"] > 0:
+                        log.info(
+                            "[ModelStore] auto-retrain: pre-pruned %d stale "
+                            "version(s) and %d empty key(s) from registry "
+                            "before background retraining kicks off",
+                            _pre_cleanup["removed_versions"],
+                            _pre_cleanup["removed_keys"],
+                        )
+                        cold_pairs = store.get_cold_pairs()
+                except Exception as _pre_clean_e:
+                    log.debug(
+                        "[ModelStore] pre-retrain cleanup failed (non-fatal): %s",
+                        _pre_clean_e,
+                    )
                 # Retrain baseline models for just the affected pairs —
                 # this replaces the missing files AND rewrites their
                 # registry entries (ModelStore.save_model), so the

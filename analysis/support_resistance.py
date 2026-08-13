@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -34,6 +35,12 @@ import pandas as pd
 from utils.logger import get_logger
 
 log = get_logger("support_resistance")
+
+# Gate the per-analyze() [SR-DIAG] debug log behind an env var. The log
+# fires once per symbol per trading cycle (~28 pairs × every 1-2 min =
+# thousands of lines per hour in trader.log) and is only useful during
+# active development of the SR engine. Set SR_DEBUG_DIAG=1 to re-enable.
+_SR_DEBUG_DIAG = os.getenv("SR_DEBUG_DIAG", "0").lower() in ("1", "true", "yes")
 
 # ─── Timeframe → swing_window mapping ──────────────────────────
 _TF_SWING_WINDOW = {
@@ -700,10 +707,11 @@ class SupportResistance:
         for z in all_support:
             src = z.get("source", "?")
             _src_counts_s[src] = _src_counts_s.get(src, 0) + 1
-        log.debug(
-            f"[SR-DIAG] {symbol}: resistance={len(all_resistance)} {_src_counts_r} | "
-            f"support={len(all_support)} {_src_counts_s}"
-        )
+        if _SR_DEBUG_DIAG:
+            log.debug(
+                f"[SR-DIAG] {symbol}: resistance={len(all_resistance)} {_src_counts_r} | "
+                f"support={len(all_support)} {_src_counts_s}"
+            )
 
         try:
             pivot = self.calculate_pivot(df)

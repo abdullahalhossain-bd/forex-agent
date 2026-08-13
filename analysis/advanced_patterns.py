@@ -109,7 +109,7 @@ class AdvancedPatternDetector:
         # Sort by confidence descending
         patterns.sort(key=lambda p: p.get('confidence', 0), reverse=True)
 
-        log.info(f"Advanced patterns detected: {len(patterns)}")
+        log.debug(f"Advanced patterns: {len(patterns)} detected")
         return patterns
 
     # ═══════════════════════════════════════════════════════════
@@ -1142,7 +1142,7 @@ class AdvancedPatternDetector:
                     reason = "Bearish pattern against strong bullish trend"
 
             if reason:
-                log.info(f"False pattern filtered: {pattern_name} — {reason}")
+                log.debug(f"False pattern filtered: {pattern_name} — {reason}")
                 pat = dict(pat)
                 pat['filtered']       = True
                 pat['filter_reason']  = reason

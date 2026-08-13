@@ -25,7 +25,7 @@ class DataValidator:
         Return True  → data OK, proceed
         Return False → critical issue, don't proceed
         """
-        log.info(f"Validating data: {symbol} {timeframe} | rows={len(df)}")
+        log.debug(f"Validating data: {symbol} {timeframe} | rows={len(df)}")
         passed = True
 
         passed &= self._check_empty(df)
@@ -43,7 +43,7 @@ class DataValidator:
         self._check_gaps(df, timeframe)
 
         if passed:
-            log.info("Data validation passed")
+            log.debug("Data validation passed")
         else:
             log.error("Data validation FAILED — check warnings above")
 
@@ -137,7 +137,7 @@ class DataValidator:
             gaps = actual_deltas[actual_deltas > expected_delta * 1.5]
 
             if len(gaps) > 0:
-                log.info(f"Time gaps detected: {len(gaps)} gap(s) "
+                log.debug(f"Time gaps detected: {len(gaps)} gap(s) "
                           f"(market closed periods or missing data) - informational only")
                 for ts, delta in gaps.head(3).items():
                     log.debug(f"  Gap at {ts}: {delta}")

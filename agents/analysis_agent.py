@@ -196,9 +196,7 @@ class AnalysisAgent:
         symbol    = market_output["symbol"]
         timeframe = market_output.get("timeframe", "15m")
 
-        log.info(
-            f"[AnalysisAgent] Running Day 65 pipeline for {symbol} ({timeframe})"
-        )
+        log.debug(f"[AnalysisAgent] Pipeline: {symbol} ({timeframe})")
 
         # ── 0. SESSION INTELLIGENCE (Day 63) ─────────────────
         # SMC context এখনো নেই, তাই খালি dict দিয়ে শুরু, পরে update
@@ -505,6 +503,20 @@ class AnalysisAgent:
             log.debug(f"[AnalysisAgent] Extended modules adapter error: {e}")
 
         signal_engine = SignalEngine()
+        # 2026-08-13: pass per-pair profile params to SignalEngine so each
+        # pair gets its own optimized ADX gate, pullback distance, and spread
+        # filter threshold. Falls back to defaults if profile not found.
+        try:
+            from utils.pair_profiles import get_pair_profile
+            _pair_prof = get_pair_profile(symbol)
+            _adx_min = _pair_prof.adx_min
+            _pullback_atr = _pair_prof.pullback_atr_mult
+            _spread_max = _pair_prof.spread_max_mult
+        except Exception:
+            _adx_min = 18.0
+            _pullback_atr = 1.0
+            _spread_max = 2.0
+
         signal_result = signal_engine.generate(
             ind_ctx          = ind_ctx,
             pat_ctx          = pat_ctx,
@@ -514,7 +526,42 @@ class AnalysisAgent:
             advanced_pat_ctx = advanced_pat_ctx,
             fib_ctx          = fib_ctx,
             extended_ctx     = extended_ctx,
+            adx_min          = _adx_min,
+            pullback_atr_mult = _pullback_atr,
+            spread_max_mult  = _spread_max,
         )
+
+        # ── 2026-08-13: PER-PAIR STRATEGY SYSTEM ──────────────
+        # Each pair uses a COMPLETELY DIFFERENT entry logic (mean-reversion,
+        # range-trading, trend-follow, breakout) based on its behavior.
+        # If the per-pair strategy returns BUY/SELL, it OVERRIDES the
+        # SignalEngine result (per-pair strategy knows the pair better).
+        try:
+            from utils.pair_strategies import run_strategy
+            from utils.pair_profiles import get_pair_profile as _gpp
+            _pp = _gpp(symbol)
+            if _pp and _pp.enabled and _pp.strategy:
+                _strat_sig = run_strategy(_pp.strategy, ind_ctx, pat_ctx, sr_ctx, pair=symbol)
+                if _strat_sig.get("signal") in ("BUY", "SELL") and _strat_sig.get("confidence", 0) >= _pp.min_confidence:
+                    # Override SignalEngine with per-pair strategy signal
+                    signal_result["signal"] = _strat_sig["signal"]
+                    signal_result["confidence"] = _strat_sig["confidence"]
+                    signal_result["reason"] = _strat_sig.get("reason", f"per-pair: {_pp.strategy}")
+                    signal_result["strategy"] = _pp.strategy
+                    # Store SL/TP from strategy for downstream RiskEngine
+                    if "sl_price" in _strat_sig:
+                        signal_result["sl_price"] = _strat_sig["sl_price"]
+                    if "tp_price" in _strat_sig:
+                        signal_result["tp_price"] = _strat_sig["tp_price"]
+                    if "rr_ratio" in _strat_sig:
+                        signal_result["rr_ratio"] = _strat_sig["rr_ratio"]
+                    log.info(
+                        f"[AnalysisAgent] Per-pair strategy '{_pp.strategy}' → "
+                        f"{_strat_sig['signal']} (conf={_strat_sig['confidence']}%) for {symbol}"
+                    )
+        except Exception as _strat_e:
+            log.debug(f"[AnalysisAgent] Per-pair strategy skipped: {_strat_e}")
+
         signal_engine.print_summary(signal_result)
         signal_ctx = signal_engine.get_ai_context(signal_result)
 
@@ -568,28 +615,29 @@ class AnalysisAgent:
         oscillator_gate_ctx = {}
 
         # ── 6.5 Currency Strength Matrix (Day 64, wired 2026-07-22) ──
-        # Runs BEFORE the sentiment step below so its (possibly richer,
-        # possibly stale-cache, possibly failed) strengths dict is ready
-        # to hand to SentimentEngine.final_sentiment_score() in place of
-        # the crude yfinance 1-day-change proxy it used to get. Kept as
-        # its own try/except so a currency-strength failure can never
-        # take down the sentiment step — falls back to the old proxy.
+        # DISABLED 2026-08-13 (winrate audit): live 28-pair MT5 fetch is
+        # slow + currency strength is a slow fundamental, wrong tool for
+        # H1 signals. Was producing noise that polluted downstream LLM
+        # prompts. Empty dict downstream degrades gracefully.
         currency_strength_result = {}
         currency_strength_ctx    = {}
-        try:
+        if False:  # DISABLED — was: try:
             currency_strength_result = self.currency_strength_engine.analyze()
             self.currency_strength_engine.print_summary(currency_strength_result)
             currency_strength_ctx = self.currency_strength_engine.get_ai_context(
                 currency_strength_result
             )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Currency Strength Engine error: {e}")
+        # removed except block (kept empty for safety)
 
         # ── 7. Sentiment Engine ─────────────────────────────
+        # DISABLED 2026-08-13 (winrate audit): SentimentDataProvider uses
+        # yfinance 5-day history to "approximate" retail long% — this is
+        # NOT real retail sentiment, it's a momentum proxy mislabeled.
+        # The fake sentiment was polluting ConfluenceEngine and LLM prompts.
         sentiment_ctx    = {}
         sentiment_result = {}
         conflict_result  = {}
-        try:
+        if False:  # DISABLED — was: try:
             sent_provider    = self.sentiment_data_provider
             sent_data        = sent_provider.get_all(symbol)
             sent_provider.print_summary(sent_data)
@@ -624,8 +672,7 @@ class AnalysisAgent:
                 technical_signal = signal_result.get("signal", "NO TRADE"),
                 sentiment_result = sentiment_result,
             )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Sentiment error: {e}")
+        # removed except block (kept empty for safety)
 
         # ── 8. SMC Engine ───────────────────────────────────
         smc_result = {}
@@ -802,20 +849,30 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] NewsAPI provider error: {e}")
 
         # ── Day 63: Re-run Session with SMC context ───────────
+        # 2026-08-13 fix: pass dt=_bar_dt (computed at line 219-225 from the
+        # historical bar's timestamp). Without this, SessionAnalyzer defaults
+        # to datetime.now(timezone.utc) — applying wall-clock session tags
+        # to historical bars in backtest (e.g. a 14:00 GMT bar replayed at
+        # 03:00 GMT machine-time gets tagged "DEAD_ZONE" → blocked).
         session_result = self.session_analyzer.analyze(
             pair        = symbol,
             smc_ctx     = smc_ctx,
             signal      = signal_result.get("signal", "NO TRADE"),
             signal_conf = signal_result.get("confidence", 0),
+            dt          = _bar_dt,
         )
         session_ctx = self.session_analyzer.get_ai_context(session_result)
         self.session_analyzer.print_summary(session_result)
 
         # ── 8.5 Intermarket / Global Macro Analysis (Day 65) ─
+        # DISABLED 2026-08-13 (winrate audit): yfinance DXY/Gold/Oil/SPX
+        # fetch is slow + correlation ≠ causation. "Risk-on regime"
+        # doesn't predict EURUSD H1 direction. Output was polluting LLM
+        # prompts and adding noise to ConfluenceEngine.
         intermarket_result = {}
         intermarket_ctx    = {}
         macro_fusion        = {}
-        try:
+        if False:  # DISABLED — was: try:
             intermarket_result = self.intermarket_engine.analyze(symbol)
             self.intermarket_engine.print_summary(intermarket_result)
             intermarket_ctx = self.intermarket_engine.get_ai_context(intermarket_result)
@@ -823,8 +880,7 @@ class AnalysisAgent:
             macro_fusion = self.intermarket_engine.fuse_with_smc(
                 intermarket_result, smc_ctx=smc_ctx, session_ctx=session_ctx
             )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Intermarket Engine error: {e}")
+        # removed except block
 
         # ── 8.95 MTF Structure (Day 88) — Internal vs External ──
         # Uses df as the "internal" timeframe. The external (HTF) tier is
@@ -945,11 +1001,13 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] FRED macro data error: {e}")
 
         # ── 8.92 Retail Sentiment (Day 94/95 — OANDA → Myfxbook → synthetic) ──
-        # Contrarian indicator: when 80%+ retail is long, smart money is short.
-        # Day 95: now passes df for synthetic RSI fallback when both OANDA + Myfxbook fail.
+        # DISABLED 2026-08-13 (winrate audit): contrarian indicator with
+        # weak statistical edge on FX majors. OANDA requires paid API key,
+        # Myfxbook scrapes public HTML (brittle). yfinance synthetic RSI
+        # fallback is just RSI renamed — pure noise as "sentiment".
         retail_sentiment_result = {}
         retail_sentiment_ctx    = {}
-        try:
+        if False:  # DISABLED — was: try:
             sent_api = get_retail_sentiment_api()
             # Pass df for synthetic fallback (RSI-based sentiment computation)
             retail_sentiment_result = sent_api.get_sentiment(symbol, df=df)
@@ -973,8 +1031,7 @@ class AnalysisAgent:
                     f"{retail_sentiment_result['short_pct']:.0f}%S) "
                     f"[source={src}]"
                 )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Retail sentiment error: {e}")
+        # removed except block (was: except Exception as e: log.warning Retail sentiment error)
 
         # ── 8.95 Correlation + Volatility Engine (Day 96) ──────────
         # Detects correlated exposure + ATR spikes → adjusts position size.
@@ -1020,31 +1077,35 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] Correlation engine error: {e}")
 
         # ── 8.96 Institutional Flow (Day 96 — COT + displacement) ──
-        # Detects institutional direction vs retail → divergence signal.
+        # DISABLED 2026-08-13 (winrate audit): CFTC COT reports are weekly
+        # + the "divergence signal" with retail sentiment has weak statistical
+        # edge on intraday timeframes. With retail_sentiment already disabled
+        # above, retail_long_pct defaults to 50.0 — output is meaningless.
         institutional_result = {}
         institutional_ctx    = {}
-        try:
+        if False:  # DISABLED — was: try:
             inst_engine = self.institutional_flow_engine
             retail_long = retail_sentiment_result.get("long_pct", 50.0)
             institutional_result = inst_engine.analyze(symbol, retail_long_pct=retail_long, df=df)
             inst_engine.print_summary(institutional_result)
             institutional_ctx = inst_engine.get_ai_context(institutional_result)
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Institutional flow error: {e}")
+        # removed except block
 
         # ── 8.97 Economic Surprise Index (Day 96) ───────────────────
-        # Actual vs Forecast comparison → detects market-moving surprises.
+        # DISABLED 2026-08-13 (winrate audit): surprise signals have very
+        # short half-lives (minutes) — wrong tool for H1 swing signals.
+        # Also no is_backtest_mode() guard — fetches live ForexFactory on
+        # every cycle, polluting historical backtests with today's data.
         surprise_result = {}
         surprise_ctx    = {}
-        try:
+        if False:  # DISABLED — was: try:
             surprise_engine = EconomicSurpriseEngine()
             currency = symbol[:3] if len(symbol) >= 3 else "USD"
             surprise_result = surprise_engine.analyze(currency)
             if surprise_result.get("event_count", 0) > 0:
                 surprise_engine.print_summary(surprise_result)
             surprise_ctx = surprise_engine.get_ai_context(surprise_result)
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Economic surprise error: {e}")
+        # removed except block
 
         # ── 8.975 Microstructure Engine (Day 97 — MT5 tick analysis) ──
         # Tick speed + spread expansion + volume burst + price acceleration.
@@ -1083,17 +1144,18 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] Network monitor error: {e}")
 
         # ── 8.979 Forecast Engine (Day 97 — conservative extra vote) ──
-        # EMA + RSI + candle body composite forecast. Weight = 10%
-        # in decision fusion. NEVER overrides primary signals.
+        # DISABLED 2026-08-13 (winrate audit): "EMA + RSI + candle body
+        # composite forecast" — literally the same inputs SignalEngine
+        # already uses. Per audit, forecast_ctx is NEVER consumed by
+        # DecisionAgent.decide() or SignalFusion. Pure CPU waste.
         forecast_result = {}
         forecast_ctx    = {}
-        try:
+        if False:  # DISABLED — was: try:
             forecast_engine = get_forecast_engine()
             forecast_result = forecast_engine.forecast(df)
             forecast_engine.print_summary(forecast_result)
             forecast_ctx = forecast_engine.get_ai_context(forecast_result)
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Forecast engine error: {e}")
+        # removed except block
 
         # ── 8.97 Strategy Selector (Day 90) ──────────────────
         # Now that we have regime + mtf_bias + structure_ctx, ask the
@@ -1571,7 +1633,16 @@ class AnalysisAgent:
         # positive check a few lines below) can bypass a news block now.
         news_intel_ctx = {}
 
-        try:
+        # ── DISABLED in backtest mode 2026-08-13 (winrate audit) ─────
+        # NewsIntelligence does a live RSS fetch (5-min TTL cache) which
+        # applies TODAY's news to HISTORICAL bars — a backtest parity bug.
+        # NewsFilter (line 1133) is the actual hard-gate in TradePermission;
+        # this layer is a redundant 3rd news check that only softens.
+        from core.constants import is_backtest_mode as _is_bt_mode
+        if _is_bt_mode():
+            news_intel_ctx = {"blocked": False, "source": "backtest_skip"}
+        else:
+         try:
             from intelligence.news_ai import get_news_intelligence
             # Use the symbol passed in market_output (or fallback to EURUSD)
             symbol = market_output.get("symbol", "EURUSD") if isinstance(market_output, dict) else "EURUSD"
@@ -1680,9 +1751,10 @@ class AnalysisAgent:
                     news_intel_ctx["blocked_pairs"] = latest.blocked_pairs
             except Exception:
                 pass
-        except Exception as e:
+         except Exception as e:
             log.warning(f"[AnalysisAgent] Day 66 NewsIntelligence failed: {e}")
             news_intel_ctx = {"error": str(e)}
+        # end of NewsIntelligence (backtest-skip gate)
 
         # ── Day 67: Multi-Factor Confluence Engine ────────────────────
         # Run the confluence engine over ALL 7 analysis factors. This produces
@@ -1858,12 +1930,12 @@ class AnalysisAgent:
             feature_vector_ctx = {"error": str(e)}
 
         # ── Day 69: ML Model Prediction (Ensemble) ────────────────────
-        # Run the ML predictor on the feature vector. If models are trained,
-        # this produces a BUY/SELL/WAIT probability that adjusts the final
-        # confidence. If no models are trained yet, it returns NOT_READY
-        # and the agent falls back to rule-based logic.
+        # DISABLED 2026-08-13 (winrate audit): memory/ml_models/_registry.json
+        # is empty — zero trained models on disk. Every predict() returns
+        # NOT_READY, but the empty ctx is still fed to EnsembleEngine which
+        # then applies -8%/-10% confidence penalties to valid BUY/SELL signals.
         ml_prediction_ctx: Dict[str, Any] = {}
-        try:
+        if False:  # DISABLED — was: try:
             from ml.model_predictor import get_model_predictor
             predictor = get_model_predictor()
             ml_pred = predictor.predict(
@@ -1881,9 +1953,7 @@ class AnalysisAgent:
                     f"| prob={ml_proba:.2f} | agreement={agreement} | "
                     f"models={ml_pred['models_used']}"
                 )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Day 69 ML prediction failed: {e}")
-            ml_prediction_ctx = {"error": str(e)}
+        # removed except block (was: except Exception as e: log.warning Day 69 ML prediction failed)
 
         # ── Day 70: AI Brain Fusion Layer (Ensemble Engine) ───────────
         # The culmination of Days 60-69. Fuses ALL intelligence layers:
@@ -1895,8 +1965,13 @@ class AnalysisAgent:
         #   - Weighted confidence fusion (regime + performance adjusted)
         #   - Conflict detection + abstain capability
         #   - Position size multiplier
+        # DISABLED 2026-08-13 (winrate audit): with ML=NOT_READY and LLM
+        # auto-bypassed in backtest, Ensemble only has rule_sig as real
+        # input. It then applies ABSTAIN (-10%) or WAIT (-8%) penalties
+        # based on a 4-layer consensus that's effectively 1-of-4 — pure
+        # noise that crushes valid BUY/SELL confidence.
         ensemble_ctx: Dict[str, Any] = {}
-        try:
+        if False:  # DISABLED — was: try:
             from ml.ensemble import get_ensemble_engine
             engine = get_ensemble_engine()
 
@@ -1995,9 +2070,7 @@ class AnalysisAgent:
                     f"position={ensemble_decision.position_size} "
                     f"({'conflict!' if ensemble_decision.has_conflict else 'clean'})"
                 )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Day 70 EnsembleEngine failed: {e}")
-            ensemble_ctx = {"error": str(e)}
+        # removed except block (was: except Exception as e: log.warning Day 70 EnsembleEngine failed)
 
         # ── Day 71: Reinforcement Learning Agent (Final Wisdom Filter) ──
         # The RL agent acts as the FINAL filter on top of the Day 70 Ensemble.
@@ -2005,7 +2078,11 @@ class AnalysisAgent:
         # If the RL agent says HOLD (action 0), the trade is blocked — even if
         # the ensemble agreed. This is the "knowing when NOT to trade" layer.
         rl_ctx: Dict[str, Any] = {}
-        try:
+        # DISABLED 2026-08-13 (winrate audit): RL agent has no real trained
+        # model — silently falls back to heuristic that penalizes valid
+        # BUY/SELL signals with -10% confidence when ensemble_conf < 40%.
+        # With Ensemble disabled, this layer was pure noise.
+        if False:  # DISABLED — was: try:
             from ml.rl_agent import get_rl_agent
             import numpy as np
 
@@ -2070,16 +2147,19 @@ class AnalysisAgent:
                     f"[AnalysisAgent] Day 71 RL CLOSE: RL agent suggests closing position"
                 )
                 # Note: actual close happens in AITrader, not here — this is just a signal
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Day 71 RL Agent failed: {e}")
-            rl_ctx = {"error": str(e)}
+        # removed except block (was: except Exception as e: log.warning Day 71 RL Agent failed)
+        # end RL disabled
 
         # ── Day 73: Master Decision Engine (Central Brain) ────────────
         # The culmination of Days 60-72. Collects ALL intelligence layer
         # signals and fuses them into one final master decision with
         # dynamic weights, conflict resolution, and validation.
+        # DISABLED 2026-08-13 (winrate audit): fuses rule + ML + RL + LLM,
+        # but with ML/RL/LLM all disabled/noise, 3 of 4 layers are noise.
+        # Yet it still overrides final_signal at line ~2180 and applies -8%
+        # penalty when it votes WAIT. Pure noise in current config.
         master_decision_ctx: Dict[str, Any] = {}
-        try:
+        if False:  # DISABLED — was: try:
             from core.master_decision import get_master_decision_engine
             engine = get_master_decision_engine()
 
@@ -2177,9 +2257,7 @@ class AnalysisAgent:
                         log.info(
                             f"[AnalysisAgent] MasterDecision WAIT; keeping {final_signal} with -8% penalty"
                         )
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Day 73 MasterDecisionEngine failed: {e}")
-            master_decision_ctx = {"error": str(e)}
+        # removed except block (was: except Exception as e: log.warning Day 73 MasterDecisionEngine failed)
 
         # P2 FIX: "Master:" used to show master_ctx['master_signal'] which is
         # the LLM MasterAnalyst signal ONLY — NOT the MasterDecisionEngine's

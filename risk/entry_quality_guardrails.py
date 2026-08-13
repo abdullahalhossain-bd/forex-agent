@@ -1795,17 +1795,20 @@ def run_all_entry_quality_checks(
     #   Poor candle quality   -> -5
 
     _PENALTY_MAP = {
-        "chasing_filter":             8,   # momentum exhaustion (mid -5 to -10)
-        "indecision_candles":         5,   # small body candles (mid -3 to -8)
-        "sl_swing_anchor":            3,   # WARNING: not structurally anchored
-        "tp_structure_validation":    3,   # WARNING: unconfirmed territory
-        "indicator_confluence":       5,   # low momentum / weak breakout
-        "round_number_tp":            2,   # minor
-        "rejection_wick_at_entry":    5,   # poor candle quality
-        "fresh_high_rejection":       5,   # weak breakout
-        "tp_above_unconfirmed_spike": 3,   # minor
-        "exhaustion_filter":          8,   # momentum exhaustion (mid -5 to -10)
-        "rejection_psychology":       5,   # no zone-anchored rejection confirmation
+        # 2026-08-13: reduced all penalties by ~60% — the old values were
+        # crushing confidence by 36-42% on a single trade, blocking
+        # everything. New values are gentler: max ~15% penalty for worst case.
+        "chasing_filter":             3,   # was 8 — momentum exhaustion
+        "indecision_candles":         2,   # was 5 — small body candles
+        "sl_swing_anchor":            1,   # was 3 — WARNING: not structurally anchored
+        "tp_structure_validation":    1,   # was 3 — WARNING: unconfirmed territory
+        "indicator_confluence":       2,   # was 5 — low momentum / weak breakout
+        "round_number_tp":            1,   # was 2 — minor
+        "rejection_wick_at_entry":    2,   # was 5 — poor candle quality
+        "fresh_high_rejection":       2,   # was 5 — weak breakout
+        "tp_above_unconfirmed_spike": 1,   # was 3 — minor
+        "exhaustion_filter":          3,   # was 8 — momentum exhaustion
+        "rejection_psychology":       2,   # was 5 — no zone-anchored rejection
     }
 
     _DISPLAY_NAMES = {
@@ -1874,7 +1877,7 @@ def run_all_entry_quality_checks(
     # 65% → blocked. -5 keeps the structural warning without over-blocking.
     _failed_flags = {r.flag_name for r in results if not r.passed}
     if {"sl_swing_anchor", "tp_structure_validation"}.issubset(_failed_flags):
-        _compound_penalty = 5
+        _compound_penalty = 2  # 2026-08-13: was 5, reduced for per-pair strategies
         confidence_penalty += _compound_penalty
         penalty_by_rule["sl_tp_structure_compound"] = (
             penalty_by_rule.get("sl_tp_structure_compound", 0) - _compound_penalty

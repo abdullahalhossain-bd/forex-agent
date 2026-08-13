@@ -182,7 +182,12 @@ def _get_shared_handlers():
     fh.addFilter(secret_filter)
 
     ch = logging.StreamHandler(_utf8_console_stream())
-    ch.setLevel(logging.INFO)
+    # 2026-08-13: console level raised to WARNING — only show important
+    # messages on console (warnings, errors, rejections, trades).
+    # File handler still captures everything (DEBUG+).
+    # Set CONSOLE_LOG_LEVEL=INFO in .env to restore verbose console output.
+    _console_level = os.getenv("CONSOLE_LOG_LEVEL", "WARNING").upper()
+    ch.setLevel(getattr(logging, _console_level, logging.WARNING))
     ch.setFormatter(fmt)
     ch.addFilter(secret_filter)
 

@@ -157,9 +157,27 @@ def log_llm_call_failure(
     max_retries: int,
     error: Exception,
 ) -> dict:
-    """Log full LLM failure details for diagnosis."""
+    """Log full LLM failure details for diagnosis.
+
+    Log level policy:
+      * Rate-limit (429) and auth (401/403) failures are logged at
+        WARNING, not ERROR — the system has a multi-provider fallback
+        chain (Groq → Gemini → OpenRouter → Cerebras) that almost
+        always recovers successfully, so logging these as ERROR was
+        producing scary tracebacks in trader.log for a benign, handled
+        condition. A real ERROR is reserved for genuine failures with
+        no recovery path (e.g. all providers down, programming errors).
+      * Genuine server errors (500/502/503), model_unavailable, and
+        unknown exceptions are still logged at ERROR.
+    """
     info = classify_llm_error(error)
-    logger.error(
+    _is_recoverable = bool(
+        info.get("rate_limited")
+        or info.get("auth_failed")
+        or info.get("transient_server")
+    )
+    _log_fn = logger.warning if _is_recoverable else logger.error
+    _log_fn(
         "[LLM] %s failed attempt %s/%s | model=%s | type=%s | "
         "rate_limited=%s (tpd=%s, rpm=%s) | auth_failed=%s | "
         "transient_server=%s | model_unavailable=%s | error=%s",
@@ -175,7 +193,9 @@ def log_llm_call_failure(
         info.get("transient_server"),
         info.get("model_unavailable"),
         info["error_str"][:800],
-        exc_info=True,
+        # Only attach the traceback for genuine errors — rate-limit
+        # tracebacks are 100% noise (the same Groq SDK frames every time).
+        exc_info=not _is_recoverable,
     )
     return info
 

@@ -122,11 +122,20 @@ def setup_logging():
     logging.getLogger("PIL").setLevel(logging.WARNING)
     logging.getLogger("chromadb").setLevel(logging.WARNING)
     logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+    # 2026-08-13: suppress additional noisy loggers
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
+    logging.getLogger("groq").setLevel(logging.WARNING)
+    logging.getLogger("numexpr").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
 
     # Configure root logger to use utils/logger.py's handlers
     # (RotatingFileHandler at logs/trader.log + console)
+    # 2026-08-13: root level is DEBUG so all messages reach file handler.
+    # Console handler independently filters to WARNING+ (see utils/logger.py).
     root = logging.getLogger()
-    root.setLevel(logging.INFO)
+    root.setLevel(logging.DEBUG)
 
     # If root already has handlers (from basicConfig in imported modules),
     # clear them to avoid duplicate output

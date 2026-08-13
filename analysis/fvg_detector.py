@@ -177,7 +177,7 @@ class FVGDetector:
             r.pop('_atr', None)  # internal-only, used by _flag_stacked
 
         deduped = sorted(raw, key=lambda r: (r['quality_score'], r['index']), reverse=True)
-        log.info(f"[FVG] Detected {len(deduped)} fair value gaps "
+        log.debug(f"[FVG] Detected {len(deduped)} fair value gaps "
                  f"(regime={'on' if self.use_regime_filter else 'off'})")
         cap = self.MAX_RESULTS if max_results is None else max_results
         return deduped if not cap else deduped[:cap]

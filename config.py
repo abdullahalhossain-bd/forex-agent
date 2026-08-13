@@ -47,7 +47,11 @@ PROJECT_NAME = "Autonomous Forex AI Trader"
 INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "10000"))
 INITIAL_CAPITAL = INITIAL_BALANCE  # Alias for compatibility
 RISK_PER_TRADE = 0.005              # 0.5% per trade (production-safe — matches strict_risk_manager)
-MAX_DAILY_LOSS = 0.03              # 3% daily loss limit (legacy — kept for backward compat)
+# 2026-08-13 fix: MAX_DAILY_LOSS was 0.03 (3%) but DAILY_LOSS_LIMIT_PCT below
+# is 5.0% — two different values for the same concept. MAX_DAILY_LOSS is read
+# by NOTHING in the live path (only Config.MAX_DAILY_LOSS alias at line ~625).
+# Aliased to DAILY_LOSS_LIMIT_PCT / 100 for consistency.
+MAX_DAILY_LOSS = 0.05              # alias of DAILY_LOSS_LIMIT_PCT/100 (legacy compat)
 
 # ── Daily Loss Limit (Day 81+ — single source of truth) ──────
 # All risk modules (RiskEngine, CircuitBreaker, KillSwitch,
@@ -101,44 +105,51 @@ DATA_SOURCE = "yfinance"
 # Day 81 reduction to 6 pairs is no longer a concern.
 #
 # To restore the 6-pair conservative list, uncomment the block below.
-SYMBOLS = [
-    # ── MAJORS (7) — USD on one side, highest liquidity ──
-    "EURUSD", "GBPUSD", "USDJPY", "USDCHF",
+# 2026-08-13: SYMBOLS now driven by utils/pair_profiles.py — only pairs
+# with enabled=True are traded. Each pair gets its own optimized config
+# (min_confidence, min_factors, min_rr, session_filter, SL/TP ATR).
+# See utils/pair_profiles.py for the per-pair profiles and backtest data.
+try:
+    from utils.pair_profiles import get_active_pairs as _get_active_pairs
+    _PROFILE_PAIRS = _get_active_pairs()
+except Exception:
+    _PROFILE_PAIRS = []
+
+# 2026-08-13 FINAL: For LIVE TRADING SAFETY, only trade pairs that have
+# been backtested AND have an optimized profile in utils/pair_profiles.py.
+# Trading unprofiled pairs (minors/metals/exotics) without backtest data
+# is risky — they may have completely different behavior than majors.
+# To add a new pair: (1) backtest it (2) add profile in pair_profiles.py
+# (3) it will automatically appear in SYMBOLS via _PROFILE_PAIRS.
+#
+# Previous 48-pair list (minors/metals/exotics) is commented out below
+# for reference. Re-enable individual pairs ONLY after adding their
+# profile to pair_profiles.py.
+SYMBOLS = list(_PROFILE_PAIRS) if _PROFILE_PAIRS else [
+    # Fallback if pair_profiles import fails — conservative 6-pair list
+    "GBPUSD", "USDJPY", "USDCHF",
     "USDCAD", "AUDUSD", "NZDUSD",
-    # ── MINORS / CROSSES (21) — non-USD, still high liquidity ──
-    "EURGBP", "EURJPY", "EURCHF", "EURAUD",
-    "EURCAD", "EURNZD",
+]
+
+# Previous 48-pair list (DISABLED for live trading safety):
+# To re-enable a pair, add it to utils/pair_profiles.py PROFILES dict
+# with enabled=True and backtest-optimized parameters.
+_DISABLED_SYMBOLS_REFERENCE = [
+    # Minors / Crosses (21)
+    "EURGBP", "EURJPY", "EURCHF", "EURAUD", "EURCAD", "EURNZD",
     "GBPJPY", "GBPCHF", "GBPAUD", "GBPCAD", "GBPNZD",
     "AUDJPY", "AUDCHF", "AUDCAD", "AUDNZD",
     "NZDJPY", "NZDCHF", "NZDCAD",
     "CADJPY", "CADCHF", "CHFJPY",
-    # ── METALS / COMMODITIES (4) ──
-    "XAUUSD", "XAGUSD",          # Gold, Silver
-    "XPTUSD", "XPDUSD",          # Platinum, Palladium
-    # ── ENERGY: REMOVED (2026-07-23) ──
-    # "USOUSD", "UKOUSD" — repeatedly failed to fetch under MT5_ONLY_MODE=true
-    # (no fallback source active), auto-marked unavailable, and contributed
-    # to the "NO_TRADE — Market data fetch failed" spam in the run log.
-    # ── CRYPTO: REMOVED (2026-07-23) ──
-    # "BTCUSD", "ETHUSD", "LTCUSD", "XRPUSD" — same MT5_ONLY_MODE fetch
-    # failure as above; this broker/demo account doesn't offer live MT5
-    # quotes for these and there's no fallback source enabled to cover them.
-    # ── INDEX CFDs: REMOVED (2026-07-23) ──
-    # "US30USD", "NAS100USD", "SPX500USD", "GER40USD" — this broker exposes
-    # these under different tickers (USNUSD, NASNUSD, SPXNUSD, GERNUSD in
-    # the MT5 terminal), so the config names above never resolved and were
-    # auto-marked unavailable too.
-    # ── EXOTIC (2) — lower liquidity, higher spread ──
-    "USDTRY", "USDZAR",          # Turkish Lira, South African Rand
-    # ── ADDITIONAL CROSSES (9) ──
-    "EURNOK", "EURSEK",          # Scandinavian crosses
-    "GBPSEK", "GBPNOK",          # Scandinavian GBP crosses
-    "AUDSGD", "NZDSGD",          # Singapore Dollar crosses
-    "SGDJPY",                    # HK/Singapore cross (CADHKD removed 2026-07-23 — same fetch-failure issue)
-    "HKDJPY", "MXNJPY",          # HK/Mexico Yen crosses
-    # ── ASIA PACIFIC (5) ──
-    "USDCNH", "USDHKD", "USDSGD",  # China offshore, HK, Singapore
-    "USDMXN", "USDTHB",            # Mexico, Thailand
+    # Metals (4)
+    "XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD",
+    # Exotic (2)
+    "USDTRY", "USDZAR",
+    # Additional Crosses (9)
+    "EURNOK", "EURSEK", "GBPSEK", "GBPNOK",
+    "AUDSGD", "NZDSGD", "SGDJPY", "HKDJPY", "MXNJPY",
+    # Asia Pacific (5)
+    "USDCNH", "USDHKD", "USDSGD", "USDMXN", "USDTHB",
 ]
 # Total: 7 + 21 + 4 + 2 + 9 + 5 = 48 pairs
 # (majors + minors + metals + exotic + additional crosses + Asia Pacific)
@@ -333,10 +344,12 @@ MAX_LOT = float(os.getenv("MAX_LOT", "0.20"))
 # Each pair needs ~3 LLM calls (SentimentModel + MasterAnalyst + retries).
 # 62 pairs × 3 calls = 186 calls/cycle theoretical max, but caching +
 # skip-AIAnalyst-if-MasterAnalyst-runs keeps real usage ~20-40 calls.
+# 2026-08-13 fix: default was still "8" despite comment saying 20 —
+# this throttled most pairs after the first 2-3. Aligned with intent.
 try:
-    MAX_LLM_CALLS_PER_CYCLE = int(os.getenv("MAX_LLM_CALLS_PER_CYCLE", "8") or 8)
+    MAX_LLM_CALLS_PER_CYCLE = int(os.getenv("MAX_LLM_CALLS_PER_CYCLE", "20") or 20)
 except (ValueError, TypeError):
-    MAX_LLM_CALLS_PER_CYCLE = 8
+    MAX_LLM_CALLS_PER_CYCLE = 20
 
 # Minimum delay (seconds) between LLM calls to the same provider.
 # Groq free tier rate-limits aggressively; this prevents the 429 storm.

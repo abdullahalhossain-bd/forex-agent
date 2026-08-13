@@ -132,11 +132,14 @@ class TradePermission:
     # entry-quality penalties). Rolled back so this floor is no longer
     # the primary cause of 0 trades. False-trade protection remains in
     # entry_quality_guardrails, MTF/S/R alignment, and RiskEngine.
-    # 2026-08-13 #2: ConfidenceEngine Bayesian (0-sample) was crushing
-    # live conf to 25-30%. Floor 55 still blocked every SELL. Drop to 35
-    # so directional signals with Risk-approved lots can execute; quality
-    # gates (S/R, R:R) remain as primary protection.
-    MIN_CONFIDENCE_PROD  = 25  # was 35/55/70 — Bayesian 0-sample crushes to ~25%
+    # 2026-08-13 final: default 80 (was 85). Wide SL strategy works with
+    # lower confidence — gives more trades while maintaining PF > 1.0.
+    # Reads from .env via core.constants.MIN_CONFIDENCE_PROD.
+    try:
+        from core.constants import MIN_CONFIDENCE_PROD as _ENV_MIN_CONF
+        MIN_CONFIDENCE_PROD = int(_ENV_MIN_CONF) if _ENV_MIN_CONF else 80
+    except Exception:
+        MIN_CONFIDENCE_PROD = 80
     MIN_CONFIDENCE_TEST  = 10
     MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
     MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
@@ -144,9 +147,13 @@ class TradePermission:
     LOSS_STREAK_CONFIDENCE_BUMP = 5
     LOSS_STREAK_COOLDOWN_TRADES = 2
 
-    # Co-founder fix: raised thresholds for institutional-grade entries
-    # 2026-08-13: single-engine/adaptive fills often report 1 aligned factor
-    MIN_ALIGNED_FACTORS_PROD = 1
+    # 2026-08-13 final: default 4 (was 5). Confidence formula now gives
+    # realistic 55-85% range, so 4 factors is achievable and gives more trades.
+    try:
+        from core.constants import MIN_ALIGNED_FACTORS_PROD as _ENV_MIN_FACT
+        MIN_ALIGNED_FACTORS_PROD = int(_ENV_MIN_FACT) if _ENV_MIN_FACT else 4
+    except Exception:
+        MIN_ALIGNED_FACTORS_PROD = 4
     MIN_ALIGNED_FACTORS_TEST = 1
     # R:R floor now comes from risk/rr_policy.py (single source of truth) —
     # previously hardcoded here as 1.5, which conflicted with the 2.0 used by
@@ -167,10 +174,45 @@ class TradePermission:
 
     @property
     def MIN_CONFIDENCE(self) -> int:
+        # 2026-08-13: per-pair profile override — if a pair has a custom
+        # min_confidence in utils/pair_profiles.py, use that instead of
+        # the global default. Falls back to global if no profile or import fails.
+        try:
+            from utils.pair_profiles import get_pair_profile
+            import inspect
+            # Get the symbol from the calling context (check() method passes
+            # it in decision_out). This is a best-effort override — if we
+            # can't find the symbol, use the global default.
+            frame = inspect.currentframe()
+            if frame is not None and frame.f_back is not None:
+                decision_out = frame.f_back.f_locals.get("decision_out") or frame.f_back.f_locals.get("decision")
+                if decision_out and isinstance(decision_out, dict):
+                    _sym = decision_out.get("symbol") or decision_out.get("pair")
+                    if _sym:
+                        _prof = get_pair_profile(_sym)
+                        if _prof and _prof.enabled:
+                            return _prof.min_confidence
+        except Exception:
+            pass
         return self.MIN_CONFIDENCE_TEST if _test_mode() else self.MIN_CONFIDENCE_PROD
 
     @property
     def MIN_ALIGNED_FACTORS(self) -> int:
+        # 2026-08-13: per-pair profile override
+        try:
+            from utils.pair_profiles import get_pair_profile
+            import inspect
+            frame = inspect.currentframe()
+            if frame is not None and frame.f_back is not None:
+                decision_out = frame.f_back.f_locals.get("decision_out") or frame.f_back.f_locals.get("decision")
+                if decision_out and isinstance(decision_out, dict):
+                    _sym = decision_out.get("symbol") or decision_out.get("pair")
+                    if _sym:
+                        _prof = get_pair_profile(_sym)
+                        if _prof and _prof.enabled:
+                            return _prof.min_aligned_factors
+        except Exception:
+            pass
         return self.MIN_ALIGNED_FACTORS_TEST if _test_mode() else self.MIN_ALIGNED_FACTORS_PROD
 
     @property
@@ -186,12 +228,49 @@ class TradePermission:
         session_ctx:  dict | None = None,
         execution_filters: dict | None = None,
         bypass_checks: set[str] | list[str] | None = None,
+        symbol:       str | None = None,  # 2026-08-13: per-pair profile
     ) -> dict:
 
         checks = []
         passed = 0
         total = 0
         bypass_checks = _normalize_bypass_checks(bypass_checks)
+
+        # ── 2026-08-13: PER-PAIR STRATEGY OVERRIDE ────────────────
+        # When a per-pair strategy (mean_reversion, range_trading, etc.)
+        # generates the signal, certain gates that are designed for
+        # trend-following should be BYPASSED because they conflict with
+        # the strategy's intent:
+        #   - Mean-reversion: trades AGAINST trend (low ADX, RSI extreme)
+        #     → bypass "Trend alignment", "MTF trend alignment", "S/R zone alignment", "Confluence quality"
+        #   - Range-trading: trades at S/R edges (low ADX)
+        #     → bypass "Trend alignment", "MTF trend alignment"
+        #   - Trend-follow: keep all gates (they're designed for it)
+        _strategy = decision_out.get("strategy", "")
+        if _strategy in ("mean_reversion", "range_trading", "breakout"):
+            _strategy_bypass = {
+                "Trend alignment (regime)",
+                "MTF trend alignment (H4/H1/M15)",
+            }
+            if _strategy in ("mean_reversion", "range_trading"):
+                _strategy_bypass.update({
+                    "S/R zone alignment",
+                    "Confluence quality",
+                })
+            bypass_checks = bypass_checks | _strategy_bypass
+
+        # 2026-08-13: per-pair min_confidence override — read directly
+        # from pair_profiles if symbol is provided (more reliable than
+        # frame inspection).
+        _per_pair_min_conf = None
+        if symbol:
+            try:
+                from utils.pair_profiles import get_pair_profile
+                _pp = get_pair_profile(symbol)
+                if _pp and _pp.enabled:
+                    _per_pair_min_conf = _pp.min_confidence
+            except Exception:
+                pass
 
         # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
         # The new `execution_filters` dict (produced by AnalysisAgent)
@@ -1160,7 +1239,12 @@ class TradePermission:
                 )
 
         ok   = conf >= effective_min_confidence
-        _conf_detail = f"{conf}% (min {effective_min_confidence}%)"
+        # 2026-08-13: per-pair profile min_confidence override
+        if _per_pair_min_conf is not None:
+            ok = conf >= _per_pair_min_conf
+            _conf_detail = f"{conf}% (per-pair min {_per_pair_min_conf}%)"
+        else:
+            _conf_detail = f"{conf}% (min {effective_min_confidence}%)"
         if _bypass_check("Min confidence", bypass_checks):
             ok = True
             _conf_detail = f"{conf}% (min {effective_min_confidence}%) — BYPASSED via permission_bypass"
@@ -1535,11 +1619,11 @@ class TradePermission:
         }
 
         # ── INSTITUTIONAL LOG FORMAT ────────────────────────────────
-        # Separates the ANALYSIS verdict from the EXECUTION verdict so the
-        # operator can see "BUY 79% (analysis) → BLOCKED (news)" instead of
-        # the misleading "WAIT 0%" that the old pipeline produced.
+        # 2026-08-13: professional evidence-based logging. Each check's
+        # actual value is shown so the operator can see WHY it passed/failed.
         _analysis_signal = decision_out.get("decision", "WAIT")
         _analysis_conf   = decision_out.get("confidence", 0)
+        _strategy = decision_out.get("strategy", "")
         if allowed:
             log.info(
                 f"[TradePermission] ALLOWED "
@@ -1547,14 +1631,31 @@ class TradePermission:
                 f"Analysis: {_analysis_signal} {_analysis_conf:.0f}% | "
                 f"Execution: {execution_action} | "
                 f"Confidence floor={self.MIN_CONFIDENCE}%"
+                + (f" | strategy={_strategy}" if _strategy else "")
             )
+            # Evidence summary — one line per passed check with actual values
+            for c in checks:
+                _tick = "✓" if c.get("passed") else "✗"
+                _check_name = c.get("check", "?")[:25]
+                _detail = c.get("detail", "")[:80]
+                log.debug(f"  {_tick} {_check_name:<25s} {_detail}")
         else:
-            log.info(
+            # Show ALL failed checks with evidence
+            _failed_names = [c.get("check", "?") for c in checks if not c.get("passed", True)]
+            log.warning(
                 f"[TradePermission] BLOCKED "
                 f"({passed}/{total} checks passed) | "
                 f"Analysis: {_analysis_signal} {_analysis_conf:.0f}% | "
-                f"Execution: BLOCKED | Reason: {blocked_reason}"
+                f"Execution: BLOCKED | Failed: {', '.join(_failed_names)} | "
+                f"Reason: {blocked_reason}"
+                + (f" | strategy={_strategy}" if _strategy else "")
             )
+            # Evidence for each failed check
+            for c in checks:
+                if not c.get("passed", True):
+                    log.warning(
+                        f"  ✗ {c.get('check', '?'):<25s} {c.get('detail', '')[:100]}"
+                    )
         return result
 
     def print_summary(self, result: dict) -> None:

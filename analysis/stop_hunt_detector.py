@@ -116,7 +116,7 @@ class StopHuntDetector:
                 events.append(event)
 
         events.sort(key=lambda e: e['candles_ago'])
-        log.info(f"[StopHuntDetector] {len(events)} stop-hunt event(s) detected")
+        log.debug(f"[StopHuntDetector] {len(events)} stop-hunt events")
         return events[: self.MAX_RESULTS]
 
     # ═══════════════════════════════════════════════════════

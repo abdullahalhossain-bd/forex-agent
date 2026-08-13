@@ -152,12 +152,8 @@ def get_stop_hunt_direct_signal(
         dict with action/entry/stop_loss/take_profit/reason/confidence, or None.
     """
     if df is None or len(df) < MIN_BARS_FOR_ENGINE:
-        print(f"[DIRECT_LANE] {symbol} df too short ({len(df) if df is not None else 0} < {MIN_BARS_FOR_ENGINE})")
+        # 2026-08-13: removed debug print() — was firing every bar
         return None
-
-    # Diagnostic: confirm this function is being called by the trader.
-    # Remove this print after debugging is complete.
-    print(f"[DIRECT_LANE] called for {symbol} at {df.index[-1]} (df={len(df)} bars, df_h4={'yes' if df_h4 is not None and len(df_h4)>0 else 'no'})")
 
     # Late import — same module the tester uses (analysis/stop_hunt_signal_engine.py)
     from analysis.stop_hunt_signal_engine import StopHuntSignalEngine

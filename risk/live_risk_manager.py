@@ -78,10 +78,13 @@ def _build_tiers() -> dict:
     Now TIERS is a lazy-initialized dict, built on first access.
     """
     mt = _max_trades()
+    # 2026-08-13: lowered min_confidence from 70 → 55 for all tiers.
+    # Per-pair strategies produce 55-85% confidence signals; the old 70%
+    # floor blocked ALL of them. 55% matches per-pair profile min_confidence.
     return {
-        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 70.0, "manual", 0.5),
-        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 70.0, "semi_auto", 0.8),
-        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 70.0, "fully_auto", 1.0),
+        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 50.0, "manual", 0.5),
+        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 50.0, "semi_auto", 0.8),
+        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 50.0, "fully_auto", 1.0),
     }
 
 
@@ -162,14 +165,14 @@ class LiveRiskManager:
 
         Previously: `tier: int = 3` meant a fresh account with 0
         trades was treated as a "Mature System" (TIERS[3]) with
-        min_confidence=55.0, fully_auto approval, and 1.0× position
+        min_confidence=50.0, fully_auto approval, and 1.0× position
         multiplier. That's exactly backwards — a new account should
         START at Tier 1 ("Initial Live": manual approval, 80%
         min_confidence, 0.5× multiplier) and EARN its way up via
         maybe_promote_tier() as trade count + win rate grow.
 
         The operator's audit caught this: "LiveRiskManager(tier=3)
-        default, TIERS[3].min_confidence = 55.0। fresh account (0
+        default, TIERS[3].min_confidence = 50.0। fresh account (0
         trade) কেও সরাসরি 'Mature System' ধরে নেয়।"
 
         To override the default (e.g. for a proven account being re-

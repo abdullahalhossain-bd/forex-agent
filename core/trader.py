@@ -1034,6 +1034,13 @@ class AITrader:
             "is_placeholder": True,
         }
         dec_out = self._decision.decide(market_out, analysis_out, placeholder_risk)
+        # 2026-08-13: pass per-pair strategy from signal_result to dec_out
+        # so TradePermission can apply strategy-based gate bypass.
+        _sig = analysis_out.get("signal", {}) if isinstance(analysis_out, dict) else {}
+        if isinstance(_sig, dict) and _sig.get("strategy"):
+            dec_out["strategy"] = _sig["strategy"]
+        elif isinstance(analysis_out, dict) and analysis_out.get("signal_ctx", {}).get("strategy"):
+            dec_out["strategy"] = analysis_out["signal_ctx"]["strategy"]
         self._decision.print_summary(dec_out)
         if debugger:
             debugger.record("decision",
@@ -1183,10 +1190,15 @@ class AITrader:
         #      folded into daily PnL — the circuit breaker is blind.
         # Existing open positions are left alone (we don't touch SL/TP or
         # force-close); only NEW entries are blocked.
+        # 2026-08-13 fix: add ALLOW_MT5_SYNC_BYPASS env var — when true,
+        # skip the MT5 sync fail-closed check (for environments where MT5
+        # connection is known to be intermittent but trading should continue).
+        _allow_mt5_bypass = os.getenv("ALLOW_MT5_SYNC_BYPASS", "false").lower() in ("1", "true", "yes")
         if (
             self.execution_mode == "mt5_demo"
             and risk_out.get("approved")
             and dec_out.get("decision") in ("BUY", "SELL")
+            and not _allow_mt5_bypass
         ):
             if not getattr(self, "_mt5_sync_ok", True):
                 risk_out["approved"] = False
@@ -1398,6 +1410,7 @@ class AITrader:
             ),
             execution_filters=analysis_out.get("execution_filters", {}),
             bypass_checks=bypass_checks,
+            symbol=self.symbol,  # 2026-08-13: per-pair profile
         )
 
         # Day 97+ Book Page 15: Signal Persistence Filter
@@ -1602,9 +1615,9 @@ class AITrader:
 
 
     def run_cycle(self, show_chart: bool = False, auto_paper_trade: bool = True) -> dict:
-        log.info("━" * 52)
-        log.info(f"  AITrader {self.VERSION} — {self.symbol} {self.timeframe}")
-        log.info("━" * 52)
+        log.debug("━" * 52)
+        log.debug(f"  AITrader {self.VERSION} — {self.symbol} {self.timeframe}")
+        log.debug("━" * 52)
         t0 = time.time()
 
         # Day 81+ hotfix: reset per-cycle LLM call counter so each
@@ -2147,7 +2160,10 @@ class AITrader:
             except Exception as e:
                 log.debug(f"[Trader] Candle-close check skipped (non-fatal): {e}")
 
-        log.info("[3/9] Analysis Agent...")
+        # NOTE: "[3/9] Analysis Agent..." is logged inside
+        # evaluate_decision_core() below — do NOT duplicate it here.
+        # (Audit finding: the duplicate log line was producing two
+        # identical INFO entries per cycle in trader.log.)
         _core = self.evaluate_decision_core(market_out, session_ctx, debugger)
         analysis_out = _core["analysis_out"]
         dec_out      = _core["dec_out"]
@@ -2302,94 +2318,25 @@ class AITrader:
                 result["reject_reason"] = approval_out.get("message", result.get("reject_reason"))
 
         if approved_to_execute and result.get("trade_allowed"):
-            try:
-                # FIX (log audit — EURNOK 2026-08-07): approval + Devil's
-                # Advocate were running (and now that Devil's Advocate calls
-                # a real LLM, *burning an LLM call*) on trades that then got
-                # blocked seconds later by ExecutionRouter's absolute_safety
-                # gate — the live-feed spread check. The risk check above
-                # (line ~597, check_trade_permission) only uses a stale/
-                # estimated `ind["spread_pips"]`, not the live spread, so it
-                # can pass while the real-time gate still rejects. Re-running
-                # the same live absolute_safety check here, before Devil's
-                # Advocate, means trades that are going to be rejected for
-                # spread/session/connectivity reasons anyway are rejected
-                # for free instead of after paying for an LLM review.
+            # 2026-08-13: skip DevilsAdvocate when disabled via env.
+            _da_enabled = os.getenv("DEVILS_ADVOCATE_ENABLED", "true").lower() in ("1", "true", "yes", "on")
+            if not _da_enabled:
+                log.debug(f"[Trader] {self.symbol}: DevilsAdvocate disabled — skipping")
+            else:
                 try:
-                    from execution.execution_router import _check_absolute_safety
-                    _safe, _safety_reason = _check_absolute_safety(self.symbol)
-                except Exception as _e:
-                    _safe, _safety_reason = True, f"safety pre-check unavailable: {_e}"
+                    try:
+                        from execution.execution_router import _check_absolute_safety
+                        _safe, _safety_reason = _check_absolute_safety(self.symbol)
+                    except Exception as _e:
+                        _safe, _safety_reason = True, f"safety pre-check unavailable: {_e}"
 
-                if not _safe:
-                    result["trade_allowed"] = False
-                    result["final_action"] = "NO TRADE"
-                    result["execution_action"] = "NO TRADE"
-                    result["reject_reason"] = f"absolute_safety: {_safety_reason}"
-                    result["blocked_reason"] = result["reject_reason"]
-                    result["reject_stage"] = "absolute_safety"
-                    approved_to_execute = False
-                    perm_out["allowed"] = False
-                    perm_out["execution_allowed"] = False
-                    perm_out["final_action"] = "NO TRADE"
-                    perm_out["execution_action"] = "NO TRADE"
-                    perm_out["blocked_reason"] = result["reject_reason"]
-                    perm_out["checks"].append({
-                        "check": "Absolute safety pre-check (pre Devil's Advocate)",
-                        "passed": False,
-                        "detail": _safety_reason,
-                    })
-                    perm_out["total"] = perm_out.get("total", 0) + 1
-                    log.info(
-                        f"[Trader] {self.symbol}: absolute_safety pre-check blocked trade "
-                        f"before Devil's Advocate ({_safety_reason}) — LLM call skipped"
-                    )
-                else:
-                    trade_context = {
-                        "symbol": self.symbol,
-                        "pair": self.symbol,
-                        "market_context": {
-                            "timeframe": self.timeframe,
-                            "session": session_ctx.get("current_session") if session_ctx else None,
-                            "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
-                            "rr_ratio": result.get("rr"),
-                        },
-                        "analysis_out": analysis_out,
-                        "risk_out": risk_out,
-                        "decision_out": dec_out,
-                        "perm_out": perm_out,
-                    }
-                    review = self._devils_advocate.review(
-                        trade_context=trade_context,
-                        signal=result.get("final_action"),
-                        risk_out=risk_out,
-                        decision_out=dec_out,
-                    )
-                    result["devils_advocate"] = review
-                    dec_out["devils_advocate"] = review
-                    # 2026-08-11 review fix: the gate's decision vocabulary is
-                    # now TAKE/REJECT/UNCERTAIN (UNCERTAIN is always resolved
-                    # to TAKE/REJECT before it reaches this point — see
-                    # DevilsAdvocateGate._resolve_uncertain/_resolve_failure).
-                    # The raw (pre-resolution) model verdict is preserved in
-                    # review["raw_decision"] for audit purposes.
-                    _da_final = "REJECT_TRADE" if review.get("decision") == "REJECT" else "TAKE_TRADE"
-                    log.info(
-                        f"[Trader] {self.symbol}: Devil's Advocate reviewed "
-                        f"{result.get('final_action')} -> {_da_final} "
-                        f"(raw={review.get('raw_decision', 'n/a')}, conf={review.get('confidence', 0):.0f}%) | "
-                        f"reasoning: {review.get('risk_summary', 'n/a')} | "
-                        f"concerns={review.get('reasons_for_concern', [])}"
-                    )
-                    if review.get("decision") == "REJECT":
+                    if not _safe:
                         result["trade_allowed"] = False
                         result["final_action"] = "NO TRADE"
                         result["execution_action"] = "NO TRADE"
-                        result["reject_reason"] = (
-                            f"Devil's Advocate reject: {review.get('risk_summary', 'high concern')}"
-                        )
+                        result["reject_reason"] = f"absolute_safety: {_safety_reason}"
                         result["blocked_reason"] = result["reject_reason"]
-                        result["reject_stage"] = "devils_advocate"
+                        result["reject_stage"] = "absolute_safety"
                         approved_to_execute = False
                         perm_out["allowed"] = False
                         perm_out["execution_allowed"] = False
@@ -2397,40 +2344,111 @@ class AITrader:
                         perm_out["execution_action"] = "NO TRADE"
                         perm_out["blocked_reason"] = result["reject_reason"]
                         perm_out["checks"].append({
-                            "check": "Devil's Advocate review",
+                            "check": "Absolute safety pre-check (pre Devil's Advocate)",
                             "passed": False,
-                            "detail": f"{review.get('risk_summary', 'high concern')} | concerns={'; '.join(review.get('reasons_for_concern', [])[:3])}",
+                            "detail": _safety_reason,
                         })
                         perm_out["total"] = perm_out.get("total", 0) + 1
-                    else:
-                        perm_out["checks"].append({
-                            "check": "Devil's Advocate review",
-                            "passed": True,
-                            "detail": f"{review.get('decision')} conf={review.get('confidence', 0):.0f}%",
-                        })
-                        perm_out["total"] = perm_out.get("total", 0) + 1
-                    try:
-                        from core.execution_logger import log_devils_advocate_result
-                        log_devils_advocate_result(
-                            symbol=self.symbol,
-                            decision=review.get("decision", "TAKE"),
-                            confidence=float(review.get("confidence", 0) or 0),
-                            reasons=review.get("reasons_for_concern", []),
-                            risk_summary=review.get("risk_summary", ""),
-                            evidence=review.get("evidence", []),
-                            raw_decision=review.get("raw_decision"),
-                            thesis_quality=review.get("thesis_quality"),
-                            counter_evidence_strength=review.get("counter_evidence_strength"),
-                            expected_edge=review.get("expected_edge"),
-                            risk_level=review.get("risk_level"),
-                            data_quality=review.get("data_quality"),
-                            critical_failure=review.get("critical_failure"),
+                        log.info(
+                            f"[Trader] {self.symbol}: absolute_safety pre-check blocked trade "
+                            f"before Devil's Advocate ({_safety_reason}) — LLM call skipped"
                         )
-                    except Exception as e:
-                        log.warning(f"Suppressed exception at line 1110: {e}")
-                        pass
-            except Exception as e:
-                log.warning(f"[Trader] Devil's Advocate review failed (non-fatal): {e}")
+                    else:
+                        trade_context = {
+                            "symbol": self.symbol,
+                            "pair": self.symbol,
+                            "market_context": {
+                                "timeframe": self.timeframe,
+                                "session": session_ctx.get("current_session") if session_ctx else None,
+                                "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
+                                "rr_ratio": result.get("rr"),
+                                # 2026-08-13 fix: include canonical market data
+                                # so DA doesn't see "unknown" for H4/SR
+                                "h4_trend": analysis_out.get("mtf_structure_ctx", {}).get("h4_trend", "unknown"),
+                                "h1_trend": analysis_out.get("mtf_structure_ctx", {}).get("h1_trend", market_out.get("ind_ctx", {}).get("trend", "unknown")),
+                                "m15_trend": market_out.get("ind_ctx", {}).get("trend", "unknown"),
+                                "regime": market_out.get("regime", {}).get("regime", "unknown"),
+                                "market_direction": market_out.get("regime", {}).get("market_direction", "unknown"),
+                                "sr_zone": analysis_out.get("sr_ctx", {}).get("location", "unknown"),
+                                "nearest_support": analysis_out.get("sr_ctx", {}).get("nearest_support"),
+                                "nearest_resistance": analysis_out.get("sr_ctx", {}).get("nearest_resistance"),
+                                "smc_bias": analysis_out.get("smc_ctx", {}).get("bias", "unknown"),
+                                "structure_trend": analysis_out.get("structure_ctx", {}).get("trend", "unknown"),
+                                "confluence_quality": analysis_out.get("confluence", {}).get("setup_quality", "unknown"),
+                                "entry": result.get("entry"),
+                                "sl": result.get("sl"),
+                                "tp": result.get("tp"),
+                            },
+                            "analysis_out": analysis_out,
+                            "risk_out": risk_out,
+                            "decision_out": dec_out,
+                            "perm_out": perm_out,
+                        }
+                        review = self._devils_advocate.review(
+                            trade_context=trade_context,
+                            signal=result.get("final_action"),
+                            risk_out=risk_out,
+                            decision_out=dec_out,
+                        )
+                        result["devils_advocate"] = review
+                        dec_out["devils_advocate"] = review
+                        _da_final = "REJECT_TRADE" if review.get("decision") == "REJECT" else "TAKE_TRADE"
+                        log.info(
+                            f"[Trader] {self.symbol}: Devil's Advocate reviewed "
+                            f"{result.get('final_action')} -> {_da_final} "
+                            f"(raw={review.get('raw_decision', 'n/a')}, conf={review.get('confidence', 0):.0f}%) | "
+                            f"reasoning: {review.get('risk_summary', 'n/a')} | "
+                            f"concerns={review.get('reasons_for_concern', [])}"
+                        )
+                        if review.get("decision") == "REJECT":
+                            result["trade_allowed"] = False
+                            result["final_action"] = "NO TRADE"
+                            result["execution_action"] = "NO TRADE"
+                            result["reject_reason"] = (
+                                f"Devil's Advocate reject: {review.get('risk_summary', 'high concern')}"
+                            )
+                            result["blocked_reason"] = result["reject_reason"]
+                            result["reject_stage"] = "devils_advocate"
+                            approved_to_execute = False
+                            perm_out["allowed"] = False
+                            perm_out["execution_allowed"] = False
+                            perm_out["final_action"] = "NO TRADE"
+                            perm_out["execution_action"] = "NO TRADE"
+                            perm_out["blocked_reason"] = result["reject_reason"]
+                            perm_out["checks"].append({
+                                "check": "Devil's Advocate review",
+                                "passed": False,
+                                "detail": f"{review.get('risk_summary', 'high concern')}",
+                            })
+                            perm_out["total"] = perm_out.get("total", 0) + 1
+                        else:
+                            perm_out["checks"].append({
+                                "check": "Devil's Advocate review",
+                                "passed": True,
+                                "detail": f"{review.get('decision')} conf={review.get('confidence', 0):.0f}%",
+                            })
+                            perm_out["total"] = perm_out.get("total", 0) + 1
+                        try:
+                            from core.execution_logger import log_devils_advocate_result
+                            log_devils_advocate_result(
+                                symbol=self.symbol,
+                                decision=review.get("decision", "TAKE"),
+                                confidence=float(review.get("confidence", 0) or 0),
+                                reasons=review.get("reasons_for_concern", []),
+                                risk_summary=review.get("risk_summary", ""),
+                                evidence=review.get("evidence", []),
+                                raw_decision=review.get("raw_decision"),
+                                thesis_quality=review.get("thesis_quality"),
+                                counter_evidence_strength=review.get("counter_evidence_strength"),
+                                expected_edge=review.get("expected_edge"),
+                                risk_level=review.get("risk_level"),
+                                data_quality=review.get("data_quality"),
+                                critical_failure=review.get("critical_failure"),
+                            )
+                        except Exception as e:
+                            log.warning(f"Suppressed exception: {e}")
+                except Exception as e:
+                    log.warning(f"[Trader] Devil's Advocate review failed (non-fatal): {e}")
 
         log.info("[9/9] Execution + Alerts...")
         if approved_to_execute:
@@ -3426,7 +3444,11 @@ class AITrader:
             # "WAIT".
             "analysis_signal":    dec_out.get("pre_gate_decision") or dec_out.get("decision"),
             "execution_action":   dec_out.get("execution_action") or perm_out.get("final_action"),
-            "confidence":         dec_out.get("pre_gate_confidence") or dec_out.get("confidence"),
+            # 2026-08-13 fix: use post-penalty confidence (not pre_gate).
+            # Previously used pre_gate_confidence (60%) which bypassed
+            # entry_quality penalties. Now uses the final confidence that
+            # TradePermission saw (50% after penalty).
+            "confidence":         perm_out.get("confidence_post_penalty") or dec_out.get("confidence", 0),
             "trade_allowed":      perm_out["allowed"],
             "final_action":       perm_out["final_action"],
             "blocked_reason":     perm_out.get("blocked_reason"),
@@ -3487,80 +3509,66 @@ class AITrader:
         }
 
     def _print_final(self, r: dict) -> None:
-        icons = {"BUY": "🟢", "SELL": "🔴", "WAIT": "🟡", "NO TRADE": "⚪"}
-        icon = icons.get(r["final_action"], "⚪")
-        bar = "═" * 52
+        # 2026-08-13: professional concise log — one-line summary + details only when needed
+        icons = {"BUY": "BUY ", "SELL": "SELL", "WAIT": "WAIT", "NO TRADE": "SKIP"}
+        icon = icons.get(r["final_action"], "SKIP")
 
-        log.info(bar)
-        log.info(f"  {icon}  AI TRADER FINAL REPORT — {r['symbol']}")
-        log.info(bar)
-        log.info(f"  Engine       : {self.execution_mode.upper()} | Approval: {r.get('approval_mode', 'N/A')}")
-        log.info(f"  Price        : {r['price']}  |  Session: {r.get('session')}")
-        if r.get("decision_candle"):
-            log.info(f"  Candle       : {r['decision_candle']}")
-        if r.get("monitor_only"):
-            log.info(f"  Monitor only : {r['reject_reason']}")
+        # One-line summary (always shown)
+        _sym = r.get("symbol", "?")
+        _action = icon
+        _price = r.get("price", "?")
+        _session = r.get("session", "?")
+        _trend = r.get("trend", "?")
+        _rule_sig = r.get("rule_signal", "?")
+        _rule_conf = r.get("rule_conf", 0)
+        _elapsed = r.get("elapsed_sec", 0)
+
+        # Compact summary line
+        if r.get("trade_allowed") and r.get("paper_trade_id"):
+            _entry = r.get("entry", "?")
+            _sl = r.get("sl", "?")
+            _tp = r.get("tp", "?")
+            _lot = r.get("lot", 0)
+            _rr = r.get("rr", 0)
+            log.info(
+                f"[TRADE] {_sym} {_action} | price={_price} | entry={_entry} | "
+                f"SL={_sl} | TP={_tp} | lot={_lot} | RR=1:{_rr} | "
+                f"session={_session} | trend={_trend} | {_elapsed}s"
+            )
+        elif r.get("monitor_only"):
+            _reason = r.get("reject_reason", "monitor only")
+            log.info(f"[SKIP]  {_sym} {_action} | price={_price} | reason={_reason} | {_elapsed}s")
         else:
-            log.info(f"  Trend        : {r['trend']}  |  Regime: {r['regime']}")
-            log.info(f"  RSI          : {r['rsi']}  |  Volatility: {r['volatility']}")
-            log.info(f"  Rule signal  : {r['rule_signal']} ({r['rule_conf']}%)")
-            log.info(f"  LLM signal   : {r['llm_signal']} ({r['llm_conf']}%)")
-            # ── INSTITUTIONAL LOG FORMAT ──────────────────────────────
-            # Separates the ANALYSIS verdict from the EXECUTION verdict so
-            # the operator sees "BUY 79% (analysis) → BLOCKED (news)"
-            # instead of the misleading "WAIT 0%" the old pipeline produced.
-            _analysis_signal = r.get("analysis_signal") or r.get("decision", "WAIT")
-            _execution_action = r.get("execution_action") or r.get("final_action", "WAIT")
-            _analysis_conf = r.get("confidence", 0)
-            log.info(f"  ──")
-            log.info(f"  ANALYSIS     : {_analysis_signal} (confidence {_analysis_conf}%)")
-            if _execution_action in ("BUY", "SELL") and r.get("trade_allowed"):
-                log.info(f"  EXECUTION    : {_execution_action} (ALLOWED)")
-            else:
-                _blocked = r.get("blocked_reason") or r.get("reject_reason") or "gated"
-                log.info(f"  EXECUTION    : BLOCKED — {_blocked}")
-                # Show which execution filter blocked (if any)
-                _filters = r.get("execution_filters") or {}
-                for _gate, _info in _filters.items():
-                    if isinstance(_info, dict) and _info.get("blocked"):
-                        log.info(f"    └─ {_gate}: {_info.get('reason', 'blocked')}")
-            log.info(f"  ──")
+            _blocked = r.get("blocked_reason") or r.get("reject_reason") or "gated"
+            _analysis_sig = r.get("analysis_signal") or r.get("decision", "WAIT")
+            _conf = r.get("confidence", 0)
+            log.info(
+                f"[SKIP]  {_sym} {_action} | price={_price} | "
+                f"analysis={_analysis_sig}({_conf}%) | "
+                f"blocked={_blocked} | session={_session} | {_elapsed}s"
+            )
 
-            if r.get("paper_trade_id"):
-                log.info(f"  FINAL ACTION : {r['final_action']}")
-                log.info(f"  Entry: {r['entry']} | SL: {r['sl']} | TP: {r['tp']}")
-                log.info(f"  Lot: {r['lot']} | R:R 1:{r['rr']} | Risk: ${r['risk_usd']}")
-                # Day 76 — show sizer breakdown if available
-                ps = r.get("position_sizing")
-                if ps and ps.get("approved"):
-                    log.info(
-                        f"  Sizer        : base={ps.get('base_lot', 0):.2f} → "
-                        f"final={ps.get('lot', 0):.2f} (×{ps.get('final_mult', 0):.3f})"
-                    )
-                if r.get("trade_id"):
-                    log.info(f"  Trade ID     : #{r['trade_id']}")
+        # Trade entry details (only when trade executed)
+        if r.get("paper_trade_id") and r.get("trade_allowed"):
+            ps = r.get("position_sizing")
+            if ps and ps.get("approved"):
                 log.info(
-                    f"  Paper Trade  : #{r['paper_trade_id']}  |  "
-                    f"Paper Balance: ${r.get('paper_balance')}"
+                    f"        sizer: base={ps.get('base_lot', 0):.2f} → "
+                    f"final={ps.get('lot', 0):.2f} (×{ps.get('final_mult', 0):.3f})"
                 )
-            elif r["trade_allowed"]:
-                log.info(f"  FINAL ACTION : {r['final_action']} (not executed — {r.get('reject_reason', 'pending approval')})")
-            else:
-                log.info(f"  FINAL ACTION : NO TRADE — {r['reject_reason']}")
+            if r.get("trade_id"):
+                log.info(f"        trade_id=#{r['trade_id']} paper=#{r['paper_trade_id']}")
+            if r.get("risk_usd"):
+                log.info(f"        risk=${r['risk_usd']} | paper_balance=${r.get('paper_balance')}")
 
+        # Closed trades (only when something closed)
         if r.get("closed_trades"):
-            log.info(f"  Closed now   : {len(r['closed_trades'])} trade(s) updated")
-        # Day 102+ hotfix: log CLOSED decisions (with outcomes) separately
-        # from TOTAL history entries. The previous "X decisions" line used
-        # the total JSON history length, which always showed 0 because
-        # outcomes were never backfilled — making it look like the bot
-        # had no memory even after dozens of trades.
-        _closed   = r.get("total_decisions", 0)
-        _total    = r.get("total_history", _closed)
-        _wr       = r.get("win_rate", "N/A")
-        log.info(f"  Memory       : {_closed} closed / {_total} total | WR: {_wr}%")
-        log.info(f"  Completed in : {r['elapsed_sec']}s")
-        log.info(bar)
+            log.info(f"        closed: {len(r['closed_trades'])} trade(s) updated")
+
+        # Memory summary (always — but one line)
+        _closed = r.get("total_decisions", 0)
+        _wr = r.get("win_rate", "N/A")
+        log.info(f"        memory: {_closed} closed | WR: {_wr}%")
 
     def _save_all(self, market_out, analysis_out, risk_out, dec_out, perm_out):
         try:
@@ -4350,7 +4358,21 @@ class AutonomousTraderSystem:
             from core.constants import MT5_MAGIC_NUMBER
             positions = mt5_conn.positions_get()
             if positions is None:
+                # Throttle this warning the same way _get_live_open_pairs
+                # does — close-detection runs every cycle, so without
+                # throttling this spams trader.log once per minute when
+                # MT5 terminal is unreachable.
                 self._mt5_disconnect_cycles = getattr(self, "_mt5_disconnect_cycles", 0) + 1
+                _now = time.time()
+                if _now - getattr(self, "_mt5_close_detect_warn_last_ts", 0.0) > 300:
+                    log.warning(
+                        "[MT5CloseDetect] positions_get() returned None "
+                        "(MT5 terminal may not be running or account issue) — "
+                        "close detection skipped for %d consecutive cycles "
+                        "(warning throttled to once per 5min)",
+                        self._mt5_disconnect_cycles,
+                    )
+                    self._mt5_close_detect_warn_last_ts = _now
                 return []
             current = {
                 p.ticket: p

@@ -147,6 +147,13 @@ class MyfxbookSentiment:
     # Round-13: retry/backoff tuning for transient HTTP errors (429/503).
     MAX_RETRIES = 2
     RETRY_BACKOFF_BASE_SEC = 1.0
+    # ConnectionResetError (TCP RST from Cloudflare) gets a longer base
+    # backoff — the default 1s × 2^attempt caps at 4s, which is far too
+    # aggressive for a server that just RST'd us. Cloudflare typically
+    # needs 15-30s before accepting a new connection from the same IP
+    # after a RST, so retrying within 4s just produces 3 identical
+    # failures and exhausts the retry budget for nothing.
+    CONNRESET_BACKOFF_BASE_SEC = 15.0
 
     # Round-13: lightweight in-process metrics (see get_metrics()).
     _metrics_lock: threading.Lock = threading.Lock()
@@ -586,6 +593,21 @@ class MyfxbookSentiment:
         for attempt in range(self.MAX_RETRIES + 1):
             try:
                 resp2 = scraper.get(self.BASE_URL, timeout=20)
+            except ConnectionResetError as e:
+                # Cloudflare RST — needs much longer backoff than a 429.
+                # The default 1s×2^attempt would fire 3 retries within 7s
+                # and all fail identically. Use the CONNRESET base so the
+                # retries are 15s → 30s → 60s, giving Cloudflare time to
+                # un-blacklist our IP.
+                log.warning(
+                    f"[Myfxbook] cloudscraper ConnectionResetError (attempt {attempt + 1}): "
+                    f"{e} — TCP RST from upstream, using longer backoff"
+                )
+                if attempt < self.MAX_RETRIES:
+                    self._sleep_backoff_connreset(attempt)
+                    continue
+                self._record_failure(f"cloudscraper ConnectionResetError: {e}")
+                return None
             except Exception as e:
                 log.warning(f"[Myfxbook] cloudscraper fetch failed (attempt {attempt + 1}): {e}")
                 if attempt < self.MAX_RETRIES:
@@ -621,6 +643,17 @@ class MyfxbookSentiment:
     def _sleep_backoff(cls, attempt: int) -> None:
         """Capped exponential backoff with jitter (Round-13 fix #6)."""
         backoff = cls.RETRY_BACKOFF_BASE_SEC * (2 ** attempt) + random.uniform(0, 0.5)
+        time.sleep(backoff)
+
+    @classmethod
+    def _sleep_backoff_connreset(cls, attempt: int) -> None:
+        """Longer exponential backoff for ConnectionResetError (Cloudflare RST).
+
+        The default _sleep_backoff caps at ~4s which is too short for
+        Cloudflare to un-block our IP. Use a 15s base so retries land at
+        ~15s → ~30s → ~60s, giving the upstream time to recover.
+        """
+        backoff = cls.CONNRESET_BACKOFF_BASE_SEC * (2 ** attempt) + random.uniform(0, 1.0)
         time.sleep(backoff)
 
     @staticmethod

@@ -223,6 +223,19 @@ def get_ai_context(df: pd.DataFrame) -> dict:
         except Exception:
             return default
 
+    # 2026-08-13 fix: add spread_pips + spread_avg_20 for SignalEngine
+    # spread filter. Without these, the spread filter in signal_engine.py
+    # silently no-ops (spread_pips=0 → condition always False).
+    _spread_pips = 0.0
+    _spread_avg = 0.0
+    try:
+        if "spread" in df.columns:
+            _spread_series = pd.to_numeric(df["spread"], errors="coerce").fillna(0)
+            _spread_pips = float(_spread_series.iloc[-1]) if len(_spread_series) > 0 else 0.0
+            _spread_avg = float(_spread_series.tail(20).mean()) if len(_spread_series) >= 20 else _spread_pips
+    except Exception:
+        pass
+
     return {
         "price":      _safe_float("close"),
         "trend":      _safe_str("trend"),
@@ -244,6 +257,9 @@ def get_ai_context(df: pd.DataFrame) -> dict:
         "stoch_d":    _safe_float("stoch_d"),
         "cci":        _safe_float("cci"),
         "vwap":       _safe_float("vwap"),
+        # 2026-08-13: spread fields for SignalEngine spread filter
+        "spread_pips":  _spread_pips,
+        "spread_avg_20": _spread_avg,
     }
 
 

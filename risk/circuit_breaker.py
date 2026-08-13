@@ -56,7 +56,11 @@ class CircuitBreaker:
     """
 
     # Thresholds
-    MAX_CONSECUTIVE_LOSSES = 50     # ৫০টা loss → pause
+    # 2026-08-13 winrate audit: lowered from 50 → 7. The previous 50 was
+    # so high it would NEVER trigger in practice — by the time 50 consecutive
+    # losses pile up, the account is wiped. 7 consecutive losses = clearly
+    # something is wrong (strategy broken, market regime shifted, etc.).
+    MAX_CONSECUTIVE_LOSSES = 7      # was 50 — too lenient
 
     # P1 fix (audit §3.2): this used to silently fall back to
     # MAX_DAILY_LOSS_PCT = 20.0 if `from config import DAILY_LOSS_LIMIT_PCT`

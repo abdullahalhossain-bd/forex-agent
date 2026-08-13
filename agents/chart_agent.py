@@ -52,7 +52,7 @@ class SymbolSpec:
     not share a common decimal precision or pip size. Getting this wrong
     silently breaks level rounding and clustering (see audit finding #3).
     """
-    yahoo_symbol: str        # e.g. "EURUSD=X", "JPY=X", "GC=F"
+    yahoo_symbol: Optional[str]  # e.g. "EURUSD=X", "JPY=X"; None for metals with no free Yahoo ticker
     tv_symbol: str           # e.g. "EURUSD", "USDJPY", "XAUUSD"
     decimals: int            # rounding precision for this symbol
     cluster_tol: float       # absolute-price tolerance for level clustering
@@ -76,7 +76,15 @@ _SYMBOL_TABLE = {
     "EURJPY": SymbolSpec("EURJPY=X", "EURJPY", decimals=3, cluster_tol=0.04),
     "GBPJPY": SymbolSpec("GBPJPY=X", "GBPJPY", decimals=3, cluster_tol=0.04),
     # Metals: 2-decimal precision, much larger absolute price scale.
-    "XAUUSD": SymbolSpec("GC=F", "XAUUSD", decimals=2, cluster_tol=0.5),
+    # NOTE: Yahoo's GC=F (gold futures) was delisted (Day 82 fix in
+    # data/fetcher.py — _to_yahoo_symbol now returns None for XAUUSD).
+    # SI=F (silver) is still working but unreliable for short windows.
+    # SymbolSpec.yahoo_symbol is only used for the chart_agent's optional
+    # yfinance cross-check — when it is None / unsupported, chart_agent
+    # falls back to MT5-only price data, which is the correct behavior.
+    # Keep XAUUSD/XAGUSD entries so the precision/cluster_tol settings
+    # are still applied (these don't depend on Yahoo).
+    "XAUUSD": SymbolSpec(None, "XAUUSD", decimals=2, cluster_tol=0.5),
     "XAGUSD": SymbolSpec("SI=F", "XAGUSD", decimals=3, cluster_tol=0.02),
 }
 
@@ -184,6 +192,16 @@ class ChartAgent:
         Raises ChartDataError if data cannot be obtained after retries.
         """
         spec = get_symbol_spec(symbol)
+        # If the symbol has no Yahoo ticker (e.g. XAUUSD after GC=F was
+        # delisted), raise ChartDataError immediately so the caller can
+        # fall back to MT5 / another source. Spinning through the retry
+        # loop with yahoo_symbol=None would just produce N identical
+        # "yfinance returned no data for None" errors.
+        if spec.yahoo_symbol is None:
+            raise ChartDataError(
+                f"No Yahoo Finance ticker for {symbol} — use MT5 / "
+                f"another data source for this symbol."
+            )
         log.info("Calculating S/R for %s (yahoo=%s)...", symbol, spec.yahoo_symbol)
 
         last_error: Optional[Exception] = None

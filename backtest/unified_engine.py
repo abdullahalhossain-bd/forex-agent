@@ -327,7 +327,9 @@ def run_unified_backtest(
     # authoritative bar source for the main loop (so the loop iterates over
     # the CSV's bars, not whatever df was passed in). For HistoricalMT5Provider
     # (fallback), keep using the passed df as before.
-    primary_df = getattr(provider, "primary_df", None) or df
+    primary_df = getattr(provider, "primary_df", None)
+    if primary_df is None or (hasattr(primary_df, "empty") and primary_df.empty):
+        primary_df = df
     total_bars = len(primary_df)
     log.info(f"[unified_engine] Primary bars: {total_bars} (source: "
              f"{'CSV' if hasattr(provider, 'primary_df') else 'passed df'})")

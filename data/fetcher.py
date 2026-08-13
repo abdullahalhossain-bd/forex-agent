@@ -551,7 +551,7 @@ class DataFetcher:
         except Exception:
             pass
 
-        log.info(f"Fetching {symbol} | {timeframe} | {limit} candles...")
+        log.debug(f"Fetching {symbol} | {timeframe} | {limit} candles...")
 
         # P4c FIX: per-fetch fallback chain instead of single-source dispatch.
         # Previously, self.source was chosen once at init and never changed.
@@ -987,7 +987,22 @@ class DataFetcher:
                         # the next one prints). D1 on Sat/Sun is normal
                         # at up to ~60h old; H4 on Sun is normal at up
                         # to ~12h old.
-                        _stale_threshold = max(_tf_sec * 1.5, 3600)
+                        #
+                        # The 1.5× multiplier is configurable via env var
+                        # MT5_STALE_BAR_MULTIPLIER (default 1.5). Some
+                        # brokers print H1 bars 2-3 minutes after the
+                        # hour mark, and on low-liquidity pairs (e.g.
+                        # USDTRY, USDZAR) the H1 bar can be 10-15 minutes
+                        # late without indicating a feed problem.
+                        # Setting MT5_STALE_BAR_MULTIPLIER=3.0 raises the
+                        # H1 threshold from 5400s (90 min) to 10800s
+                        # (3 hours), eliminating false-positive stale-data
+                        # errors during normal broker latency.
+                        try:
+                            _stale_mult = float(os.getenv("MT5_STALE_BAR_MULTIPLIER", "1.5"))
+                        except (TypeError, ValueError):
+                            _stale_mult = 1.5
+                        _stale_threshold = max(_tf_sec * _stale_mult, 3600)
                         if _delta > _stale_threshold:
                             # BUGFIX: this used to just log.warning and
                             # move on — "stale data or market closed" was
@@ -1252,6 +1267,16 @@ class DataFetcher:
 
         # Map symbol to Yahoo format
         yf_symbol = self._to_yahoo_symbol(symbol)
+        # Metals (XAUUSD/XAGUSD/XPDUSD/XPTUSD) and any other symbol Yahoo
+        # doesn't support return None — short-circuit here so the caller
+        # (DataFetcher.fetch) can fall back to MT5 / other sources instead
+        # of producing a noisy "possibly delisted" error from yfinance.
+        if yf_symbol is None:
+            log.info(
+                f"[yfinance] {symbol} has no Yahoo Finance ticker — "
+                f"deferring to MT5 / other data sources."
+            )
+            return None
         # Map timeframe to yfinance interval
         interval = self._tf_to_yfinance_interval(timeframe)
         if interval is None:
@@ -1330,15 +1355,16 @@ class DataFetcher:
         }
         if s in forex_pairs:
             return f"{s}=X"
-        # Metals — Yahoo uses futures tickers
+        # Metals — Yahoo has REMOVED free tickers for all four FX-metals.
         # Day 82 fix: GC=F (Gold futures) is delisted from yfinance.
-        # For XAUUSD, rely on MT5 data instead (if trading on MT5).
-        # If yfinance fetch is needed, return None so caller can handle gracefully.
-        if s == "XAUUSD":
-            # return "GC=F"   # DELISTED
-            return None  # Let MT5 or other sources handle gold prices
-        if s == "XAGUSD":
-            return "SI=F"   # Silver futures
+        # Day 121 fix: SI=F (Silver) still works but is unreliable for
+        # short periods; XPDUSD (palladium) and XPTUSD (platinum) have
+        # NEVER had a working free Yahoo ticker (returns "possibly
+        # delisted; no price data found" on every call — see error log).
+        # For ALL metals, return None so the caller falls back to MT5 /
+        # other sources instead of producing noisy delisted-symbol errors.
+        if s in ("XAUUSD", "XAGUSD", "XPDUSD", "XPTUSD"):
+            return None  # Let MT5 or other sources handle metal prices
         # Indices
         if s == "SPX500":
             return "^GSPC"
