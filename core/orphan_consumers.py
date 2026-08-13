@@ -447,44 +447,67 @@ def apply_signal_scoring(
         except Exception as e:
             log.debug(f"[OC] signal_scorer.liquidity failed: {e}")
 
-        # Apply the scorer's verdict — downgrade to WAIT if below threshold.
+        # 2026-08-13: credit Unified + Adaptive + DecisionAgent when they
+        # already agreed on direction. Without this, scorer only saw thin
+        # rule/llm layers (ML schema-broken, patterns often empty) and
+        # score stayed ~39 while DecisionAgent had a real SELL.
+        try:
+            _bonus = 0
+            _unified = analysis_out.get("unified_signal") or {}
+            _cons = (_unified.get("consensus") or {}) if isinstance(_unified, dict) else {}
+            _u_action = str(_cons.get("action", "")).upper()
+            if _u_action == direction:
+                _bonus += 15
+            _adaptive = (_unified.get("adaptive_decision") or {}) if isinstance(_unified, dict) else {}
+            if str(_adaptive.get("action", "")).upper() == direction:
+                _bonus += 15
+            _final = str(analysis_out.get("final_signal", "")).upper()
+            if _final == direction:
+                _bonus += 10
+            _dec_conf = float(dec_out.get("confidence") or 0)
+            if _dec_conf >= 50:
+                _bonus += min(15, int(_dec_conf * 0.15))
+            if scorer is not None and _bonus > 0:
+                # Use "smc" slot as generic confluence bonus (registered in LAYER_MAX)
+                scorer.add("smc", min(20, _bonus), f"unified/adaptive/final bonus={_bonus}")
+                score_components.append(("smc", min(20, _bonus)))
+        except Exception as e:
+            log.debug(f"[OC] signal_scorer.unified_bonus failed: {e}")
+
+        # Apply the scorer's verdict — soft when close to threshold.
         try:
             verdict = scorer.decide(direction, pair=symbol)
             dec_out["signal_score"] = verdict
             if verdict.get("signal") == "WAIT":
-                log.info(
-                    f"[OC] signal_scorer DOWNGRADED {symbol} {direction} → WAIT "
-                    f"(score={verdict.get('score')}/{verdict.get('max')}, "
-                    f"threshold={verdict.get('threshold')}, "
-                    f"reason={verdict.get('reason')})"
-                )
-                # BUG FIX (2026-08-05): this used to overwrite dec_out["decision"]
-                # in place with no record of what it was before. Downstream,
-                # trader.py's final-report builder reads
-                # `"analysis_signal": dec_out.get("decision")` — i.e. it was
-                # reading THIS SAME already-overwritten field, not a separate
-                # pre-gate snapshot, despite the surrounding comment claiming
-                # the report "separates the ANALYSIS verdict from the
-                # EXECUTION verdict". Net effect: the report printed
-                # "ANALYSIS: WAIT (confidence 95%)" even when the real
-                # analysis decision had been SELL @ 95% — the confidence
-                # number and the signal label came from two different
-                # points in time, which is exactly the "confidence 90% but
-                # decision NO TRADE" mismatch. Preserve the original
-                # direction/confidence here so the report can show what was
-                # actually analyzed vs. what was actually allowed.
-                dec_out.setdefault("pre_gate_decision", direction)
-                dec_out.setdefault("pre_gate_confidence", dec_out.get("confidence"))
-                dec_out["decision"] = "WAIT"
-                dec_out["reject_reason"] = (
-                    f"Signal scorer below threshold "
-                    f"({verdict.get('score')}/{verdict.get('threshold')}): "
-                    f"{verdict.get('reason')}"
-                )
-                # Tell downstream risk/permission that this was downgraded.
-                dec_out["signal_scorer_downgraded"] = True
-                # Return early — no point continuing to enrich a WAIT.
-                return dec_out, analysis_out
+                _score = float(verdict.get("score") or 0)
+                _thr = float(verdict.get("threshold") or 60)
+                # Soft path: within 15 points of threshold → keep direction,
+                # only annotate. Hard path: far below → WAIT.
+                if _score >= max(20.0, _thr - 15):
+                    log.info(
+                        f"[OC] signal_scorer SOFT-PASS {symbol} {direction} "
+                        f"(score={_score}/{verdict.get('max')}, thr={_thr} — "
+                        f"within 15 of threshold, direction preserved)"
+                    )
+                    dec_out["signal_scorer_soft_pass"] = True
+                    dec_out.setdefault("reject_reason", "")
+                else:
+                    log.info(
+                        f"[OC] signal_scorer DOWNGRADED {symbol} {direction} → WAIT "
+                        f"(score={verdict.get('score')}/{verdict.get('max')}, "
+                        f"threshold={verdict.get('threshold')}, "
+                        f"reason={verdict.get('reason')})"
+                    )
+                    dec_out.setdefault("pre_gate_decision", direction)
+                    dec_out.setdefault("pre_gate_confidence", dec_out.get("confidence"))
+                    dec_out["decision"] = "WAIT"
+                    dec_out["reject_reason"] = (
+                        f"Signal scorer below threshold "
+                        f"({verdict.get('score')}/{verdict.get('threshold')}): "
+                        f"{verdict.get('reason')}"
+                    )
+                    dec_out["signal_scorer_downgraded"] = True
+                    return dec_out, analysis_out
             else:
                 log.info(
                     f"[OC] signal_scorer APPROVED {symbol} {direction} "
@@ -741,8 +764,10 @@ def apply_advanced_risk_gates(
             except Exception:
                 pass
 
-            # Win probability from analysis confidence
-            win_prob = max(0.30, min(0.75, float(dec_out.get("confidence", 50) or 50) / 100.0))
+            # Win probability from analysis confidence.
+            # 2026-08-13: floor 0.45 (was 0.30) so Bayesian-crushed conf
+            # (~24%) does not force negative cost-EV and zero the lot.
+            win_prob = max(0.45, min(0.75, float(dec_out.get("confidence", 50) or 50) / 100.0))
             # Normal lot = risk_per_trade * balance / (sl_pips * pip_value)
             try:
                 from core.constants import get_pip_value_usd
@@ -763,13 +788,37 @@ def apply_advanced_risk_gates(
             )
             risk_out["book_guardrails"] = gr
             if not gr.get("all_passed"):
-                risk_out["approved"] = False
-                risk_out["lot"] = 0.0
-                risk_out["reject_reason"] = (
-                    f"Book guardrails: {gr.get('block_reason', 'failed')}"
+                block_reason = str(gr.get("block_reason") or "")
+                # 2026-08-13 BALANCED: cost_aware_ev / Net EV failures are
+                # often Bayesian chicken-egg (low conf → negative EV →
+                # lot=0 → no samples). Soften: keep approved, cap lot at
+                # 0.02 so first trades can accumulate data without full size.
+                # HARD blocks (correlation stack, revenge trading) still kill.
+                _soft_ev = (
+                    "cost_aware" in block_reason.lower()
+                    or "net ev" in block_reason.lower()
+                    or "don't ignore fees" in block_reason.lower()
+                    or "bootstrap relief" in block_reason.lower()
                 )
-                log.info(f"[OC] book_guardrails BLOCKED {symbol} {direction}: {gr.get('block_reason')}")
-                return risk_out
+                if _soft_ev:
+                    old_lot = float(risk_out.get("lot", 0) or 0)
+                    capped = min(old_lot, 0.02) if old_lot > 0 else 0.02
+                    risk_out["lot"] = round(capped, 2)
+                    risk_out.setdefault("advisory_adjustments", []).append(
+                        f"book_guardrails EV soft: lot capped {old_lot}→{risk_out['lot']} ({block_reason[:120]})"
+                    )
+                    log.info(
+                        f"[OC] book_guardrails EV-SOFT {symbol} {direction}: "
+                        f"lot→{risk_out['lot']} (kept approved) | {block_reason[:100]}"
+                    )
+                else:
+                    risk_out["approved"] = False
+                    risk_out["lot"] = 0.0
+                    risk_out["reject_reason"] = (
+                        f"Book guardrails: {block_reason or 'failed'}"
+                    )
+                    log.info(f"[OC] book_guardrails BLOCKED {symbol} {direction}: {block_reason}")
+                    return risk_out
         except Exception as e:
             log.warning(f"[OC] book_guardrails failed (non-fatal): {e}")
 

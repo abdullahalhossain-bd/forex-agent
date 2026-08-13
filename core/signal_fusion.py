@@ -11,28 +11,19 @@ Layers:
   3. RL Agent (Day 71) — weight 20%
   4. LLM Analyst (Day 42+ MasterAnalyst) — weight 20%
 
-Conflict resolution:
-  - 4/4 agreement → FULL position, max confidence
-  - 3/4 agreement → HALF position, reduced confidence
-  - 2/4 agreement → WAIT (insufficient consensus)
-  - 1/4 or 0/4 → NO TRADE
+Conflict resolution (2026-08-13 update):
+  - Directional votes only (BUY/SELL). WAIT/HOLD = abstain, not opposition.
+  - Missing / NOT_READY layers have weight zeroed and redistributed.
+  - 3+ directional agreement → FULL / HIGH confidence
+  - 2 directional agreement → allowed if weighted_conf >= REDUCED_THRESHOLD
+  - 1 directional → allowed only at high confidence (REDUCED size)
+  - Active opposition (BUY vs SELL) still penalizes confidence.
 
-Emergency disagreement:
-  If one layer strongly opposes (confidence >80%) while others agree,
-  confidence is penalized and position is reduced.
-
-⚠️  STATUS UPDATE (2026-07-21): WIRED IN via MasterDecisionEngine.
-    SignalFusion.fuse() IS called from core/master_decision.py's
-    MasterDecisionEngine.decide() → self.fusion.fuse(signals) at Step 2
-    of the decision pipeline. The earlier "NOT CURRENTLY WIRED IN" comment
-    was stale — the fusion has been active since Day 73. Verified: the
-    AnalysisAgent passes rule/ML/RL/LLM signals to engine.decide(), which
-    calls fuse(), producing the final BUY/SELL/WAIT + confidence + agreement.
+⚠️  STATUS: WIRED IN via MasterDecisionEngine.decide() → self.fusion.fuse()
 """
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List, Optional
 
@@ -45,7 +36,7 @@ log = get_logger("signal_fusion")
 class LayerSignal:
     """One intelligence layer's signal."""
     layer: str           # rule_engine / ml_ensemble / rl_agent / llm_analyst
-    signal: str          # BUY / SELL / WAIT
+    signal: str          # BUY / SELL / WAIT / HOLD / NOT_READY
     confidence: float    # 0-100
     weight: float = 0.25
     reasoning: str = ""
@@ -59,7 +50,7 @@ class FusionResult:
     """Output of the signal fusion process."""
     final_signal: str = "WAIT"       # BUY / SELL / WAIT / NO_TRADE
     master_confidence: float = 0.0   # 0-100
-    agreement: str = "0/4"
+    agreement: str = "0/0"
     agreement_count: int = 0
     total_layers: int = 4
     position_size: str = "NO_TRADE"  # FULL / HALF / REDUCED / WAIT / NO_TRADE
@@ -69,27 +60,29 @@ class FusionResult:
     layer_signals: List[Dict[str, Any]] = field(default_factory=list)
     weighted_contributions: Dict[str, float] = field(default_factory=dict)
     explanation: List[str] = field(default_factory=list)
-    # ARCHITECTURAL FIX (institutional refactor): preserve the strongest
-    # single-layer signal even when the fused decision is WAIT/NO_TRADE.
-    # The execution layer may block, but the audit trail must show what
-    # the analysis actually said. NEVER zero confidence just because
-    # consensus failed.
-    analysis_signal: str = "WAIT"          # strongest single-layer signal
-    analysis_confidence: float = 0.0       # strongest single-layer confidence
-    ml_available: bool = True              # whether ML layers participated
-    excluded_layers: List[str] = field(default_factory=list)  # voters that dropped out
+    # Strongest single-layer directional signal (audit trail)
+    analysis_signal: str = "WAIT"
+    analysis_confidence: float = 0.0
+    ml_available: bool = True
+    excluded_layers: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
 class SignalFusion:
-    """Fuses 4-layer signals into a master decision."""
+    """Fuses multi-layer signals into a master decision."""
 
     # Position size thresholds
     FULL_THRESHOLD = 70.0
     HALF_THRESHOLD = 55.0
-    REDUCED_THRESHOLD = 45.0
+    # 2026-08-13: lowered from 45 → 40 so two agreeing directional
+    # layers with moderate confidence can still produce a tradeable
+    # signal instead of permanent WAIT.
+    REDUCED_THRESHOLD = 40.0
+
+    # Layers that are considered "not participating" (abstain / missing)
+    _ABSTAIN_SIGNALS = {"WAIT", "HOLD", "NOT_READY", "NO_TRADE", ""}
 
     def fuse(self, signals: List[LayerSignal]) -> FusionResult:
         """Fuse multiple layer signals into a single master decision."""
@@ -101,148 +94,129 @@ class SignalFusion:
             result.explanation.append("No intelligence layers available")
             return result
 
-        # ── ARCHITECTURAL FIX (institutional refactor) ───────────────
-        # Track which layers actually participated vs which dropped out.
-        # Missing layers (LLM rate-limited, ML NOT_READY, etc.) are recorded
-        # in `excluded_layers` for audit. The fused decision is computed
-        # from the AVAILABLE layers only — no zero-padding for missing ones.
-        # ──────────────────────────────────────────────────────────────
-        result.ml_available = any(s.layer == "ml_ensemble" for s in signals)
+        # ── 1. Mark non-participating layers & redistribute weight ──
+        working = self._normalize_weights(signals, result)
 
-        # Count votes
-        buy_votes = [s for s in signals if s.signal == "BUY"]
-        sell_votes = [s for s in signals if s.signal == "SELL"]
-        wait_votes = [s for s in signals if s.signal in ("WAIT", "HOLD")]
+        # ── 2. Split directional vs abstaining ──
+        directional = [s for s in working if s.signal in ("BUY", "SELL")]
+        buy_votes = [s for s in directional if s.signal == "BUY"]
+        sell_votes = [s for s in directional if s.signal == "SELL"]
 
-        # Determine majority
-        if len(buy_votes) > len(sell_votes) and len(buy_votes) > len(wait_votes):
-            majority = "BUY"
-            agreeing = buy_votes
-            opposing = sell_votes
-        elif len(sell_votes) > len(buy_votes) and len(sell_votes) > len(wait_votes):
-            majority = "SELL"
-            agreeing = sell_votes
-            opposing = buy_votes
-        else:
-            majority = "WAIT"
-            agreeing = []
-            opposing = []
+        result.ml_available = any(
+            s.layer == "ml_ensemble" and s.signal not in self._ABSTAIN_SIGNALS
+            for s in signals
+        )
 
-        # `analysis_signal`/`analysis_confidence` represent the single
-        # strongest BUY/SELL vote across ALL layers, independent of which
-        # direction wins the majority/agreement count below. This is the
-        # raw pre-consensus signal used for audit visibility and for the
-        # thin-agreement confidence fallback further down — it must NOT
-        # be restricted to `agreeing` (the majority-direction subset),
-        # otherwise a 1-BUY/1-SELL/1-WAIT tie (agreeing=[]) silently
-        # collapses analysis_signal to "WAIT" even though one layer had
-        # a strong, real BUY or SELL vote. Whether that vote is actually
-        # tradeable is decided later by `len(agreeing)` / `weighted_conf`
-        # — this field only needs to preserve what was actually voted.
-        _strongest_vote = max(
-            (s for s in signals if s.signal in ("BUY", "SELL")),
+        # Strongest single directional vote (audit + thin-agreement fallback)
+        _strongest = max(
+            directional,
             key=lambda s: s.confidence,
             default=None,
         )
-        if _strongest_vote is not None:
-            result.analysis_signal = _strongest_vote.signal
-            result.analysis_confidence = _strongest_vote.confidence
+        if _strongest is not None:
+            result.analysis_signal = _strongest.signal
+            result.analysis_confidence = _strongest.confidence
         else:
             result.analysis_signal = "WAIT"
             result.analysis_confidence = 0.0
 
-        result.agreement_count = len(agreeing)
-        result.agreement = f"{len(agreeing)}/{len(signals)}"
+        # ── 3. Majority among directional votes only ──
+        # WAIT no longer vetoes a real BUY/SELL the way an opposing
+        # directional vote does. Abstentions simply reduce the voter pool.
+        if len(buy_votes) > len(sell_votes):
+            majority = "BUY"
+            agreeing = buy_votes
+            opposing = sell_votes
+        elif len(sell_votes) > len(buy_votes):
+            majority = "SELL"
+            agreeing = sell_votes
+            opposing = buy_votes
+        else:
+            # Tie or no directional votes
+            majority = "WAIT"
+            agreeing = []
+            opposing = buy_votes + sell_votes  # both sides if pure tie
 
-        # Weighted confidence
-        total_weight = sum(s.weight for s in signals)
-        if total_weight > 0 and agreeing:
-            weighted_conf = sum(s.confidence * s.weight for s in agreeing) / sum(s.weight for s in agreeing)
+        result.agreement_count = len(agreeing)
+        n_directional = len(directional)
+        result.agreement = f"{len(agreeing)}/{n_directional}" if n_directional else "0/0"
+        result.total_layers = n_directional  # report directional pool size
+
+        # ── 4. Weighted confidence from agreeing directional layers ──
+        if agreeing:
+            w_sum = sum(s.weight for s in agreeing)
+            if w_sum > 0:
+                weighted_conf = sum(s.confidence * s.weight for s in agreeing) / w_sum
+            else:
+                weighted_conf = sum(s.confidence for s in agreeing) / len(agreeing)
         else:
             weighted_conf = 0.0
 
-        # ARCHITECTURAL FIX (2026-07-22 — corrected): preserve the strongest
-        # analysis-layer confidence ONLY when agreement is too thin (<2) for
-        # any trade to happen regardless of confidence — i.e. the decision
-        # below is guaranteed to force WAIT anyway (see "else: final_signal
-        # = WAIT" further down). In that case weighted_conf has no trade
-        # consequence, so surfacing the strongest raw confidence for audit
-        # visibility is safe.
-        #
-        # BUG FIXED: this override used to apply unconditionally, including
-        # on the len(agreeing) == 2 or >= 3 paths where weighted_conf is
-        # what actually decides BUY/SELL vs WAIT and FULL/HALF/REDUCED
-        # position sizing. Because analysis_confidence (a single layer's
-        # raw, unweighted confidence) is almost always >= the weighted
-        # average of multiple agreeing layers, the max() was silently
-        # discarding the weighted computation on nearly every trade-signal
-        # path — per-layer `weight` had no effect on the final decision.
-        # Verified live: changing an agreeing layer's weight from 0.10 to
-        # 0.60 produced byte-identical master_confidence (69.7 both times)
-        # before this fix.
+        # Thin agreement (<2 directional): surface strongest raw confidence
+        # for audit only — final_signal will still be WAIT below unless
+        # single high-confidence path triggers.
         if result.analysis_confidence > 0 and len(agreeing) < 2:
             weighted_conf = max(weighted_conf, result.analysis_confidence)
 
-        # Penalty for disagreement
-        if opposing:
-            avg_opposing_conf = sum(s.confidence for s in opposing) / len(opposing)
-            if avg_opposing_conf > 80:
-                # Strong opposition — penalty
-                weighted_conf *= 0.7
+        # ── 5. Opposition penalty (only real BUY vs SELL conflict) ──
+        if opposing and agreeing:
+            avg_opp = sum(s.confidence for s in opposing) / len(opposing)
+            if avg_opp > 80:
+                weighted_conf *= 0.70
                 result.has_conflict = True
                 result.conflict_reason = (
-                    f"Strong opposition from {', '.join(s.layer for s in opposing)} "
-                    f"(conf {avg_opposing_conf:.0f}%) — confidence penalized"
+                    f"Strong opposition from "
+                    f"{', '.join(s.layer for s in opposing)} "
+                    f"(conf {avg_opp:.0f}%) — confidence penalized"
                 )
-            elif opposing:
-                # Moderate opposition — smaller penalty
+            else:
                 weighted_conf *= 0.85
                 result.has_conflict = True
                 result.conflict_reason = (
                     f"Opposition from {', '.join(s.layer for s in opposing)}"
                 )
 
-        # Confidence Calibration (audit Rule 6): real markets always carry
-        # uncertainty, so usable confidence is never allowed to reach 100%.
-        # A system that hits 100% confidence trades too aggressively.
+        # Confidence calibration (never allow 100%)
         try:
             from core.entry_safety_filters import EntrySafetyFilters
             weighted_conf = EntrySafetyFilters.calibrate_confidence(weighted_conf)
         except Exception as e:
             log.debug(f"[SignalFusion] Confidence calibration unavailable: {e}")
 
-        result.master_confidence = round(weighted_conf, 1)
+        result.master_confidence = round(min(99.0, max(0.0, weighted_conf)), 1)
 
-        # Determine final signal based on agreement
+        # ── 6. Final signal from directional agreement ──
         if len(agreeing) >= 3:
             result.final_signal = majority
-        elif len(agreeing) == 2 and len(signals) <= 3:
-            # 2/3 or 2/4 — allow with reduced confidence
-            if weighted_conf >= self.REDUCED_THRESHOLD:
+        elif len(agreeing) == 2:
+            if result.master_confidence >= self.REDUCED_THRESHOLD:
                 result.final_signal = majority
             else:
                 result.final_signal = "WAIT"
-        elif len(agreeing) == 2 and len(signals) == 4:
-            # Log-driven fix (2026-07-17): 2/4 agreement was an automatic
-            # WAIT regardless of confidence, even when the two agreeing
-            # layers (e.g. ml_ensemble + rl_agent) were both highly
-            # confident and the other two layers simply didn't vote
-            # (WAIT/HOLD), not actively opposing. Now handled the same
-            # way as the 2/3 case: allowed through if the weighted
-            # confidence clears the reduced threshold.
-            if weighted_conf >= self.REDUCED_THRESHOLD:
-                result.final_signal = majority
-            else:
-                result.final_signal = "WAIT"
+        elif len(agreeing) == 1 and result.master_confidence >= self.FULL_THRESHOLD:
+            # Single high-confidence directional layer (e.g. only Rule
+            # Engine is live and ML/RL/LLM abstained). Allow at REDUCED
+            # size so the system is not completely silent when 3/4
+            # layers are offline.
+            result.final_signal = majority
+            result.has_conflict = True
+            result.conflict_reason = (
+                result.conflict_reason
+                or "Single-layer directional signal — reduced size"
+            )
         else:
             result.final_signal = "WAIT"
 
-        # Position size
+        # ── 7. Position size ──
         if result.final_signal in ("BUY", "SELL"):
-            if result.master_confidence >= self.FULL_THRESHOLD and not result.has_conflict:
+            if (
+                result.master_confidence >= self.FULL_THRESHOLD
+                and not result.has_conflict
+                and len(agreeing) >= 3
+            ):
                 result.position_size = "FULL"
                 result.position_multiplier = 1.0
-            elif result.master_confidence >= self.HALF_THRESHOLD:
+            elif result.master_confidence >= self.HALF_THRESHOLD and len(agreeing) >= 2:
                 result.position_size = "HALF"
                 result.position_multiplier = 0.5
             elif result.master_confidence >= self.REDUCED_THRESHOLD:
@@ -253,28 +227,108 @@ class SignalFusion:
                 result.position_size = "WAIT"
                 result.position_multiplier = 0.0
         else:
-            result.position_size = "WAIT" if result.final_signal == "WAIT" else "NO_TRADE"
+            result.position_size = (
+                "WAIT" if result.final_signal == "WAIT" else "NO_TRADE"
+            )
+            result.position_multiplier = 0.0
 
-        # Build explanation
-        result.explanation = self._build_explanation(signals, result)
+        # Weighted contributions (for audit)
+        for s in working:
+            result.weighted_contributions[s.layer] = round(
+                s.confidence * s.weight, 2
+            )
+
+        result.explanation = self._build_explanation(working, result)
 
         log.info(
-            f"[SignalFusion] {result.final_signal} | conf={result.master_confidence:.1f}% | "
-            f"agreement={result.agreement} | position={result.position_size}"
+            f"[SignalFusion] {result.final_signal} | "
+            f"conf={result.master_confidence:.1f}% | "
+            f"agreement={result.agreement} | "
+            f"position={result.position_size}"
             f"{' | CONFLICT' if result.has_conflict else ''}"
+            f"{' | excluded=' + ','.join(result.excluded_layers) if result.excluded_layers else ''}"
         )
-
         return result
 
-    def _build_explanation(self, signals: List[LayerSignal], result: FusionResult) -> List[str]:
-        """Build human-readable explanation of the decision."""
+    def _normalize_weights(
+        self, signals: List[LayerSignal], result: FusionResult
+    ) -> List[LayerSignal]:
+        """Zero weight on abstaining / missing layers and redistribute.
+
+        Returns a *new* list of LayerSignal with adjusted weights so the
+        original caller objects are not mutated.
+        """
+        working: List[LayerSignal] = []
+        active_weight = 0.0
+
+        for s in signals:
+            sig = (s.signal or "").upper().strip()
+            # Treat NOT_READY / empty / very-low-confidence WAIT as non-voters
+            is_abstain = (
+                sig in self._ABSTAIN_SIGNALS
+                or (sig in ("WAIT", "HOLD") and s.confidence < 30)
+            )
+            # ML layer that is present but not producing a real signal
+            if s.layer == "ml_ensemble" and is_abstain:
+                result.ml_available = False
+
+            if is_abstain:
+                result.excluded_layers.append(s.layer)
+                working.append(
+                    LayerSignal(
+                        layer=s.layer,
+                        signal=sig or "WAIT",
+                        confidence=s.confidence,
+                        weight=0.0,
+                        reasoning=s.reasoning or "abstain/not ready",
+                    )
+                )
+            else:
+                working.append(
+                    LayerSignal(
+                        layer=s.layer,
+                        signal=sig,
+                        confidence=s.confidence,
+                        weight=s.weight,
+                        reasoning=s.reasoning,
+                    )
+                )
+                active_weight += s.weight
+
+        # Redistribute: active layers share the full 1.0 mass
+        if active_weight > 0:
+            for s in working:
+                if s.weight > 0:
+                    s.weight = s.weight / active_weight
+        # else: all abstained — weights stay 0, final will be WAIT/NO_TRADE
+
+        if result.excluded_layers:
+            log.debug(
+                f"[SignalFusion] excluded (weight→0): {result.excluded_layers}"
+            )
+        return working
+
+    def _build_explanation(
+        self, signals: List[LayerSignal], result: FusionResult
+    ) -> List[str]:
         explanations = []
         for s in signals:
-            emoji = "✅" if s.signal == result.final_signal else "❌"
-            explanations.append(f"{emoji} {s.layer}: {s.signal} ({s.confidence:.0f}%) — {s.reasoning[:60]}")
+            if s.weight == 0:
+                emoji = "⚪"
+            elif s.signal == result.final_signal:
+                emoji = "✅"
+            else:
+                emoji = "❌"
+            explanations.append(
+                f"{emoji} {s.layer}: {s.signal} ({s.confidence:.0f}%, "
+                f"w={s.weight:.2f}) — {(s.reasoning or '')[:60]}"
+            )
         if result.has_conflict:
             explanations.append(f"⚠️ Conflict: {result.conflict_reason}")
-        explanations.append(f"→ Master: {result.final_signal} ({result.master_confidence:.0f}%) — {result.position_size}")
+        explanations.append(
+            f"→ Master: {result.final_signal} "
+            f"({result.master_confidence:.0f}%) — {result.position_size}"
+        )
         return explanations
 
 

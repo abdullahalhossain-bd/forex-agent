@@ -215,8 +215,11 @@ def _pip_size(symbol: str, overrides: Optional[Dict[str, float]] = None) -> Opti
         return None
     sym = symbol.upper().replace("/", "").replace("_", "").replace("-", "")
 
-    if overrides and symbol.upper() in overrides:
-        return overrides[symbol.upper()]
+    if overrides:
+        if symbol.upper() in overrides:
+            return overrides[symbol.upper()]
+        if sym in overrides:
+            return overrides[sym]
 
     for token in _INDEX_TOKENS:
         if token in sym:
@@ -273,10 +276,18 @@ class EngineWeights:
 
 @dataclass
 class ConsensusConfig:
-    """Tunable consensus-layer thresholds (institutional review fix #9)."""
-    min_action_score: float = 1.8       # minimum score for a side to be actionable at all
-    min_margin_abs: float = 0.5         # winning side must beat the other by at least this much...
-    min_margin_ratio: float = 1.15      # ...OR by this ratio (winner / loser), whichever is looser
+    """Tunable consensus-layer thresholds (institutional review fix #9).
+
+    2026-08-13 (0-trades audit): thresholds were so high that a single
+    healthy engine (e.g. StopHunt weight 2.0, or ICT weight 3.0) could not
+    clear min_action_score when every other engine abstained. Live logs
+    showed 0 consensus BUY/SELL across 164 evaluations. Relaxed so that
+    one solid engine vote is enough to surface a signal; downstream
+    TradePermission / fusion still provide the multi-layer safety net.
+    """
+    min_action_score: float = 0.8       # was 1.8 — single engine (wt≥1.0) can now clear
+    min_margin_abs: float = 0.2         # was 0.5 — less strict when only one side votes
+    min_margin_ratio: float = 1.05      # was 1.15 — 5% dominance enough when both sides vote
     high_confidence_score: float = 3.0
     medium_confidence_score: float = 1.5
     rr_ev_weight: float = 0.15          # how much a vote's R:R scales its effective weight
@@ -294,7 +305,11 @@ _REGIME_WEIGHT_MULTIPLIERS: Dict[str, Dict[str, float]] = {
     "TRENDING": {"stop_hunt": 1.00, "ict_amd": 1.15, "pa": 1.15, "liquidity": 0.90, "cci": 0.75, "pattern": 1.00},
     "RANGING":  {"stop_hunt": 1.05, "ict_amd": 0.85, "pa": 0.90, "liquidity": 1.15, "cci": 1.25, "pattern": 1.00},
     "VOLATILE": {"stop_hunt": 0.85, "ict_amd": 0.80, "pa": 0.80, "liquidity": 0.85, "cci": 0.70, "pattern": 0.85},
-    "CHOPPY":   {"stop_hunt": 0.50, "ict_amd": 0.00, "pa": 0.50, "liquidity": 0.50, "cci": 0.50, "pattern": 0.40},
+    # 2026-08-13: ict_amd was hard-zeroed in CHOPPY which, combined with
+    # the old min_action_score=1.8, made CHOPPY sessions produce zero votes
+    # forever. Softened so mean-reversion engines can still surface a
+    # signal; ICT still heavily discounted (regime_ctx hard-gate remains).
+    "CHOPPY":   {"stop_hunt": 0.60, "ict_amd": 0.25, "pa": 0.55, "liquidity": 0.70, "cci": 0.80, "pattern": 0.45},
 }
 _CONFIDENCE_PRIOR = {"High": 0.85, "Medium": 0.6, "Low": 0.35}
 
@@ -539,7 +554,7 @@ class UnifiedSignalEngine:
             detected_patterns, pattern_repetition,
             liquidity_result=liquidity_result, cci_result=cci_result,
             weights=weights, regime_mult=regime_mult, regime_label=regime_label,
-            engine_statuses=engine_statuses,
+            engine_statuses=engine_statuses, df_len=len(df),
         )
 
         # ── BUILD UNIFIED OUTPUT ──
@@ -917,6 +932,7 @@ class UnifiedSignalEngine:
         regime_mult: Dict[str, float],
         regime_label: str,
         engine_statuses: Dict[str, str],
+        df_len: int,
     ) -> dict:
         """
         Weighted, regime- and R:R-aware voting consensus across all engines.
@@ -970,16 +986,16 @@ class UnifiedSignalEngine:
         _engine_vote(liquidity_result, weights.liquidity, "liquidity", "Liquidity")
         _engine_vote(cci_result, weights.cci, "cci", "CCI")
 
+        # df_len is the REAL bar count of the analyzed dataframe (fix —
+        # previously this was derived from max(p.candle_index for p in
+        # detected_patterns), i.e. "recent" was relative to whichever
+        # pattern happened to be detected most recently, not the actual
+        # live bar. If pattern detection found nothing near the current
+        # bar but did find something several bars back, that stale
+        # pattern was incorrectly treated as "now" and allowed to vote —
+        # a plausible contributor to wrong-side consensus signals.
         pattern_votes, pattern_trail = self._pattern_votes(
-            detected_patterns, df_len=(detected_patterns[0].candle_index + 1 if False else 10**9),
-            weights=weights, regime_mult=regime_mult,
-        ) if False else ([], [])
-        # NOTE: df_len must come from the real bar count, not a sentinel —
-        # computed properly below using pattern_repetition metadata when
-        # available, else derived from the max candle_index seen.
-        max_idx = max((p.candle_index for p in detected_patterns), default=-1)
-        pattern_votes, pattern_trail = self._pattern_votes(
-            detected_patterns, df_len=max_idx + 1, weights=weights, regime_mult=regime_mult,
+            detected_patterns, df_len=df_len, weights=weights, regime_mult=regime_mult,
         )
         votes.extend(pattern_votes)
         _vote_trail.extend(pattern_trail)

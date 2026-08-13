@@ -2287,26 +2287,36 @@ class AnalysisAgent:
                 final_signal = adaptive_decision["action"]
                 _agreeing = adaptive_decision.get("agreeing_strategies", []) or []
                 _disagreeing = adaptive_decision.get("disagreeing_strategies", []) or []
-                # Fast-path flag: a CLEAN solo stop_hunt signal (the one
-                # strategy with an out-of-sample-validated edge — see
-                # backtest/per_strategy_tester.py::_test_stop_hunt, 76-80%
-                # / 65-70% win rate — and the session/no-Wednesday/H4-trend
-                # filter already applied above before this signal could
-                # even reach agreeing_strategies) with nothing disagreeing.
-                # trade_permission.py uses this to skip the two gates that
-                # were never validated for a standalone strategy
-                # (Confluence quality's "≥2 factors" and SMC+Session
-                # fusion) — those gates exist to judge a BLEND of several
-                # engines, and applying them to a single already-filtered
-                # strategy's signal was diluting a proven edge rather than
-                # protecting anything.
+                # 2026-08-13: propagate confidence so TradePermission does
+                # not see confidence=0 on an otherwise valid adaptive fill.
+                _ad_conf_raw = adaptive_decision.get("confidence", 0)
+                try:
+                    _ad_conf = float(_ad_conf_raw)
+                    if _ad_conf <= 1.0:
+                        _ad_conf *= 100.0
+                except (TypeError, ValueError):
+                    _ad_conf = 55.0
+                _ad_conf = max(45.0, min(85.0, _ad_conf))
+                try:
+                    if isinstance(signal_result, dict):
+                        signal_result["confidence"] = _ad_conf
+                        signal_result["signal"] = final_signal
+                    if isinstance(master_ctx, dict):
+                        master_ctx["master_confidence"] = _ad_conf
+                        master_ctx["master_signal"] = final_signal
+                        _track_confidence(master_ctx, "adaptive_fill", _ad_conf)
+                except Exception:
+                    pass
+                # Fast-path flag: CLEAN solo stop_hunt signal
                 unified_signal_ctx["fast_path"] = (
                     _agreeing == ["stop_hunt"] and not _disagreeing
                 )
-                unified_signal_ctx["fast_path_source"] = "stop_hunt_solo" if unified_signal_ctx["fast_path"] else None
+                unified_signal_ctx["fast_path_source"] = (
+                    "stop_hunt_solo" if unified_signal_ctx["fast_path"] else None
+                )
                 log.info(
                     f"[AnalysisAgent] Adaptive Decision FILLED final_signal "
-                    f"(was WAIT/NO TRADE) -> {final_signal} | "
+                    f"(was WAIT/NO TRADE) -> {final_signal} conf={_ad_conf:.0f}% | "
                     f"fast_path={unified_signal_ctx['fast_path']} | "
                     f"agreeing={_agreeing} disagreeing={_disagreeing}"
                 )
@@ -2316,6 +2326,33 @@ class AnalysisAgent:
                 "action": unified_signal_ctx.get("consensus", {}).get("action", "NO_TRADE"),
                 "source": "legacy_fallback", "reason": f"Adaptive failed: {e}",
             }
+
+        # 2026-08-13: direct consensus fallback when adaptive abstains but
+        # UnifiedSignalEngine produced BUY/SELL (after min_action_score
+        # relaxation). Prevents valid single-engine consensus from dying
+        # after MasterDecision WAIT.
+        if final_signal not in ("BUY", "SELL"):
+            try:
+                _cons = (unified_signal_ctx or {}).get("consensus") or {}
+                _cons_action = str(_cons.get("action", "")).upper()
+                if _cons_action in ("BUY", "SELL"):
+                    final_signal = _cons_action
+                    _cal = float(_cons.get("calibrated_score", 0) or 0)
+                    _cons_conf = max(50.0, min(80.0, _cal * 100.0 if _cal <= 1.0 else _cal))
+                    if isinstance(signal_result, dict):
+                        signal_result["confidence"] = _cons_conf
+                        signal_result["signal"] = final_signal
+                    if isinstance(master_ctx, dict):
+                        master_ctx["master_confidence"] = _cons_conf
+                        master_ctx["master_signal"] = final_signal
+                        _track_confidence(master_ctx, "unified_consensus_fallback", _cons_conf)
+                    log.info(
+                        f"[AnalysisAgent] Unified consensus FALLBACK filled "
+                        f"final_signal -> {final_signal} conf={_cons_conf:.0f}% "
+                        f"(reason={str(_cons.get('reason', ''))[:80]})"
+                    )
+            except Exception as _e_cons:
+                log.debug(f"[AnalysisAgent] consensus fallback skipped: {_e_cons}")
 
         # ── Odd Enhancers Zone Scoring (Book 5 Chapter 6) ──────
         # CRITICAL FIX: Wire odd_enhancers into the LIVE pipeline.

@@ -1,65 +1,556 @@
-2026-08-12 20:39:18 | INFO     | main                      | ============================================================
-2026-08-12 20:39:18 | INFO     | main                      |   FOREX AI AUTONOMOUS TRADING SYSTEM — Booting
-2026-08-12 20:39:18 | INFO     | main                      | ============================================================
-2026-08-12 20:39:18 | INFO     | main                      |   Booting runtime (24 phases)...
-2026-08-12 20:39:18 | INFO     | main                      |   Config: MAX_LOT=0.1 | APPROVAL_MODE=3 | MAX_OPEN_TRADES=20
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 14 Groq key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 13 Gemini key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Cerebras key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 SambaNova key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 OpenRouter key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GitHub Models key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Hugging Face key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 Claude key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GLM key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 DeepSeek key(s)
-2026-08-12 20:39:18 | INFO     | llm_key_manager           | [LLM Throttle] Loaded config parameters successfully.
-2026-08-12 20:39:18 | INFO     | core.runtime              | LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
-2026-08-12 20:39:18 | INFO     | main.boot                 |   [OK] bootstrap      (0.014s) - config, paths, event_bus, metrics, health_monitor
-2026-08-12 20:39:25 | INFO     | database.db               | Database ready: D:\Projects\forex\database\trader.db
-2026-08-12 20:40:34 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config_sentence_transformers.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:35 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config_sentence_transformers.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/README.md "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/README.md "HTTP/1.1 200 OK"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/modules.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/modules.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/sentence_bert_config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:36 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/sentence_bert_config.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/adapter_config.json "HTTP/1.1 404 Not Found"
-2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json "HTTP/1.1 307 Temporary Redirect"
-2026-08-12 20:40:37 | INFO     | httpx                     | HTTP Request: HEAD https://huggingface.co/api/resolve-cache/models/sentence-transformers/all-MiniLM-L6-v2/1110a243fdf4706b3f48f1d95db1a4f5529b4d41/config.json "HTTP/1.1 200 OK"
-2026-08-12 20:40:37 | INFO     | trade_memory              | [TradeMemory] Running without vector memory — sentence-transformers not installed; semantic search disabled. Install with pip install -U sentence-transformers to enable.
-2026-08-12 20:40:37 | INFO     | main.boot                 |   [OK] persistence    (78.717s) - db, trade_memory, learning_engine, analysis_history, knowledge_store
-2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-12 20:40:38 | INFO     | mt5_connection            |   🤖  AI TRADER — MT5 CONNECTION
-2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-12 20:40:38 | INFO     | mt5_connection            |   Connected : MetaQuotes-Demo
-2026-08-12 20:40:38 | INFO     | mt5_connection            |   Account   : 108647429
-2026-08-12 20:40:38 | INFO     | mt5_connection            |   Status    : ✅ Ready
-2026-08-12 20:40:38 | INFO     | mt5_connection            |   Balance   : $99113.92
-2026-08-12 20:40:38 | INFO     | mt5_connection            | ════════════════════════════════════════════
-2026-08-12 20:40:38 | INFO     | data.fetcher              | [OK] DataFetcher initialized | source: mt5
-2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] data           (2.233s) - data_fetcher, data_validator, indicators, data_updater
-2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] market         (0.027s) - market_scanner, correlation_filter, opportunity_ranker, mt5_connection
-2026-08-12 20:40:39 | INFO     | main.boot                 |   [OK] research       (0.015s) - research_agent, hypothesis_engine, experiment_runner, research_report
-2026-08-12 20:40:40 | INFO     | sentiment_model           | [SentimentModel] Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-12 20:40:40 | INFO     | core.runtime              | Day 66 NewsIntelligence engine wired
-2026-08-12 20:40:40 | INFO     | main.boot                 |   [OK] fundamental    (0.900s) - news_filter, fundamental_sentiment, news_intelligence
-2026-08-12 20:40:40 | INFO     | core.runtime              | Day 67 ConfluenceEngine wired
-2026-08-12 20:40:40 | INFO     | core.runtime              | Day 68 FeatureStore wired (4647 feature rows, 1599 labels)
-2026-08-12 20:40:43 | INFO     | model_store               | [ModelStore] imported 171 historical trained model(s) into registry from data/trained_models/
-2026-08-12 20:40:43 | INFO     | core.runtime              | Day 69 ModelStore wired (171 models on disk)
-2026-08-12 20:40:43 | INFO     | core.runtime              | [ModelStore] registry/disk consistency OK (171 model file(s) verified)
-2026-08-12 20:40:43 | INFO     | core.runtime              | Day 69 ModelPredictor wired (ensemble prediction ready)
-2026-08-12 20:40:43 | INFO     | core.runtime              | Day 70 EnsembleEngine wired (brain fusion layer ready)
-2026-08-12 20:40:44 | INFO     | rl_agent                  | [RL Agent] PPO model at D:\Projects\forex\ml\rl_policy\ppo_forex_latest.zip exists but FAILED the training-quality gate (recorded avg_reward=-9140.96 in its own training run (threshold: > -10.0) — model consistently LOST money during training; loading it as 'trusted' would let an unprofitable policy vote on live trades) — NOT loading it as trusted; falling back to heuristic mode instead of letting an unverified/undertrained policy vote on live trades.
-2026-08-12 20:40:44 | INFO     | core.runtime              | Day 71 RL Agent wired (source=heuristic, model_loaded=False)
-2026-08-12 20:40:44 | INFO     | core.runtime              | Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
-2026-08-12 20:40:44 | INFO     | main.boot                 |   [OK] analysis       (3.561s) - intermarket_engine, session_analyzer_analytics, confluence_engine, feature_engineer, feature_store, label_generator, data_preprocessor, feature_selector, dataset_builder, model_evaluator, model_store, model_trainer, model_predictor, voting_engine, confidence_fusion, ensemble_store, ensemble_engine, reward_engine, rl_agent, rl_policy_store, cv_splitter, walk_forward_validator, monte_carlo_simulator, regime_tester, sensitivity_tester, validation_engine
-2026-08-12 20:40:44 | INFO     | ai_analyst                | Groq client initialized | model=llama-3.3-70b-versatile
-2026-08-12 20:40:49 | INFO     | ai_analyst                | Gemini client initialized (fallback ready) | model=gemini-3.5-flash
-2026-08-12 20:40:49 | INFO     | master_analyst            | [MasterAnalyst] Groq client initialized | model=llama-3.3-70b-versatile
+2026-08-13 10:33:23 | INFO     | core.production_hardening | [is_candle_closed] tf=M15 | last_bar=2026-08-13T04:15:00+00:00 | current=2026-08-13T04:33:23.554574+00:00 | close=2026-08-13T04:30:00+00:00 | seconds_left=-204s | naive_input=False | is_closed=True
+2026-08-13 10:33:23 | INFO     | ai_trader                 | [3/9] Analysis Agent...
+2026-08-13 10:33:23 | INFO     | ai_trader                 | [3/9] Analysis Agent...
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | MTF Analysis started: EURUSD
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | Fetching H4 (4h)...
+2026-08-13 10:33:23 | INFO     | data.fetcher              | Fetching EURUSD | H4 | 200 candles...
+2026-08-13 10:33:23 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-06-28T21:00:00+00:00 | last=2026-08-13T01:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [OK] Got 200 candles for EURUSD H4 via MT5 | Latest: 2026-08-13 01:00:00+00:00
+2026-08-13 10:33:23 | DEBUG    | data.fetcher              | [MT5] Latest H4 bar is 12804s old (within tolerance).
+2026-08-13 10:33:23 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | H4 ready: 200 candles
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | Fetching H1 (1h)...
+2026-08-13 10:33:23 | INFO     | data.fetcher              | Fetching EURUSD | H1 | 200 candles...
+2026-08-13 10:33:23 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-02T21:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [OK] Got 200 candles for EURUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:23 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | H1 ready: 200 candles
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | Fetching M15 (15m)...
+2026-08-13 10:33:23 | INFO     | data.fetcher              | Fetching EURUSD | M15 | 200 candles...
+2026-08-13 10:33:23 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-11T02:45:00+00:00 | last=2026-08-13T04:30:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [OK] Got 200 candles for EURUSD M15 via MT5 | Latest: 2026-08-13 04:30:00+00:00
+2026-08-13 10:33:23 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | M15 ready: 200 candles
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | Fetching M5 (5m)...
+2026-08-13 10:33:23 | INFO     | data.fetcher              | Fetching EURUSD | M5 | 200 candles...
+2026-08-13 10:33:23 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-12T11:55:00+00:00 | last=2026-08-13T04:30:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:23 | INFO     | data.fetcher              | [OK] Got 200 candles for EURUSD M5 via MT5 | Latest: 2026-08-13 04:30:00+00:00
+2026-08-13 10:33:23 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:23 | INFO     | analysis.mtf_analyzer     | M5 ready: 200 candles
+2026-08-13 10:33:24 | INFO     | market_structure          | [MarketStructure] 57 swings, 19 BOS/CHoCH events, trend=DOWN
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: RANGING | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 30 fair value gaps (regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: RANGING | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | order_block               | [OrderBlock] Detected 5 order blocks (mode=consecutive, require_structure=True, require_fvg=True, regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: RANGING | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 28 fair value gaps (regime=on)
+2026-08-13 10:33:24 | DEBUG    | curve_mtf                 | [curve_mtf] equilibrium and curve widths both ~0 — boundary_buffer=0.000152 left as-is (degenerate input)
+2026-08-13 10:33:24 | INFO     | market_structure          | [MarketStructure] 59 swings, 18 BOS/CHoCH events, trend=UP
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 16 fair value gaps (regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | order_block               | [OrderBlock] Detected 2 order blocks (mode=consecutive, require_structure=True, require_fvg=True, regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: BEARISH | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 15 fair value gaps (regime=on)
+2026-08-13 10:33:24 | INFO     | market_structure          | [MarketStructure] 59 swings, 17 BOS/CHoCH events, trend=DOWN
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 30 fair value gaps (regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:24 | INFO     | order_block               | [OrderBlock] Detected 0 order blocks (mode=consecutive, require_structure=True, require_fvg=True, regime=on)
+2026-08-13 10:33:24 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:24 | INFO     | fvg_detector              | [FVG] Detected 30 fair value gaps (regime=on)
+2026-08-13 10:33:24 | INFO     | market_structure          | [MarketStructure] 58 swings, 18 BOS/CHoCH events, trend=DOWN
+2026-08-13 10:33:25 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:25 | INFO     | fvg_detector              | [FVG] Detected 23 fair value gaps (regime=on)
+2026-08-13 10:33:25 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:25 | INFO     | order_block               | [OrderBlock] Detected 1 order blocks (mode=consecutive, require_structure=True, require_fvg=True, regime=on)
+2026-08-13 10:33:25 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BEARISH | Strength: MODERATE | Volatility: LOW
+2026-08-13 10:33:25 | INFO     | fvg_detector              | [FVG] Detected 24 fair value gaps (regime=on)
+2026-08-13 10:33:25 | INFO     | analysis.mtf_analyzer     | MTF Result: SELL | Confidence: 95% | Conflicts: 0
+2026-08-13 10:33:25 | INFO     | session_analysis          | [SessionAnalyzer] LONDON_LIQUIDITY_SWEEP | Direction: BULLISH
+2026-08-13 10:33:25 | INFO     | stop_hunt_detector        | [StopHuntDetector] 1 stop-hunt event(s) detected
+2026-08-13 10:33:25 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BULLISH | Strength: MODERATE | Volatility: NORMAL
+2026-08-13 10:33:25 | INFO     | fvg_detector              | [FVG] Detected 36 fair value gaps (regime=on)
+2026-08-13 10:33:25 | INFO     | liquidity_engine          | [LiquidityEngine] Bias: NEUTRAL | Score: 48/100 | Grade: INVALID | StopHunt: BULLISH_REVERSAL
+2026-08-13 10:33:25 | INFO     | analysis_agent            | [AnalysisAgent] Running Day 65 pipeline for EURNZD (15m)
+2026-08-13 10:33:25 | INFO     | session_analyzer          | [SessionAnalyzer] TOKYO | EURNZD | Strategy: RANGE_TRADING | Score: 10 | Fusion: ⏳ pending | Trade: ✅
+2026-08-13 10:33:30 | DEBUG    | support_resistance        | [SR-DIAG] : resistance=2 {'cluster': 2} | support=2 {'cluster': 2}
+2026-08-13 10:33:30 | INFO     | session_analysis          | [SessionAnalyzer] LONDON_LIQUIDITY_SWEEP | Direction: BULLISH
+2026-08-13 10:33:30 | INFO     | stop_hunt_detector        | [StopHuntDetector] 1 stop-hunt event(s) detected
+2026-08-13 10:33:30 | INFO     | analysis.market_regime    | Regime: TRENDING | Direction: BULLISH | Strength: MODERATE | Volatility: NORMAL
+2026-08-13 10:33:30 | INFO     | fvg_detector              | [FVG] Detected 36 fair value gaps (regime=on)
+2026-08-13 10:33:30 | INFO     | liquidity_engine          | [LiquidityEngine] Bias: NEUTRAL | Score: 48/100 | Grade: INVALID | StopHunt: BULLISH_REVERSAL
+2026-08-13 10:33:30 | INFO     | analysis.advanced_patterns | Advanced patterns detected: 18
+2026-08-13 10:33:30 | INFO     | analysis.advanced_patterns | False pattern filtered: RISING_WEDGE — Bearish pattern against strong bullish trend
+2026-08-13 10:33:30 | INFO     | analysis.advanced_patterns | False pattern filtered: DOUBLE_TOP — Confidence 48% too low
+2026-08-13 10:33:30 | INFO     | amt                       | [AMT] IB=[1.96651-1.96787] VA=[1.96646-1.96889] POC=1.96816 price=1.97704 loc=ABOVE_VA accepted=True → BUY (60/100)
+2026-08-13 10:33:31 | INFO     | trendline_engine          | [Trendline] Up: 35 touches (strong) | Down: 10 touches (strong) | 1 signals
+2026-08-13 10:33:31 | INFO     | supply_demand             | [SupplyDemand] 0 demand zones, 0 supply zones detected
+2026-08-13 10:33:31 | INFO     | data.fetcher              | Fetching EURUSD | H1 | 100 candles...
+2026-08-13 10:33:31 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [OK] Got 100 candles for EURUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:31 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:31 | INFO     | data.fetcher              | Fetching GBPUSD | H1 | 100 candles...
+2026-08-13 10:33:31 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPUSD
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:31 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPUSD H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:31 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20012s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching AUDUSD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDUSD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching NZDUSD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDUSD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching USDCAD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDCAD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for USDCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching USDCHF | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDCHF
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for USDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching USDJPY | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDJPY
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for USDJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURGBP | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURGBP
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURGBP H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURJPY | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURJPY
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURAUD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURAUD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURAUD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURCAD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURCAD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURCHF | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURCHF
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching EURNZD | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURNZD
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:32 | INFO     | data.fetcher              | [OK] Got 100 candles for EURNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:32 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:32 | INFO     | data.fetcher              | Fetching GBPJPY | H1 | 100 candles...
+2026-08-13 10:33:32 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPJPY
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPJPY H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:33 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20013s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching GBPCAD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPCAD
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching GBPCHF | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPCHF
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPCHF H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:33 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20013s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching GBPAUD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPAUD
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPAUD H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:33 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20013s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching GBPNZD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPNZD
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching AUDJPY | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDJPY
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching AUDCAD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDCAD
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching AUDNZD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDNZD
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching AUDCHF | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDCHF
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching NZDJPY | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDJPY
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:33 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDJPY H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:33 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20014s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:33 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:33 | INFO     | data.fetcher              | Fetching NZDCAD | H1 | 100 candles...
+2026-08-13 10:33:33 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDCAD
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-06T20:00:00+00:00 | last=2026-08-12T23:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDCAD H1 via MT5 | Latest: 2026-08-12 23:00:00+00:00
+2026-08-13 10:33:34 | ERROR    | data.fetcher              | [MT5] Latest H1 bar is 20014s old (>5400s threshold) while the forex market is expected to be OPEN — this is a genuine stale-data condition (feed/connection problem), NOT a weekend gap.
+2026-08-13 10:33:34 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:34 | INFO     | data.fetcher              | Fetching NZDCHF | H1 | 100 candles...
+2026-08-13 10:33:34 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDCHF
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:34 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:34 | INFO     | data.fetcher              | Fetching CADJPY | H1 | 100 candles...
+2026-08-13 10:33:34 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CADJPY
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [OK] Got 100 candles for CADJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:34 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:34 | INFO     | data.fetcher              | Fetching CADCHF | H1 | 100 candles...
+2026-08-13 10:33:34 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CADCHF
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [OK] Got 100 candles for CADCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:34 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:34 | INFO     | data.fetcher              | Fetching CHFJPY | H1 | 100 candles...
+2026-08-13 10:33:34 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CHFJPY
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:34 | INFO     | data.fetcher              | [OK] Got 100 candles for CHFJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:34 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:34 | INFO     | currency_strength         | [CurrencyStrength] Normalized strengths: {'USD': 57.6, 'EUR': 51.5, 'GBP': 52.1, 'JPY': 51.2, 'AUD': 51.4, 'CAD': 52.2, 'CHF': 46.7, 'NZD': 37.2}
+2026-08-13 10:33:34 | INFO     | currency_strength         | [CurrencyStrength] Saved 8 snapshot(s) to history
+2026-08-13 10:33:34 | INFO     | currency_strength         | [CurrencyStrength] Strongest: ['USD', 'CAD', 'GBP'] | Weakest: ['NZD', 'CHF', 'JPY'] | Opportunities (diff>=40): 0
+2026-08-13 10:33:34 | INFO     | currency_strength         | ══════════════════════════════════════════════════════════
+2026-08-13 10:33:34 | INFO     | currency_strength         |   🌍  CURRENCY STRENGTH MATRIX ENGINE  (Day 64)
+2026-08-13 10:33:34 | INFO     | currency_strength         | ══════════════════════════════════════════════════════════
+2026-08-13 10:33:34 | INFO     | currency_strength         |   Timeframe   : 1h
+2026-08-13 10:33:34 | INFO     | currency_strength         |   Pairs used  : 28 (failed: 0)
+2026-08-13 10:33:34 | INFO     | currency_strength         | 
+2026-08-13 10:33:34 | INFO     | currency_strength         |   ── Currency Strength Map ──
+2026-08-13 10:33:34 | INFO     | currency_strength         |   USD  ███████████░░░░░░░░░   57.6  →
+2026-08-13 10:33:34 | INFO     | currency_strength         |   CAD  ██████████░░░░░░░░░░   52.2  ↑↑
+2026-08-13 10:33:34 | INFO     | currency_strength         |   GBP  ██████████░░░░░░░░░░   52.1  →
+2026-08-13 10:33:34 | INFO     | currency_strength         |   EUR  ██████████░░░░░░░░░░   51.5  ↑↑
+2026-08-13 10:33:34 | INFO     | currency_strength         |   AUD  ██████████░░░░░░░░░░   51.4  ↓↓
+2026-08-13 10:33:34 | INFO     | currency_strength         |   JPY  ██████████░░░░░░░░░░   51.2  →
+2026-08-13 10:33:34 | INFO     | currency_strength         |   CHF  █████████░░░░░░░░░░░   46.7  ↑↑
+2026-08-13 10:33:34 | INFO     | currency_strength         |   NZD  ███████░░░░░░░░░░░░░   37.2  ↓↓
+2026-08-13 10:33:34 | INFO     | currency_strength         | 
+2026-08-13 10:33:34 | INFO     | currency_strength         |   Strongest   : USD, CAD, GBP
+2026-08-13 10:33:34 | INFO     | currency_strength         |   Weakest     : NZD, CHF, JPY
+2026-08-13 10:33:34 | INFO     | currency_strength         | 
+2026-08-13 10:33:34 | INFO     | currency_strength         |   ── 🔥 Best Opportunities ──
+2026-08-13 10:33:34 | INFO     | currency_strength         |   None — no pair meets the strength-difference threshold
+2026-08-13 10:33:34 | INFO     | currency_strength         | 
+2026-08-13 10:33:34 | INFO     | currency_strength         |   ── Currency Cycles ──
+2026-08-13 10:33:34 | INFO     | currency_strength         |   USD: NEUTRAL_CYCLE (slope -0.03)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   EUR: NEUTRAL_CYCLE (slope +0.20)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   GBP: NEUTRAL_CYCLE (slope +0.05)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   JPY: NEUTRAL_CYCLE (slope -0.04)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   AUD: NEUTRAL_CYCLE (slope -0.26)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   CAD: NEUTRAL_CYCLE (slope +0.11)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   CHF: NEUTRAL_CYCLE (slope +0.32)
+2026-08-13 10:33:34 | INFO     | currency_strength         |   NZD: NEUTRAL_CYCLE (slope -0.36)
+2026-08-13 10:33:34 | INFO     | currency_strength         | ══════════════════════════════════════════════════════════
+2026-08-13 10:33:34 | INFO     | sentiment_data            | [SentimentData] Fetching all sentiment data for EURNZD
+2026-08-13 10:33:35 | INFO     | sentiment_data            | [RetailData] EURNZD | Approx Long: 53.0%
+2026-08-13 10:33:36 | INFO     | myfxbook_sentiment        | [Myfxbook] HTTP 403 from requests — trying cloudscraper fallback (if installed).
+2026-08-13 10:33:36 | WARNING  | myfxbook_sentiment        | [Myfxbook] cloudscraper fetch failed (attempt 1): ('Connection aborted.', ConnectionResetError(10054, 'An existing connection was forcibly closed by the remote host', None, 10054, None))
+2026-08-13 10:33:38 | INFO     | myfxbook_sentiment        | [Myfxbook] cloudscraper fetch SUCCESS — Cloudflare challenge solved.
+2026-08-13 10:33:39 | DEBUG    | myfxbook_sentiment        | [Myfxbook] parsed 72 pairs from outlook page
+2026-08-13 10:33:39 | DEBUG    | myfxbook_sentiment        | [Myfxbook] parse_ms=837 pairs=72
+2026-08-13 10:33:39 | INFO     | myfxbook_sentiment        | [Myfxbook] EURUSD | retail BULLISH (56%L/44%S) | contrarian=NEUTRAL(WEAK) | bias=NEUTRAL conf=12% | fetch_ms=4062 cache_size=72
+2026-08-13 10:33:39 | INFO     | sentiment_data            | [F&G FX-native] avg_long=59.0% across 7 pairs → value=59.0 (Neutral)
+2026-08-13 10:33:39 | INFO     | data.fetcher              | Fetching EURUSD | H1 | 100 candles...
+2026-08-13 10:33:39 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURUSD
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [OK] Got 100 candles for EURUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:39 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:39 | INFO     | data.fetcher              | Fetching GBPUSD | H1 | 100 candles...
+2026-08-13 10:33:39 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPUSD
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:39 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:39 | INFO     | data.fetcher              | Fetching AUDUSD | H1 | 100 candles...
+2026-08-13 10:33:39 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDUSD
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:39 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:39 | INFO     | data.fetcher              | Fetching NZDUSD | H1 | 100 candles...
+2026-08-13 10:33:39 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDUSD
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDUSD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:39 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:39 | INFO     | data.fetcher              | Fetching USDCAD | H1 | 100 candles...
+2026-08-13 10:33:39 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDCAD
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:39 | INFO     | data.fetcher              | [OK] Got 100 candles for USDCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching USDCHF | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDCHF
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for USDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching USDJPY | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: USDJPY
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for USDJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURGBP | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURGBP
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURGBP H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURJPY | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURJPY
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURAUD | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURAUD
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURAUD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURCAD | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURCAD
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURCHF | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURCHF
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:40 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:40 | INFO     | data.fetcher              | Fetching EURNZD | H1 | 100 candles...
+2026-08-13 10:33:40 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURNZD
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:40 | INFO     | data.fetcher              | [OK] Got 100 candles for EURNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching GBPJPY | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPJPY
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching GBPCAD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPCAD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching GBPCHF | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPCHF
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching GBPAUD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPAUD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPAUD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching GBPNZD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: GBPNZD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for GBPNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching AUDJPY | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDJPY
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching AUDCAD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDCAD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching AUDNZD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDNZD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDNZD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching AUDCHF | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: AUDCHF
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for AUDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching NZDJPY | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDJPY
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching NZDCAD | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDCAD
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDCAD H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching NZDCHF | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: NZDCHF
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for NZDCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:41 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:41 | INFO     | data.fetcher              | Fetching CADJPY | H1 | 100 candles...
+2026-08-13 10:33:41 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CADJPY
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:41 | INFO     | data.fetcher              | [OK] Got 100 candles for CADJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:42 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:42 | INFO     | data.fetcher              | Fetching CADCHF | H1 | 100 candles...
+2026-08-13 10:33:42 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CADCHF
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [OK] Got 100 candles for CADCHF H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:42 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:42 | INFO     | data.fetcher              | Fetching CHFJPY | H1 | 100 candles...
+2026-08-13 10:33:42 | DEBUG    | data.fetcher              | [MT5] Symbol selected: CHFJPY
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-07T01:00:00+00:00 | last=2026-08-13T04:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [OK] Got 100 candles for CHFJPY H1 via MT5 | Latest: 2026-08-13 04:00:00+00:00
+2026-08-13 10:33:42 | INFO     | indicators                | All indicators added successfully | Total columns: 28
+2026-08-13 10:33:42 | INFO     | currency_strength         | [CurrencyStrength] Normalized strengths: {'USD': 59.3, 'EUR': 51.5, 'GBP': 51.0, 'JPY': 53.0, 'AUD': 50.1, 'CAD': 53.6, 'CHF': 46.7, 'NZD': 34.7}
+2026-08-13 10:33:42 | INFO     | sentiment_data            | [CurrStr] From shared CurrencyStrengthEngine: {'USD': 59.3, 'EUR': 51.5, 'GBP': 51.0, 'JPY': 53.0, 'AUD': 50.1, 'CAD': 53.6, 'CHF': 46.7, 'NZD': 34.7}
+2026-08-13 10:33:42 | INFO     | sentiment_data            | [DXY] Current: 100.022 | Change: +0.012% | Trend: BULLISH
+2026-08-13 10:33:42 | INFO     | sentiment_data            | [SentimentData] EURNZD | Retail Long: 53.0% | F&G: 59.0 | DXY: BULLISH
+2026-08-13 10:33:42 | INFO     | sentiment_engine          | [Retail] EURNZD | Long: 53.0% | Bias: NEUTRAL | Score: +0 | Quality: synthetic_proxy
+2026-08-13 10:33:42 | INFO     | sentiment_engine          | [F&G] Value: 59.0 | Label: GREED | Score: -5 | Quality: crypto_proxy
+2026-08-13 10:33:42 | INFO     | sentiment_engine          | [CurrStr] EURNZD | EUR: 51.5 vs NZD: 37.2 | Bias: BULLISH | Score: +7
+2026-08-13 10:33:42 | INFO     | sentiment_engine          | [DXY] Trend: BULLISH | Change: +0.01% | Impact: WEAK | Score: +6
+2026-08-13 10:33:42 | INFO     | sentiment_engine          | [SentimentEngine] EURNZD | Score: +8 | Bias: NEUTRAL | Conf: 40%
+2026-08-13 10:33:42 | INFO     | data.fetcher              | Fetching EURNZD | H4 | 150 candles...
+2026-08-13 10:33:42 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURNZD
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-07-09T05:00:00+00:00 | last=2026-08-13T01:00:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [OK] Got 150 candles for EURNZD H4 via MT5 | Latest: 2026-08-13 01:00:00+00:00
+2026-08-13 10:33:42 | DEBUG    | data.fetcher              | [MT5] Latest H4 bar is 12823s old (within tolerance).
+2026-08-13 10:33:42 | INFO     | data.fetcher              | Fetching EURNZD | M15 | 150 candles...
+2026-08-13 10:33:42 | DEBUG    | data.fetcher              | [MT5] Symbol selected: EURNZD
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Applied broker tz offset: -3.0h (MT5_BROKER_TZ_OFFSET_HOURS=3.0). Bar timestamps are now true UTC.
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [MT5] Bar timestamps (UTC): first=2026-08-11T15:15:00+00:00 | last=2026-08-13T04:30:00+00:00 | broker_offset=3.0h
+2026-08-13 10:33:42 | INFO     | data.fetcher              | [OK] Got 150 candles for EURNZD M15 via MT5 | Latest: 2026-08-13 04:30:00+00:00
+2026-08-13 10:33:42 | INFO     | market_structure          | [MarketStructure] 45 swings, 16 BOS/CHoCH events, trend=UP
+2026-08-13 10:33:42 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: NEUTRAL | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:42 | INFO     | fvg_detector              | [FVG] Detected 20 fair value gaps (regime=on)
+2026-08-13 10:33:42 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: NEUTRAL | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:42 | INFO     | order_block               | [OrderBlock] Detected 2 order blocks (mode=consecutive, require_structure=True, require_fvg=True, regime=on)
+2026-08-13 10:33:42 | INFO     | analysis.market_regime    | Regime: CHOPPY | Direction: NEUTRAL | Strength: WEAK | Volatility: NORMAL
+2026-08-13 10:33:42 | INFO     | fvg_detector              | [FVG] Detected 20 fair value gaps (regime=on)
+2026-08-13 10:33:44 | DEBUG    | smc_engine                | [SMCEngine] EURNZD M15 pattern detection ran (was not cached)
+2026-08-13 10:33:44 | INFO     | smc_engine                | [SMCEngine] EURNZD | Signal: BUY | Direction: BUY | Score: 62/100 | Grade: B
+2026-08-13 10:33:44 | INFO     | smc_engine                | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | smc_engine                |   🧠  SMC ENGINE  (Day 44)
+2026-08-13 10:33:44 | INFO     | smc_engine                | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Pair         : EURNZD
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Signal       : 🟢 BUY
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Direction    : BUY
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Score        : 62/100
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Grade        : B
+2026-08-13 10:33:44 | INFO     | smc_engine                | 
+2026-08-13 10:33:44 | INFO     | smc_engine                |   ✅ liquidity_sweep        (+20)
+2026-08-13 10:33:44 | INFO     | smc_engine                |   ❌ order_block            (+25)
+2026-08-13 10:33:44 | INFO     | smc_engine                |   ❌ fvg                    (+15)
+2026-08-13 10:33:44 | INFO     | smc_engine                |   ✅ bos                    (+25)
+2026-08-13 10:33:44 | INFO     | smc_engine                |   ✅ confirmation_candle    (+15)
+2026-08-13 10:33:44 | INFO     | smc_engine                | 
+2026-08-13 10:33:44 | INFO     | smc_engine                |   Analysis     : Price swept buy-side liquidity. Market structure shifted buy. Confirmation candle present on M15.
+2026-08-13 10:33:44 | INFO     | smc_engine                | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | breaker_block             | [BreakerBlock] Detected 1 breaker block(s)
+2026-08-13 10:33:44 | INFO     | structure_engine          | [Structure] Bias=RANGING | BOS=BULLISH_BOS | CHoCH=NONE | Displacement=False
+2026-08-13 10:33:44 | INFO     | structure_engine          | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | structure_engine          |   🏛️  MARKET STRUCTURE ENGINE  (Day 61)
+2026-08-13 10:33:44 | INFO     | structure_engine          | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | structure_engine          |   Structure    : 🟡 RANGING
+2026-08-13 10:33:44 | INFO     | structure_engine          |   BOS          : BULLISH_BOS  @ 1.96802  (conf 95%)
+2026-08-13 10:33:44 | INFO     | structure_engine          |   CHoCH        : NONE
+2026-08-13 10:33:44 | INFO     | structure_engine          |   Displacement : ❌ None
+2026-08-13 10:33:44 | INFO     | structure_engine          | 
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ── Recent Swing Points ──
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▲ HH   @ 1.96999
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▼ LL   @ 1.96403
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▲ LH   @ 1.96845
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▼ HL   @ 1.9647
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▲ LH   @ 1.96802
+2026-08-13 10:33:44 | INFO     | structure_engine          |   ▼ HL   @ 1.96651
+2026-08-13 10:33:44 | INFO     | structure_engine          | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | divergence_engine         | [Divergence] No divergence — momentum confirms price action
+2026-08-13 10:33:44 | INFO     | divergence_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | divergence_engine         |   🔄  DIVERGENCE ENGINE  (Day 83)
+2026-08-13 10:33:44 | INFO     | divergence_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | divergence_engine         |   No divergence detected — momentum confirms price
+2026-08-13 10:33:44 | INFO     | divergence_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | volatility_engine         | [Volatility] squeeze=False(NONE) | BB_width_pct=100.0% | ATR_regime=VOLATILE | release=NONE | prob=0%
+2026-08-13 10:33:44 | INFO     | volatility_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   📊  VOLATILITY ENGINE  (Day 85)
+2026-08-13 10:33:44 | INFO     | volatility_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   Squeeze      : ⚪  False  (NONE)
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   BB Width     : 0.76336 (pct 100.0%)
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   BB Upper/Low : 1.97834 / 1.9633
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   ATR          : 0.00108 (VOLATILE, pct 78.8%)
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   Release      : NONE
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   Expansion %  : 0
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   Signal       : EXPANDED
+2026-08-13 10:33:44 | INFO     | volatility_engine         |   Note         : Volatility expanded — no squeeze setup
+2026-08-13 10:33:44 | INFO     | volatility_engine         | ════════════════════════════════════════════════════════
+2026-08-13 10:33:44 | INFO     | news_api_provider         | [NewsAPI] fetching headlines for EURNZD (q='EUR OR NZD') [1/100 today]

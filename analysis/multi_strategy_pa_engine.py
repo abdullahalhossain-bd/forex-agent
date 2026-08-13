@@ -94,10 +94,20 @@ SESSION_START_UTC = float(os.getenv("PA_SESSION_START_UTC", "5.0"))    # 05:00 U
 SESSION_END_UTC   = float(os.getenv("PA_SESSION_END_UTC", "22.0"))     # 22:00 UTC (04:00 BD) — aligned to DEAD_ZONES start
 
 # Lower TF mapping for MTF confirmation
+#
+# BUG FIX: ALLOWED_TIMEFRAMES accepts both "4H"/"1H" AND the MT4/MT5-style
+# "H4"/"H1" aliases (self.timeframe is upper-cased but NOT normalized), yet
+# this map only had the "4H"/"1H" keys. Any engine built with timeframe="H4"
+# or "H1" (the format MT4/MT5 period constants actually use) hit
+# LOWER_TF_MAP.get(self.timeframe) -> None in _step5_mtf_confirmation, which
+# is the same branch used for "1D" ("no lower TF required") — so Step 5 was
+# silently skipped (auto "aligned": True) instead of requiring H2/M30
+# confirmation. Added the H4/H1 aliases so MTF confirmation actually runs
+# for MT-style timeframe strings.
 LOWER_TF_MAP = {
-    "4H": "H2",
-    "1H": "M30",
-    # 1D has no lower TF confirmation requirement per spec
+    "4H": "H2", "H4": "H2",
+    "1H": "M30", "H1": "M30",
+    # 1D/D1 has no lower TF confirmation requirement per spec
 }
 
 # Momentum candle: body ≥ 70% of total range
@@ -121,7 +131,13 @@ from analysis._engine_utils import (
 
 
 def _is_in_session(df: pd.DataFrame) -> bool:
-    """Check if latest candle timestamp is within 11:00-22:00 BD Time."""
+    """Check if latest candle timestamp is within 11:00 BD - 04:00 BD (next day).
+
+    BUG FIX: docstring/log text previously said "11:00-22:00 BD Time", which
+    was stale — SESSION_END_UTC=22.0 UTC is 04:00 BD *the next day*
+    (BD = UTC+6), not 22:00 BD. Left uncorrected this misleads anyone
+    reading logs/reasons while debugging why a signal was or wasn't gated.
+    """
     try:
         if df.empty or not hasattr(df.index, "hour"):
             return False
@@ -424,7 +440,7 @@ class MultiStrategyPAEngine:
 
         # ── STEP 8: Confirmation checklist ──
         checklist = self._step8_checklist(
-            df, sr_zones, sd_zones, trend, mtf_info, confluence_zone, ss_setup
+            df, sr_zones, sd_zones, trend, mtf_info, confluence_zone, ss_setup, atr_val
         )
 
         # ── FINAL: Signal generation ──
@@ -922,6 +938,7 @@ class MultiStrategyPAEngine:
         mtf_info: dict,
         confluence_zone: Optional[ConfluenceZone],
         ss_setup: dict,
+        atr_val: float,
     ) -> dict:
         """6-factor checklist — need ≥3 to pass.
 
@@ -947,10 +964,18 @@ class MultiStrategyPAEngine:
             })
 
         # ── Run HighReliabilityPatternDetector ──
+        # BUG FIX: this used to call `atr_val = _atr(df)`, which shadowed the
+        # scalar atr_val computed once in analyze() and reassigned it to the
+        # *raw Series* that _atr() returns (every other call site does
+        # `float(_atr(df, period=14).iloc[-1])` to get a scalar — this one
+        # skipped that). The full Series was then passed as `atr_value` to
+        # HighReliabilityPatternDetector.detect(), which expects a single
+        # float. Now atr_val is passed in from analyze() (already a
+        # validated float, same value used everywhere else in the pipeline)
+        # instead of being recomputed and mis-typed here.
         detected_patterns = []
         if self.pattern_detector is not None:
             try:
-                atr_val = _atr(df)
                 detected_patterns = self.pattern_detector.detect(
                     df, zones=unified_zones_for_patterns, atr_value=atr_val
                 )
@@ -1068,7 +1093,7 @@ class MultiStrategyPAEngine:
         # ── Gate 1: Session time ──
         if not session_ok:
             return self._no_trade_signal(
-                "NO_TRADE (Outside trading window 11:00-22:00 BD Time)"
+                "NO_TRADE (Outside trading window 11:00 BD - 04:00 BD next day)"
             )
 
         # ── Gate 2: Trend structure ──

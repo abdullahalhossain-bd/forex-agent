@@ -382,38 +382,49 @@ class MasterDecisionEngine:
         )
 
         # ── Day 90 — Strategy-aware position sizing ─────────────────
-        # The validator produces a position_multiplier based on agreement
-        # and confidence. The strategy selector also produces a risk_mult
-        # based on regime + volatility. We MULTIPLY them so that:
-        #   - A WAIT strategy → 0.0 (no trade regardless of validation)
-        #   - A high-volatility regime → reduced size
-        #   - Both factors agree → full size
-        # If strategy_family == WAIT, force final_signal to WAIT (unless
-        # it's already NO_TRADE) — the selector said "stand aside".
+        # Validator mult × strategy risk_mult.
+        # 2026-08-13 (0-trades audit): Strategy WAIT used to HARD-OVERRIDE
+        # final_signal to WAIT even when all 4 layers agreed BUY/SELL.
+        # That destroyed the analysis signal before TradePermission could
+        # see it, and was a major contributor to permanent 0-trades when
+        # the selector defaulted to WAIT in RANGING/CHOPPY regimes.
+        #
+        # New behaviour (soft penalty):
+        #   - final_signal is PRESERVED (BUY/SELL stays BUY/SELL)
+        #   - position_multiplier is zeroed (or capped very low) so size
+        #     is effectively stand-aside
+        #   - confidence is reduced and override_reason records the veto
+        #   - downstream RiskEngine / TradePermission still see a real
+        #     directional signal for audit and for gates that only care
+        #     about direction (S/R alignment, MTF, etc.)
+        #
+        # Only apply when strategy_available is True (selector actually
+        # ran). Missing regime/strategy_context must not masquerade as a
+        # deliberate stand-aside.
         validator_mult = validation.position_multiplier
         strategy_adjusted_mult = round(validator_mult * strategy_risk, 3)
-        # FIX: only treat this as a deliberate "selector says stand aside"
-        # when the selector actually ran (strategy_available). If regime/
-        # strategy_context was never supplied, strategy_family defaults to
-        # "WAIT" with no meaning behind it — that must NOT override a
-        # validated BUY/SELL from the four intelligence layers.
+
         if strategy_available and strategy_family == "WAIT":
-            strategy_adjusted_mult = 0.0
-            # If validation said BUY/SELL but strategy said WAIT, downgrade
+            final_signal = validation.final_signal  # PRESERVE — do not force WAIT
             if validation.final_signal in ("BUY", "SELL"):
-                log.info(
-                    f"[MasterDecision] Strategy WAIT override — "
-                    f"validation said {validation.final_signal} but selector says stand aside"
-                )
-                final_signal = "WAIT"
+                # Soft stand-aside: keep direction, zero size
+                strategy_adjusted_mult = 0.0
+                position_size = "WAIT"
+                master_confidence = round(validation.confidence * 0.6, 1)
                 override_reason = (
-                    f"Strategy WAIT ({strategy_reason}) — standing aside despite layer agreement"
+                    f"Strategy stand-aside SOFT ({strategy_reason or 'selector WAIT'}) "
+                    f"— signal {validation.final_signal} preserved, size zeroed"
+                )
+                log.info(
+                    f"[MasterDecision] Strategy WAIT soft-penalty — "
+                    f"kept {validation.final_signal} conf={master_confidence:.0f}% "
+                    f"size=0 (was hard-override before 2026-08-13)"
                 )
             else:
-                final_signal = validation.final_signal
-                override_reason = validation.override_reason
-            position_size = "WAIT" if final_signal != "NO_TRADE" else "NO_TRADE"
-            master_confidence = validation.confidence * 0.5  # halve confidence on WAIT
+                strategy_adjusted_mult = 0.0
+                position_size = "WAIT" if validation.final_signal != "NO_TRADE" else "NO_TRADE"
+                master_confidence = validation.confidence * 0.5
+                override_reason = validation.override_reason or "Strategy WAIT"
         else:
             final_signal = validation.final_signal
             override_reason = validation.override_reason

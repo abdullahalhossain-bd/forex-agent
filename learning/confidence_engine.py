@@ -80,8 +80,12 @@ W_REGIME     = 0.20
 # claim's distance above neutral (50) — modest claims barely move,
 # overconfident claims get shrunk hard — so it generalises instead of
 # being fit to a single test number.
-BAYESIAN_PENALTY_FLOOR = 8.0   # minimum discount at sample_size=0, any claim
-BAYESIAN_PENALTY_SCALE = 0.6   # extra discount per point of claim above neutral(50)
+# 2026-08-13 (0-trades audit): FLOOR=8 + SCALE=0.6 crushed live conf
+# from ~66 → 48 (downstream permission saw 25%). Softened so a real
+# 55-70% base stays tradeable while still discounting 90%+ zero-history claims.
+BAYESIAN_PENALTY_FLOOR = 4.0   # was 8.0
+BAYESIAN_PENALTY_SCALE = 0.25  # was 0.6
+BAYESIAN_PENALTY_CAP   = 12.0  # never subtract more than this absolute
 
 
 class ConfidenceEngine:
@@ -213,6 +217,13 @@ class ConfidenceEngine:
             + regime_score   * W_REGIME
         )
         final_confidence = max(5, min(95, round(raw_final + bayesian_penalty)))
+        # 2026-08-13: in bootstrap / tiny-sample mode never crush below 70%
+        # of the pipeline's own base_confidence (floor 40). Prevents the
+        # Bayesian path from producing 25% conf that TradePermission rejects.
+        if sample_size < MIN_SAMPLE_SIZE:
+            _floor = max(40, int(float(base_confidence) * 0.70))
+            if final_confidence < _floor:
+                final_confidence = _floor
 
         # 6. Pattern skip check
         should_skip, skip_reason = self._check_skip(
@@ -468,10 +479,15 @@ class ConfidenceEngine:
         deviation = max(0.0, raw_score - 50.0)
         base_penalty = -(BAYESIAN_PENALTY_FLOOR + BAYESIAN_PENALTY_SCALE * deviation) * uncertainty
 
-        # Round-12: halve the penalty in bootstrap mode so the very
-        # first trades can still clear the gate and start generating data.
+        # Cap absolute magnitude so modest claims never get nuked.
+        if base_penalty < -BAYESIAN_PENALTY_CAP:
+            base_penalty = -BAYESIAN_PENALTY_CAP
+
+        # 2026-08-13: bootstrap (0-2 system trades) gets 75% relief so the
+        # first live SELLs can clear Min confidence (~25-35 floor) and
+        # start generating real sample data.
         if _is_bootstrap:
-            base_penalty *= 0.5
+            base_penalty *= 0.25
 
         return round(base_penalty, 1)
 

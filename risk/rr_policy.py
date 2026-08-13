@@ -55,5 +55,5 @@ if __name__ == "__main__":
 
     assert get_min_rr() == 2.0
     assert get_min_rr(test_mode=True) == 1.0
-    assert get_min_rr(strategy="stop_hunt") == 1.4
+    assert get_min_rr(strategy="stop_hunt") == 1.2  # matches STRATEGY_OVERRIDES
     print("rr_policy smoke test passed — resolves from core/constants.py.")

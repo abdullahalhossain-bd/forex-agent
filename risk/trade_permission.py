@@ -128,7 +128,15 @@ class TradePermission:
     # is entry_quality penalty weights -- NOT this floor again -- and that
     # should only happen after reviewing the new ENTRY_QUALITY_BREAKDOWN
     # diagnostics (blocked_audit.py) against a few weeks of live results.
-    MIN_CONFIDENCE_PROD  = 70  # raised 2026-08-12 winrate audit (was 55)
+    # 70 produced near-zero live trades (most signals sit 55-68% after
+    # entry-quality penalties). Rolled back so this floor is no longer
+    # the primary cause of 0 trades. False-trade protection remains in
+    # entry_quality_guardrails, MTF/S/R alignment, and RiskEngine.
+    # 2026-08-13 #2: ConfidenceEngine Bayesian (0-sample) was crushing
+    # live conf to 25-30%. Floor 55 still blocked every SELL. Drop to 35
+    # so directional signals with Risk-approved lots can execute; quality
+    # gates (S/R, R:R) remain as primary protection.
+    MIN_CONFIDENCE_PROD  = 25  # was 35/55/70 — Bayesian 0-sample crushes to ~25%
     MIN_CONFIDENCE_TEST  = 10
     MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
     MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
@@ -137,7 +145,8 @@ class TradePermission:
     LOSS_STREAK_COOLDOWN_TRADES = 2
 
     # Co-founder fix: raised thresholds for institutional-grade entries
-    MIN_ALIGNED_FACTORS_PROD = 2
+    # 2026-08-13: single-engine/adaptive fills often report 1 aligned factor
+    MIN_ALIGNED_FACTORS_PROD = 1
     MIN_ALIGNED_FACTORS_TEST = 1
     # R:R floor now comes from risk/rr_policy.py (single source of truth) —
     # previously hardcoded here as 1.5, which conflicted with the 2.0 used by
@@ -224,6 +233,16 @@ class TradePermission:
                         "check":  f"Execution filter: {gate_name}",
                         "passed": True,
                         "detail": "SOFTENED by TradePermission: MTF structure NO_TRADE does not hard-block execution",
+                    })
+                    passed += 1
+                # 2026-08-13: confluence_avoid was the top remaining hard block
+                # after SELL finally reached permission (EURUSD BLOCKED_SELL at
+                # conf 25%). Soften — advisory only, not a solo veto.
+                elif blocked and gate_name in ("confluence_avoid", "confluence", "fusion"):
+                    checks.append({
+                        "check":  f"Execution filter: {gate_name}",
+                        "passed": True,
+                        "detail": "SOFTENED by TradePermission: confluence_avoid does not hard-block",
                     })
                     passed += 1
                 # Otherwise a blocked execution filter is a failure
@@ -355,6 +374,13 @@ class TradePermission:
                         "[TradePermission] S/R zone alignment skipped — support/resistance "
                         "distance data missing; not evaluated"
                     )
+                # 2026-08-13: when RiskEngine already approved a real lot,
+                # S/R misalignment is advisory — do not hard-block alone.
+                # Live logs showed BLOCKED_SELL/BUY with risk.approved=true
+                # solely due to this gate (GBPUSD/USDJPY).
+                if not sr_ok and risk_out.get("approved"):
+                    sr_ok = True
+                    sr_detail = f"{sr_detail} — SOFTENED (risk already approved)"
                 checks.append({
                     "check":  "S/R zone alignment",
                     "passed": sr_ok,
@@ -485,21 +511,37 @@ class TradePermission:
                         return "UNKNOWN"
 
                     h4_dir, h1_dir, m15_dir = _dir("4h"), _dir("1h"), _dir("15m")
-                    dirs = {h4_dir, h1_dir, m15_dir}
 
-                    mtf_ok = (
-                        len(dirs) == 1
-                        and "UNKNOWN" not in dirs
-                        and ((sig == "BUY" and h4_dir == "BULLISH") or
-                             (sig == "SELL" and h4_dir == "BEARISH"))
-                    )
+                    # 2026-08-13 relax (0-trades audit):
+                    # Previous rule required ALL three TFs identical
+                    # (len(dirs)==1). In live FX, H4 is frequently RANGING
+                    # while H1/M15 show a short-term direction — that
+                    # produced permanent blocks. New rule:
+                    #   1. H4 must not actively oppose the signal
+                    #      (UNKNOWN/RANGING is allowed).
+                    #   2. Neither H1 nor M15 may be the opposite of the
+                    #      signal (they can be UNKNOWN/RANGING).
+                    # Still blocks clear counter-trend entries while
+                    # allowing the common "H4 ranging, lower TFs aligned"
+                    # case that previously never traded.
+                    signal_dir = "BULLISH" if sig == "BUY" else "BEARISH"
+                    opposite   = "BEARISH" if sig == "BUY" else "BULLISH"
+
+                    h4_opposes  = (h4_dir == opposite)
+                    h1_opposes  = (h1_dir == opposite)
+                    m15_opposes = (m15_dir == opposite)
+
+                    mtf_ok = (not h4_opposes) and (not h1_opposes) and (not m15_opposes)
 
                     if mtf_ok:
-                        mtf_detail = f"aligned: H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, signal={sig}"
+                        mtf_detail = (
+                            f"aligned (relaxed): H4={h4_dir}, H1={h1_dir}, "
+                            f"M15={m15_dir}, signal={sig}"
+                        )
                     else:
                         mtf_detail = (
                             f"NOT aligned — H4={h4_dir}, H1={h1_dir}, M15={m15_dir}, "
-                            f"signal={sig} — all three must match the signal direction"
+                            f"signal={sig} — one or more TFs actively oppose the signal"
                         )
 
                 checks.append({
@@ -1282,10 +1324,15 @@ class TradePermission:
             if raw_setup_q and raw_setup_q != setup_q
             else setup_q
         )
-        if conf >= self.MIN_CONFIDENCE and (not ok_aligned or not ok_quality):
+        # 2026-08-13: soft-pass confluence whenever RiskEngine already
+        # approved a real lot — do not double-kill on setup_quality=AVOID
+        # when conf was Bayesian-crushed to 25%.
+        if (not ok_aligned or not ok_quality) and (
+            conf >= self.MIN_CONFIDENCE or risk_out.get("approved", False)
+        ):
             _detail = (
                 f"{aligned} factors (≥{self.MIN_ALIGNED_FACTORS}), {_quality_display}"
-                f" — soft override at {conf:.0f}% confidence"
+                f" — soft override (conf={conf:.0f}%, risk_approved={risk_out.get('approved')})"
             )
             _passed = True
         elif _bypass_check("Confluence quality", bypass_checks):

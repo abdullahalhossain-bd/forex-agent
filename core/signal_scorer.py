@@ -129,9 +129,13 @@ class AdaptiveThreshold:
         else:
             hours_since = 999  # no trades ever
 
+        # 2026-08-13: deeper relief when system has been idle for a long
+        # time (999h = never traded this process lifetime).
         adj = 0
-        if hours_since >= 12:
-            adj = -15
+        if hours_since >= 24:
+            adj = -25
+        elif hours_since >= 12:
+            adj = -20
         elif hours_since >= 6:
             adj = -10
         if trades_1h >= 3:
@@ -203,10 +207,14 @@ class SignalScorer:
     }
 
     # Base threshold per TRADING_MODE
+    # 2026-08-13 (0-trades audit): SAFE=80 / AUTONOMOUS=60 were unreachable
+    # when ML schema-mismatched + LLM rate-limited — live score typically
+    # 30-45 from rule/liquidity alone. Adaptive -15 left SAFE at 65, so
+    # every DecisionAgent SELL was DOWNGRADED (score 39 < 65).
     BASE_THRESHOLDS = {
-        "TEST":       30,
-        "AUTONOMOUS": 60,
-        "SAFE":       80,
+        "TEST":       25,
+        "AUTONOMOUS": 40,
+        "SAFE":       50,
     }
 
     def __init__(self):

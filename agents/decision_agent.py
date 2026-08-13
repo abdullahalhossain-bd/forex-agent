@@ -898,6 +898,59 @@ class DecisionAgent:
                             pattern=pattern, pair=pair, timeframe=timeframe,
                             regime=regime_label, analysis_out=analysis_out,
                             excluded_layers=_excluded_layers)
+                    # 2026-08-13 (0-trades audit): analysis_agent may have
+                    # already filled final_signal via Adaptive Decision or
+                    # Unified consensus FALLBACK after MasterDecision WAIT.
+                    # Returning NO TRADE here skipped the later
+                    # `if final_signal in ("BUY","SELL"): decision = final_signal`
+                    # preserve and permanently killed those signals.
+                    # Respect analysis final_signal when it is directional.
+                    _analysis_final = str(
+                        (analysis_out or {}).get("final_signal", "") or ""
+                    ).upper().replace(" ", "_")
+                    if _analysis_final in ("BUY", "SELL"):
+                        _af_ind = market_out.get("ind_ctx", {}) or {}
+                        _af_entry = (
+                            master_ctx.get("master_entry")
+                            or risk_out.get("entry")
+                            or _af_ind.get("close")
+                            or _af_ind.get("price")
+                            or 0
+                        )
+                        _af_sl = master_ctx.get("master_sl") or risk_out.get("sl_price")
+                        _af_tp = master_ctx.get("master_tp1") or risk_out.get("tp_price")
+                        _af_reasons = [
+                            f"Analysis final_signal={_analysis_final} preserved "
+                            f"(SignalFusion gate was {_fs_signal}/{_fs_agreement} — "
+                            f"unified/adaptive fill takes priority over layer-only fusion)",
+                        ]
+                        if (_af_sl is None or _af_tp is None):
+                            _fb_sl, _fb_tp = _fallback_sl_tp(
+                                _analysis_final, _af_entry, _af_ind, market_out.get("regime", {})
+                            )
+                            if _af_sl is None:
+                                _af_sl = _fb_sl
+                                _af_reasons.append("ℹ️ SL missing — ATR fallback")
+                            if _af_tp is None:
+                                _af_tp = _fb_tp
+                                _af_reasons.append("ℹ️ TP missing — ATR fallback")
+                        _af_conf = max(
+                            float(_preserved_conf or 0),
+                            float((analysis_out.get("signal") or {}).get("confidence") or 0),
+                            55.0,
+                        )
+                        log.info(
+                            f"[DecisionAgent] Preserving analysis final_signal="
+                            f"{_analysis_final} conf={_af_conf:.0f}% over "
+                            f"SignalFusion {_fs_signal}/{_fs_agreement}"
+                        )
+                        return self._result(
+                            _analysis_final, _af_conf, risk_out, _af_reasons,
+                            entry=_af_entry, sl=_af_sl, tp=_af_tp,
+                            pattern=pattern, pair=pair, timeframe=timeframe,
+                            regime=regime_label, analysis_out=analysis_out,
+                            excluded_layers=_excluded_layers,
+                        )
                     return self._result(
                         "NO TRADE", max(_preserved_conf, _fs_conf), risk_out, [
                             f"SignalFusion gate: {_fs_signal} "
