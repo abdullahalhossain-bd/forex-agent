@@ -176,7 +176,7 @@ class MTFAnalyzer:
 
         # Step 7: Confidence score calculate
         confidence, score_breakdown = self._calculate_confidence(
-            tf_directions, tf_contexts, conflicts, h4_override
+            tf_directions, tf_contexts, conflicts, h4_override, core_alignment
         )
 
         # Step 8: Final decision
@@ -546,38 +546,178 @@ class MTFAnalyzer:
             }
         return structure
 
-    def _detect_bos(self, df: pd.DataFrame) -> dict:
+    def _find_swing_points(self, df: pd.DataFrame, fractal_period: int = 2) -> dict:
         """
-        Break of Structure:
-        Bullish BOS — price breaks above previous swing high
-        Bearish BOS — price breaks below previous swing low
+        Confirmed fractal swing highs/lows — non-repainting.
+
+        A bar at index i is a confirmed swing high once `fractal_period`
+        bars exist on BOTH sides and:
+            high[i] > max(high[i-fractal_period : i])
+            high[i] > max(high[i+1 : i+1+fractal_period])
+        (mirror definition for swing low on `low`).
+
+        LOOK-AHEAD SAFETY: a pivot at index i is only *knowable* once bar
+        i + fractal_period has closed. We only ever emit pivots whose
+        right-side window is fully inside the given df, so nothing
+        returned here depends on data that would not yet exist at "now"
+        (the last row of df). Re-running this on the same historical
+        slice will never change an already-confirmed pivot — i.e. it
+        does not repaint.
+
+        Returns: {'highs': [(index, price), ...], 'lows': [(index, price), ...]}
+        in chronological order.
         """
-        if len(df) < 20:
-            return {'type': 'NONE', 'note': 'Insufficient data'}
+        n = len(df)
+        highs = df['high'].values
+        lows  = df['low'].values
+        swing_highs, swing_lows = [], []
 
-        recent = df.tail(50)
-        highs  = recent['high'].values
-        lows   = recent['low'].values
-        close  = recent['close'].values
+        last_confirmable = n - 1 - fractal_period
+        for i in range(fractal_period, last_confirmable + 1):
+            left_h, right_h = highs[i - fractal_period:i], highs[i + 1:i + 1 + fractal_period]
+            if highs[i] > left_h.max() and highs[i] > right_h.max():
+                swing_highs.append((i, highs[i]))
 
-        # Previous swing high (last 20 candles exclude last 5)
-        prev_high = max(highs[-20:-5])
-        prev_low  = min(lows[-20:-5])
-        curr_close = close[-1]
+            left_l, right_l = lows[i - fractal_period:i], lows[i + 1:i + 1 + fractal_period]
+            if lows[i] < left_l.min() and lows[i] < right_l.min():
+                swing_lows.append((i, lows[i]))
 
-        if curr_close > prev_high:
+        return {'highs': swing_highs, 'lows': swing_lows}
+
+    @staticmethod
+    def _bos_confidence(bars_ago: int) -> str:
+        """How stale is this BOS. Lets callers (e.g. session/fusion policy)
+        decide whether an old-but-still-valid break should still gate a
+        trade, instead of the old binary "only the last candle counts"."""
+        if bars_ago <= 2:
+            return 'FRESH'
+        if bars_ago <= 10:
+            return 'RECENT'
+        return 'ESTABLISHED'
+
+    def _detect_bos(
+        self,
+        df: pd.DataFrame,
+        fractal_period: int = 2,
+        lookback: int = 150,
+        buffer_atr_mult: float = 0.0,
+        max_age_bars: int | None = None,
+    ) -> dict:
+        """
+        Break of Structure (institutional/ICT definition):
+
+          Bullish BOS — a confirmed candle CLOSE breaks above the most
+                        recent confirmed swing high.
+          Bearish BOS — a confirmed close breaks below the most recent
+                        confirmed swing low.
+
+        Fixes vs. the previous implementation:
+          1. Real swing points (fractal-confirmed HH/LL pivots), not a
+             blind max/min over an arbitrary, misaligned 20-bar window.
+          2. PERSISTENCE — the whole recent window is walked bar-by-bar
+             and the *latest* BOS event is returned, so a normal pullback
+             or consolidation candle right after a genuine break no
+             longer wipes it out. This was the main bug: the old code
+             only returned non-NONE if the break happened on the very
+             last candle.
+          3. Every swing level used to test a break was itself confirmed
+             using only prior data — no look-ahead, no repainting.
+          4. Optional `buffer_atr_mult` treats the swing level as a zone
+             (ATR-relative) instead of an exact price, filtering out
+             noise breaks of a few points that aren't real displacement.
+          5. `max_age_bars` (optional) lets a caller enforce "BOS must
+             still be recent to count" as an explicit policy choice,
+             instead of that being baked silently into the detector.
+
+        Args:
+            fractal_period:  bars required on each side to confirm a
+                              swing pivot (2 = classic 5-bar fractal).
+            lookback:        how many recent candles to scan.
+            buffer_atr_mult: e.g. 0.1 = level must be cleared by 0.1×ATR
+                              to count as a break. 0 = exact level (legacy
+                              behavior).
+            max_age_bars:    if set, a BOS older than this many bars is
+                              reported as NONE (stale). None = no cutoff,
+                              matching real market-structure semantics
+                              (structure stays valid until invalidated).
+
+        NOTE (candle indexing): this assumes `df`'s last row is a fully
+        CLOSED candle, not the still-forming one — verify the upstream
+        fetcher guarantees that, otherwise every close-based break here
+        is subject to intrabar repainting regardless of the fix above.
+        """
+        min_needed = max(30, fractal_period * 2 + 10)
+        if len(df) < min_needed:
+            return {'type': 'NONE', 'note': 'Insufficient data', 'confidence': 0}
+
+        recent = df.tail(lookback).reset_index(drop=True)
+        closes = recent['close'].values
+        n = len(recent)
+
+        swings = self._find_swing_points(recent, fractal_period=fractal_period)
+        swing_highs, swing_lows = swings['highs'], swings['lows']
+
+        if not swing_highs or not swing_lows:
+            return {'type': 'NONE', 'note': 'No confirmed swing points yet', 'confidence': 0}
+
+        if buffer_atr_mult > 0 and 'atr' in recent.columns:
+            atr_series = recent['atr'].values
+        else:
+            # Defensive fallback — never assume an upstream ATR column
+            # exists; approximate with a rolling true-range proxy.
+            tr = (recent['high'] - recent['low']).values
+            atr_series = pd.Series(tr).rolling(14, min_periods=1).mean().values
+
+        last_swing_high = last_swing_low = None
+        latest_bos = {'type': 'NONE', 'note': 'No structural break detected', 'confidence': 0}
+        hi_ptr = lo_ptr = 0
+
+        for i in range(n):
+            # Bring into scope any pivot confirmed as of bar i — this is
+            # what makes the walk itself look-ahead safe.
+            while hi_ptr < len(swing_highs) and swing_highs[hi_ptr][0] <= i:
+                last_swing_high = swing_highs[hi_ptr]
+                hi_ptr += 1
+            while lo_ptr < len(swing_lows) and swing_lows[lo_ptr][0] <= i:
+                last_swing_low = swing_lows[lo_ptr]
+                lo_ptr += 1
+
+            if last_swing_high is None or last_swing_low is None:
+                continue
+
+            buffer = buffer_atr_mult * atr_series[i] if buffer_atr_mult > 0 else 0.0
+
+            if closes[i] > last_swing_high[1] + buffer:
+                bars_ago = n - 1 - i
+                latest_bos = {
+                    'type':       'BULLISH_BOS',
+                    'level':      round(last_swing_high[1], 5),
+                    'broke_at':   i,
+                    'bars_ago':   bars_ago,
+                    'note':       f'Close broke above swing high {last_swing_high[1]:.5f} ({bars_ago} bars ago)',
+                    'confidence': self._bos_confidence(bars_ago),
+                }
+            elif closes[i] < last_swing_low[1] - buffer:
+                bars_ago = n - 1 - i
+                latest_bos = {
+                    'type':       'BEARISH_BOS',
+                    'level':      round(last_swing_low[1], 5),
+                    'broke_at':   i,
+                    'bars_ago':   bars_ago,
+                    'note':       f'Close broke below swing low {last_swing_low[1]:.5f} ({bars_ago} bars ago)',
+                    'confidence': self._bos_confidence(bars_ago),
+                }
+
+        if (max_age_bars is not None
+                and latest_bos['type'] != 'NONE'
+                and latest_bos['bars_ago'] > max_age_bars):
             return {
-                'type':  'BULLISH_BOS',
-                'level': round(prev_high, 5),
-                'note':  f'Price broke above {prev_high:.5f} — bullish structure',
+                'type': 'NONE',
+                'note': f"Last BOS was {latest_bos['bars_ago']} bars ago (> max_age_bars={max_age_bars}) — treated as stale",
+                'confidence': 0,
             }
-        if curr_close < prev_low:
-            return {
-                'type':  'BEARISH_BOS',
-                'level': round(prev_low, 5),
-                'note':  f'Price broke below {prev_low:.5f} — bearish structure',
-            }
-        return {'type': 'NONE', 'note': 'No structural break detected'}
+
+        return latest_bos
 
     def _detect_choch(self, df: pd.DataFrame) -> dict:
         """
@@ -901,6 +1041,7 @@ class MTFAnalyzer:
         tf_contexts: dict,
         conflicts: list,
         h4_override: dict,
+        core_alignment: dict | None = None,
     ) -> tuple[int, dict]:
         """
         Confidence = sum of weights for aligned TFs
@@ -912,13 +1053,32 @@ class MTFAnalyzer:
           MEDIUM conflict    : -7
           H4 Override active : -10
           M5 weak entry      : -5
+
+        NOTE (2026-08-14 forensic audit follow-up): `dominant` previously
+        came from an independent 4-way majority vote over ALL of
+        tf_directions (including M5), which is a different computation
+        from `_check_core_alignment`'s H4+H1+M15-only, all-must-agree
+        rule that actually gates BUY/SELL vs WAIT in `_make_decision`.
+        The two could not literally disagree on WAIT-vs-trade (Rule 0
+        already blocks that), but the *scored/displayed* dominant
+        direction and per-TF "aligned" reasons in score_breakdown could
+        silently differ from the direction `_make_decision` actually
+        traded on -- e.g. a 3-bullish/1-bearish M5 split would score
+        against "bullish" here even in a case worth auditing. Passing
+        `core_alignment` in and using its direction as `dominant` when
+        aligned removes that latent inconsistency; falls back to the old
+        majority-vote behavior when core_alignment isn't supplied, so
+        this is backward compatible with any caller not yet passing it.
         """
-        # Overall bias — majority direction
-        dirs   = [v.get('direction') for v in tf_directions.values()]
-        bull_c = dirs.count('bullish')
-        bear_c = dirs.count('bearish')
-        dominant = 'bullish' if bull_c > bear_c else (
-                   'bearish' if bear_c > bull_c else 'neutral')
+        if core_alignment is not None and core_alignment.get('aligned'):
+            dominant = core_alignment['direction']
+        else:
+            # Overall bias — majority direction (legacy fallback path)
+            dirs   = [v.get('direction') for v in tf_directions.values()]
+            bull_c = dirs.count('bullish')
+            bear_c = dirs.count('bearish')
+            dominant = 'bullish' if bull_c > bear_c else (
+                       'bearish' if bear_c > bull_c else 'neutral')
 
         if dominant == 'neutral':
             return 0, {}
@@ -1259,6 +1419,21 @@ class MTFAnalyzer:
             'h4_bos':   result.get('structure', {}).get('H4', {}).get('bos', {}).get('type', 'NONE'),
             'h4_choch': result.get('structure', {}).get('H4', {}).get('choch', {}).get('type', 'NONE'),
             'h1_bos':   result.get('structure', {}).get('H1', {}).get('bos', {}).get('type', 'NONE'),
+
+            # NEW (2026-08-14 forensic audit follow-up): expose which path
+            # decided each TF's direction -- 'indicator' (RSI/MACD/trend,
+            # can lag a genuine structural reversal by a bar or more) vs
+            # 'structural(curve)' (order block / FVG / curve_mtf, only used
+            # when curve_confidence >= _STRUCTURAL_MIN_CONFIDENCE). Without
+            # this, a downstream "why did MTF alignment allow this trade"
+            # audit has to guess whether a TF's bearish/bullish read came
+            # from a confident structural break or a lagging indicator —
+            # this was previously computed internally (`directions[label]
+            # ['direction_source']`) but never surfaced past this class.
+            'h4_direction_source':  tf_dirs.get('H4', {}).get('direction_source'),
+            'h1_direction_source':  tf_dirs.get('H1', {}).get('direction_source'),
+            'm15_direction_source': tf_dirs.get('M15', {}).get('direction_source'),
+            'm5_direction_source':  tf_dirs.get('M5', {}).get('direction_source'),
 
             # NEW: regime hard-gate visibility (additive, safe for existing consumers to ignore)
             'regime_gate_blocked': result.get('regime_gate', {}).get('blocked', False),

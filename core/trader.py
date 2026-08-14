@@ -1236,6 +1236,7 @@ class AITrader:
                 sl=risk_out.get("sl_price"),
                 tp=risk_out.get("tp_price"),
                 reject_reason=risk_out.get("reject_reason"),
+                evaluation_id=getattr(self, "_current_evaluation_id", None),
             )
         except Exception as e:
             log.warning(f"Suppressed exception logging risk.evaluated: {e}")
@@ -1311,15 +1312,97 @@ class AITrader:
         # bullish, H1 is bullish, but M15 is bearish; it only ever sees the
         # single collapsed "BULLISH" bias. Thread the raw per-TF dict
         # through separately so the new hard gate below can use it.
-        dec_out["mtf_trends"] = (market_out.get("mtf_bias") or {}).get("trends", {})
+        # ── MTF trends for TradePermission + Devil's Advocate ─────────
+        # DA expects keys "4h"/"1h"/"15m". Upstream may use H4/H1/M15 or
+        # only a collapsed bias string. Normalize here so DA never sees
+        # all-unknown HTF (which forced 100% REJECT in audit logs).
+        _mtf_bias_full = market_out.get("mtf_bias") or {}
+        if not isinstance(_mtf_bias_full, dict):
+            _mtf_bias_full = {}
+        _raw_trends = _mtf_bias_full.get("trends") or {}
+        if not isinstance(_raw_trends, dict):
+            _raw_trends = {}
+        _mtf_struct = analysis_out.get("mtf_structure_ctx") or {}
+        _ind_for_mtf = market_out.get("ind_ctx") or {}
+
+        def _pick_tf(*candidates):
+            for c in candidates:
+                if c is None:
+                    continue
+                s = str(c).strip()
+                if s and s.upper() not in ("UNKNOWN", "NONE", ""):
+                    return s
+            return "unknown"
+
+        dec_out["mtf_trends"] = {
+            "4h": _pick_tf(
+                _raw_trends.get("4h"), _raw_trends.get("H4"), _raw_trends.get("h4"),
+                _mtf_bias_full.get("h4_trend"),
+                _mtf_struct.get("h4_trend"), _mtf_struct.get("external_bias"),
+                _mtf_struct.get("combined_bias"),
+            ),
+            "1h": _pick_tf(
+                _raw_trends.get("1h"), _raw_trends.get("H1"), _raw_trends.get("h1"),
+                _mtf_bias_full.get("h1_trend"),
+                _mtf_struct.get("h1_trend"), _mtf_struct.get("internal_bias"),
+            ),
+            "15m": _pick_tf(
+                _raw_trends.get("15m"), _raw_trends.get("M15"), _raw_trends.get("m15"),
+                _mtf_bias_full.get("m15_trend"),
+                _ind_for_mtf.get("trend"),
+            ),
+        }
+        # B4a fix: propagate stale-TF list so TradePermission can distinguish
+        # "mtf_trends missing because of upstream crash" from "mtf_trends
+        # missing because H1/H4 stale". The P4 hard-block fires either way,
+        # but the log detail can now be specific.
+        dec_out["mtf_stale_tfs"] = _mtf_bias_full.get("stale_tfs", []) if isinstance(_mtf_bias_full, dict) else []
 
         # 2026-07-23: feed the advisory (log-only) entry-score /
         # institutional-entry-framework check in trade_permission with real
         # context instead of the {} defaults it would otherwise get.
-        dec_out["sr_ctx"] = analysis_out.get("sr_ctx", {})
-        dec_out["structure_ctx"] = analysis_out.get("structure_ctx", {})
+        # Also alias structure_bos → bos so Devil's Advocate (and any other
+        # consumer looking for "bos") sees the real event, not unknown.
+        _sr = dict(analysis_out.get("sr_ctx") or {})
+        if "nearest_zone" not in _sr or not _sr.get("nearest_zone"):
+            _sr["nearest_zone"] = (
+                _sr.get("location")
+                or _sr.get("nearest_support")
+                or _sr.get("nearest_resistance")
+                or "unknown"
+            )
+        dec_out["sr_ctx"] = _sr
+
+        _struct = dict(analysis_out.get("structure_ctx") or {})
+        if "bos" not in _struct or _struct.get("bos") in (None, "", "unknown"):
+            _struct["bos"] = (
+                _struct.get("structure_bos")
+                or _struct.get("break_of_structure")
+                or "NONE"
+            )
+        if "choch" not in _struct or _struct.get("choch") in (None, "", "unknown"):
+            _struct["choch"] = (
+                _struct.get("structure_choch")
+                or _struct.get("change_of_character")
+                or "NONE"
+            )
+        dec_out["structure_ctx"] = _struct
         dec_out["smc_ctx"] = analysis_out.get("smc_ctx", {})
         dec_out["liquidity_ctx"] = analysis_out.get("liquidity_ctx", {})
+
+        # Spread: never leave a literal 0.0 for DA (it treated 0 as critical
+        # failure). Prefer real pips; if missing, omit so DA shows "unknown".
+        _ind = dict(market_out.get("ind_ctx") or {})
+        _sp = _ind.get("spread_pips")
+        try:
+            _sp_f = float(_sp) if _sp is not None else None
+        except (TypeError, ValueError):
+            _sp_f = None
+        if _sp_f is None or _sp_f <= 0:
+            _ind["spread_pips"] = None
+        else:
+            _ind["spread_pips"] = _sp_f
+        dec_out["ind_ctx"] = _ind
         # 2026-08-02 (Abdullah audit): market_out["regime"] comes straight
         # from MarketRegimeDetector.detect() on real historical price data
         # (no live-API dependency, unlike mtf_bias above) — used by the new
@@ -1398,6 +1481,27 @@ class AITrader:
                 "Confluence quality gate will fall back to 0 factors/UNKNOWN "
                 "(check AnalysisAgent/ConfluenceEngine wiring)."
             )
+
+        # A4 fix: log the FINAL risk_out state (post-sizer, post-RAG gates)
+        # so the operator can see the difference between risk.evaluated
+        # (raw RiskEngine output) and risk.finalized (post-mutation state).
+        # AUDUSD audit caught: risk.evaluated.approved=true was logged, but
+        # then LiveRiskManager/_apply_advanced_sizing mutated approved=False
+        # in place, and the operator couldn't see the change. This new
+        # event makes the mutation visible without losing the raw snapshot.
+        try:
+            from core.execution_logger import log_event
+            log_event("risk.finalized", {
+                "symbol":         self.symbol,
+                "approved":       risk_out.get("approved", False),
+                "lot":            risk_out.get("lot", 0),
+                "reject_reason":  risk_out.get("reject_reason"),
+                "mutator":        "post_apply_advanced_sizing+apply_advanced_risk_gates",
+                "raw_approved":   "see risk.evaluated event",
+                "evaluation_id":  getattr(self, "_current_evaluation_id", None),
+            })
+        except Exception as e:
+            log.debug(f"[Trader] risk.finalized log failed (non-fatal): {e}")
 
         log.info("[6/9] Safety Guard (Permission + Correlation)...")
         perm_out = self._perm.check(
@@ -1596,6 +1700,7 @@ class AITrader:
                     for r in ((perm_out.get("entry_quality_detail") or {}).get("results") or [])
                     if isinstance(r, dict) and not r.get("passed", True)
                 ],
+                evaluation_id=getattr(self, "_current_evaluation_id", None),
             )
         except Exception as e:
             log.warning(f"Suppressed exception at line 881: {e}")
@@ -1619,6 +1724,17 @@ class AITrader:
         log.debug(f"  AITrader {self.VERSION} — {self.symbol} {self.timeframe}")
         log.debug("━" * 52)
         t0 = time.time()
+
+        # ─── Fix #3 (Round 3 audit): evaluation_id correlation ───────
+        # Generate a unique ID per cycle so all log events from this cycle
+        # (risk.evaluated, risk.finalized, permission.checked, devils_advocate.review,
+        # approval.processed, router.execute.*) can be correlated by the operator.
+        # Format mirrors orchestrator/trading_orchestrator.py:178 cycle_id pattern.
+        import uuid as _uuid_mod
+        self._current_evaluation_id = (
+            f"eval_{int(t0)}_{self.symbol}_{_uuid_mod.uuid4().hex[:8]}"
+        )
+        log.debug(f"[Trader] {self.symbol}: cycle evaluation_id={self._current_evaluation_id}")
 
         # Day 81+ hotfix: reset per-cycle LLM call counter so each
         # symbol cycle gets a fresh budget of MAX_LLM_CALLS_PER_CYCLE.
@@ -2273,56 +2389,42 @@ class AITrader:
         result["approval_mode"] = self._approval.mode_name
 
         log.info("[8/9] Approval Gate...")
+
+        # ════════════════════════════════════════════════════════════════
+        # ARCHITECTURAL FIX (Round 3 audit, 2026-08-13):
+        # Previously the order was:
+        #     Permission ALLOW → ApprovalMode.process() (logs "EXECUTE") → DA review → Execute
+        #
+        # The `approval.processed` event with `action="EXECUTE"` fired BEFORE
+        # Devil's Advocate ran, making the operator think the trade was already
+        # executed when DA hadn't even been consulted yet. The actual MT5 call
+        # at line ~2482 WAS correctly gated by `approved_to_execute`, so no
+        # unauthorized trades went through — but the LOG ORDERING was misleading
+        # and contradicted the intended veto hierarchy.
+        #
+        # NEW ORDER (veto hierarchy enforced + log clarity):
+        #     Permission ALLOW → DA review (HARD VETO) → ApprovalMode.process()
+        #                                                       → Execute
+        #
+        # DA REJECT now:
+        #   - Sets approved_to_execute = False BEFORE ApprovalMode is consulted
+        #   - Skips the approval.processed log entirely (no misleading "EXECUTE")
+        #   - Skips the actual execute call
+        #
+        # DA exception (LLM timeout / network failure):
+        #   - Now FAIL-CLOSED: approved_to_execute = False
+        #     (was fail-open before — execution proceeded on DA exceptions)
+        # ════════════════════════════════════════════════════════════════
         approved_to_execute = False
-        if auto_paper_trade and result["trade_allowed"]:
-            approval_out = self._approval.process(
-                {
-                    "symbol": self.symbol,
-                    "final_action": result["final_action"],
-                    "confidence": result["confidence"],
-                    "entry": result["entry"],
-                    "sl": result["sl"],
-                    "tp": result["tp"],
-                    "lot": result["lot"],
-                    "rr": result["rr"],
-                    "llm_analysis": result.get("llm_analysis", ""),
-                }
-            )
-            approved_to_execute = approval_out["proceed"]
 
-            # Day 81+ hotfix: log every approval decision to execution.log
-            try:
-                from core.execution_logger import log_approval_processed
-                log_approval_processed(
-                    symbol=self.symbol,
-                    proceed=approved_to_execute,
-                    mode=approval_out.get("mode", 0),
-                    action=approval_out.get("action", "unknown"),
-                    final_action=result["final_action"],
-                    confidence=result["confidence"],
-                )
-            except Exception as e:
-                log.warning(f"Suppressed exception at line 943: {e}")
-                pass
-
-            if approval_out["action"] == "WAIT_APPROVAL":
-                result["pending_approval_id"] = approval_out.get("pending_id")
-                # ApprovalMode.process() builds the human-readable summary but
-                # can't safely send it itself (its telegram_bot.send_message()
-                # call would be an un-awaited coroutine) — send it the same
-                # async-safe way every other Telegram alert goes out below.
-                if self.notifier:
-                    self._run_async(self.notifier.send_message(approval_out["message"]))
-
-            if not approved_to_execute:
-                result["reject_reason"] = approval_out.get("message", result.get("reject_reason"))
-
-        if approved_to_execute and result.get("trade_allowed"):
-            # 2026-08-13: skip DevilsAdvocate when disabled via env.
+        # ─── STEP 1: Devil's Advocate (runs FIRST, before approval gate) ──
+        if auto_paper_trade and result.get("trade_allowed"):
             _da_enabled = os.getenv("DEVILS_ADVOCATE_ENABLED", "true").lower() in ("1", "true", "yes", "on")
             if not _da_enabled:
                 log.debug(f"[Trader] {self.symbol}: DevilsAdvocate disabled — skipping")
+                approved_to_execute = True   # DA disabled → fall through to approval gate
             else:
+                _da_exception = False
                 try:
                     try:
                         from execution.execution_router import _check_absolute_safety
@@ -2409,7 +2511,7 @@ class AITrader:
                             )
                             result["blocked_reason"] = result["reject_reason"]
                             result["reject_stage"] = "devils_advocate"
-                            approved_to_execute = False
+                            approved_to_execute = False   # ← HARD VETO
                             perm_out["allowed"] = False
                             perm_out["execution_allowed"] = False
                             perm_out["final_action"] = "NO TRADE"
@@ -2422,6 +2524,8 @@ class AITrader:
                             })
                             perm_out["total"] = perm_out.get("total", 0) + 1
                         else:
+                            # DA TAKE → fall through to approval gate below
+                            approved_to_execute = True
                             perm_out["checks"].append({
                                 "check": "Devil's Advocate review",
                                 "passed": True,
@@ -2444,11 +2548,95 @@ class AITrader:
                                 risk_level=review.get("risk_level"),
                                 data_quality=review.get("data_quality"),
                                 critical_failure=review.get("critical_failure"),
+                                evaluation_id=getattr(self, "_current_evaluation_id", None),
                             )
                         except Exception as e:
-                            log.warning(f"Suppressed exception: {e}")
+                            log.warning(f"Suppressed exception in DA log: {e}")
                 except Exception as e:
-                    log.warning(f"[Trader] Devil's Advocate review failed (non-fatal): {e}")
+                    # FIX #2: FAIL-CLOSED on DA exceptions.
+                    # Previously: exception was swallowed and execution proceeded
+                    # (since `approved_to_execute` defaulted to False but the
+                    # approval gate below would still run and set it to True).
+                    # Now: any DA exception (LLM timeout, network error, malformed
+                    # response, internal bug) BLOCKS the trade. The operator can
+                    # override via DEVILS_ADVOCATE_FAIL_OPEN=true for research.
+                    _da_exception = True
+                    _fail_open = os.getenv("DEVILS_ADVOCATE_FAIL_OPEN", "false").lower() == "true"
+                    if _fail_open:
+                        log.warning(
+                            f"[Trader] {self.symbol}: Devil's Advocate review raised exception "
+                            f"({e}) — DEVILS_ADVOCATE_FAIL_OPEN=true, proceeding to approval gate"
+                        )
+                        approved_to_execute = True
+                    else:
+                        log.error(
+                            f"[Trader] {self.symbol}: Devil's Advocate review raised exception "
+                            f"({e}) — FAIL-CLOSED (set DEVILS_ADVOCATE_FAIL_OPEN=true to override)"
+                        )
+                        result["trade_allowed"] = False
+                        result["final_action"] = "NO TRADE"
+                        result["execution_action"] = "NO TRADE"
+                        result["reject_reason"] = f"Devil's Advocate exception (fail-closed): {e}"
+                        result["blocked_reason"] = result["reject_reason"]
+                        result["reject_stage"] = "devils_advocate_exception"
+                        approved_to_execute = False
+                        perm_out["allowed"] = False
+                        perm_out["execution_allowed"] = False
+                        perm_out["final_action"] = "NO TRADE"
+                        perm_out["execution_action"] = "NO TRADE"
+                        perm_out["blocked_reason"] = result["reject_reason"]
+                        perm_out["checks"].append({
+                            "check": "Devil's Advocate review",
+                            "passed": False,
+                            "detail": f"EXCEPTION (fail-closed): {str(e)[:120]}",
+                        })
+                        perm_out["total"] = perm_out.get("total", 0) + 1
+
+        # ─── STEP 2: Approval Gate (only runs if DA passed or was skipped) ─
+        if approved_to_execute and auto_paper_trade and result.get("trade_allowed"):
+            approval_out = self._approval.process(
+                {
+                    "symbol": self.symbol,
+                    "final_action": result["final_action"],
+                    "confidence": result["confidence"],
+                    "entry": result["entry"],
+                    "sl": result["sl"],
+                    "tp": result["tp"],
+                    "lot": result["lot"],
+                    "rr": result["rr"],
+                    "llm_analysis": result.get("llm_analysis", ""),
+                }
+            )
+            approved_to_execute = approval_out["proceed"]
+
+            # Day 81+ hotfix: log every approval decision to execution.log
+            # NOTE: this log now fires ONLY after DA has approved. The
+            # `action="EXECUTE"` string here represents the approval gate's
+            # intent, not the actual broker order placement. The actual
+            # execute call is at line ~2482, gated by `if approved_to_execute:`.
+            try:
+                from core.execution_logger import log_approval_processed
+                log_approval_processed(
+                    symbol=self.symbol,
+                    proceed=approved_to_execute,
+                    mode=approval_out.get("mode", 0),
+                    action=approval_out.get("action", "unknown"),
+                    final_action=result["final_action"],
+                    confidence=result["confidence"],
+                    devils_advocate_verdict=result.get("devils_advocate", {}).get("decision", "skipped"),
+                    evaluation_id=getattr(self, "_current_evaluation_id", None),
+                )
+            except Exception as e:
+                log.warning(f"Suppressed exception at line 943: {e}")
+                pass
+
+            if approval_out["action"] == "WAIT_APPROVAL":
+                result["pending_approval_id"] = approval_out.get("pending_id")
+                if self.notifier:
+                    self._run_async(self.notifier.send_message(approval_out["message"]))
+
+            if not approved_to_execute:
+                result["reject_reason"] = approval_out.get("message", result.get("reject_reason"))
 
         log.info("[9/9] Execution + Alerts...")
         if approved_to_execute:

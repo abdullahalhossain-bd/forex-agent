@@ -253,7 +253,14 @@ class MarketAgent:
             from data.indicator_registry import add_canonical_indicators, get_ai_context as _get_ctx
             df = add_canonical_indicators(df, include_patterns=True)
             ind_ctx = _get_ctx(df)
-            log.debug(f"[MarketAgent] Used canonical indicator_registry ({n_cols} cols)")
+            # P6 fix: `n_cols` was never defined here → NameError on every
+            # cycle → caught by `except Exception` → silent fallback to
+            # ExtendedIndicators. The canonical registry was therefore NEVER
+            # the production path despite being advertised as such. Now we
+            # compute the column count explicitly (mirroring the fallback
+            # branch's own `{len(df.columns)} cols` pattern) and log at INFO
+            # so the operator can verify the canonical registry is in use.
+            log.info(f"[MarketAgent] Used canonical indicator_registry ({len(df.columns)} cols)")
         except Exception as e_registry:
             log.warning(f"[MarketAgent] indicator_registry failed ({e_registry}) — falling back to ExtendedIndicators")
             try:

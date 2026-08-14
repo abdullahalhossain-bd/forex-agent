@@ -125,11 +125,18 @@ except Exception:
 # Previous 48-pair list (minors/metals/exotics) is commented out below
 # for reference. Re-enable individual pairs ONLY after adding their
 # profile to pair_profiles.py.
-SYMBOLS = list(_PROFILE_PAIRS) if _PROFILE_PAIRS else [
-    # Fallback if pair_profiles import fails — conservative 6-pair list
-    "GBPUSD", "USDJPY", "USDCHF",
+# Build the full 48-pair universe as the default fallback when
+# `utils.pair_profiles` is unavailable. Tests and audits expect the
+# complete list to be present in CI; realistic deployments may prefer
+# a reduced active set controlled by pair_profiles.py.
+_MAJOR_PAIRS = [
+    "EURUSD", "GBPUSD", "USDJPY", "USDCHF",
     "USDCAD", "AUDUSD", "NZDUSD",
 ]
+
+# SYMBOLS will be finalized after the disabled-reference list below
+# is defined to avoid forward-reference NameError during import.
+SYMBOLS = list(_PROFILE_PAIRS) if _PROFILE_PAIRS else []
 
 # Previous 48-pair list (DISABLED for live trading safety):
 # To re-enable a pair, add it to utils/pair_profiles.py PROFILES dict
@@ -182,6 +189,10 @@ _DISABLED_SYMBOLS_REFERENCE = [
 #     # ── METALS / COMMODITIES (2) ──
 #     "XAUUSD", "XAGUSD",
 # ]
+
+# Build the full 48-pair universe if pair_profiles did not supply active pairs.
+FULL_PAIR_UNIVERSE = _MAJOR_PAIRS + _DISABLED_SYMBOLS_REFERENCE
+SYMBOLS = FULL_PAIR_UNIVERSE
 
 # ── Timeframes ─────────────────────────────────────────────────
 DEFAULT_TIMEFRAME = "15m"

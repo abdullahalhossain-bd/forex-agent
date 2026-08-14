@@ -183,94 +183,160 @@ class MarketStructureEngine:
     # STEP 4: BREAK OF STRUCTURE (BOS)
     # ═══════════════════════════════════════════════════════
 
-    def _detect_bos(self, df: pd.DataFrame, labeled: list[dict]) -> dict:
+    def _detect_bos(
+        self,
+        df: pd.DataFrame,
+        labeled: list[dict],
+        max_age_bars: int | None = None,
+    ) -> dict:
         """
-        Bullish BOS : close > সর্বশেষ confirmed swing high
-        Bearish BOS : close < সর্বশেষ confirmed swing low
+        Bullish BOS : close (primary) or wick (secondary) breaks above the
+                      most recent CONFIRMED swing high.
+        Bearish BOS : mirror on swing lows.
 
-        Trend continuation signal — গঠন একই দিকে আরও এগোচ্ছে।
-        
-        Enhanced with fallback detection for recent swing breaks.
+        Two fixes applied here:
+
+        1. PERSISTENCE — previously this only ever inspected the LAST bar,
+           so a genuine break followed by a normal pullback candle reported
+           NONE the very next bar (identical bug to the one already fixed
+           in mtf_analyzer._detect_bos). Now the whole df is walked
+           bar-by-bar and the *latest* BOS event is returned, so structure
+           persists through a pullback instead of vanishing.
+
+        2. NEAR-BOS FALSE POSITIVE REMOVED — the old "tertiary" branch
+           returned a fake BULLISH_BOS/BEARISH_BOS (confidence 35) just
+           because price was within 0.2% of a swing level. Proximity to a
+           level is not a break — it's never emitted as `event` anymore.
+           It's now only ever a non-overriding `near_bos` diagnostic on
+           the current bar, and only shown when there's no real BOS
+           already in force (so it can never mask genuine structure).
+
+        LOOK-AHEAD SAFETY: a swing pivot from `labeled` is only registered
+        into the walk once its confirmation window has actually closed
+        (`pivot_index + swing_window`), matching the same rule
+        `_find_swing_points` uses to decide a pivot exists at all.
+
+        Args:
+            max_age_bars: optional — if set, a BOS older than this many
+                bars is reported as NONE (stale). None = no cutoff
+                (structure stays valid until invalidated, which matches
+                real market-structure semantics).
         """
         highs = [p for p in labeled if p["kind"] == "high"]
         lows  = [p for p in labeled if p["kind"] == "low"]
 
         if not highs or not lows:
-            return {"event": "NONE", "level": None, "confidence": 0}
+            return {"event": "NONE", "level": None, "confidence": 0, "near_bos": False}
 
-        last_high = highs[-1]
-        last_low  = lows[-1]
-        curr_close = float(df["close"].iloc[-1])
-        curr_high = float(df["high"].iloc[-1])
-        curr_low = float(df["low"].iloc[-1])
+        w = self.swing_window
+        n = len(df)
+        closes    = df["close"].values
+        bar_highs = df["high"].values
+        bar_lows  = df["low"].values
 
-        # Primary: Close-based detection
-        if curr_close > last_high["price"]:
-            confidence = self._bos_confidence(df, last_high["price"], "bullish")
-            return {
-                "event":      "BULLISH_BOS",
-                "level":      last_high["price"],
-                "confidence": confidence,
-                "note": f"Price broke above swing high {last_high['price']:.5f}",
+        # A pivot becomes "known" only once its right-side confirmation
+        # window has closed — register it then, not at its own index.
+        hi_events = sorted((p["index"] + w, p) for p in highs)
+        lo_events = sorted((p["index"] + w, p) for p in lows)
+
+        last_high = last_low = None
+        latest = {
+            "event": "NONE", "level": None, "confidence": 0,
+            "note": "No structural break detected", "near_bos": False,
+        }
+        hi_ptr = lo_ptr = 0
+
+        for i in range(n):
+            while hi_ptr < len(hi_events) and hi_events[hi_ptr][0] <= i:
+                last_high = hi_events[hi_ptr][1]
+                hi_ptr += 1
+            while lo_ptr < len(lo_events) and lo_events[lo_ptr][0] <= i:
+                last_low = lo_events[lo_ptr][1]
+                lo_ptr += 1
+
+            if last_high is None or last_low is None:
+                continue
+
+            c, h, l = closes[i], bar_highs[i], bar_lows[i]
+
+            if c > last_high["price"]:
+                conf = self._bos_confidence(df, i, last_high["price"], "bullish")
+                latest = {
+                    "event": "BULLISH_BOS", "level": last_high["price"], "confidence": conf,
+                    "broke_at": i, "bars_ago": n - 1 - i,
+                    "note": f"Close broke above swing high {last_high['price']:.5f}",
+                    "near_bos": False,
+                }
+            elif c < last_low["price"]:
+                conf = self._bos_confidence(df, i, last_low["price"], "bearish")
+                latest = {
+                    "event": "BEARISH_BOS", "level": last_low["price"], "confidence": conf,
+                    "broke_at": i, "bars_ago": n - 1 - i,
+                    "note": f"Close broke below swing low {last_low['price']:.5f}",
+                    "near_bos": False,
+                }
+            elif h > last_high["price"] * 1.001:  # 0.1% wick-through
+                conf = max(self._bos_confidence(df, i, last_high["price"], "bullish"), 55)
+                latest = {
+                    "event": "BULLISH_BOS", "level": last_high["price"], "confidence": conf,
+                    "broke_at": i, "bars_ago": n - 1 - i,
+                    "note": f"High wick broke above swing high {last_high['price']:.5f} (wicking BOS)",
+                    "near_bos": False,
+                }
+            elif l < last_low["price"] * 0.999:
+                conf = max(self._bos_confidence(df, i, last_low["price"], "bearish"), 55)
+                latest = {
+                    "event": "BEARISH_BOS", "level": last_low["price"], "confidence": conf,
+                    "broke_at": i, "bars_ago": n - 1 - i,
+                    "note": f"Low wick broke below swing low {last_low['price']:.5f} (wicking BOS)",
+                    "near_bos": False,
+                }
+            # (Old tertiary "near level → fake BOS" branch removed —
+            # proximity is handled separately by `_near_bos_flag` below,
+            # and only ever as a diagnostic, never as `event`.)
+
+        if max_age_bars is not None and latest["event"] != "NONE" and latest["bars_ago"] > max_age_bars:
+            latest = {
+                "event": "NONE", "level": None, "confidence": 0,
+                "note": f"Last BOS was {latest['bars_ago']} bars ago (> max_age_bars={max_age_bars}) — treated as stale",
+                "near_bos": False,
             }
 
-        if curr_close < last_low["price"]:
-            confidence = self._bos_confidence(df, last_low["price"], "bearish")
-            return {
-                "event":      "BEARISH_BOS",
-                "level":      last_low["price"],
-                "confidence": confidence,
-                "note": f"Price broke below swing low {last_low['price']:.5f}",
-            }
+        if latest["event"] == "NONE":
+            latest["near_bos"] = self._near_bos_flag(df, last_high, last_low)
 
-        # Secondary: High/Low wicks detection for even stronger BOS signal
-        if curr_high > last_high["price"] * 1.001:  # 0.1% higher for wick
-            confidence = self._bos_confidence(df, last_high["price"], "bullish")
-            return {
-                "event":      "BULLISH_BOS",
-                "level":      last_high["price"],
-                "confidence": max(confidence, 55),  # Wick BOS has lower confidence
-                "note": f"High wick broke above swing high {last_high['price']:.5f} (wicking BOS)",
-            }
+        return latest
 
-        if curr_low < last_low["price"] * 0.999:  # 0.1% lower for wick
-            confidence = self._bos_confidence(df, last_low["price"], "bearish")
-            return {
-                "event":      "BEARISH_BOS",
-                "level":      last_low["price"],
-                "confidence": max(confidence, 55),  # Wick BOS has lower confidence
-                "note": f"Low wick broke below swing low {last_low['price']:.5f} (wicking BOS)",
-            }
-
-        # Tertiary: Check if we're very close to breaking (near-BOS) as signal building
-        threshold = 0.002  # 0.2% proximity
-        if abs(curr_close - last_high["price"]) / last_high["price"] < threshold and curr_close > last_high["price"] * 0.998:
-            confidence = 35  # Very low confidence, but signal forming
-            return {
-                "event":      "BULLISH_BOS",
-                "level":      last_high["price"],
-                "confidence": confidence,
-                "note": f"Price near swing high {last_high['price']:.5f} — BOS forming",
-            }
-
-        if abs(curr_close - last_low["price"]) / last_low["price"] < threshold and curr_close < last_low["price"] * 1.002:
-            confidence = 35  # Very low confidence, but signal forming
-            return {
-                "event":      "BEARISH_BOS",
-                "level":      last_low["price"],
-                "confidence": confidence,
-                "note": f"Price near swing low {last_low['price']:.5f} — BOS forming",
-            }
-
-        return {"event": "NONE", "level": None, "confidence": 0}
-
-    def _bos_confidence(self, df: pd.DataFrame, level: float, direction: str) -> int:
+    def _near_bos_flag(self, df: pd.DataFrame, last_high: dict | None, last_low: dict | None,
+                        threshold: float = 0.002):
         """
-        Break কতটা decisive — close, level থেকে কতদূর সরে গেছে (ATR-normalized)।
+        Proximity heads-up ONLY. "Price is close to a swing level" is not
+        a Break of Structure — this must never be surfaced as `event`
+        (that was the bug). Returns False, or a dict describing which
+        side price is approaching, purely as extra context for a caller
+        that wants "signal building" awareness.
         """
-        atr = self._atr_value(df)
         curr_close = float(df["close"].iloc[-1])
-        dist = abs(curr_close - level)
+        if last_high is not None:
+            gap = (last_high["price"] - curr_close) / last_high["price"]
+            if 0 < gap < threshold:
+                return {"direction": "bullish", "level": last_high["price"], "distance_pct": round(gap * 100, 3)}
+        if last_low is not None:
+            gap = (curr_close - last_low["price"]) / last_low["price"]
+            if 0 < gap < threshold:
+                return {"direction": "bearish", "level": last_low["price"], "distance_pct": round(gap * 100, 3)}
+        return False
+
+    def _bos_confidence(self, df: pd.DataFrame, idx: int, level: float, direction: str) -> int:
+        """
+        Break কতটা decisive — close, level থেকে কতদূর সরে গেছে (ATR-normalized),
+        evaluated AT BAR `idx` (not necessarily the last row) — needed so a
+        persisted, older BOS still gets a correctly-dated confidence score
+        instead of being scored against today's close.
+        """
+        atr = self._atr_value(df.iloc[:idx + 1])
+        close_at = float(df["close"].iloc[idx])
+        dist = abs(close_at - level)
         ratio = dist / atr if atr else 0
         confidence = int(min(95, 50 + ratio * 25))
         return confidence

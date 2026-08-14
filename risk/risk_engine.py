@@ -224,14 +224,29 @@ class RiskEngine:
         # under *_intended for audit/backtest transparency.
         risk_usd_intended = risk_usd
         risk_pc_intended  = self.MAX_RISK_PC
+        # P5 fix: explicit "max allowed by lot cap" — what risk_usd WOULD be
+        # if we used MAX_LOT exactly. Previously this was implicit in the
+        # if/else below; now it's a named field so the operator can see all
+        # three numbers in one place: requested / max_allowed_by_lot / actual.
+        risk_usd_max_by_lot = round(self.MAX_LOT * sl_pips * pip_val, 2)
+        risk_pc_max_by_lot  = round((risk_usd_max_by_lot / self.balance) * 100, 4) if self.balance > 0 else 0.0
+
         if lot_raw > self.MAX_LOT:
-            risk_usd = round(lot * sl_pips * pip_val, 2)
-            risk_pc  = round((risk_usd / self.balance) * 100, 4) if self.balance > 0 else 0.0
+            # Lot was capped → actual risk = max_by_lot (since lot == MAX_LOT here)
+            risk_usd = risk_usd_max_by_lot
+            risk_pc  = risk_pc_max_by_lot
             log.warning(
                 f"[RiskEngine] Intended lot {lot_raw:.2f} capped to {self.MAX_LOT} — "
                 f"Effective risk reduced from {risk_pc_intended:.2f}% (${risk_usd_intended}) "
                 f"to {risk_pc:.4f}% (${risk_usd}) "
                 f"(sl_pips={sl_pips} pip_val=${pip_val})"
+            )
+            log.warning(
+                f"[RiskEngine] Risk breakdown: "
+                f"requested_risk={risk_pc_intended:.2f}% (${risk_usd_intended}) | "
+                f"max_allowed_by_lot={risk_pc_max_by_lot:.4f}% (${risk_usd_max_by_lot}) | "
+                f"actual_risk_after_lot_cap={risk_pc:.4f}% (${risk_usd}) | "
+                f"lot_intended={lot_raw:.2f} lot_actual={lot} MAX_LOT={self.MAX_LOT}"
             )
         else:
             risk_pc = risk_pc_intended
@@ -258,6 +273,17 @@ class RiskEngine:
             "risk_usd_intended": risk_usd_intended,
             "risk_pc_intended":  risk_pc_intended,
             "lot_capped":        lot_raw > self.MAX_LOT,
+            # P5 fix: explicit three-number breakdown so TradePermission /
+            # operator can see requested vs max-allowed-by-lot vs actual.
+            # `risk_usd_max_by_lot` = max USD risk achievable given MAX_LOT.
+            # `actual_risk_after_lot_cap` = the REAL exposure (= risk_usd).
+            # When lot_capped=False, requested == max == actual.
+            "risk_usd_max_by_lot":        risk_usd_max_by_lot,
+            "risk_pc_max_by_lot":         risk_pc_max_by_lot,
+            "actual_risk_after_lot_cap":  risk_pc,
+            "actual_risk_usd_after_lot_cap": risk_usd,
+            "lot_intended":               round(lot_raw, 2),
+            "MAX_LOT":                    self.MAX_LOT,
             "rr_ratio":      rr_ratio,
             "daily_loss_pc": round(daily_loss_pc, 2),
             "open_trades":   open_trades,

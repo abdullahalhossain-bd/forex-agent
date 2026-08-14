@@ -310,7 +310,23 @@ class MT5Connection:
                 with self.MT5_LOCK:
                     terminal = mt5.terminal_info()
 
-                if terminal is not None:
+                # BUGFIX: terminal_info() returning a non-None struct only
+                # proves the terminal PROCESS answered the IPC call — it
+                # says nothing about whether that terminal is actually
+                # connected to the broker's trade server. terminal_info()
+                # exposes exactly that as `.connected`, and this check was
+                # ignoring it entirely. Result: if the terminal's broker-side
+                # connection dropped (network blip, server-side kick, feed
+                # outage) while the terminal process itself stayed up,
+                # is_alive() kept returning True forever — health checks
+                # "passed", ensure_connected()/_require_connected() never
+                # triggered reconnect(), and every symbol's OHLCV fetch kept
+                # returning the same last-cached bars indefinitely (visible
+                # in trader.log as bar staleness climbing in lockstep with
+                # wall-clock time across ALL timeframes and ALL symbols
+                # simultaneously — the signature of a frozen feed, not a
+                # per-symbol data problem).
+                if terminal is not None and getattr(terminal, "connected", False):
                     self.last_ping = datetime.utcnow()
                     self._consecutive_failures = 0
 
@@ -343,6 +359,25 @@ class MT5Connection:
                     self._last_health_check_ts = _time.time()
                     self._last_health_check_result = True
                     return True
+
+                # Distinguish the two failure modes for diagnosability:
+                # terminal is None -> IPC itself is dead (process gone/hung).
+                # terminal is not None but .connected is False -> terminal
+                # process is fine but it has lost its link to the broker's
+                # trade server (this is the case that used to be missed).
+                if terminal is None:
+                    log.debug(
+                        f"[MT5Connection] terminal_info() returned None "
+                        f"(attempt {attempt}/{attempts}) — IPC channel to "
+                        f"terminal appears down."
+                    )
+                else:
+                    log.debug(
+                        f"[MT5Connection] terminal_info() returned but "
+                        f".connected=False (attempt {attempt}/{attempts}) — "
+                        f"terminal process is up but not connected to the "
+                        f"broker trade server."
+                    )
 
                 if attempt < attempts:
                     time.sleep(self.HEALTH_CHECK_RETRY_DELAY)

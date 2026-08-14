@@ -48,9 +48,13 @@ def _test_mode() -> bool:
     """Lazy check for TEST_MODE flag. Returns False if config isn't
     importable (e.g. during unit tests)."""
     try:
-        return bool(TEST_MODE)
+        from core.constants import is_test_mode
+        return bool(is_test_mode())
     except Exception:
-        return False
+        try:
+            return bool(TEST_MODE)
+        except Exception:
+            return False
 
 # ── Storage ──────────────────────────────────────────────────
 PATTERN_STATS_PATH     = str(MEMORY_DIR / "pattern_stats.json")

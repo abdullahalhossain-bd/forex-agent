@@ -952,6 +952,40 @@ class DataFetcher:
             # Ensure correct column order
             df = df[['open', 'high', 'low', 'close', 'volume']]
 
+            # ── Forming-candle guard (audit fix) ───────────────────────
+            # copy_rates_from_pos(symbol, tf, 0, limit) starts at position 0,
+            # which the MT5 docs define as the CURRENT bar — i.e. it can
+            # still be forming when this call happens mid-bar. Nothing
+            # upstream of here ever dropped that row.
+            #
+            # _detect_bos()'s own docstring assumes the DataFrame's last
+            # row is a fully CLOSED candle. Feeding it a still-forming bar
+            # means BOS/CHoCH on H4/H1 can silently repaint as that bar's
+            # high/low/close keep moving — this is not specific to one
+            # trade, it's every call to fetch_ohlcv() via MT5.
+            #
+            # Fix: compute the bar's implied close time (open + timeframe
+            # duration) and drop the last row if that close time is still
+            # in the future, so every downstream consumer (not just
+            # _detect_bos) transparently only ever sees closed candles.
+            _tf_seconds = {
+                "M1": 60, "M5": 300, "M15": 900, "M30": 1800,
+                "H1": 3600, "H4": 14400, "D1": 86400,
+            }.get(timeframe.upper())
+            if _tf_seconds and len(df) > 1:
+                _last_open = df.index[-1]
+                _implied_close = _last_open + pd.Timedelta(seconds=_tf_seconds)
+                _now_utc = pd.Timestamp.now(tz='UTC')
+                if _implied_close > _now_utc:
+                    log.debug(
+                        f"[MT5] {symbol} {timeframe}: dropping still-forming "
+                        f"last bar (open={_last_open.isoformat()}, implied "
+                        f"close={_implied_close.isoformat()} is still in the "
+                        f"future) — structural detectors (BOS/CHoCH) require "
+                        f"closed candles only."
+                    )
+                    df = df.iloc[:-1].copy()
+
             log.info(
                 f"[OK] Got {len(df)} candles for {symbol} {timeframe} via MT5 | "
                 f"Latest: {df.index.max()}"
@@ -1034,6 +1068,49 @@ class DataFetcher:
                                     f"(>{_stale_threshold:.0f}s) during expected "
                                     f"open market hours"
                                 )
+                                # ── Forced reconnect on genuine staleness ──
+                                # Root cause (fixed in mt5_connection.py
+                                # is_alive()): terminal_info() returning a
+                                # non-None struct only proves the terminal
+                                # PROCESS is reachable via IPC — it does not
+                                # mean the terminal is connected to the
+                                # broker's trade server. is_alive() used to
+                                # ignore terminal_info().connected entirely,
+                                # so ensure_connected() kept reporting healthy
+                                # while the feed was frozen. With that fixed,
+                                # is_alive() will now correctly report False
+                                # here and _require_connected() will already
+                                # have auto-reconnected via reconnect().
+                                # This call is now mostly a belt-and-braces
+                                # nudge in case ensure_connected() above ran
+                                # before is_alive()'s cache window expired —
+                                # debounced so we don't hammer the broker
+                                # across every symbol in the same cycle.
+                                _now_mono = time.monotonic()
+                                _last_forced = getattr(
+                                    self, "_last_forced_reconnect_at", 0.0
+                                )
+                                _RECONNECT_DEBOUNCE_SEC = float(
+                                    os.getenv("MT5_STALE_RECONNECT_DEBOUNCE_SEC", "60")
+                                )
+                                if _now_mono - _last_forced >= _RECONNECT_DEBOUNCE_SEC:
+                                    self._last_forced_reconnect_at = _now_mono
+                                    log.warning(
+                                        f"[MT5] Feed staleness detected — "
+                                        f"forcing reconnect."
+                                    )
+                                    reconnected = self._mt5_conn.reconnect()
+                                    if reconnected:
+                                        log.warning(
+                                            "[MT5] Reconnect succeeded — next "
+                                            "cycle should see fresh bars."
+                                        )
+                                    else:
+                                        log.error(
+                                            "[MT5] Reconnect FAILED — feed "
+                                            "will remain stale until terminal/"
+                                            "broker connectivity is restored."
+                                        )
                             else:
                                 log.info(
                                     f"[MT5] Latest {timeframe} bar is "

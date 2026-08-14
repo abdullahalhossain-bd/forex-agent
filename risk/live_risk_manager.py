@@ -47,14 +47,34 @@ log = get_logger("live_risk_manager")
 
 @dataclass
 class CapitalTier:
-    """One tier of the capital progression system."""
+    """One tier of the capital progression system.
+
+    ⚠ CODE VERIFICATION REQUIRED (2026-08-14 forensic-audit finding):
+    `approval_mode` below is stored on every tier (manual / semi_auto /
+    fully_auto) but is NEVER read anywhere in this file --
+    check_trade_permission() does not consult it, and nothing else in
+    this module gates execution on it. Confirmed against a real trade:
+    trader.log shows the EURUSD SELL that triggered this audit (ticket
+    10015498153) ran under tier=1 -- "Initial Live", approval_mode=
+    "manual" by design -- yet executed via "[Mode 3 — Autonomous]" with
+    no human step. Either (a) manual/semi/fully-auto approval is enforced
+    entirely by a *different* module (an "approval_mode"/Mode-1/2/3
+    system referenced in trader.log that this class doesn't talk to at
+    all, in which case this field is dead code misleadingly implying a
+    protection that lives elsewhere or doesn't connect), or (b) it's
+    supposed to be enforced here and the wiring was simply never written.
+    Not fixed here: doing so blind, without seeing core/trader.py or
+    whatever implements "Mode 3 — Autonomous", risks either duplicating
+    an existing gate incorrectly or breaking live execution. Needs that
+    source before this can be safely resolved.
+    """
     tier: int
     name: str
     risk_per_trade: float        # 0.005 = 0.5%
     daily_loss_limit: float      # 0.015 = 1.5%
     max_trades_per_day: int
     min_confidence: float
-    approval_mode: str           # manual / semi_auto / fully_auto
+    approval_mode: str           # manual / semi_auto / fully_auto -- see warning above: unenforced here
     tier_mult: float             # position size multiplier
 
 # Import from the single source of truth (core.constants).
@@ -81,6 +101,22 @@ def _build_tiers() -> dict:
     # 2026-08-13: lowered min_confidence from 70 → 55 for all tiers.
     # Per-pair strategies produce 55-85% confidence signals; the old 70%
     # floor blocked ALL of them. 55% matches per-pair profile min_confidence.
+    #
+    # 2026-08-14 forensic-audit correction: the line below was never
+    # actually updated to 55 -- it reads 50.0 for all three tiers, and
+    # trader.log confirms 50.0 is what's really enforced in production
+    # ("Min confidence 63.8% (per-pair min 50%)", tier=1). This comment
+    # was therefore describing a value the code never had. Also relevant
+    # to the audit's open question about the Devil's Advocate module
+    # referencing a "typical threshold of 70": that 70% does not exist
+    # anywhere in the current tier config -- the real, enforced floor is
+    # 50% and is IDENTICAL across all three tiers, so tier no longer
+    # differentiates confidence requirements at all (see the now-inaccurate
+    # action_taken log strings in maybe_promote_tier() below, fixed
+    # alongside this comment). Not changing the actual 50.0 value here --
+    # that's a live risk parameter and, per the audit's own methodology
+    # (§19), shouldn't move without a baseline-vs-modified backtest; this
+    # only fixes the comment to describe what the code actually does.
     return {
         1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 50.0, "manual", 0.5),
         2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 50.0, "semi_auto", 0.8),
@@ -250,7 +286,17 @@ class LiveRiskManager:
             self.risk_reporter.record_event(
                 "TIER_PROMOTION",
                 trigger_value=f"Tier 1 → 2 (trades={total_closed_trades}, wr={win_rate:.1f}%)",
-                action_taken=f"min_conf 80%→70%, risk 0.5%→1.0%, mult 0.5→0.8",
+                # 2026-08-14 forensic-audit fix: this used to say
+                # "min_conf 80%→70%" -- a claim from before the 2026-08-13
+                # change that flattened min_confidence to 50.0 on every
+                # tier. Promotion no longer changes min_confidence at all;
+                # logging that it does misleads anyone reading the risk
+                # event trail (including a future audit) into thinking the
+                # confidence gate tightens or loosens on promotion when it
+                # is now identical (50%) before and after. State what
+                # actually changes: risk-per-trade and position multiplier.
+                action_taken=f"risk 0.5%→1.0%, mult 0.5→0.8 (min_conf unchanged at "
+                             f"{TIERS[2].min_confidence:.0f}% -- see 2026-08-13 flattening)",
                 send_telegram=True,
             )
             return True
@@ -259,7 +305,20 @@ class LiveRiskManager:
             self.risk_reporter.record_event(
                 "TIER_PROMOTION",
                 trigger_value=f"Tier 2 → 3 (trades={total_closed_trades}, wr={win_rate:.1f}%)",
-                action_taken=f"min_conf 70%→55%, approval semi_auto→fully_auto, mult 0.8→1.0",
+                # 2026-08-14 forensic-audit fix: same correction as above --
+                # was "min_conf 70%→55%, approval semi_auto→fully_auto".
+                # min_confidence does not change (flat 50% across tiers).
+                # approval_mode is left in the message because that field
+                # genuinely differs per tier in CapitalTier -- but see the
+                # separate CODE VERIFICATION REQUIRED note where this class
+                # is defined: approval_mode is not actually read/enforced
+                # anywhere in this file, so this log line describes the
+                # *intended* design, not a verified live behavior change.
+                action_taken=f"mult 0.8→1.0 (min_conf unchanged at "
+                             f"{TIERS[3].min_confidence:.0f}% -- see 2026-08-13 flattening; "
+                             f"approval_mode field says semi_auto→fully_auto but is NOT "
+                             f"currently enforced by this module -- CODE VERIFICATION "
+                             f"REQUIRED against whatever does gate manual/auto execution)",
                 send_telegram=True,
             )
             return True

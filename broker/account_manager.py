@@ -58,7 +58,11 @@ def _spread_limit(symbol: str) -> float:
  
  
 def _test_mode() -> bool:
-    return os.getenv("TEST_MODE", "false").lower() == "true"
+    try:
+        from core.constants import is_test_mode
+        return bool(is_test_mode())
+    except Exception:
+        return os.getenv("TEST_MODE", "false").lower() == "true"
  
  
 class AccountManager:

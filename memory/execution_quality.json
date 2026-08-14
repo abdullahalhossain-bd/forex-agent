@@ -106,5 +106,29 @@
     "spread_pips": 11.0,
     "latency_ms": 352,
     "timestamp": "2026-08-07T19:01:18+00:00"
+  },
+  {
+    "ticket": 10015405210,
+    "pair": "USDJPY",
+    "direction": "BUY",
+    "requested": 159.5,
+    "executed": 159.499,
+    "slippage": -0.001,
+    "slippage_pips": -0.1,
+    "spread_pips": 0.0,
+    "latency_ms": 269,
+    "timestamp": "2026-08-13T17:15:22+00:00"
+  },
+  {
+    "ticket": 10015498153,
+    "pair": "EURUSD",
+    "direction": "SELL",
+    "requested": 1.15272,
+    "executed": 1.15272,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.2,
+    "latency_ms": 243,
+    "timestamp": "2026-08-13T17:20:11+00:00"
   }
 ]

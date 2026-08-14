@@ -13,6 +13,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# Ensure test-mode env visible during collection and for unittest.TestCase
+# tests which don't receive pytest fixtures; keeps behavior consistent.
+os.environ.setdefault("FOREX_TEST_MODE", "1")
+
 # Make sure repo root is importable so `from analysis.xxx import ...`
 # works no matter where pytest is invoked from.
 ROOT = Path(__file__).resolve().parent.parent

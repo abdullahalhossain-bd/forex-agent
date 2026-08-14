@@ -112,7 +112,20 @@ class DevilsAdvocateGate:
         if self.mode not in {"live", "research", "backtest"}:
             self.mode = "live"
 
-        self.fail_mode = (fail_mode or os.getenv("DEVILS_ADVOCATE_FAIL_MODE", "fail_open")).lower()
+        # B4g fix: default was the string "fail_open", but the actual
+        # resolution logic below never implemented an "open" (auto-TAKE)
+        # path for it -- any value other than "fail_closed" just fell
+        # through to uncertain_policy, which itself defaults to "reject".
+        # So the *real* default behavior was always fail-closed; the env
+        # var name was actively misleading (an operator reading
+        # DEVILS_ADVOCATE_FAIL_MODE=fail_open would reasonably assume a
+        # provider outage lets trades through, which it does not).
+        # Fix: rename the default to "fail_closed" to match actual
+        # behavior, and give "fail_open" a real effect in
+        # _resolve_failure() below so the setting is no longer a no-op.
+        self.fail_mode = (fail_mode or os.getenv("DEVILS_ADVOCATE_FAIL_MODE", "fail_closed")).lower()
+        if self.fail_mode not in {"fail_open", "fail_closed"}:
+            self.fail_mode = "fail_closed"
 
         # 2026-08-11 review fix: UNCERTAIN previously did not exist as a
         # state — anything short of an explicit VETO defaulted to EXECUTE.
@@ -203,6 +216,20 @@ class DevilsAdvocateGate:
                 return default
         return cur if cur is not None else default
 
+    @staticmethod
+    def _first_present(d: Optional[Dict[str, Any]], *keys: str, default: Any = None) -> Any:
+        """Return the first key that is present in d (even if falsy), else default.
+
+        Unlike `d.get(a) or d.get(b)`, this does NOT treat a real empty
+        string / 0 / False as "missing" and fall through to the next key.
+        """
+        if not isinstance(d, dict):
+            return default
+        for key in keys:
+            if key in d and d[key] is not None:
+                return d[key]
+        return default
+
     def _build_thesis(self, trade_context: Dict[str, Any], signal: str, risk_out: Dict[str, Any], decision_out: Dict[str, Any]) -> Dict[str, Any]:
         """Build the explicit "why this trade" thesis the model has to attack.
 
@@ -216,21 +243,71 @@ class DevilsAdvocateGate:
             return {"symbol": trade_context.get("symbol", "UNKNOWN"), "signal": signal, "claims": custom}
 
         symbol = trade_context.get("symbol") or trade_context.get("pair") or "UNKNOWN"
-        mtf_bias = decision_out.get("mtf_bias") or self._g(decision_out, "mtf_trends", "h4")
+
+        # B4f fix: previously used decision_out.get("mtf_bias") -- a
+        # separate summary field that can desync from the actual per-TF
+        # mtf_trends dict used to build `evidence` (see B4d fix below).
+        # In production this produced thesis claims like "bias is NEUTRAL"
+        # sitting right next to evidence showing h1_trend=strong_bearish /
+        # h4_trend=sideways for the same review, which both confuses the
+        # reviewing LLM and creates duplicate/contradictory
+        # "Higher-timeframe bias..." entries in its supporting/
+        # contradicting evidence output. Its fallback also looked up the
+        # wrong key ("h4" instead of "4h"), so if mtf_bias were ever
+        # absent it silently degraded to "unknown".
+        # Fix: derive the thesis claim from the same mtf_trends dict (and
+        # the same "4h"/"1h" keys) that evidence uses, so thesis and
+        # evidence can never disagree about what the HTF trend actually is.
+        mtf_trends_for_thesis = decision_out.get("mtf_trends") or {}
+        h4_bias = mtf_trends_for_thesis.get("4h", "unknown")
+        h1_bias = mtf_trends_for_thesis.get("1h", "unknown")
+        if h4_bias != "unknown":
+            mtf_bias = h4_bias
+        elif h1_bias != "unknown":
+            mtf_bias = h1_bias
+        else:
+            mtf_bias = decision_out.get("mtf_bias", "unknown")
+
         structure_ctx = decision_out.get("structure_ctx") or {}
         smc_ctx = decision_out.get("smc_ctx") or {}
         sr_ctx = decision_out.get("sr_ctx") or {}
 
         claims: List[str] = []
-        if mtf_bias and mtf_bias != "unknown":
+        sig = str(signal).upper()
+        # Only claim HTF alignment when bias actually agrees with the signal.
+        # "sideways/neutral aligned with SELL" was confusing the reviewer into
+        # inventing contradictions or treating ranging HTF as support.
+        _bullish_words = ("bull", "buy", "long")
+        _bearish_words = ("bear", "sell", "short")
+        _mtf_l = str(mtf_bias).lower()
+        _htf_agrees = (
+            (sig == "BUY" and any(w in _mtf_l for w in _bullish_words))
+            or (sig == "SELL" and any(w in _mtf_l for w in _bearish_words))
+        )
+        if mtf_bias and mtf_bias != "unknown" and _htf_agrees:
             claims.append(f"Higher-timeframe bias is {mtf_bias}, aligned with the {signal} signal")
+        elif mtf_bias and str(mtf_bias).lower() in ("sideways", "neutral", "ranging"):
+            claims.append(f"Higher-timeframe is {mtf_bias} (no strong opposing HTF trend against {signal})")
+
         if structure_ctx:
-            bos = structure_ctx.get("bos") or structure_ctx.get("break_of_structure")
-            choch = structure_ctx.get("choch") or structure_ctx.get("change_of_character")
-            if bos:
-                claims.append(f"Break of structure detected: {bos}")
-            if choch:
-                claims.append(f"Change of character detected: {choch}")
+            bos = self._first_present(
+                structure_ctx, "bos", "structure_bos", "break_of_structure"
+            )
+            choch = self._first_present(
+                structure_ctx, "choch", "structure_choch", "change_of_character"
+            )
+            bos_u = str(bos or "").upper()
+            choch_u = str(choch or "").upper()
+            # Only claim BOS/CHoCH when they SUPPORT the signal direction.
+            # Claiming BULLISH_BOS on a SELL thesis made the reviewer reject
+            # every counter-structure trade (correct) AND also polluted
+            # aligned trades' thesis with noise.
+            if bos_u not in ("NONE", "UNKNOWN", ""):
+                if (sig == "BUY" and "BULLISH" in bos_u) or (sig == "SELL" and "BEARISH" in bos_u):
+                    claims.append(f"Break of structure supports {signal}: {bos}")
+            if choch_u not in ("NONE", "UNKNOWN", ""):
+                if (sig == "BUY" and "BULLISH" in choch_u) or (sig == "SELL" and "BEARISH" in choch_u):
+                    claims.append(f"Change of character supports {signal}: {choch}")
         if smc_ctx.get("liquidity_sweep"):
             claims.append(f"Liquidity sweep observed: {smc_ctx.get('liquidity_sweep')}")
         if sr_ctx:
@@ -277,10 +354,29 @@ class DevilsAdvocateGate:
         except (TypeError, ValueError):
             pass
 
+        # B4e fix: spread_atr_ratio was computing spread_pips (a pip count,
+        # e.g. 1.2) divided directly by atr (a raw price delta, e.g.
+        # 0.00081). That's a unit mismatch -- pips vs price -- which
+        # produces a number with no real meaning even when both inputs
+        # are valid.
+        # On top of that, spread_pips == 0 (missing/upstream-default, not
+        # a genuine zero spread) silently produced ratio = 0.0, which the
+        # LLM then read as a red flag ("near-zero spread -> high risk")
+        # instead of being told the data was absent.
+        #
+        # Fix: convert atr into pips using the correct pip size for the
+        # symbol before dividing, and treat spread_pips == 0 as missing
+        # data ("unknown") rather than a real zero-cost spread, since a
+        # true zero spread does not occur in live FX feeds.
+        symbol_for_pip = trade_context.get("symbol") or trade_context.get("pair") or ""
+        pip_size = 0.01 if "JPY" in str(symbol_for_pip).upper() else 0.0001
+
         spread_atr_ratio = "unknown"
         try:
-            if spread_pips is not None and atr not in (None, 0):
-                spread_atr_ratio = round(float(spread_pips) / float(atr), 4)
+            if spread_pips not in (None, 0) and atr not in (None, 0):
+                atr_pips = float(atr) / pip_size
+                if atr_pips:
+                    spread_atr_ratio = round(float(spread_pips) / atr_pips, 4)
         except (TypeError, ValueError, ZeroDivisionError):
             pass
 
@@ -290,17 +386,78 @@ class DevilsAdvocateGate:
             if isinstance(news_ctx, dict):
                 news_risk = news_ctx.get("risk_level", "unknown")
 
+        # ── Normalize upstream key aliases ─────────────────────────────
+        # structure_engine.get_ai_context uses structure_bos / structure_choch;
+        # DA historically only looked for bos / choch. Also accept values
+        # placed on trade_context["market_context"] by trader.py (2026-08-13)
+        # when decision_out["mtf_trends"] is empty or uses H4/H1 labels.
+        def _tf(*keys, fallback="unknown"):
+            for k in keys:
+                v = mtf_trends.get(k) if isinstance(mtf_trends, dict) else None
+                if v not in (None, "", "unknown"):
+                    return v
+                v = market_context.get(k) if isinstance(market_context, dict) else None
+                if v not in (None, "", "unknown"):
+                    return v
+            # common alternate names on market_context
+            for k in keys:
+                alt = {
+                    "4h": ("h4_trend", "H4", "h4"),
+                    "1h": ("h1_trend", "H1", "h1"),
+                    "15m": ("m15_trend", "M15", "m15", "m15_structure"),
+                }.get(k, ())
+                for a in alt:
+                    v = mtf_trends.get(a) if isinstance(mtf_trends, dict) else None
+                    if v not in (None, "", "unknown"):
+                        return v
+                    v = market_context.get(a) if isinstance(market_context, dict) else None
+                    if v not in (None, "", "unknown"):
+                        return v
+            return fallback
+
+        _bos = self._first_present(
+            structure_ctx, "bos", "structure_bos", "break_of_structure", default="unknown"
+        )
+        _choch = self._first_present(
+            structure_ctx, "choch", "structure_choch", "change_of_character", default="unknown"
+        )
+        _nearest_zone = self._first_present(
+            sr_ctx,
+            "nearest_zone", "location", "nearest_support", "nearest_resistance",
+            default="unknown",
+        )
+        # Prefer market_context SR hints if sr_ctx is empty
+        if _nearest_zone in (None, "", "unknown") and isinstance(market_context, dict):
+            _nearest_zone = (
+                market_context.get("sr_zone")
+                or market_context.get("nearest_support")
+                or market_context.get("nearest_resistance")
+                or "unknown"
+            )
+
         evidence: Dict[str, Any] = {
             "htf": {
-                "h4_trend": mtf_trends.get("h4", "unknown"),
-                "h1_trend": mtf_trends.get("h1", "unknown"),
-                "m15_structure": mtf_trends.get("m15", structure_ctx.get("m15", "unknown")),
+                # B4d + 2026-08-13: accept "4h"/"1h"/"15m" and H4/h4_trend aliases
+                # so empty mtf_trends no longer forces every review to REJECT.
+                "h4_trend": _tf("4h"),
+                "h1_trend": _tf("1h"),
+                "m15_structure": _tf("15m", fallback=structure_ctx.get("m15", "unknown")),
             },
             "structure": {
-                "bos": structure_ctx.get("bos") or structure_ctx.get("break_of_structure", "unknown"),
-                "choch": structure_ctx.get("choch") or structure_ctx.get("change_of_character", "unknown"),
-                "liquidity_sweep": smc_ctx.get("liquidity_sweep") or liquidity_ctx.get("sweep", "unknown"),
-                "displacement": smc_ctx.get("displacement", "unknown"),
+                "bos": _bos if _bos not in (None, "") else "unknown",
+                "choch": _choch if _choch not in (None, "") else "unknown",
+                "liquidity_sweep": (
+                    smc_ctx.get("liquidity_sweep")
+                    or liquidity_ctx.get("sweep")
+                    or structure_ctx.get("liquidity_sweep")
+                    or "unknown"
+                ),
+                "displacement": (
+                    smc_ctx.get("displacement")
+                    or structure_ctx.get("displacement")
+                    or structure_ctx.get("displacement_dir")
+                    or "unknown"
+                ),
             },
             "location": {
                 "pdh": sr_ctx.get("pdh", "unknown"),
@@ -309,7 +466,7 @@ class DevilsAdvocateGate:
                 "prev_week_low": sr_ctx.get("prev_week_low", "unknown"),
                 "session_high": sr_ctx.get("session_high", "unknown"),
                 "session_low": sr_ctx.get("session_low", "unknown"),
-                "support_resistance_zone": sr_ctx.get("nearest_zone", "unknown"),
+                "support_resistance_zone": _nearest_zone,
                 "supply_demand_zone": smc_ctx.get("supply_demand_zone", "unknown"),
             },
             "momentum": {
@@ -318,7 +475,12 @@ class DevilsAdvocateGate:
                 "volatility_regime": regime.get("regime", market_context.get("volatility", "unknown")),
             },
             "execution": {
-                "spread_pips": spread_pips if spread_pips is not None else "unknown",
+                # Treat 0 / 0.0 as missing (never a real FX spread) so the
+                # LLM does not invent a "spread_to_atr_ratio is 0.0" critical
+                # failure from absent upstream data.
+                "spread_pips": (
+                    spread_pips if spread_pips not in (None, 0, 0.0) else "unknown"
+                ),
                 "spread_to_atr_ratio": spread_atr_ratio,
                 "estimated_slippage": trade_context.get("estimated_slippage", "unknown"),
                 "sl_distance": sl_distance if sl_distance is not None else "unknown",
@@ -363,7 +525,25 @@ class DevilsAdvocateGate:
                 "replace the strategy. Assume the proposed direction may be wrong: you are not "
                 "rewarded for agreeing with the thesis. Your only task is to find the strongest "
                 "falsification of the thesis using the evidence provided, and to state plainly "
-                "when the evidence is too thin to have an opinion (UNCERTAIN)."
+                "when the evidence is too thin to have an opinion (UNCERTAIN). "
+                "IMPORTANT policy on RANGING markets: a RANGING or sideways regime alone is "
+                "NOT sufficient grounds to REJECT when evidence.structure.bos / "
+                "evidence.structure.choch ACTUALLY agree with the proposed signal direction "
+                "(check the real evidence field, not just the absence of an opposing claim in "
+                "the thesis) AND a mapped S/R or supply/demand zone is present AND "
+                "reward-to-risk meets the minimum. In that case prefer TAKE (or UNCERTAIN if "
+                "other hard contradictions exist). Do REJECT when structure breaks the "
+                "opposite way of the signal, or HTF trend is strongly against the signal, or "
+                "the signal is entering at/near a swing level that would invalidate it on a "
+                "normal continuation. A thesis whose only claim is 'no strong opposing HTF "
+                "trend' (an absence-of-opposition claim, not real support) is NOT sufficient "
+                "grounds for TAKE by itself. "
+                "CONSISTENCY REQUIREMENT (hard rule, checked programmatically downstream): "
+                "your `expected_edge` field must agree with your `decision`. Never return "
+                "decision=TAKE together with expected_edge=negative, and never return "
+                "decision=REJECT together with expected_edge=positive. If your honest edge "
+                "assessment is negative or unclear, your decision must be REJECT or UNCERTAIN, "
+                "not TAKE."
             ),
             "trade_thesis": thesis,
             "evidence": evidence,
@@ -371,11 +551,15 @@ class DevilsAdvocateGate:
                 "task_1": "List concrete SUPPORTING evidence for why this trade could work.",
                 "task_2": "List concrete CONTRADICTING evidence for why this trade could fail. "
                            "This is the primary task -- actively search for it, do not pad it "
-                           "with the mere absence of supporting evidence.",
-                "task_3": "Decide TAKE only if the thesis survives adversarial review. Decide "
-                          "REJECT if contradicting evidence materially outweighs supporting "
-                          "evidence. Decide UNCERTAIN if evidence is missing/degraded/mixed "
-                          "enough that no confident call can be made.",
+                           "with the mere absence of supporting evidence. Do not treat "
+                           "'regime is RANGING' as a critical failure by itself when BOS/CHoCH "
+                           "agree with the signal.",
+                "task_3": "Decide TAKE if supporting structure (direction-aligned BOS/CHoCH and "
+                          "location) outweighs contradictions — including in RANGING regimes. "
+                          "Decide REJECT if structure or HTF clearly opposes the signal, or "
+                          "contradicting evidence materially outweighs support. Decide UNCERTAIN "
+                          "if evidence is missing/degraded/mixed enough that no confident call "
+                          "can be made.",
                 "output_schema": {
                     "decision": "TAKE|REJECT|UNCERTAIN",
                     "confidence": 0.0,
@@ -442,8 +626,22 @@ class DevilsAdvocateGate:
             client = manager.get_groq_client()
             if client is None:
                 return None
+            # B4h fix: silently swapping any "gpt*"-named model for
+            # llama-3.1-8b-instant (Groq doesn't host GPT models) used to
+            # happen with no trace anywhere. An operator setting
+            # DEVILS_ADVOCATE_MODEL=gpt-4o expecting that model would get
+            # llama-3.1-8b-instant instead with nothing in the logs to
+            # explain why. Fix: keep the same override (Groq still can't
+            # serve GPT models) but log it once so it's visible.
+            groq_model = self.model_name
+            if "gpt" in groq_model:
+                groq_model = "llama-3.1-8b-instant"
+                log.warning(
+                    f"[DevilsAdvocate] configured model '{self.model_name}' is not "
+                    f"available on Groq; using '{groq_model}' instead"
+                )
             create_kwargs = dict(
-                model=self.model_name if "gpt" not in self.model_name else "llama-3.1-8b-instant",
+                model=groq_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1,
                 max_tokens=700,
@@ -523,6 +721,37 @@ class DevilsAdvocateGate:
         if raw_decision == DECISION_UNCERTAIN:
             resolved = self._resolve_uncertain()
 
+        expected_edge_raw = parsed.get("expected_edge") or "unknown"
+        expected_edge_l = str(expected_edge_raw).lower()
+        thesis_quality = float(parsed.get("thesis_quality", 0.0) or 0.0)
+        counter_evidence_strength = float(parsed.get("counter_evidence_strength", 0.0) or 0.0)
+
+        # P0 fix (2026-08-14 forensic audit, EURUSD eval_1786641545_EURUSD_fe0d708e):
+        # that trade's raw model output was decision=TAKE, expected_edge=negative,
+        # reasons_for_rejection=[] -- a self-contradictory verdict that executed
+        # anyway because expected_edge/counter_evidence_strength were recorded for
+        # audit purposes but never fed back into the resolved decision. Close that
+        # gap here: if the model's own structured fields contradict a TAKE, don't
+        # trust the raw label -- run it through the same conservative resolution
+        # path as an UNCERTAIN verdict (REJECT by default; see _resolve_uncertain).
+        # This is a general consistency check, not a rule tailored to this one
+        # trade -- it fires on any TAKE whose own expected_edge is negative, or
+        # whose own counter_evidence_strength meets/exceeds its own thesis_quality.
+        contradiction_reason: Optional[str] = None
+        if resolved == DECISION_TAKE:
+            if expected_edge_l == "negative":
+                contradiction_reason = "expected_edge=negative on a TAKE decision"
+            elif counter_evidence_strength > 0.0 and counter_evidence_strength >= thesis_quality:
+                contradiction_reason = (
+                    f"counter_evidence_strength={counter_evidence_strength} >= "
+                    f"thesis_quality={thesis_quality} on a TAKE decision"
+                )
+        if contradiction_reason:
+            log.warning(f"[DevilsAdvocate] TAKE overridden -- internal contradiction: {contradiction_reason}")
+            resolved = self._resolve_contradiction()
+            if not critical_failure:
+                critical_failure = f"internal_contradiction: {contradiction_reason}"
+
         supporting = parsed.get("supporting_evidence") or []
         contradicting = parsed.get("contradicting_evidence") or []
         reasons_for_rejection = parsed.get("reasons_for_rejection") or []
@@ -533,9 +762,9 @@ class DevilsAdvocateGate:
             "decision": resolved,
             "raw_decision": raw_decision,
             "confidence": float(parsed.get("confidence", 0.0) or 0.0),
-            "thesis_quality": float(parsed.get("thesis_quality", 0.0) or 0.0),
-            "counter_evidence_strength": float(parsed.get("counter_evidence_strength", 0.0) or 0.0),
-            "expected_edge": parsed.get("expected_edge") or "unknown",
+            "thesis_quality": thesis_quality,
+            "counter_evidence_strength": counter_evidence_strength,
+            "expected_edge": expected_edge_raw,
             "risk_level": parsed.get("risk_level") or "unknown",
             "supporting_evidence": supporting,
             "contradicting_evidence": contradicting,
@@ -559,6 +788,27 @@ class DevilsAdvocateGate:
             return DECISION_REJECT
         return DECISION_TAKE if self.uncertain_policy == "take" else DECISION_REJECT
 
+    @staticmethod
+    def _resolve_contradiction() -> str:
+        """Resolve a TAKE whose own structured fields contradict it
+        (expected_edge=negative, or counter_evidence_strength >=
+        thesis_quality -- see _finalize).
+
+        Deliberately NOT routed through _resolve_uncertain(): that path
+        honors self.uncertain_policy, which is a legitimate operator
+        preference for genuine model uncertainty ("no opinion" -> take or
+        reject, operator's call). A self-contradictory TAKE is not "no
+        opinion" -- it's the model asserting two incompatible things in
+        the same response, which is a data-integrity failure. If this
+        reused _resolve_uncertain(), setting
+        DEVILS_ADVOCATE_UNCERTAIN_POLICY=take (a supported, documented
+        value) would silently resolve the contradiction back to TAKE and
+        defeat the entire P0 fix -- exactly reproducing the 2026-08-13
+        EURUSD incident this check exists to prevent. Always REJECT here,
+        unconditionally, in every mode.
+        """
+        return DECISION_REJECT
+
     def _resolve_failure(self, error_text: str) -> Dict[str, Any]:
         """Resolve a provider-call failure (timeout, no key, bad JSON, etc.).
 
@@ -566,12 +816,19 @@ class DevilsAdvocateGate:
         actually reached, so data_quality is always "poor" and a
         critical_failure note is always attached.
         """
-        if self.mode in {"research", "backtest"}:
+        # Conservative default: provider failures resolve to REJECT in
+        # all modes unless the operator explicitly opts into the unsafe
+        # combination: `fail_mode='fail_open'` AND
+        # `uncertain_policy='take'`.
+        # Research/backtest MUST NEVER auto-TAKE on reviewer outage —
+        # that would contaminate simulated expectancy. Only allow TAKE
+        # in live mode when both opt-ins are present.
+        if self.mode == "research":
             resolved = DECISION_REJECT
-        elif self.fail_mode == "fail_closed":
-            resolved = DECISION_REJECT
+        elif self.fail_mode == "fail_open" and self.uncertain_policy == "take":
+            resolved = DECISION_TAKE
         else:
-            resolved = DECISION_TAKE if self.uncertain_policy == "take" else DECISION_REJECT
+            resolved = DECISION_REJECT
 
         return {
             "decision": resolved,

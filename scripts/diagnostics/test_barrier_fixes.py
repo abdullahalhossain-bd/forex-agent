@@ -41,9 +41,10 @@ def check(name, condition, detail=""):
         print(f"  [FAIL] {name}" + (f" — {detail}" if detail else ""))
 
 
-print("=" * 70)
-print("  BARRIER FIX VERIFICATION")
-print("=" * 70)
+if __name__ == "__main__":
+    print("=" * 70)
+    print("  BARRIER FIX VERIFICATION")
+    print("=" * 70)
 
 # ──────────────────────────────────────────────────────────────────
 # Barrier 6: MAX_LLM_CALLS_PER_CYCLE = 8
@@ -132,8 +133,8 @@ check("master_ctx safe default code present",
 # ──────────────────────────────────────────────────────────────────
 # Summary
 # ──────────────────────────────────────────────────────────────────
-print()
-print("=" * 70)
-print(f"  Result: {PASS} PASS, {FAIL} FAIL")
-print("=" * 70)
-sys.exit(0 if FAIL == 0 else 1)
+    print()
+    print("=" * 70)
+    print(f"  Result: {PASS} PASS, {FAIL} FAIL")
+    print("=" * 70)
+    sys.exit(0 if FAIL == 0 else 1)

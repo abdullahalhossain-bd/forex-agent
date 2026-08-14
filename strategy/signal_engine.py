@@ -388,13 +388,29 @@ class SignalEngine:
                 # Need at least 2 confluence factors (was 3 — too strict)
                 signal = 'WAIT'
             else:
+                # price_above_200 / price_below_200: None-safe fallback for
+                # when ema_200 wasn't resolvable (avoids TypeError on None
+                # comparisons, mirrors the try/except float-cast used for
+                # htf_bull/htf_bear above). 2026-08-13 hotfix: this used to
+                # reference an undefined name `close`, which raised
+                # NameError on every BUY/SELL candidate and crashed the
+                # symbol cycle for every pair (see trader.log 20:57:06+).
+                price_above_200 = False
+                price_below_200 = False
+                if price and ema_200:
+                    try:
+                        price_above_200 = float(price) > float(ema_200)
+                        price_below_200 = float(price) < float(ema_200)
+                    except (TypeError, ValueError):
+                        pass
+
                 if net >= 6 and max_factors >= 4:
                     signal = 'STRONG_BUY'
-                elif net >= 4 and max_factors >= 3 and (htf_bull or close > ema_200):
+                elif net >= 4 and max_factors >= 3 and (htf_bull or price_above_200):
                     signal = 'BUY'
                 elif net <= -6 and max_factors >= 4:
                     signal = 'STRONG_SELL'
-                elif net <= -4 and max_factors >= 3 and (htf_bear or close < ema_200):
+                elif net <= -4 and max_factors >= 3 and (htf_bear or price_below_200):
                     signal = 'SELL'
                 else:
                     signal = 'WAIT'

@@ -29,6 +29,7 @@
 # ============================================================
 
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -36,6 +37,27 @@ import numpy as np
 import pandas as pd
 
 log = logging.getLogger(__name__)
+
+# P0 fix (2026-08-14, forensic audit — EURUSD SELL 2026-08-13, ticket
+# 10015498153, P/L -6.30 USD): check_sl_swing_anchor()'s "not anchored"
+# branch was WARNING-only (a -1 confidence penalty), so a stop with NO
+# real structural basis — sitting inside the current range instead of
+# beyond the actual invalidating swing — could still execute as long as
+# nothing else blocked. That's exactly what happened: SL 1.15377 was
+# ~15 pips inside the range, never anchored to the real invalidating
+# swing high (~1.1542). Per the audit's §18 Fix #2 recommendation, this
+# check can now hard-block instead of just penalizing.
+#
+# Gated by an env var (default ON) rather than unconditionally wired in,
+# so it can be A/B-tested against the historical trade set per the
+# audit's own §19 ablation plan (baseline vs hard-block: trade count,
+# win rate, expectancy, and — critically — how many newly-blocked trades
+# would actually have won) before being locked on unconditionally.
+# Set SL_SWING_ANCHOR_HARD_BLOCK=false to restore the old penalty-only
+# behavior.
+SL_SWING_ANCHOR_HARD_BLOCK = os.getenv(
+    "SL_SWING_ANCHOR_HARD_BLOCK", "true"
+).strip().lower() in ("1", "true", "yes")
 
 
 # ─── Constants ────────────────────────────────────────────────
@@ -443,14 +465,24 @@ def check_sl_swing_anchor(
         )
 
     if not is_anchored:
+        # P0 audit fix (2026-08-14): previously always WARNING (soft
+        # penalty only) — see SL_SWING_ANCHOR_HARD_BLOCK docstring above
+        # for why this is now a hard block by default.
+        _severity = "BLOCK" if SL_SWING_ANCHOR_HARD_BLOCK else "WARNING"
         return EntryQualityResult(
             flag_name="sl_swing_anchor",
             passed=False,
-            severity="WARNING",
+            severity=_severity,
             reason=(
                 f"SL {stop_loss:.5f} is {sl_to_swing_pips:.1f} pips ({sl_to_swing_atr:.2f}×ATR) "
                 f"from nearest swing {nearest_swing:.5f} — appears to be a fixed-pip stop, "
                 f"not structure-anchored. Risk of stop-run wick."
+                + (
+                    " BLOCKED (SL_SWING_ANCHOR_HARD_BLOCK=true, 2026-08-14 "
+                    "P0 audit fix — set env var to false to revert to "
+                    "penalty-only)."
+                    if _severity == "BLOCK" else ""
+                )
             ),
             details=details,
         )
@@ -1831,6 +1863,19 @@ def run_all_entry_quality_checks(
     _EXTREME_FLAGS = {"averaging_into_losers", "opposite_direction_stacking"}
     _EXTREME_REASON_KW = {"WRONG SIDE"}
 
+    # P0 audit fix (2026-08-14): sl_swing_anchor's "not anchored" branch
+    # can now self-report severity="BLOCK" (see SL_SWING_ANCHOR_HARD_BLOCK
+    # above). Scoped narrowly to this one flag_name — deliberately NOT a
+    # blanket "respect every check's severity field" change, because
+    # several other checks (chasing_filter, tp_structure_validation,
+    # indecision_candles, rejection_wick_at_entry, fresh_high_rejection,
+    # exhaustion_filter) also internally set severity="BLOCK" in some
+    # branches, and the 2026-08-13 soft-scoring redesign (see comment
+    # below) intentionally downgrades those to penalties. Widening this
+    # to all of them is a separate, larger decision — not part of the
+    # audit's §18 Fix #2 scope — and should not happen silently here.
+    _SEVERITY_RESPECTED_FLAGS = {"sl_swing_anchor"}
+
     passed_count = sum(1 for r in results if r.passed)
     confidence_penalty = 0
     # NEW — attribution: which rule contributed how much of the total
@@ -1852,6 +1897,7 @@ def run_all_entry_quality_checks(
             is_extreme = (
                 r.flag_name in _EXTREME_FLAGS
                 or any(kw in r.reason for kw in _EXTREME_REASON_KW)
+                or (r.flag_name in _SEVERITY_RESPECTED_FLAGS and r.severity == "BLOCK")
             )
             if is_extreme:
                 per_check_report.append(f"{display:<22} BLOCK (extreme)")

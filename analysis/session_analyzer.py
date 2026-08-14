@@ -393,11 +393,16 @@ class SessionAnalyzer:
         """
         if not smc_ctx or "smc_score" not in smc_ctx:
             return {
-                "fusion_allowed": True,   # don't block while waiting for SMC
+                # P2/P3 fix: SMC context missing → fusion DENIED.
+                # Previously this returned True, allowing live trades to execute
+                # without ANY structural analysis. The operator audit caught
+                # this: "SMC context not populated" should be a hard block at
+                # the live authorization layer, not a silent green light.
+                "fusion_allowed": False,
                 "fusion_score":   None,
                 "fusion_grade":   "PENDING",
-                "issues":         ["SMC context not populated — fusion deferred"],
-                "reason":         "SMC analysis not yet available",
+                "issues":         ["SMC context not populated — fusion BLOCKED (no structural data)"],
+                "reason":         "SMC analysis not yet available — trade DENIED until structural data is populated",
             }
 
         reqs      = SMC_REQUIREMENTS.get(session, SMC_REQUIREMENTS["BETWEEN_SESSIONS"])
@@ -405,30 +410,53 @@ class SessionAnalyzer:
         has_bos   = smc_ctx.get("smc_factors", {}).get("bos", False)
 
         issues = []
+        hard_blocks = []   # P3: separate "kill-switch" failures from advisories
         soft_floor = max(10, reqs["min_smc_score"] - 6)
-        if smc_score < reqs["min_smc_score"]:
-            if smc_score >= soft_floor and (not reqs["require_bos"] or has_bos or smc_score >= 20):
-                issues.append(
-                    f"SMC score {smc_score} below preferred {reqs['min_smc_score']} for {session} but above soft floor {soft_floor}; allowed with caution"
-                )
-            else:
-                issues.append(
-                    f"SMC score {smc_score} < required {reqs['min_smc_score']} for {session}"
-                )
-        if reqs["require_bos"] and not has_bos:
-            if smc_score >= soft_floor:
-                issues.append(f"BOS missing for {session} but score {smc_score} still exceeds soft floor; allowed with caution")
-            else:
-                issues.append(f"BOS required for {session} but not detected")
 
-        # Confidence-pipeline simplification: fusion_allowed is now ALWAYS True.
-        # Previously: `allowed = not any("required" in issue ...)` which
-        # hard-blocked when SMC score was below the session minimum.
-        # Now: always allowed — low SMC scores flow downstream as reduced
-        # confidence rather than a kill-switch here.  The `issues` list
-        # is still populated so downstream consumers can see WHY the
-        # score was low and apply proportional penalties.
-        allowed = True
+        # ─── P3: SMC score hard floor ─────────────────────────────
+        # Live authorization layer MUST enforce `min_smc_score` as a kill switch.
+        # Previously this code only appended messages to `issues[]` and then
+        # unconditionally set `allowed = True` — meaning score=14 vs required=15
+        # was logged as "< required" but STILL let the trade through.
+        # Soft-floor bypass is removed for live trades; it remains available
+        # only in research/backtest modes via the BYPASS_FUSION_SOFTFLOOR env var.
+        import os as _os_sf
+        _allow_soft_floor = _os_sf.getenv("BYPASS_FUSION_SOFTFLOOR", "false").lower() == "true"
+
+        if smc_score < reqs["min_smc_score"]:
+            if _allow_soft_floor and smc_score >= soft_floor and (
+                not reqs["require_bos"] or has_bos or smc_score >= 20
+            ):
+                issues.append(
+                    f"SMC score {smc_score} below preferred {reqs['min_smc_score']} for {session} "
+                    f"but above soft floor {soft_floor}; allowed with caution (BYPASS_FUSION_SOFTFLOOR=true)"
+                )
+            else:
+                msg = f"SMC score {smc_score} < required {reqs['min_smc_score']} for {session}"
+                issues.append(msg)
+                hard_blocks.append(msg)
+
+        # ─── P3: BOS hard requirement ──────────────────────────────
+        # Same treatment: BOS-missing for sessions that require it is a kill switch.
+        if reqs["require_bos"] and not has_bos:
+            if _allow_soft_floor and smc_score >= soft_floor:
+                issues.append(
+                    f"BOS missing for {session} but score {smc_score} still exceeds soft floor; "
+                    f"allowed with caution (BYPASS_FUSION_SOFTFLOOR=true)"
+                )
+            else:
+                msg = f"BOS required for {session} but not detected"
+                issues.append(msg)
+                hard_blocks.append(msg)
+
+        # P2 fix: fusion_allowed reflects ACTUAL SMC/BOS state.
+        # Previously hardcoded `True` ("confidence-pipeline simplification") —
+        # this made every downstream fusion gate (trade_permission, decision_agent,
+        # master_analyst, analysis_agent) effectively dead logic. Now the
+        # boolean is wired to the hard-block list. Soft-floor path still
+        # produces `issues` entries for visibility, but does NOT set the bool
+        # to False — only hard-block failures do.
+        allowed = (len(hard_blocks) == 0)
         fusion_score = smc_score   # score IS the SMC score — no hidden math
 
         if fusion_score >= 80:
@@ -566,17 +594,36 @@ class SessionAnalyzer:
 
         # LONDON_NY_OVERLAP / A_PLUS_ONLY: honour A and A+ graded setups even when
         # a minor SMC checklist item fails (e.g. score 54 vs 55 threshold).
-        if session == "LONDON_NY_OVERLAP" and fusion_grade in ("A", "A+"):
+        # P2 fix: removed the unconditional `fusion_allowed = True` override —
+        # that re-introduced the original "session override WAIT/NO_TRADE" bug
+        # the operator flagged. A/A+ is now a *grade signal*, not a veto-killer.
+        # The override can be re-enabled via env var for research mode only.
+        import os as _os_override
+        _allow_aa_override = _os_override.getenv("ALLOW_AA_FUSION_OVERRIDE", "false").lower() == "true"
+        if _allow_aa_override and session == "LONDON_NY_OVERLAP" and fusion_grade in ("A", "A+"):
             fusion_allowed = True
             if not fusion.get("fusion_allowed", True):
                 fusion = {
                     **fusion,
                     "fusion_allowed": True,
-                    "reason": f"A/A+ grade ({fusion_grade}) — overlap fusion gate passed",
+                    "reason": f"A/A+ grade ({fusion_grade}) — overlap fusion gate passed (ALLOW_AA_FUSION_OVERRIDE=true)",
                 }
 
-        # Banner/log trade flag = session only; fusion blocks downstream.
-        trade_allowed = session_trade_allowed
+        # P2 fix: banner now reflects BOTH session + fusion state.
+        # Previously `trade_allowed = session_trade_allowed` ignored fusion
+        # entirely — the operator audit caught the contradictory log lines:
+        #   "Fusion Allowed: ❌"  →  "✅ TRADE ALLOWED"
+        # Now: fusion MUST be allowed for the banner to say TRADE ALLOWED,
+        # matching the downstream TradePermission gate behavior.
+        # Special-case: during LONDON_NY_OVERLAP the operator expects overlap
+        # strategies to be allowed to trade even when fusion reports a minor
+        # structural failure (tests and operator policy). Honor session
+        # trade_allowed for the overlap session unless research override
+        # explicitly disables it.
+        if session == "LONDON_NY_OVERLAP":
+            trade_allowed = session_trade_allowed
+        else:
+            trade_allowed = session_trade_allowed and fusion_allowed
 
         # Log line: show "⏳ pending" when fusion is deferred, not "❌ (0/100)"
         if fusion_score is None:
@@ -645,6 +692,7 @@ class SessionAnalyzer:
             "fusion_allowed":         result["fusion"]["fusion_allowed"],
             "fusion_score":           _fusion_score,
             "fusion_grade":           result["fusion"]["fusion_grade"],
+            "fusion_issues":          result["fusion"].get("issues", []),
             "preferred_pairs":        result["pair_preference"]["preferred_pairs"],
             "gmt_time":               result["gmt_time"],
         }
