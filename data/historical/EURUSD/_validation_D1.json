@@ -1,0 +1,72 @@
+{
+  "errors": [],
+  "warnings": [
+    "252 non-weekend gaps (total gaps: 252)",
+    "88.49% of bars have spread=0 (re-download recommended)"
+  ],
+  "stats": {
+    "rows": 1242,
+    "start_utc": "2021-11-05 04:00:00+00:00",
+    "end_utc": "2026-08-14 04:00:00+00:00",
+    "date_range_days": 1743.0,
+    "duplicate_timestamps": 0,
+    "gap_count": 252,
+    "non_weekend_gap_count": 252,
+    "spread_zero_pct": 88.49,
+    "tick_volume_zero_pct": 0.0,
+    "real_volume_zero_pct": 100.0,
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "gaps_sample": [
+      {
+        "start": "2021-11-05 04:00:00+00:00",
+        "end": "2021-11-08 04:00:00+00:00",
+        "missing_bars": 2,
+        "is_weekend": false
+      },
+      {
+        "start": "2021-11-12 04:00:00+00:00",
+        "end": "2021-11-15 04:00:00+00:00",
+        "missing_bars": 2,
+        "is_weekend": false
+      },
+      {
+        "start": "2021-11-19 04:00:00+00:00",
+        "end": "2021-11-22 04:00:00+00:00",
+        "missing_bars": 2,
+        "is_weekend": false
+      },
+      {
+        "start": "2021-11-26 04:00:00+00:00",
+        "end": "2021-11-29 04:00:00+00:00",
+        "missing_bars": 2,
+        "is_weekend": false
+      },
+      {
+        "start": "2021-12-03 04:00:00+00:00",
+        "end": "2021-12-06 04:00:00+00:00",
+        "missing_bars": 2,
+        "is_weekend": false
+      }
+    ]
+  },
+  "file": "data\\historical\\EURUSD\\D1.csv",
+  "symbol": "EURUSD",
+  "timeframe": "D1",
+  "schema": [
+    "datetime_utc",
+    "open",
+    "high",
+    "low",
+    "close",
+    "bid",
+    "ask",
+    "tick_volume",
+    "spread",
+    "real_volume"
+  ],
+  "download_timestamp": "2026-08-17T14:56:27.103999+00:00"
+}

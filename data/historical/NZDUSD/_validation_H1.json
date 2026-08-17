@@ -1,0 +1,71 @@
+{
+  "errors": [],
+  "warnings": [
+    "122 non-weekend gaps (total gaps: 122)"
+  ],
+  "stats": {
+    "rows": 13345,
+    "start_utc": "2024-06-20 12:00:00+00:00",
+    "end_utc": "2026-08-15 03:00:00+00:00",
+    "date_range_days": 785.62,
+    "duplicate_timestamps": 0,
+    "gap_count": 122,
+    "non_weekend_gap_count": 122,
+    "spread_zero_pct": 11.44,
+    "tick_volume_zero_pct": 0.0,
+    "real_volume_zero_pct": 100.0,
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "gaps_sample": [
+      {
+        "start": "2024-06-22 03:00:00+00:00",
+        "end": "2024-06-24 04:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-06-29 03:00:00+00:00",
+        "end": "2024-07-01 04:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-07-02 16:00:00+00:00",
+        "end": "2024-07-03 04:00:00+00:00",
+        "missing_bars": 11,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-07-06 03:00:00+00:00",
+        "end": "2024-07-08 04:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-07-13 03:00:00+00:00",
+        "end": "2024-07-15 04:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": false
+      }
+    ]
+  },
+  "file": "data\\historical\\NZDUSD\\H1.csv",
+  "symbol": "NZDUSD",
+  "timeframe": "H1",
+  "schema": [
+    "datetime_utc",
+    "open",
+    "high",
+    "low",
+    "close",
+    "bid",
+    "ask",
+    "tick_volume",
+    "spread",
+    "real_volume"
+  ],
+  "download_timestamp": "2026-08-17T14:58:55.266757+00:00"
+}

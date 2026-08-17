@@ -1,0 +1,71 @@
+{
+  "errors": [],
+  "warnings": [
+    "135 non-weekend gaps (total gaps: 135)"
+  ],
+  "stats": {
+    "rows": 3859,
+    "start_utc": "2024-02-16 12:00:00+00:00",
+    "end_utc": "2026-08-15 00:00:00+00:00",
+    "date_range_days": 910.5,
+    "duplicate_timestamps": 0,
+    "gap_count": 135,
+    "non_weekend_gap_count": 135,
+    "spread_zero_pct": 3.08,
+    "tick_volume_zero_pct": 0.0,
+    "real_volume_zero_pct": 100.0,
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "gaps_sample": [
+      {
+        "start": "2024-02-17 00:00:00+00:00",
+        "end": "2024-02-19 04:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-02-24 00:00:00+00:00",
+        "end": "2024-02-26 04:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-03-02 00:00:00+00:00",
+        "end": "2024-03-04 04:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-03-09 00:00:00+00:00",
+        "end": "2024-03-11 04:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": false
+      },
+      {
+        "start": "2024-03-16 00:00:00+00:00",
+        "end": "2024-03-18 04:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": false
+      }
+    ]
+  },
+  "file": "data\\historical\\XAUUSD\\H4.csv",
+  "symbol": "XAUUSD",
+  "timeframe": "H4",
+  "schema": [
+    "datetime_utc",
+    "open",
+    "high",
+    "low",
+    "close",
+    "bid",
+    "ask",
+    "tick_volume",
+    "spread",
+    "real_volume"
+  ],
+  "download_timestamp": "2026-08-17T15:04:21.118962+00:00"
+}
