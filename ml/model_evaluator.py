@@ -45,6 +45,7 @@ class ModelMetrics:
     """Comprehensive evaluation metrics for one model."""
     model_name: str
     # Standard ML metrics
+    n_samples: int = 0
     accuracy: float = 0.0
     precision: float = 0.0
     recall: float = 0.0
@@ -131,6 +132,7 @@ class ModelEvaluator:
 
         y_test_arr = np.array(y_test).astype(int)
         y_pred_arr = np.array(y_pred).astype(int)
+        metrics.n_samples = int(len(y_test_arr))
 
         # Confusion matrix
         metrics.tp = int(np.sum((y_pred_arr == 1) & (y_test_arr == 1)))

@@ -1,55 +1,78 @@
 {
-  "episodes": 60000,
-  "win_rate": 0.017,
-  "avg_reward": -9140.96,
-  "trained_on": "2026-08-05T16:20:27.926499+00:00",
-  "timesteps": 200000,
-  "symbol": "GBPUSD",
+  "episodes": 90,
+  "win_rate": 0.4176,
+  "total_trades": 5513,
+  "trades_per_episode": 61.26,
+  "avg_reward": -3839.83,
+  "trained_on": "2026-08-17T11:07:55.479506+00:00",
+  "timesteps": 300000,
+  "symbol": "USDCHF",
   "timeframe": "H1",
   "engine_version": "v2",
   "eval_history": [
     {
       "timestep": 10000,
-      "avg_eval_reward": 0.029999999329447746,
-      "avg_eval_pnl": 0.0,
-      "eval_win_rate": 0.0,
-      "eval_trades": 0
+      "avg_eval_reward": -73.83000183105469,
+      "avg_eval_pnl": -5.21,
+      "eval_win_rate": 40.2,
+      "eval_trades": 249
     },
     {
       "timestep": 20000,
-      "avg_eval_reward": 0.029999999329447746,
-      "avg_eval_pnl": 0.0,
-      "eval_win_rate": 0.0,
-      "eval_trades": 0
+      "avg_eval_reward": -246.7100067138672,
+      "avg_eval_pnl": -371.36,
+      "eval_win_rate": 23.9,
+      "eval_trades": 159
     },
     {
       "timestep": 30000,
-      "avg_eval_reward": 0.029999999329447746,
-      "avg_eval_pnl": 0.0,
-      "eval_win_rate": 0.0,
-      "eval_trades": 0
+      "avg_eval_reward": -63.88999938964844,
+      "avg_eval_pnl": -239.19,
+      "eval_win_rate": 28.1,
+      "eval_trades": 203
     },
     {
       "timestep": 40000,
+      "avg_eval_reward": -7.329999923706055,
+      "avg_eval_pnl": -380.97,
+      "eval_win_rate": 23.1,
+      "eval_trades": 130
+    },
+    {
+      "timestep": 50000,
       "avg_eval_reward": 0.029999999329447746,
       "avg_eval_pnl": 0.0,
       "eval_win_rate": 0.0,
       "eval_trades": 0
     },
     {
-      "timestep": 50000,
-      "avg_eval_reward": -150.0,
+      "timestep": 60000,
+      "avg_eval_reward": 0.2800000011920929,
       "avg_eval_pnl": 0.0,
       "eval_win_rate": 0.0,
-      "eval_trades": 10
+      "eval_trades": 0
     },
     {
-      "timestep": 60000,
-      "avg_eval_reward": -150.0,
+      "timestep": 70000,
+      "avg_eval_reward": 0.2800000011920929,
       "avg_eval_pnl": 0.0,
       "eval_win_rate": 0.0,
-      "eval_trades": 10
+      "eval_trades": 0
+    },
+    {
+      "timestep": 80000,
+      "avg_eval_reward": 0.2800000011920929,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
+    },
+    {
+      "timestep": 90000,
+      "avg_eval_reward": 0.5099999904632568,
+      "avg_eval_pnl": 0.0,
+      "eval_win_rate": 0.0,
+      "eval_trades": 0
     }
   ],
-  "best_eval_reward": 0.03
+  "best_eval_reward": -7.33
 }

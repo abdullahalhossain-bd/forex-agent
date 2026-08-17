@@ -92,6 +92,7 @@ class ConfluenceScore:
     confidence: float = 0.0        # 0-100 final calibrated confidence
     has_contradiction: bool = False
     contradiction_reason: str = ""
+    experiment_alignment: str = ""  # EXPERIMENT Iteration 9; empty on live
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,6 +109,17 @@ class ConfluenceScore:
             "contradiction_reason": self.contradiction_reason,
         }
 
+
+
+# EXPERIMENT (Iteration 9, owner-approved) — NOT a production "fix"
+# Offline CSV backtests cannot populate session (always NEUTRAL by design),
+# news, or intermarket (live-only). Counting them toward min_aligned made ≥3 untestable.
+# When flag AND is_backtest_mode(): aligned/total use only {smc, technical, liquidity, currency_strength}
+# Live path unchanged. Re-review when live feeds make those modules directional.
+BACKTEST_EFFECTIVE_ALIGNMENT_ONLY = True
+BACKTEST_COUNTED_ALIGNMENT_MODULES = frozenset({
+    "smc", "technical", "liquidity", "currency_strength",
+})
 
 class DecisionScorer:
     """Computes weighted confluence scores from individual factor inputs."""
@@ -184,8 +196,21 @@ class DecisionScorer:
             result.final_direction = "SELL"
 
         # Count aligned factors
+        # EXPERIMENT (Iteration 9): backtest-only effective denominator. Live unchanged.
+        _count_from = result.factors
+        try:
+            from core.constants import is_backtest_mode
+            if BACKTEST_EFFECTIVE_ALIGNMENT_ONLY and is_backtest_mode():
+                _count_from = [
+                    f for f in result.factors
+                    if getattr(f, "name", None) in BACKTEST_COUNTED_ALIGNMENT_MODULES
+                ]
+                result.total_factors = len(_count_from)
+                result.experiment_alignment = "BACKTEST_EFFECTIVE_ALIGNMENT_ONLY"
+        except Exception:
+            _count_from = result.factors
         result.aligned_factors = sum(
-            1 for f in result.factors
+            1 for f in _count_from
             if f.direction == result.final_direction and f.is_meaningful
         )
 

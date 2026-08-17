@@ -64,6 +64,7 @@ Bug #D — `list_models()` used direct dict-key access on registry
 from __future__ import annotations
 import os
 import json
+import re
 import time
 import errno
 import contextlib
@@ -80,6 +81,22 @@ from config import PROJECT_ROOT
 
 MODELS_DIR = PROJECT_ROOT / "memory" / "ml_models"
 REGISTRY_PATH = MODELS_DIR / "_registry.json"
+
+
+def _sanitize_model_component(value: Any, fallback: str = "unknown") -> str:
+    """Normalize pair/timeframe values so they are always valid directory names."""
+    if value is None:
+        raw = fallback
+    elif isinstance(value, str):
+        raw = value.strip()
+    else:
+        raw = getattr(value, "__name__", type(value).__name__)
+    if not raw:
+        raw = fallback
+    raw = raw.replace("\\", "_").replace("/", "_").replace(":", "_")
+    raw = re.sub(r"[^A-Za-z0-9_.-]+", "_", raw)
+    raw = re.sub(r"_+", "_", raw).strip("_.-")
+    return raw or fallback
 
 
 class _RegistryLock:
@@ -261,7 +278,9 @@ class ModelStore:
             log.warning(f"[ModelStore] registry save failed: {e}")
 
     def _pair_dir(self, pair: str, timeframe: str) -> Path:
-        d = self.base_dir / f"{pair.upper()}_{timeframe}"
+        pair_name = _sanitize_model_component(pair, "unknown").upper()
+        tf_name = _sanitize_model_component(timeframe, "unknown")
+        d = self.base_dir / f"{pair_name}_{tf_name}"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -272,7 +291,9 @@ class ModelStore:
         Always POSIX-style ('/') regardless of the OS writing it, so the
         registry can move between Windows and Linux machines untouched.
         """
-        return f"{pair.upper()}_{timeframe}/{filename}"
+        pair_name = _sanitize_model_component(pair, "unknown").upper()
+        tf_name = _sanitize_model_component(timeframe, "unknown")
+        return f"{pair_name}_{tf_name}/{filename}"
 
     def _resolve_path(self, raw_path: str) -> Optional[Path]:
         """Resolve a registry-stored path (new relative style OR legacy
@@ -331,7 +352,9 @@ class ModelStore:
             # another process since __init__ / the last save.
             self._registry = self._load_registry()
 
-            key = f"{pair.upper()}_{timeframe}_{model_type}"
+            pair_name = _sanitize_model_component(pair, "unknown").upper()
+            tf_name = _sanitize_model_component(timeframe, "unknown")
+            key = f"{pair_name}_{tf_name}_{model_type}"
             versions = self._registry["models"].get(key, {}).get("versions", [])
             existing_labels = {v["version"] for v in versions}
             next_num = len(versions) + 1
@@ -355,7 +378,7 @@ class ModelStore:
                     # unverified model is unsafe and used to generate the
                     # recurring "No metadata file" production warning.
                     _safe_dump(model, str(model_path), metadata={
-                        "pair": pair.upper(), "timeframe": timeframe,
+                        "pair": pair_name, "timeframe": tf_name,
                         "model_type": model_type, "version": version_label,
                         "feature_names": list(feature_names or []),
                     })
@@ -366,8 +389,8 @@ class ModelStore:
             rel_path = self._relative_model_path(pair, timeframe, filename)
 
             meta = {
-                "pair": pair.upper(),
-                "timeframe": timeframe,
+                "pair": pair_name,
+                "timeframe": tf_name,
                 "model_type": model_type,
                 "version": version_label,
                 "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -392,8 +415,8 @@ class ModelStore:
                 "feature_names": list(feature_names or []),
             })
             self._registry["models"][key] = {
-                "pair": pair.upper(),
-                "timeframe": timeframe,
+                "pair": pair_name,
+                "timeframe": tf_name,
                 "model_type": model_type,
                 "versions": versions,
                 "latest": version_label,

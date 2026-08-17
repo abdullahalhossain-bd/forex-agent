@@ -6,12 +6,25 @@ SQLite-backed feature store for ML training data. Stores every
 feature vector + label + outcome so the ML model can learn over time.
 
 Tables:
-  * **features**    — feature_vector (JSON), pair, timeframe, timestamp
+  * **features**    — feature_vector (JSON), pair, timeframe, timestamp, source
   * **labels**      — target label + outcome (filled in after trade closes)
   * **importance**  — feature importance rankings over time
 
 CRITICAL: labels are added AFTER the trade closes — no future leakage.
 The features table only contains info available at decision time.
+
+CRITICAL (added after the 2026-08 leakage audit): every row now carries a
+`source` tag — 'live' for rows that came from real market/trading data,
+'bootstrap' for synthetic placeholder rows written by
+ml.data_bootstrap.bootstrap_feature_store_if_needed(). load_training_data()
+excludes 'bootstrap' rows by default. This exists because an earlier
+version of the bootstrap code wrote synthetic rows whose features and
+labels were both deterministic functions of row index (i.e. correlated
+with each other for no real reason), and because those rows were
+indistinguishable from real data there was no way to keep them out of a
+training run without wiping the whole database. Never remove the
+`source` filter from load_training_data() without an explicit,
+opt-in reason.
 
 Usage:
     store = get_feature_store()
@@ -92,6 +105,13 @@ class FeatureStore:
             for ddl in (
                 "ALTER TABLE labels ADD COLUMN labeling_method TEXT DEFAULT 'fixed_horizon'",
                 "ALTER TABLE labels ADD COLUMN sample_weight REAL DEFAULT 1.0",
+                # NEW (leakage audit follow-up): tag every features row with
+                # its origin. Existing rows (pre-migration) default to
+                # 'live' — this is not perfectly accurate for any old
+                # bootstrap rows written before this column existed, but
+                # those should be removed via scripts/cleanup_bootstrap_leakage.py
+                # (fingerprint-based), not silently mislabeled here.
+                "ALTER TABLE features ADD COLUMN source TEXT DEFAULT 'live'",
             ):
                 try:
                     c.execute(ddl)
@@ -119,18 +139,26 @@ class FeatureStore:
         forward_pips: Optional[float] = None,
         labeling_method: str = "fixed_horizon",
         sample_weight: float = 1.0,
+        source: str = "live",
     ) -> int:
         """Save a feature vector + optional label. Returns the feature_id.
 
         labeling_method/sample_weight are NEW (Priority #1) and default to
         the values every existing row already implicitly had — omitting
         them is identical to current behavior.
+
+        source: 'live' (default) for real market/trading data, or
+            'bootstrap' for synthetic placeholder rows. Only
+            ml.data_bootstrap should ever pass source='bootstrap'. This
+            lets load_training_data() keep synthetic rows out of any
+            training run that didn't explicitly ask for them.
         """
         with self._lock, self._conn() as c:
             cur = c.execute(
-                "INSERT INTO features (pair, timeframe, feature_vector, feature_count, timestamp) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO features (pair, timeframe, feature_vector, feature_count, timestamp, source) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (pair.upper(), timeframe, json.dumps(features, default=str),
-                 len(features), datetime.now(timezone.utc).isoformat(timespec="seconds")),
+                 len(features), datetime.now(timezone.utc).isoformat(timespec="seconds"), source),
             )
             feature_id = cur.lastrowid
             if label is not None:
@@ -162,16 +190,25 @@ class FeatureStore:
         pair: Optional[str] = None,
         timeframe: Optional[str] = None,
         min_samples: int = None,
+        include_bootstrap: bool = False,
     ) -> pd.DataFrame:
         """Load all feature vectors + labels as a DataFrame for ML training.
 
         Returns DataFrame with one row per sample: feature columns + 'label'.
+
+        include_bootstrap: if False (default), rows tagged source='bootstrap'
+            are excluded — training and any accuracy numbers you intend to
+            trust should always use the default. Pass True only for
+            first-run/dev flows that explicitly want the synthetic
+            placeholder rows included (e.g. so the bootstrap fallback in
+            ml.data_bootstrap can still let a from-scratch pipeline run
+            end-to-end without crashing).
         """
         with self._lock, self._conn() as c:
             query = """
                 SELECT f.id, f.pair, f.timeframe, f.feature_vector, f.timestamp,
                        l.label_binary, l.label_ternary, l.forward_pips, l.outcome, l.pnl_usd,
-                       l.labeling_method, l.sample_weight
+                       l.labeling_method, l.sample_weight, f.source
                 FROM features f
                 LEFT JOIN labels l ON f.id = l.feature_id
                 WHERE 1=1
@@ -183,6 +220,11 @@ class FeatureStore:
             if timeframe:
                 query += " AND f.timeframe = ?"
                 params.append(timeframe)
+            if not include_bootstrap:
+                # f.source defaults to 'live' for pre-migration rows via the
+                # ALTER TABLE default, so this only ever excludes rows
+                # explicitly tagged 'bootstrap'.
+                query += " AND (f.source IS NULL OR f.source != 'bootstrap')"
             query += " ORDER BY f.timestamp ASC"
             rows = c.execute(query, params).fetchall()
 
@@ -210,11 +252,12 @@ class FeatureStore:
                 # handling is a no-op for historical data.
                 feats["_labeling_method"] = r[10] if r[10] is not None else "fixed_horizon"
                 feats["sample_weight"] = r[11] if r[11] is not None else 1.0
+                feats["_source"] = r[12] if r[12] is not None else "live"
                 records.append(feats)
             except Exception as e:
                 log.debug(f"[FeatureStore] row parse failed: {e}")
         df = pd.DataFrame(records)
-        log.info(f"[FeatureStore] loaded {len(df)} samples ({len(rows)} raw)")
+        log.info(f"[FeatureStore] loaded {len(df)} samples ({len(rows)} raw, include_bootstrap={include_bootstrap})")
         return df
 
     def stats(self) -> Dict[str, Any]:
@@ -226,6 +269,9 @@ class FeatureStore:
             by_pair = c.execute(
                 "SELECT pair, COUNT(*) FROM features GROUP BY pair ORDER BY COUNT(*) DESC"
             ).fetchall()
+            by_source = c.execute(
+                "SELECT COALESCE(source, 'live'), COUNT(*) FROM features GROUP BY COALESCE(source, 'live')"
+            ).fetchall()
             wins = c.execute("SELECT COUNT(*) FROM labels WHERE outcome = 'WIN'").fetchone()[0]
             losses = c.execute("SELECT COUNT(*) FROM labels WHERE outcome = 'LOSS'").fetchone()[0]
         return {
@@ -236,6 +282,7 @@ class FeatureStore:
             "losses": losses,
             "win_rate_pct": round((wins / (wins + losses) * 100) if (wins + losses) else 0, 1),
             "by_pair": dict(by_pair),
+            "by_source": dict(by_source),
         }
 
     def save_importance(self, pair: str, method: str, ranking: List[Dict[str, Any]]) -> None:

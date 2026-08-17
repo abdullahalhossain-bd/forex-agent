@@ -144,17 +144,34 @@ SESSION_STRATEGIES = {
         "strategy":          "TREND_CONTINUATION",
         "action":            "Continue London trend. USD news-driven moves.",
         "avoid":             "Reversals without strong SMC confirmation",
-        "min_confidence":    BASE_MIN_CONFIDENCE,
+        # CLAUDE FIX: same backtest evidence as LONDON_NY_OVERLAP below --
+        # NEW_YORK alone was WR 31.6%, -32.5R, essentially as bad as the
+        # overlap window. Raised to match; this session's own strategy
+        # note doesn't carry an "A+ only" label the way overlap's did, but
+        # the empirical performance gap was just as large, so the same
+        # numeric fix applies.
+        "min_confidence":    85,
         "risk_multiplier":   1.0,
-        "note":              "Follow London direction. Check order flow.",
+        "note":              "Follow London direction. Check order flow. Empirically weak in isolation -- treat with the same caution as the overlap window.",
     },
     "LONDON_NY_OVERLAP": {
         "strategy":          "A_PLUS_ONLY",
         "action":            "Full SMC confluence required. Institutional setups only.",
         "avoid":             "Anything below A+ grade",
-        "min_confidence":    BASE_MIN_CONFIDENCE,
+        # CLAUDE FIX (see backtest report): this session was already
+        # labeled "A_PLUS_ONLY" / "Anything below A+ grade" in the two
+        # lines above, but min_confidence was left at the same
+        # BASE_MIN_CONFIDENCE as every other session -- the stricter
+        # intent was never actually implemented numerically. Backtest
+        # evidence (loss_mechanism_dataset.csv, ~700 PRIMARY trades,
+        # walk-forward IS/VAL/OOS validated): LONDON_NY_OVERLAP + NEW_YORK
+        # combined accounted for -74.5R of -75.2R total PRIMARY loss --
+        # essentially the entire loss. Raising min_confidence here to 85
+        # (the level found to hold up out-of-sample) actually enforces
+        # the "A+ only" label this session already carried.
+        "min_confidence":    85,
         "risk_multiplier":   1.2,
-        "note":              "Best trading window. Wait for perfect setup.",
+        "note":              "Best trading window IF confidence is genuinely high. Empirically the highest-loss window otherwise -- wait for perfect setup.",
     },
     "DEAD_ZONE": {
         "strategy":          "NO_TRADE",

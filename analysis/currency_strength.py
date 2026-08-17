@@ -130,26 +130,11 @@ class CurrencyStrengthEngine:
         # real network I/O on every bar (perf bug — this was measured at 100+
         # sec/bar during backtest runs, making a full 6000+ bar run take days).
         # Return a neutral fallback with the same dict shape instead.
-        if is_backtest_mode():
-            log.debug(
-                "[CurrencyStrength] backtest mode — live 28-pair fetch skipped, "
-                "returning neutral fallback"
-            )
-            neutral = {c: 50.0 for c in MAJOR_CURRENCIES}
-            result = {
-                "strengths":    neutral,
-                "raw_scores":   {c: 0.0 for c in MAJOR_CURRENCIES},
-                "pair_details": {},
-                "timeframe":    self.timeframe,
-                "pairs_used":   0,
-                "pairs_failed": [],
-                "timestamp":    datetime.utcnow().isoformat(),
-                "source":       "backtest_skipped",
-            }
-            self._strength_cache      = result
-            self._strength_cache_time = now
-            return result
-
+        # Parity fix (Iteration 7): do NOT hard-skip in backtest.
+        # Live path uses DataFetcher.fetch_ohlcv; in backtest mode the same
+        # call hits backtest_ohlcv_cache for any registered historical pairs
+        # (as-of sliced — no look-ahead). If zero pairs resolve, fall back
+        # to neutral — same outcome as before when no data exists.
         raw_scores     = {c: 0.0 for c in MAJOR_CURRENCIES}
         counts         = {c: 0   for c in MAJOR_CURRENCIES}
         pair_details   = {}
@@ -192,7 +177,13 @@ class CurrencyStrengthEngine:
             "pairs_used":   len(pair_details),
             "pairs_failed": fetch_failures,
             "timestamp":    datetime.utcnow().isoformat(),
+            "source":       ("backtest_cache" if is_backtest_mode() else "live"),
         }
+        if len(pair_details) == 0:
+            log.warning(
+                "[CurrencyStrength] zero pairs resolved — neutral strengths "
+                "(backtest needs multi-pair OHLCV registered in cache; live needs MT5)"
+            )
         self._strength_cache      = result
         self._strength_cache_time = now
         return result

@@ -258,42 +258,53 @@ def _extract_rr(signal: dict) -> float:
 
 @dataclass
 class EngineWeights:
-    """Base per-engine consensus weights. Research-driven tuning belongs
-    here (backed by the audit WR/PF/Sharpe numbers referenced in code
-    comments), not as inline literals in the voting logic. These are
-    still starting points, not a substitute for `pair_weight_overrides`
-    or the regime multiplier — see class docstring on `ConsensusConfig`."""
-    stop_hunt: float = 2.0
-    ict_amd: float = 3.0
-    pa: float = 1.5
-    liquidity: float = 1.3
-    cci: float = 1.0
-    # NEW: pattern votes (issue #3). Base weight per HIGH reliability
-    # pattern; Medium/Low reliability patterns are scaled down further in
-    # `_pattern_votes`.
-    pattern: float = 0.8
+    """Base per-engine consensus weights — calibrated from M15 walk-forward
+    backtests (2025-07 → 2026-07, GBPUSD/USDCAD/EURAUD/GBPCAD).
+
+    Empirical findings (n≈160 trades):
+      - Liquidity alone drove ~100% of signals but only ~41% WR → cut weight.
+      - ICT/AMD sparse but higher quality when it fires → keep high.
+      - StopHunt High-conf historically ~52% (report); overall ~37% → moderate.
+      - CCI ~50% in limited sample → modest weight, needs confluence.
+      - PA engine does not support M15 → effectively disabled on M15.
+      - Patterns highly mixed (Tweezer Top 57%, Hammer 18%, Hanging Man 17%)
+        → low base weight + allowlist of proven patterns only.
+
+    2026-08-14 frequency pass → daily-trade pass:
+      Target ≥1 actionable signal/day across active pairs.
+      Liquidity still cannot solo (1.0 < min_action 1.15 when alone after
+      conf_scale), but Liquidity+CCI / Liquidity+Pattern / StopHunt High
+      / ICT clear the bar easily.
+    """
+    stop_hunt: float = 2.2
+    ict_amd: float = 3.2
+    pa: float = 1.4
+    liquidity: float = 1.0           # pair with any other engine → trade
+    cci: float = 1.2
+    pattern: float = 0.85            # allowlist patterns contribute meaningfully
 
 
 @dataclass
 class ConsensusConfig:
-    """Tunable consensus-layer thresholds (institutional review fix #9).
+    """Tunable consensus-layer thresholds.
 
-    2026-08-13 (0-trades audit): thresholds were so high that a single
-    healthy engine (e.g. StopHunt weight 2.0, or ICT weight 3.0) could not
-    clear min_action_score when every other engine abstained. Live logs
-    showed 0 consensus BUY/SELL across 164 evaluations. Relaxed so that
-    one solid engine vote is enough to surface a signal; downstream
-    TradePermission / fusion still provide the multi-layer safety net.
+    2026-08-14 recalibration (winrate audit) + frequency → daily pass:
+      Goal: daily trades without pure-solo-Liquidity spam.
+      min_action_score 1.15 → Liquidity(1.0) alone still blocked after
+      conf_scale (~0.7–0.9), but any 2-engine combo clears.
+      High can come from ICT alone or StopHunt-High alone.
     """
-    min_action_score: float = 0.8       # was 1.8 — single engine (wt≥1.0) can now clear
-    min_margin_abs: float = 0.2         # was 0.5 — less strict when only one side votes
-    min_margin_ratio: float = 1.05      # was 1.15 — 5% dominance enough when both sides vote
-    high_confidence_score: float = 3.0
-    medium_confidence_score: float = 1.5
-    rr_ev_weight: float = 0.15          # how much a vote's R:R scales its effective weight
-    rr_ev_cap: float = 2.5              # cap the R:R multiplier so a single 1:20 outlier can't dominate
-    max_pattern_votes: int = 2          # cap how many patterns can vote, so a noisy cluster of low-grade
-                                         # patterns can't out-vote the real strategy engines
+    min_action_score: float = 1.15      # Liquidity alone blocked; 2 engines clear
+    min_margin_abs: float = 0.20
+    min_margin_ratio: float = 1.06
+    high_confidence_score: float = 2.4
+    medium_confidence_score: float = 1.30
+    rr_ev_weight: float = 0.18
+    rr_ev_cap: float = 2.2
+    max_pattern_votes: int = 2
+    min_engines_for_high: int = 1
+    min_calibrated_for_high: float = 0.58
+    min_calibrated_for_medium: float = 0.36
 
 
 # Regime → per-engine multiplier (institutional review fix #12).
@@ -302,15 +313,34 @@ class ConsensusConfig:
 # opposite. CHOPPY caps everything low (and separately hard-blocks ICT via
 # `regime_ctx`).
 _REGIME_WEIGHT_MULTIPLIERS: Dict[str, Dict[str, float]] = {
-    "TRENDING": {"stop_hunt": 1.00, "ict_amd": 1.15, "pa": 1.15, "liquidity": 0.90, "cci": 0.75, "pattern": 1.00},
-    "RANGING":  {"stop_hunt": 1.05, "ict_amd": 0.85, "pa": 0.90, "liquidity": 1.15, "cci": 1.25, "pattern": 1.00},
-    "VOLATILE": {"stop_hunt": 0.85, "ict_amd": 0.80, "pa": 0.80, "liquidity": 0.85, "cci": 0.70, "pattern": 0.85},
-    # 2026-08-13: ict_amd was hard-zeroed in CHOPPY which, combined with
-    # the old min_action_score=1.8, made CHOPPY sessions produce zero votes
-    # forever. Softened so mean-reversion engines can still surface a
-    # signal; ICT still heavily discounted (regime_ctx hard-gate remains).
-    "CHOPPY":   {"stop_hunt": 0.60, "ict_amd": 0.25, "pa": 0.55, "liquidity": 0.70, "cci": 0.80, "pattern": 0.45},
+    # Frequency pass: mild uplift vs previous ultra-discount so more
+    # regimes can still clear min_action_score without re-opening pure
+    # Liquidity spam.
+    "TRENDING": {"stop_hunt": 1.10, "ict_amd": 1.25, "pa": 1.20, "liquidity": 0.70, "cci": 0.75, "pattern": 1.00},
+    "RANGING":  {"stop_hunt": 1.15, "ict_amd": 0.90, "pa": 1.00, "liquidity": 0.85, "cci": 1.25, "pattern": 1.05},
+    "VOLATILE": {"stop_hunt": 0.90, "ict_amd": 0.85, "pa": 0.85, "liquidity": 0.65, "cci": 0.75, "pattern": 0.85},
+    # Softened further so mean-reversion can fire in chop without ICT.
+    "CHOPPY":   {"stop_hunt": 0.70, "ict_amd": 0.30, "pa": 0.60, "liquidity": 0.55, "cci": 0.95, "pattern": 0.50},
 }
+
+# Patterns allowed to vote (others are blocked). Derived from M15 WR audit:
+# keep only those with WR ≥ ~40% + classic high-reliability, or borderline
+# that historically helped confluence (frequency pass expanded slightly).
+_PATTERN_VOTE_ALLOWLIST = {
+    "Tweezer Top", "Three Inside Up", "Three Inside Down",
+    "Bearish Engulfing", "Bullish Engulfing",
+    "Bearish Harami", "Bullish Harami",
+    "Evening Star", "Morning Star",
+    "Shooting Star", "Dark Cloud Cover",
+    "Three White Soldiers", "Three Black Crows",
+    "Doji",  # high frequency, modest WR — only votes under confluence
+}
+# Patterns that actively hurt (WR < 25% in audit) — hard block.
+_PATTERN_VOTE_BLOCKLIST = {
+    "Hammer", "Hanging Man", "Piercing Line", "Inverted Hammer",
+    "Tweezer Bottom",  # 27.9% WR in audit — surprisingly weak on M15
+}
+
 _CONFIDENCE_PRIOR = {"High": 0.85, "Medium": 0.6, "Low": 0.35}
 
 
@@ -343,7 +373,7 @@ class UnifiedSignalEngine:
         ict_min_rr: float = 6.0,
         pa_min_rr: float = 2.0,
         liquidity_min_rr: float = 2.0,
-        cci_min_rr: float = 1.5,
+        cci_min_rr: float = 2.0,   # was 1.5 — raise for positive EV at ~45% WR
         # Pattern lookback
         pattern_lookback: int = 20,
         # ── Institutional review additions ──
@@ -766,9 +796,19 @@ class UnifiedSignalEngine:
             stop = max(pool_price, entry) + 1.0 * atr_val
             tp = entry - abs(entry - stop) * self.liquidity_min_rr
 
-        # Confidence now reflects pool strength, not a flat "Medium".
-        touches = sweep.get("touches", 0)
-        confidence = "High" if touches >= 3 else "Medium" if touches >= 2 else "Low"
+        # Profit-safe confidence (2026-08-15 audit):
+        # Historical liquidity-driven signals ~41% WR. Never label High —
+        # High is reserved for ICT / StopHunt-High which have proven edge.
+        # Strong pools (4+ touches) → Medium; 2-3 → Low; <2 → abstain path.
+        touches = int(sweep.get("touches", 0) or 0)
+        if touches >= 4:
+            confidence = "Medium"
+        elif touches >= 2:
+            confidence = "Low"
+        else:
+            return self._fallback_liquidity(
+                reason=f"Sweep pool too weak ({touches} touches < 2)"
+            )
 
         return {
             "valid": True,
@@ -838,19 +878,33 @@ class UnifiedSignalEngine:
         tp = close + 1.5 * atr_val * self.cci_min_rr if action == "BUY" \
             else close - 1.5 * atr_val * self.cci_min_rr
 
-        confluence = getattr(sig, "confluence_score", 0)
+        confluence = int(getattr(sig, "confluence_score", 0) or 0)
+        zone_strength = str(best_zone.get("strength", "Weak") or "Weak")
+        # Profit-safe CCI confidence (2026-08-15 audit):
+        # Overall CCI WR ~35%. Only Strong zone + full confluence (3) may
+        # claim High. Medium needs confluence≥2 at Strong/Medium zone.
+        # Weak zones never vote above Low — they historically drag EV negative.
+        if confluence >= 3 and zone_strength == "Strong":
+            confidence = "High"
+        elif confluence >= 2 and zone_strength in ("Strong", "Medium"):
+            confidence = "Medium"
+        elif confluence >= 1:
+            confidence = "Low"
+        else:
+            return self._fallback_cci(reason="CCI confluence too weak")
+
         return {
             "valid": True,
             "cci_value": round(cci_val, 2),
             "zone_type": best_zone_type,
-            "zone_strength": best_zone.get("strength", "Weak"),
+            "zone_strength": zone_strength,
             "signal": {
                 "action": action, "entry_price": round(close, 5),
                 "stop_loss": round(stop, 5), "take_profit": round(tp, 5),
                 "risk_reward": self.cci_min_rr, "r_rr": self.cci_min_rr,
                 "reason": f"CCI={cci_val:.1f} at {best_zone_type} zone "
-                          f"({best_zone.get('strength', 'Weak')}, {best_zone.get('touches', 0)} touches)",
-                "confidence": "High" if confluence == 3 else "Medium" if confluence == 2 else "Low",
+                          f"({zone_strength}, {best_zone.get('touches', 0)} touches, conf={confluence}/3)",
+                "confidence": confidence,
             },
         }
 
@@ -896,21 +950,28 @@ class UnifiedSignalEngine:
         """
         trail = []
         votes = []
-        reliability_mult = {"High": 1.0, "Medium": 0.6, "Low": 0.3}
-        eligible = [
-            p for p in detected_patterns
-            if p.near_zone and p.direction in ("bullish", "bearish")
-            and p.candle_index >= df_len - 2
-        ]
+        reliability_mult = {"High": 1.0, "Medium": 0.55, "Low": 0.25}
+        eligible = []
+        for p in detected_patterns:
+            name = getattr(p, "pattern_name", "") or ""
+            if name in _PATTERN_VOTE_BLOCKLIST:
+                trail.append(f"Pattern:{name}=blocked abstained: blocklisted (historically weak WR)")
+                continue
+            if name not in _PATTERN_VOTE_ALLOWLIST and getattr(p, "reliability", "") != "High":
+                trail.append(f"Pattern:{name}=skipped abstained: not in allowlist and not High reliability")
+                continue
+            if not (p.near_zone and p.direction in ("bullish", "bearish") and p.candle_index >= df_len - 2):
+                continue
+            eligible.append(p)
         if not eligible:
-            trail.append("Patterns=none_eligible abstained: no directional, zone-confluent, recent pattern")
+            trail.append("Patterns=none_eligible abstained: no directional, zone-confluent, recent, allowed pattern")
             return votes, trail
 
         # Highest reliability first, cap count.
         eligible.sort(key=lambda p: reliability_mult.get(p.reliability, 0), reverse=True)
         for p in eligible[: self.consensus_config.max_pattern_votes]:
             action = "BUY" if p.direction == "bullish" else "SELL"
-            w = weights.pattern * reliability_mult.get(p.reliability, 0.3) * regime_mult.get("pattern", 1.0)
+            w = weights.pattern * reliability_mult.get(p.reliability, 0.25) * regime_mult.get("pattern", 1.0)
             votes.append((action, w, p.reliability, f"Pattern:{p.pattern_name}"))
             trail.append(f"Pattern:{p.pattern_name}={action}({p.reliability}) voted weight={w:.2f}")
         return votes, trail
@@ -969,15 +1030,31 @@ class UnifiedSignalEngine:
                     f"{name}={action} abstained: {str(sig.get('reason', 'no reason given'))[:100]}"
                 )
                 return
+            eng_conf = sig.get("confidence", "Medium")
+            # Historical audit: StopHunt Medium=10% / Low=0% WR.
+            # Daily-trade pass: Low still hard-skip; Medium allowed at
+            # heavily reduced weight so it can only help confluence, never solo.
+            if name == "StopHunt" and eng_conf == "Low":
+                _vote_trail.append(
+                    f"{name}={action}({eng_conf}) abstained: StopHunt Low hist WR=0%"
+                )
+                return
+            stop_hunt_med_penalty = 0.35 if (name == "StopHunt" and eng_conf == "Medium") else 1.0
             rr = _extract_rr(sig)
             rr_mult = 1.0 + min(cfg.rr_ev_weight * (rr - 1.0), cfg.rr_ev_cap - 1.0)
-            rr_mult = max(rr_mult, 0.5)  # never let a sub-1 R:R crush a vote to near-zero
-            eff_weight = base_weight * regime_mult.get(mult_key, 1.0) * rr_mult
-            votes.append((action, eff_weight, sig.get("confidence", "Medium"), name))
+            rr_mult = max(rr_mult, 0.5)
+            conf_mult = _CONFIDENCE_PRIOR.get(eng_conf, 0.5)
+            # Blend: full weight only when engine itself is confident
+            conf_scale = 0.55 + 0.45 * conf_mult  # High≈0.93, Medium≈0.82, Low≈0.71
+            eff_weight = (
+                base_weight * regime_mult.get(mult_key, 1.0) * rr_mult
+                * conf_scale * stop_hunt_med_penalty
+            )
+            votes.append((action, eff_weight, eng_conf, name))
             _vote_trail.append(
-                f"{name}={action}({sig.get('confidence', '?')}) voted "
+                f"{name}={action}({eng_conf}) voted "
                 f"weight={eff_weight:.2f} (base={base_weight}, regime_x{regime_mult.get(mult_key, 1.0):.2f}, "
-                f"rr_x{rr_mult:.2f}, rr={rr:.1f})"
+                f"rr_x{rr_mult:.2f}, conf_x{conf_scale:.2f}, rr={rr:.1f})"
             )
 
         _engine_vote(stop_hunt_result, weights.stop_hunt, "stop_hunt", "StopHunt")
@@ -1083,6 +1160,55 @@ class UnifiedSignalEngine:
             cfg=cfg,
         )
 
+        # ── Profit gate (2026-08-15) ──────────────────────────────────
+        # Historical priors: ICT≈100%, StopHunt-High≈52%, Liquidity≈41%,
+        # CCI≈35%, Patterns≈38%.
+        # Rules:
+        #  1. Edge engine present (ICT/StopHunt) → always allow.
+        #  2. Weak-only: need ≥2 distinct real engines (not just patterns)
+        #     e.g. Liquidity+CCI. Solo CCI / pattern-only / solo Liq → block.
+        #  3. Weak-only + Low confidence → always block (negative EV).
+        _win_blob = " ".join(e for _, _, _, e in winning_votes).lower()
+        _has_edge = (
+            "ict" in _win_blob
+            or "stophunt" in _win_blob
+            or "stop_hunt" in _win_blob
+            or "stop hunt" in _win_blob
+        )
+        _real_engines = set()
+        for _, _, _, e in winning_votes:
+            el = e.lower()
+            if el.startswith("pattern"):
+                continue
+            if "liquidity" in el:
+                _real_engines.add("liquidity")
+            elif "cci" in el:
+                _real_engines.add("cci")
+            elif "pa" in el:
+                _real_engines.add("pa")
+            else:
+                _real_engines.add(el.split(":")[0].strip() or el)
+        _weak_ok = len(_real_engines) >= 2
+
+        if not _has_edge and (confidence == "Low" or not _weak_ok):
+            return {
+                **base_result,
+                "action": "NO_TRADE",
+                "confidence": confidence if confidence else "Low",
+                "calibrated_score": calibrated_score,
+                "reason": (
+                    f"Profit gate: {consensus_action} weak-only stack "
+                    f"(engines={sorted(_real_engines) or ['patterns-only']}, "
+                    f"conf={confidence}) — need ICT/StopHunt or ≥2 real engines"
+                ) + degraded_note,
+                "voting_engines": [
+                    {"engine": e, "action": a, "weight": round(w, 3), "confidence": c}
+                    for a, w, c, e in winning_votes
+                ],
+                "buy_score": round(buy_score, 2),
+                "sell_score": round(sell_score, 2),
+            }
+
         reason = (
             f"Consensus {consensus_action} | {vote_count} engine(s)/pattern(s) agreed | "
             f"Score={consensus_score:.2f} vs {loser_score:.2f} | Regime={regime_label}"
@@ -1124,6 +1250,7 @@ class UnifiedSignalEngine:
         here once it exists rather than trusting this number as a true P(win).
         """
         # Component 1: vote-count signal, saturating at 3 agreeing sources.
+        # Strong engines (ICT, StopHunt) count more toward "quality".
         count_component = min(vote_count / 3.0, 1.0)
         # Component 2: absolute score vs. the "High" threshold.
         score_component = min(consensus_score / max(cfg.high_confidence_score, 1e-9), 1.0)
@@ -1132,16 +1259,56 @@ class UnifiedSignalEngine:
         # Component 4: mean of each voting engine's own confidence prior.
         priors = [_CONFIDENCE_PRIOR.get(c, 0.5) for _, _, c, _ in winning_votes]
         prior_component = float(np.mean(priors)) if priors else 0.5
+        # Component 5: engine quality bonus/penalty from historical WR audit.
+        # ICT (~100% tiny-n) and StopHunt-High (~52%) raise trust.
+        # Liquidity-dominant / pure weak-engine stacks are penalized so they
+        # cannot inflate calibrated_score into High and bleed the book.
+        engine_names = " ".join(e for _, _, _, e in winning_votes).lower()
+        quality_bonus = 0.0
+        if "ict" in engine_names:
+            quality_bonus += 0.14
+        if "stophunt" in engine_names or "stop_hunt" in engine_names or "stop hunt" in engine_names:
+            quality_bonus += 0.08
+        if "liquidity" in engine_names and vote_count == 1:
+            quality_bonus -= 0.22  # solo Liquidity ~41% WR — hard penalize
+        if "liquidity" in engine_names and "ict" not in engine_names and "stophunt" not in engine_names and "stop_hunt" not in engine_names and "stop hunt" not in engine_names:
+            # Liquidity without a proven edge engine → modest penalty
+            quality_bonus -= 0.08
+        if "cci" in engine_names and vote_count == 1:
+            quality_bonus -= 0.12  # solo CCI overall ~35% WR
+        if "pattern" in engine_names and vote_count == 1:
+            quality_bonus -= 0.10  # pattern-only historically mixed
 
         calibrated = (
-            0.30 * count_component + 0.30 * score_component
-            + 0.20 * margin_component + 0.20 * prior_component
+            0.28 * count_component + 0.28 * score_component
+            + 0.18 * margin_component + 0.18 * prior_component
+            + quality_bonus
         )
         calibrated = round(min(max(calibrated, 0.0), 1.0), 3)
 
-        if calibrated >= 0.70 or vote_count >= 2 or consensus_score >= cfg.high_confidence_score:
+        # Bucketing (profit-safe 2026-08-15):
+        # High ONLY when a proven-edge engine (ICT or StopHunt) is in the
+        # winning stack. Liquidity/CCI/Pattern confluence → Medium at best.
+        # Keeps daily frequency via Medium while protecting book WR.
+        min_cal_h = getattr(cfg, "min_calibrated_for_high", 0.58)
+        min_cal_m = getattr(cfg, "min_calibrated_for_medium", 0.36)
+
+        engine_blob = " ".join(e for _, _, _, e in winning_votes).lower()
+        has_ict = "ict" in engine_blob
+        has_stophunt = (
+            "stophunt" in engine_blob
+            or "stop_hunt" in engine_blob
+            or "stop hunt" in engine_blob
+        )
+        has_edge = has_ict or has_stophunt
+
+        if has_edge and calibrated >= min_cal_h and (
+            consensus_score >= cfg.high_confidence_score * 0.85 or vote_count >= 2
+        ):
             label = "High"
-        elif calibrated >= 0.45 or consensus_score >= cfg.medium_confidence_score:
+        elif calibrated >= min_cal_m or (
+            vote_count >= 1 and consensus_score >= cfg.medium_confidence_score
+        ):
             label = "Medium"
         else:
             label = "Low"

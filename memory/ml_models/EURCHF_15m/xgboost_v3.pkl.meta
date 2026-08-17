@@ -1,0 +1,37 @@
+{
+  "hash": "3470a06731da3e582640e8cff87b4c7abec0e3e241886a3e89e5789fd669d6b7",
+  "saved_at": "2026-08-17T11:21:51.377016+00:00",
+  "metadata": {
+    "pair": "EURCHF",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v3",
+    "feature_names": [
+      "price_open",
+      "price_high",
+      "price_low",
+      "price_close",
+      "price_volume",
+      "change_1",
+      "change_3",
+      "change_5",
+      "distance_ma20",
+      "distance_ma50",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "day_of_week",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "trend_bias",
+      "volatility",
+      "session_hour",
+      "pair_strength",
+      "high",
+      "low",
+      "close",
+      "open"
+    ]
+  }
+}

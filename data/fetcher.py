@@ -546,7 +546,24 @@ class DataFetcher:
         try:
             from core.constants import is_backtest_mode
             if is_backtest_mode():
-                log.debug(f"[DataFetcher] backtest mode — skipping live fetch for {symbol} {timeframe}")
+                # Iteration-3: serve registered historical series (M15 + resampled
+                # H1/H4) so SMCEngine / MTF paths work without live MT5.
+                # Returns None if nothing registered or asof not set — same
+                # fail-closed behaviour as before for unregistered symbols.
+                try:
+                    from data.backtest_ohlcv_cache import get_ohlcv as _bt_get
+                    _bt_df = _bt_get(symbol, timeframe, limit=limit)
+                    if _bt_df is not None and not _bt_df.empty:
+                        log.debug(
+                            f"[DataFetcher] backtest cache hit {symbol} {timeframe} "
+                            f"bars={len(_bt_df)}"
+                        )
+                        return _bt_df
+                except Exception as _bt_e:
+                    log.debug(f"[DataFetcher] backtest cache miss: {_bt_e}")
+                log.debug(
+                    f"[DataFetcher] backtest mode — no cache for {symbol} {timeframe}"
+                )
                 return None
         except Exception:
             pass

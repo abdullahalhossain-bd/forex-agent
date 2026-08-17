@@ -70,19 +70,51 @@ def main():
     except Exception:
         ppo_dir = os.path.join(_PROJECT_ROOT, "ml", "rl_policy")
 
+    # AUDIT FIX (2026-08-17, RL winrate/frequency project): rl_agent.py
+    # now prefers ppo_forex_best.zip (the checkpoint the training
+    # callback specifically verified against a held-out eval, gated on
+    # its own real win_rate/avg_reward) over ppo_forex_latest.zip (just
+    # whatever the run happened to end on — round-3 testing showed this
+    # can be a degenerate never-trades checkpoint even when an earlier
+    # one in the same run was genuinely profitable). Check both files so
+    # this diagnostic reflects what actually gets loaded.
+    ppo_best = os.path.join(ppo_dir, "ppo_forex_best.zip")
+    ppo_best_meta = os.path.join(ppo_dir, "ppo_forex_best_meta.json")
+    if os.path.isfile(ppo_best):
+        size_kb = os.path.getsize(ppo_best) / 1024
+        step("PPO BEST model file exists", True, f"{ppo_best} ({size_kb:.0f} KB)")
+        if os.path.isfile(ppo_best_meta):
+            try:
+                import json as _json
+                with open(ppo_best_meta) as _f:
+                    _meta = _json.load(_f)
+                step("PPO BEST meta.json", True,
+                     f"win_rate={_meta.get('win_rate', 'n/a')}, "
+                     f"avg_reward={_meta.get('avg_reward', 'n/a')}, "
+                     f"episodes={_meta.get('episodes', 'n/a')}")
+            except Exception as e:
+                step("PPO BEST meta.json", False, f"unreadable: {e}")
+        else:
+            step("PPO BEST meta.json", False, f"{ppo_best_meta} not found")
+    else:
+        step("PPO BEST model file exists", False,
+             f"{ppo_best} not found — this is normally the primary model; "
+             f"falls back to latest.zip, then heuristic")
+
     ppo_latest = os.path.join(ppo_dir, "ppo_forex_latest.zip")
     if os.path.isfile(ppo_latest):
         size_kb = os.path.getsize(ppo_latest) / 1024
-        step("PPO model file exists", True, f"{ppo_latest} ({size_kb:.0f} KB)")
+        step("PPO LATEST model file exists", True, f"{ppo_latest} ({size_kb:.0f} KB)")
     else:
-        step("PPO model file exists", False, f"{ppo_latest} not found")
-        # List what IS in the directory
-        if os.path.isdir(ppo_dir):
-            files = os.listdir(ppo_dir)
-            step("rl_policy directory contents", True,
-                 f"{len(files)} files: {files[:8]}")
-        else:
-            step("rl_policy directory", False, f"{ppo_dir} does not exist")
+        step("PPO LATEST model file exists", False, f"{ppo_latest} not found")
+
+    # List what IS in the directory either way
+    if os.path.isdir(ppo_dir):
+        files = os.listdir(ppo_dir)
+        step("rl_policy directory contents", True,
+             f"{len(files)} files: {files[:8]}")
+    else:
+        step("rl_policy directory", False, f"{ppo_dir} does not exist")
 
     # Check policy versioning store
     ppo_versions_dir = os.path.join(_PROJECT_ROOT, "memory", "rl_policy_versions")

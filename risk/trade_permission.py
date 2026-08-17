@@ -311,9 +311,15 @@ class TradePermission:
                 # explicit MTF_STRUCTURE_SOFTEN env var (off by default) can.
                 elif blocked and gate_name == "mtf_structure_no_trade":
                     import os as _os_mtf_struct
-                    # Default to softening MTF structure NO_TRADE in tests
-                    # and during conservative tuning. Allow opt-out via env.
-                    _soften_mtf_struct = _os_mtf_struct.getenv("MTF_STRUCTURE_SOFTEN", "true").lower() == "true"
+                    # CLAUDE FIX (see backtest report): the comment above has
+                    # always said this override is "off by default", but the
+                    # code defaulted the env var to "true" (softened/ON by
+                    # default) -- a direct contradiction that silently
+                    # disabled the exact gate the "silent-pass #1" audit fix
+                    # was meant to restore. Default corrected to "false" so
+                    # mtf_structure_no_trade actually hard-blocks unless an
+                    # operator explicitly opts into softening it.
+                    _soften_mtf_struct = _os_mtf_struct.getenv("MTF_STRUCTURE_SOFTEN", "false").lower() == "true"
                     if _soften_mtf_struct:
                         checks.append({
                             "check":  f"Execution filter: {gate_name}",

@@ -1,0 +1,13 @@
+{
+  "episodes": 10,
+  "win_rate": 0.2308,
+  "avg_reward": -7.33,
+  "timestep": 40000,
+  "avg_eval_pnl": -380.97,
+  "eval_trades": 130,
+  "trained_on": "2026-08-17T11:00:50.711382+00:00",
+  "symbol": "USDCHF",
+  "timeframe": "H1",
+  "engine_version": "v2",
+  "checkpoint_type": "best_eval"
+}

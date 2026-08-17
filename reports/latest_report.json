@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-14T09:34:10+00:00",
+  "generated_at": "2026-08-17T07:18:54+00:00",
   "mode": "MT5_DEMO",
   "scanner": "OFF",
   "pairs": [
@@ -110,9 +110,9 @@
     "symbol": "EURUSD",
     "consecutive_losses": 3,
     "daily_loss_sync_stale": false,
-    "recent_win_rate": 0.0,
-    "daily_loss_usd": 14.16,
-    "daily_loss_pct": 0.01,
+    "recent_win_rate": 0,
+    "daily_loss_usd": 0.0,
+    "daily_loss_pct": 0.0,
     "pause_reason": "",
     "total_trades": 7,
     "by_symbol": {
@@ -121,9 +121,9 @@
         "symbol": "EURUSD",
         "consecutive_losses": 3,
         "daily_loss_sync_stale": false,
-        "recent_win_rate": 0.0,
-        "daily_loss_usd": 14.16,
-        "daily_loss_pct": 0.01,
+        "recent_win_rate": 0,
+        "daily_loss_usd": 0.0,
+        "daily_loss_pct": 0.0,
         "pause_reason": "",
         "total_trades": 7
       },
@@ -143,8 +143,8 @@
         "symbol": "USDJPY",
         "consecutive_losses": 3,
         "daily_loss_sync_stale": false,
-        "recent_win_rate": 0.0,
-        "daily_loss_usd": 2.1,
+        "recent_win_rate": 0,
+        "daily_loss_usd": 0.0,
         "daily_loss_pct": 0.0,
         "pause_reason": "",
         "total_trades": 7
@@ -647,16 +647,16 @@
     }
   },
   "summary": {
-    "trades": 18,
+    "trades": 0,
     "wins": 0,
-    "losses": 16,
+    "losses": 0,
     "win_rate": 0.0,
-    "profit": -28.46,
-    "balance": 99131.47,
+    "profit": 0.0,
+    "balance": 99159.93,
     "open_positions": 0,
-    "average_rr": 2.44,
+    "average_rr": 0,
     "best_setup": "N/A",
-    "biggest_mistake": "none"
+    "biggest_mistake": "N/A"
   },
   "last_results": []
 }

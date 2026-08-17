@@ -1,8 +1,0 @@
-{
-  "total_min_confidence_failures": 218,
-  "naturally_low_confidence": 158,
-  "penalty_created_block": 60,
-  "threshold_only_dynamic_threshold": 0,
-  "other_upstream_block_cooccurring": 197,
-  "borderline_within_5pts": 8
-}

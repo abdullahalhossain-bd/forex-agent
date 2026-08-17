@@ -27,11 +27,51 @@ log = get_logger("exposure_manager")
 try:
     from scanner.config import CORRELATION_GROUPS
 except Exception as e:
-    CORRELATION_GROUPS = [
-        {"EURUSD", "GBPUSD", "AUDUSD", "NZDUSD"},
-        {"USDCHF", "USDJPY", "USDCAD"},
-        {"XAUUSD", "XAGUSD"},
+    # BUG FIX (2026-08-17 audit): the old fallback here only covered
+    # USD-quoted majors ({EURUSD,GBPUSD,AUDUSD,NZDUSD}, {USDCHF,USDJPY,
+    # USDCAD}, {XAUUSD,XAGUSD}). If scanner.config fails to import, this
+    # module returns None for EVERY pair actually traded by this system
+    # (EURAUD, GBPCAD, EURCAD, GBPSEK, GBPNOK, EURNZD are all crosses,
+    # none of which appear in that list) — meaning correlated exposure
+    # across accounts holding 3 EUR-crosses or 3 GBP-crosses simultaneously
+    # would silently score as "0 correlated positions" and get zero
+    # size reduction, exactly when the correlation manager exists to
+    # prevent that.
+    #
+    # scanner/ was not available to verify what scanner.config actually
+    # ships in production — if that file already has correct groups this
+    # fallback never fires. But a fallback that can silently produce
+    # "no correlation" for the system's own actual instrument list is a
+    # live risk regardless, so it's fixed here defensively: log loudly
+    # (this used to fail silently) and build the fallback from actual
+    # currency-leg overlap instead of a hand-picked pair list, so it
+    # covers any symbol without needing to be manually kept in sync.
+    log.critical(
+        f"[ExposureManager] scanner.config.CORRELATION_GROUPS import "
+        f"failed ({e}) — using a currency-leg-derived fallback. Verify "
+        f"scanner/config.py is actually deployed; a stale fallback here "
+        f"previously covered 0 of this system's 6 traded pairs."
+    )
+
+    def _leg_groups(pairs):
+        """Group pairs that share any currency leg (base or quote)."""
+        from collections import defaultdict
+        by_ccy = defaultdict(set)
+        for p in pairs:
+            base, quote = p[:3], p[3:6]
+            by_ccy[base].add(p)
+            by_ccy[quote].add(p)
+        return [group for group in by_ccy.values() if len(group) > 1]
+
+    _KNOWN_PAIRS = [
+        "EURUSD", "GBPUSD", "AUDUSD", "NZDUSD", "USDCHF", "USDJPY", "USDCAD",
+        "XAUUSD", "XAGUSD",
+        "EURAUD", "GBPCAD", "EURCAD", "GBPSEK", "GBPNOK", "EURNZD",
+        "EURGBP", "EURCHF", "EURJPY", "GBPJPY", "GBPAUD", "GBPNZD", "GBPCHF",
+        "AUDCAD", "AUDNZD", "AUDJPY", "AUDCHF", "NZDCAD", "NZDJPY", "NZDCHF",
+        "CADJPY", "CADCHF", "CHFJPY",
     ]
+    CORRELATION_GROUPS = _leg_groups(_KNOWN_PAIRS)
 
 
 @dataclass

@@ -1,0 +1,37 @@
+{
+  "hash": "42949347aaba20beec26b0c42d8493c4ceb5567a10690db661bc52231afb38db",
+  "saved_at": "2026-08-17T11:21:17.608616+00:00",
+  "metadata": {
+    "pair": "EURGBP",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v3",
+    "feature_names": [
+      "price_open",
+      "price_high",
+      "price_low",
+      "price_close",
+      "price_volume",
+      "change_1",
+      "change_3",
+      "change_5",
+      "distance_ma20",
+      "distance_ma50",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "day_of_week",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "trend_bias",
+      "volatility",
+      "session_hour",
+      "pair_strength",
+      "high",
+      "low",
+      "close",
+      "open"
+    ]
+  }
+}

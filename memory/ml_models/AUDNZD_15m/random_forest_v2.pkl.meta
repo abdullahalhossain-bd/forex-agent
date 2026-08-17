@@ -1,0 +1,37 @@
+{
+  "hash": "27e8e9f10496596cceff47d43a4944f8fe9ff663a4169bb6d3827b3df96e0871",
+  "saved_at": "2026-08-17T11:25:57.024282+00:00",
+  "metadata": {
+    "pair": "AUDNZD",
+    "timeframe": "15m",
+    "model_type": "random_forest",
+    "version": "v2",
+    "feature_names": [
+      "price_open",
+      "price_high",
+      "price_low",
+      "price_close",
+      "price_volume",
+      "change_1",
+      "change_3",
+      "change_5",
+      "distance_ma20",
+      "distance_ma50",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "day_of_week",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "trend_bias",
+      "volatility",
+      "session_hour",
+      "pair_strength",
+      "high",
+      "low",
+      "close",
+      "open"
+    ]
+  }
+}

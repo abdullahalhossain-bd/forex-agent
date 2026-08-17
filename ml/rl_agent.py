@@ -34,6 +34,16 @@ log = get_logger("rl_agent")
 
 # Default PPO model path — absolute, CWD-independent
 _DEFAULT_RL_POLICY_PATH = PROJECT_ROOT / "ml" / "rl_policy" / "ppo_forex_latest.zip"
+# AUDIT FIX (winrate round 3): ppo_forex_best.zip is the checkpoint the
+# training callback specifically verified against a held-out eval and
+# saved because it beat every other checkpoint seen so far — "latest"
+# is just whatever the run happened to end on, which the round-3
+# training runs showed can be WORSE than an earlier checkpoint (a
+# policy that was genuinely profitable at 60k steps drifted to a
+# degenerate never-trade policy by 80k in one observed run). Prefer
+# the verified-best checkpoint; fall back to latest only if no best
+# checkpoint has ever been saved for this pair.
+_BEST_RL_POLICY_PATH = PROJECT_ROOT / "ml" / "rl_policy" / "ppo_forex_best.zip"
 
 
 @dataclass
@@ -137,7 +147,10 @@ class RLAgent:
             return False
         try:
             from stable_baselines3 import PPO
-            model_path = model_path or _DEFAULT_RL_POLICY_PATH
+            if model_path is None:
+                # AUDIT FIX (winrate round 3): try the verified-best
+                # checkpoint first.
+                model_path = _BEST_RL_POLICY_PATH if _BEST_RL_POLICY_PATH.exists() else _DEFAULT_RL_POLICY_PATH
             if model_path.exists():
                 meta = self._load_policy_metadata(model_path)
                 passed, gate_reason = self._passes_quality_gate(meta)

@@ -1,0 +1,33 @@
+{
+  "pair": "USDCHF",
+  "timeframe": "15m",
+  "model_type": "lstm",
+  "version": "v1",
+  "saved_at": "2026-08-17T11:04:37+00:00",
+  "metrics": {
+    "model_name": "lstm",
+    "accuracy": 0.8620689655172413,
+    "precision": 0.7692307692307693,
+    "recall": 0.9090909090909091,
+    "f1": 0.0,
+    "auc_roc": 0.9545454545454546,
+    "win_rate": 0.7692307692307693,
+    "profit_factor": 0.0,
+    "max_drawdown": 0.0,
+    "sharpe_ratio": 0.0,
+    "train_accuracy": 0.0,
+    "test_accuracy": 0.0,
+    "overfitting_score": 0.0,
+    "is_overfit": false,
+    "threshold": 0.5,
+    "tp": 10,
+    "fp": 3,
+    "tn": 15,
+    "fn": 1,
+    "labeling_method": "triple_barrier",
+    "cv_method": "purged_embargoed"
+  },
+  "model_path": "USDCHF_15m/lstm_v1.keras",
+  "is_keras": true,
+  "feature_names": []
+}

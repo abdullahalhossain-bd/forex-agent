@@ -2,7 +2,7 @@
   "mode": "TRADING",
   "consecutive_losses": 1,
   "daily_loss_usd": 0.0,
-  "date": "2026-08-11",
+  "date": "2026-08-17",
   "recent_results": [
     {
       "result": "WIN",
@@ -22,7 +22,7 @@
     }
   ],
   "pause_reason": "",
-  "week": "2026-W33",
+  "week": "2026-W34",
   "weekly_loss_usd": 0.0,
   "daily_loss_sync_stale": false
 }

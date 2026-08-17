@@ -663,21 +663,22 @@ class SupplyDemandZones:
                 return {"is_fresh": True, "test_count": 0, "detail": "No proximal line"}
  
             zone_type = "supply" if zone.get("sd_pattern", "").endswith("Drop") else "demand"
-            test_count = 0
- 
-            for i in range(len(df)):
-                high = float(df.iloc[i]["high"])
-                low = float(df.iloc[i]["low"])
- 
-                if zone_type == "supply":
-                    # Price tested supply if high reached proximal
-                    if high >= proximal:
-                        test_count += 1
-                else:  # demand
-                    # Price tested demand if low reached proximal
-                    if low <= proximal:
-                        test_count += 1
- 
+
+            # AUDIT FIX P3-PERF (HIGH performance bug):
+            # Previously iterated row-by-row with df.iloc[i] which is O(n) per zone.
+            # With N zones per call and N bars in df, total cost was O(N²) per backtest bar.
+            # Vectorize using numpy array comparison — same semantics, ~100x faster.
+            if len(df) == 0:
+                return {"is_fresh": True, "test_count": 0, "detail": "Empty df"}
+            highs = df["high"].astype(float).values
+            lows = df["low"].astype(float).values
+            if zone_type == "supply":
+                # Price tested supply if high reached proximal
+                test_count = int((highs >= proximal).sum())
+            else:  # demand
+                # Price tested demand if low reached proximal
+                test_count = int((lows <= proximal).sum())
+
             is_fresh = test_count == 0
             detail = (f"Fresh (untested)" if is_fresh
                       else f"Not fresh — tested {test_count} time(s)")

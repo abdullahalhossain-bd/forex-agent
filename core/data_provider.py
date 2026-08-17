@@ -99,6 +99,17 @@ class HistoricalMT5Provider(DataProvider):
         self._symbol = symbol
         self._timeframe = timeframe
         self._cursor = 0  # index of the last closed bar included
+        # Iteration-3: register M15 + resampled H1/H4 for SMCEngine via
+        # DataFetcher backtest cache (same path live uses for multi-TF).
+        try:
+            from data.backtest_ohlcv_cache import register_from_m15, register_series
+            tf_u = (timeframe or "").upper().replace(" ", "")
+            if tf_u in ("M15", "15M", "15"):
+                register_from_m15(symbol, df, also=("H1", "H4"))
+            else:
+                register_series(symbol, timeframe, df)
+        except Exception as e:
+            log.debug(f"[HistoricalMT5Provider] OHLCV cache register skipped: {e}")
 
     def advance_to(self, bar_index: int) -> None:
         """Move the replay cursor. Caller (the replay loop) is responsible
@@ -106,6 +117,12 @@ class HistoricalMT5Provider(DataProvider):
         against look-ahead misuse by the caller, only against building
         market_out from bars beyond the cursor."""
         self._cursor = bar_index
+        try:
+            from data.backtest_ohlcv_cache import set_asof
+            if self._df is not None and 0 <= self._cursor < len(self._df):
+                set_asof(self._df.index[self._cursor])
+        except Exception:
+            pass
 
     def current_time(self):
         return self._df.index[self._cursor]

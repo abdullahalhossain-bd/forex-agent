@@ -309,6 +309,22 @@ class ConfluenceEngine:
             direction = "SELL"
             strength = 70
             reasoning = f"buy-side liquidity sweep → bearish reversal ({sweep_note})"
+        else:
+            # Fallback: SMC confluence_factors may mark liquidity_sweep True
+            # even when nested type string is missing on some paths.
+            _factors = smc_raw.get("confluence_factors") or {}
+            if isinstance(_factors, dict) and _factors.get("liquidity_sweep"):
+                _smc_dir = (smc_raw.get("direction") or smc_raw.get("signal") or "").upper()
+                if _smc_dir in ("BUY", "BULLISH"):
+                    direction = "BUY"
+                    strength = 55
+                    reasoning = "SMC confluence_factors.liquidity_sweep + structure BUY"
+                elif _smc_dir in ("SELL", "BEARISH"):
+                    direction = "SELL"
+                    strength = 55
+                    reasoning = "SMC confluence_factors.liquidity_sweep + structure SELL"
+            elif not smc_raw:
+                log.warning("[Confluence] liquidity factor: analysis_out['smc'] empty — NEUTRAL")
 
         # Session fusion can add liquidity context
         if isinstance(fusion, dict) and fusion.get("fusion_score", 0) >= 60:
@@ -351,19 +367,20 @@ class ConfluenceEngine:
         else:
             strength = 25
 
-        # Session is direction-neutral — it boosts the OTHER factors' weight
-        # We mark it NEUTRAL with a strength that affects validation only
+        # DESIGN: Session is direction-neutral by intent — it never increments
+        # aligned_factors (only BUY/SELL + strength>=30 count). Strength still
+        # affects weighted scores. Do NOT invent BUY/SELL here (parity).
         return FactorScore(
-            name="session", direction=direction, strength=strength,
+            name="session", direction="NEUTRAL", strength=strength,
             confidence=70, weight=5, reasoning=reasoning,
-            details={"session": current, "quality": trade_quality},
+            details={"session": current, "quality": trade_quality, "aligned_capable": False},
         )
 
     def _currency_strength_factor(self, a: Dict[str, Any]) -> FactorScore:
         """Factor 4: Currency Strength — relative strength model."""
-        # May be in intermarket_ctx or sentiment_ctx
         inter = a.get("intermarket_ctx") or {}
         sent = a.get("sentiment_ctx") or {}
+        cs_ctx = a.get("currency_strength_ctx") or {}
         macro_pair_bias = (inter.get("macro_pair_bias") or "").upper() if isinstance(inter, dict) else ""
 
         direction = "NEUTRAL"
@@ -379,22 +396,58 @@ class ConfluenceEngine:
             strength = 60
             reasoning = "macro_pair_bias BEARISH"
 
-        # Sentiment can refine
-        if isinstance(sent, dict):
-            sent_score = sent.get("final_score", 0)
-            if sent_score > 20:
+        # Day-64 matrix / sentiment currency_bias (parity: same keys live uses)
+        if direction == "NEUTRAL" and isinstance(cs_ctx, dict):
+            pair_bias = (cs_ctx.get("pair_bias") or cs_ctx.get("bias") or "").upper()
+            if pair_bias in ("BULLISH", "BUY", "STRONG_BULLISH"):
                 direction = "BUY"
-                strength = min(80, strength + 20)
-                reasoning += f" | sentiment +{sent_score}"
-            elif sent_score < -20:
+                strength = 55
+                reasoning = f"currency_strength_ctx bias={pair_bias}"
+            elif pair_bias in ("BEARISH", "SELL", "STRONG_BEARISH"):
                 direction = "SELL"
-                strength = min(80, strength + 20)
-                reasoning += f" | sentiment {sent_score}"
+                strength = 55
+                reasoning = f"currency_strength_ctx bias={pair_bias}"
+            else:
+                # derive from base vs quote strengths when available
+                strengths = cs_ctx.get("currency_strengths") or cs_ctx.get("strengths") or {}
+                pair = (a.get("symbol") or a.get("pair") or "")
+                if isinstance(strengths, dict) and len(pair) >= 6:
+                    base, quote = pair[:3].upper(), pair[3:6].upper()
+                    sb, sq = strengths.get(base), strengths.get(quote)
+                    if sb is not None and sq is not None:
+                        diff = float(sb) - float(sq)
+                        if diff >= 8:
+                            direction = "BUY"
+                            strength = min(80, 40 + abs(diff))
+                            reasoning = f"{base}({sb})>{quote}({sq}) Δ={diff:.1f}"
+                        elif diff <= -8:
+                            direction = "SELL"
+                            strength = min(80, 40 + abs(diff))
+                            reasoning = f"{base}({sb})<{quote}({sq}) Δ={diff:.1f}"
+
+        if isinstance(sent, dict):
+            sent_score = sent.get("final_score", 0) or sent.get("sentiment_score", 0) or 0
+            cur_bias = (sent.get("currency_bias") or "").upper()
+            if cur_bias in ("BULLISH", "BUY") and direction == "NEUTRAL":
+                direction = "BUY"
+                strength = 50
+                reasoning = f"sentiment currency_bias={cur_bias}"
+            elif cur_bias in ("BEARISH", "SELL") and direction == "NEUTRAL":
+                direction = "SELL"
+                strength = 50
+                reasoning = f"sentiment currency_bias={cur_bias}"
+            if sent_score > 20 and direction == "BUY":
+                strength = min(80, strength + 15)
+            elif sent_score < -20 and direction == "SELL":
+                strength = min(80, strength + 15)
+
+        if direction == "NEUTRAL" and not macro_pair_bias and not cs_ctx:
+            log.debug("[Confluence] currency_strength: no intermarket/cs_ctx — NEUTRAL")
 
         return FactorScore(
             name="currency_strength", direction=direction, strength=strength,
             confidence=60, weight=15, reasoning=reasoning[:100],
-            details={"macro_pair_bias": macro_pair_bias},
+            details={"macro_pair_bias": macro_pair_bias, "cs_ctx_keys": list(cs_ctx.keys())[:8] if isinstance(cs_ctx, dict) else []},
         )
 
     def _intermarket_factor(self, a: Dict[str, Any]) -> FactorScore:

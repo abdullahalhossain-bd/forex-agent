@@ -1,0 +1,37 @@
+{
+  "hash": "58c48581a80ff705bde61335d6655827485430fad434fb0077b44f55a8e057f4",
+  "saved_at": "2026-08-17T11:52:55.916826+00:00",
+  "metadata": {
+    "pair": "EURUSD",
+    "timeframe": "15m",
+    "model_type": "xgboost",
+    "version": "v11",
+    "feature_names": [
+      "price_open",
+      "price_high",
+      "price_low",
+      "price_close",
+      "price_volume",
+      "change_1",
+      "change_3",
+      "change_5",
+      "distance_ma20",
+      "distance_ma50",
+      "rsi_14",
+      "macd",
+      "macd_signal",
+      "day_of_week",
+      "sma_20",
+      "sma_50",
+      "atr_14",
+      "trend_bias",
+      "volatility",
+      "session_hour",
+      "pair_strength",
+      "high",
+      "low",
+      "close",
+      "open"
+    ]
+  }
+}

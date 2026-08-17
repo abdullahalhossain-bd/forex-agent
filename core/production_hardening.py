@@ -383,46 +383,35 @@ def timeframe_to_seconds(timeframe: str) -> int:
 
 
 def compute_staleness_threshold(timeframe: str, *,
-                                  buffer_sec: int = 60,
+                                  buffer_sec: int = 300,          # increased from 60 → 300
                                   min_floor_sec: int = 120) -> int:
-    """Compute the appropriate `max_age_sec` for `check_data_staleness`
+    """
+    Compute the appropriate max_age_sec for check_data_staleness
     based on the trader's timeframe.
 
-    Audit Round-3 fix: previously `check_data_staleness()` was called
-    with a hardcoded `max_age_sec=120` (2 minutes) from `core/trader.py`
-    line ~820. On an M15 timeframe the candle only updates every 900s
-    (15 min), so 120s triggered "STALE DATA" on every single cycle,
-    blocking all new-entry analysis — even on a perfectly healthy live
-    feed. The 183-second "stale" warning in the operator's log was
-    this exact bug firing.
+    Increased buffer because we only analyze CLOSED bars (forming bar is dropped).
+    Right after a new candle opens, the last closed bar can already be 
+    almost a full interval old + network latency.
 
     Threshold formula:
-        threshold = max(timeframe_to_seconds(tf) + buffer_sec, min_floor_sec)
+        threshold = max(timeframe_to_seconds(tf) + buffer_sec, min_floor_sec) * multiplier
 
-    Examples:
-        M1  → max(60+60, 120)  = 120s  (2 min — same as old hardcoded value)
-        M5  → max(300+60, 120) = 360s  (6 min)
-        M15 → max(900+60, 120) = 960s  (16 min — fixes the 183s bug)
-        H1  → max(3600+60, 120) = 3660s (61 min)
-        H4  → max(14400+60, 120) = 14460s (~4h)
-        D1  → max(86400+60, 120) = 86460s (~24h)
-
-    The `+buffer_sec` allows for slow MT5 fetches / network latency so
-    that a bar that legitimately closed a few seconds ago but hasn't
-    been re-fetched yet is NOT flagged stale. The `min_floor_sec`
-    protects against absurdly short timeframes (e.g. tick data) where
-    tf_sec alone would be too aggressive.
-
-    Args:
-        timeframe: MT5-style code (e.g. 'M15') or lowercase form ('15m').
-        buffer_sec: extra seconds to add on top of the timeframe interval.
-        min_floor_sec: absolute minimum threshold (never go below this).
-
-    Returns:
-        int: max_age_sec to pass to check_data_staleness().
+    Examples with multiplier=1.5:
+        M15 → max(900+300, 120) * 1.5 = 1800s  (30 min)
+        H1  → max(3600+300, 120) * 1.5 = 5850s (~97 min)
+        H4  → max(14400+300, 120) * 1.5 = 22050s (~6.1h)
+        D1  → max(86400+300, 120) * 1.5 = 130050s (~36h)
     """
     tf_sec = timeframe_to_seconds(timeframe)
-    return max(tf_sec + buffer_sec, min_floor_sec)
+
+    # Optional multiplier from .env (default 1.5 for extra safety on closed-bar logic)
+    try:
+        multiplier = float(os.getenv("MT5_STALE_BAR_MULTIPLIER", "1.5"))
+    except (ValueError, TypeError):
+        multiplier = 1.5
+
+    threshold = max(tf_sec + buffer_sec, min_floor_sec)
+    return int(threshold * multiplier)
 
 
 def get_last_closed_bar_time(df, timeframe, current_time=None):

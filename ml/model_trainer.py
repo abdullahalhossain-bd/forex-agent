@@ -76,6 +76,7 @@ class ModelTrainer:
         labeling_method: str = "fixed_horizon",
         use_purged_split: bool = False,
         label_horizon: int = 0,
+        include_bootstrap: bool = False,
     ) -> TrainingResult:
         """Train all available models for a pair. Returns TrainingResult.
 
@@ -87,6 +88,11 @@ class ModelTrainer:
           label_horizon: forward-looking window size used by both the
             labeler (if triple_barrier) and the purger. Ignored when both
             labeling_method="fixed_horizon" and use_purged_split=False.
+          include_bootstrap: include synthetic placeholder rows in the
+            training set. Default False = real data only. Pass True only
+            when you explicitly want bootstrap fallback rows included
+            (accuracy from a run with this True should not be trusted as
+            real performance).
         """
         t0 = time.time()
         result = TrainingResult(
@@ -100,11 +106,12 @@ class ModelTrainer:
 
         # 1. Build dataset
         log.info(f"[Trainer] Building dataset for {pair} {timeframe} "
-                  f"(labeling_method={labeling_method}, use_purged_split={use_purged_split})...")
+                  f"(labeling_method={labeling_method}, use_purged_split={use_purged_split}, "
+                  f"include_bootstrap={include_bootstrap})...")
         dataset = self.builder.build_from_store(
             pair=pair, timeframe=timeframe, min_samples=min_samples,
             labeling_method=labeling_method, use_purged_split=use_purged_split,
-            label_horizon=label_horizon,
+            label_horizon=label_horizon, include_bootstrap=include_bootstrap,
         )
         if dataset is None:
             result.errors.append(f"Insufficient data for {pair} {timeframe} (need ≥{min_samples} samples)")
@@ -352,7 +359,7 @@ class ModelTrainer:
         cv_tags: Optional[Dict[str, Any]] = None,
     ) -> Optional[ModelMetrics]:
         try:
-            import tensorflow as tf
+            import tensorflow as tf_module
             from tensorflow.keras.models import Sequential
             from tensorflow.keras.layers import LSTM, Dense, Dropout
             from tensorflow.keras.callbacks import EarlyStopping
@@ -402,11 +409,13 @@ class ModelTrainer:
 
             from ml.model_evaluator import ModelMetrics
             metrics = ModelMetrics(model_name="lstm")
-            metrics.accuracy = float(np.mean(y_pred == np.array(y_test).astype(int)))
-            metrics.tp = int(np.sum((y_pred == 1) & (np.array(y_test) == 1)))
-            metrics.fp = int(np.sum((y_pred == 1) & (np.array(y_test) == 0)))
-            metrics.tn = int(np.sum((y_pred == 0) & (np.array(y_test) == 0)))
-            metrics.fn = int(np.sum((y_pred == 0) & (np.array(y_test) == 1)))
+            y_test_arr = np.array(y_test).astype(int)
+            metrics.n_samples = int(len(y_test_arr))
+            metrics.accuracy = float(np.mean(y_pred == y_test_arr))
+            metrics.tp = int(np.sum((y_pred == 1) & (y_test_arr == 1)))
+            metrics.fp = int(np.sum((y_pred == 1) & (y_test_arr == 0)))
+            metrics.tn = int(np.sum((y_pred == 0) & (y_test_arr == 0)))
+            metrics.fn = int(np.sum((y_pred == 0) & (y_test_arr == 1)))
             prec_den = metrics.tp + metrics.fp
             metrics.precision = metrics.tp / prec_den if prec_den > 0 else 0
             rec_den = metrics.tp + metrics.fn

@@ -66,6 +66,31 @@ ACTION_CLOSE = 3
 ACTIONS = {0: "HOLD", 1: "BUY", 2: "SELL", 3: "CLOSE"}
 
 
+def infer_pip_size(pair: str) -> float:
+    """Round-7 fix: pip_size used to be hardcoded 0.0001 everywhere,
+    correct only for standard non-JPY forex pairs. The user's real
+    48-pair universe (from their config.py) includes 10 JPY crosses
+    (EURJPY, GBPJPY, AUDJPY, NZDJPY, CADJPY, CHFJPY, USDJPY, SGDJPY,
+    HKDJPY, MXNJPY — pip_size 0.01, two decimal places) and 4 metals
+    (XAUUSD, XAGUSD, XPTUSD, XPDUSD). Training any of these with
+    pip_size=0.0001 makes every pip-denominated calculation (SL/TP
+    distance, lot sizing, PnL in USD) wrong by 100x for JPY pairs —
+    the position-sizing math (`sl_pips = sl_distance / pip_size`,
+    `pnl = ... / pip_size * 10 * lot`) would silently compute
+    nonsense risk/reward for any JPY pair someone runs through the
+    training queue.
+    Metal pip conventions vary by broker — 0.01 is a common default
+    but NOT universal; verify against your actual broker spec before
+    relying on metals PnL figures.
+    """
+    p = (pair or "").upper().replace("/", "").replace("_", "")
+    if p.endswith("JPY") or "JPY" in p[3:]:
+        return 0.01
+    if p.startswith("XAU") or p.startswith("XAG") or p.startswith("XPT") or p.startswith("XPD"):
+        return 0.01  # common convention; confirm against your broker
+    return 0.0001
+
+
 @dataclass
 class Position:
     """Open position state."""
@@ -105,6 +130,29 @@ class ForexTradingEnvV2(gym.Env):
         reward_engine: Optional[RewardEngineV2] = None,
         max_steps_per_episode: int = 1000,  # NEW: force episode end
         render_mode: Optional[str] = None,
+        # AUDIT FIX (winrate/frequency round 2): the first fix pass
+        # (SL/TP checked every step, proper episode-end reward, correct
+        # metrics) exposed a real, non-bug problem once it could
+        # finally be measured honestly: ~190 trades per 1000-bar
+        # episode (avg hold ~5 bars) with win_rate 25-33%, below the
+        # 33.4% breakeven for a 1:2 R:R. Two concrete levers for this:
+        #   1. SL was min 10 pips / 1.5x ATR — tight enough on M15 that
+        #      the agent was mostly getting stopped out by noise, and
+        #      every one of those churns pays the spread twice. Widen
+        #      it so real moves have room and cost-per-trade drops as
+        #      a fraction of the stop.
+        #   2. Nothing stopped the agent from opening a new trade the
+        #      bar immediately after closing one. `overtrade_penalty`
+        #      only discourages this softly (and the agent kept doing
+        #      it anyway at 60k timesteps). Add a hard cooldown — the
+        #      agent literally cannot open a new position for N bars
+        #      after a close — plus a hard daily trade cap (block, not
+        #      just penalize) so overtrading can't be trained around.
+        sl_atr_multiplier: float = 2.5,       # was 1.5 — wider stop, less noise-stopout
+        min_sl_pips: float = 15.0,            # was hardcoded 10 — matches wider ATR mult
+        cooldown_bars: int = 4,               # round-3: 8→4 — richer features should
+                                               # find more genuine (not just noise) setups
+        max_trades_per_day: int = 6,          # round-3: 4→6 — same reasoning
     ):
         super().__init__()
 
@@ -119,6 +167,11 @@ class ForexTradingEnvV2(gym.Env):
         self.pair = pair
         self.reward_engine = reward_engine or get_reward_engine_v2()
         self.max_steps_per_episode = max_steps_per_episode
+        self.sl_atr_multiplier = sl_atr_multiplier
+        self.min_sl_pips = min_sl_pips
+        self.cooldown_bars = cooldown_bars
+        self.max_trades_per_day = max_trades_per_day
+        self.last_close_step = -10**9
 
         # State space
         if self.features_df is not None:
@@ -146,6 +199,7 @@ class ForexTradingEnvV2(gym.Env):
         self.episode_reward = 0.0
         self.episode_pnl = 0.0
         self.start_idx = 0  # NEW: random start for each episode
+        self.last_close_step = -10**9
 
     def reset(self, *, seed: Optional[int] = None,
               options: Optional[Dict] = None) -> Tuple[np.ndarray, Dict]:
@@ -175,6 +229,7 @@ class ForexTradingEnvV2(gym.Env):
         self.total_losses = 0
         self.episode_reward = 0.0
         self.episode_pnl = 0.0
+        self.last_close_step = -10**9
 
         return self._get_state(), self._get_info()
 
@@ -186,10 +241,45 @@ class ForexTradingEnvV2(gym.Env):
         bankrupt = self.balance <= self.initial_balance * 0.5  # 50% DD = bankrupt
 
         if at_end_of_data or max_steps_reached or bankrupt:
-            # Close any open position
+            # AUDIT FIX (win-rate/frequency bug #2): forced episode-end
+            # close used to return a hardcoded reward of 0.0 no matter
+            # what the final PnL was. Any position still open when the
+            # episode was cut off (max_steps_per_episode, bankrupt, or
+            # end-of-data) got closed but the agent received ZERO
+            # learning signal for that outcome — including large,
+            # realistic losses. That silently hid a chunk of the
+            # policy's real losses from the reward function, and let
+            # the agent get away with holding risky positions right up
+            # to an episode boundary. Route the final close through the
+            # same reward engine as every other close so PPO actually
+            # sees the consequence.
+            end_reward = 0.0
             if self.position.direction != "NONE":
-                self._close_position(reason="episode_end")
-            return self._get_state(), 0.0, True, False, self._get_info()
+                final_pnl = self._close_position(reason="episode_end")
+                trade_closed = True
+                win = final_pnl > 0
+                rr_ratio = 0.0
+                if self.closed_trades:
+                    rr_ratio = self.closed_trades[-1].get("rr_ratio", 0.0)
+                end_rb = self.reward_engine.calculate(
+                    action="CLOSE",
+                    pnl_usd=final_pnl,
+                    balance=max(self.balance, 0),
+                    initial_balance=self.initial_balance,
+                    risk_pct=self.risk_per_trade,
+                    rr_ratio=rr_ratio,
+                    trades_today=self.trades_today,
+                    peak_balance=self.peak_balance,
+                    position_open=False,
+                    trade_closed=trade_closed,
+                    win=win,
+                )
+                end_reward = end_rb.total
+                self.episode_reward += end_reward
+                self.episode_pnl += final_pnl
+                if self.balance > self.peak_balance:
+                    self.peak_balance = self.balance
+            return self._get_state(), float(end_reward), True, False, self._get_info()
 
         action_name = ACTIONS.get(action, "HOLD")
         pnl_this_step = 0.0
@@ -214,29 +304,58 @@ class ForexTradingEnvV2(gym.Env):
         high_price = float(self.df.iloc[self.current_step].get("high", close_price))
         low_price = float(self.df.iloc[self.current_step].get("low", close_price))
 
-        if action_name == "BUY" and self.position.direction == "NONE":
+        # AUDIT FIX (win-rate/frequency bug #1): SL/TP used to be
+        # checked ONLY on steps where action_name == "HOLD". Any step
+        # where the agent output BUY/SELL (no-op, since a position was
+        # already open — the open-guards below prevent re-entry) or
+        # CLOSE skipped the SL/TP check entirely for that bar's
+        # high/low. Concretely: once a position is open, the agent
+        # only needs to emit a non-HOLD action once and every
+        # subsequent SL/TP touch on intervening bars is silently
+        # missed — the position keeps "riding" past its stop with no
+        # exit recorded, so realized losses are bigger than the
+        # configured 1R, and real TP hits get skipped until the agent
+        # happens to HOLD again (if ever, before end-of-data forces an
+        # exit at whatever the market price is then). This alone is
+        # sufficient to explain a policy that both loses more per
+        # losing trade than intended AND appears to win less often —
+        # genuine TP hits were never being credited as wins.
+        # FIX: check SL/TP against the CURRENT bar's high/low on every
+        # single step where a position is open, before any other
+        # action is processed for that step.
+        if self.position.direction != "NONE":
+            pnl = self._check_sl_tp(high_price, low_price)
+            if pnl != 0:
+                pnl_this_step = pnl
+                trade_closed = True
+                win = pnl > 0
+
+        # AUDIT FIX (winrate/frequency round 2): can_enter gates every
+        # new position on (a) cooldown bars since the last close and
+        # (b) a HARD daily trade cap — not just a reward penalty the
+        # agent could (and did) train straight through. This is the
+        # direct fix for the ~190-trades-per-1000-bars churn observed
+        # after the round-1 fixes.
+        can_enter = (
+            (self.current_step - self.last_close_step) >= self.cooldown_bars
+            and self.trades_today < self.max_trades_per_day
+        )
+
+        if action_name == "BUY" and self.position.direction == "NONE" and can_enter:
             entry_spread = self._open_position("LONG", close_price, high_price, low_price)
             self.trades_today += 1
             self.total_trades += 1
 
-        elif action_name == "SELL" and self.position.direction == "NONE":
+        elif action_name == "SELL" and self.position.direction == "NONE" and can_enter:
             entry_spread = self._open_position("SHORT", close_price, high_price, low_price)
             self.trades_today += 1
             self.total_trades += 1
 
-        elif action_name == "CLOSE" and self.position.direction != "NONE":
+        elif action_name == "CLOSE" and self.position.direction != "NONE" and not trade_closed:
             pnl = self._close_position(reason="manual_close")
             pnl_this_step = pnl
             trade_closed = True
             win = pnl > 0
-
-        elif action_name == "HOLD":
-            if self.position.direction != "NONE":
-                pnl = self._check_sl_tp(high_price, low_price)
-                if pnl != 0:
-                    pnl_this_step = pnl
-                    trade_closed = True
-                    win = pnl > 0
 
         # ── Calculate R:R for reward shaping ───────────────────────
         rr_ratio = 0.0
@@ -298,7 +417,12 @@ class ForexTradingEnvV2(gym.Env):
             atr = 0.001
 
         # SL/TP based on ATR (matches RiskEngine defaults)
-        sl_distance = max(atr * 1.5, 10 * self.pip_size)  # min 10 pips
+        # AUDIT FIX (winrate/frequency round 2): wider ATR multiplier
+        # and higher min-pip floor (configurable, was hardcoded 1.5x /
+        # 10 pips) — gives real moves room instead of getting stopped
+        # by M15 noise, and shrinks spread-cost-as-%-of-stop for every
+        # trade that does get taken.
+        sl_distance = max(atr * self.sl_atr_multiplier, self.min_sl_pips * self.pip_size)
         tp_distance = sl_distance * 2.0  # 1:2 R:R
 
         # Apply spread + slippage
@@ -374,6 +498,12 @@ class ForexTradingEnvV2(gym.Env):
         else:
             self.total_losses += 1
 
+        # AUDIT FIX (winrate/frequency round 2): stamp the cooldown
+        # clock here — this is the single choke point every close
+        # (manual, SL, TP, episode-end) funnels through, so the
+        # cooldown check in step() is guaranteed to see it.
+        self.last_close_step = self.current_step
+
         # R:R calculation for this trade
         risk = abs(self.position.entry - self.position.sl)
         actual_rr = abs(pnl) / (risk * self.position.lot * 10) if risk > 0 and self.position.lot > 0 else 0
@@ -414,24 +544,34 @@ class ForexTradingEnvV2(gym.Env):
         return 0.0
 
     def _get_state(self) -> np.ndarray:
-        """Get normalized state vector."""
+        """Get normalized state vector.
+
+        AUDIT FIX (winrate round 3): the feature schema used to be a
+        hardcoded 10-name list baked into the env, decoupled from
+        whatever columns features_df actually had — silently dropping
+        any richer feature added upstream unless this list was kept in
+        sync by hand. Now the env just consumes ALL columns of
+        features_df dynamically (n_features already tracks
+        len(features_df.columns)+6 from __init__), so the feature set
+        can be extended in the builder (train_rl_v2.build_features_df_v2)
+        without touching the environment.
+        """
         if self.current_step >= len(self.df):
             return np.zeros(self.n_features, dtype=np.float32)
 
-        FEATURE_SCHEMA = [
-            "close", "high", "low", "volume",
-            "rsi_14", "atr", "macd", "ema_20", "ema_50", "sma_200",
-        ]
-
         if self.features_df is not None and self.current_step < len(self.features_df):
             row = self.features_df.iloc[self.current_step]
+            market_features = row.to_numpy(dtype=np.float32)
         else:
+            FEATURE_SCHEMA = [
+                "close", "high", "low", "volume",
+                "rsi_14", "atr", "macd", "ema_20", "ema_50", "sma_200",
+            ]
             row = self.df.iloc[self.current_step]
-
-        market_features = np.array([
-            float(row.get(f, 0) if row.get(f) is not None else 0)
-            for f in FEATURE_SCHEMA
-        ], dtype=np.float32)
+            market_features = np.array([
+                float(row.get(f, 0) if row.get(f) is not None else 0)
+                for f in FEATURE_SCHEMA
+            ], dtype=np.float32)
 
         position_state = np.array([
             1.0 if self.position.direction == "LONG" else 0.0,

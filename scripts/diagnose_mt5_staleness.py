@@ -69,10 +69,16 @@ if account:
     print(f"  Margin free   : {account.margin_free}")
 print()
 
-# Check symbols from .env
-symbols_str = os.getenv("SYMBOLS", "EURUSD,GBPUSD,USDJPY,USDCHF,AUDUSD,USDCAD,NZDUSD,XAUUSD")
+# Check symbols: command-line arg overrides .env, .env overrides default majors list
+# Usage: python diagnose_mt5_staleness.py USDSGD,USDMXN,USDTHB
+if len(sys.argv) > 1:
+    symbols_str = sys.argv[1]
+    source = "command-line arg"
+else:
+    symbols_str = os.getenv("SYMBOLS", "EURUSD,GBPUSD,USDJPY,USDCHF,AUDUSD,USDCAD,NZDUSD,XAUUSD")
+    source = ".env SYMBOLS (or default majors)"
 symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
-print(f"  Symbols to check: {symbols}")
+print(f"  Symbols to check: {symbols}  (source: {source})")
 print()
 
 now_utc = datetime.now(timezone.utc)
@@ -82,6 +88,17 @@ print("-" * 110)
 offset_hours = float(os.getenv("MT5_BROKER_TZ_OFFSET_HOURS", "0") or 0)
 
 for sym in symbols:
+    info = mt5.symbol_info(sym)
+    if info is None:
+        print(f"{sym:<10} ❌ symbol_info() is None — symbol not found on this broker/server at all")
+        continue
+    if not info.visible:
+        print(f"{sym:<10} ⚠️  symbol exists but is NOT visible/subscribed in Market Watch (info.visible=False)")
+    tick = mt5.symbol_info_tick(sym)
+    if tick:
+        tick_age = now_utc.timestamp() - tick.time
+        print(f"{sym:<10} last tick: {datetime.fromtimestamp(tick.time, timezone.utc).isoformat()} ({tick_age/60:.1f}m ago) bid={tick.bid} ask={tick.ask}")
+
     for tf_name, tf_const in [("M15", mt5.TIMEFRAME_M15), ("H1", mt5.TIMEFRAME_H1)]:
         rates = mt5.copy_rates_from_pos(sym, tf_const, 0, 5)
         if rates is None or len(rates) == 0:

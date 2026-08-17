@@ -1,0 +1,21 @@
+{
+  "symbols": {
+    "USDSGD": {
+      "trades": 8,
+      "wins": 0,
+      "losses": 8,
+      "gross_profit": 0.0,
+      "gross_loss": -114.74000000000001,
+      "net_pnl": -114.74000000000001
+    }
+  },
+  "total_trades": 8,
+  "wins": 0,
+  "losses": 8,
+  "win_rate": 0.0,
+  "gross_profit_usd": 0.0,
+  "gross_loss_usd": -114.74,
+  "net_pnl_usd": -114.74,
+  "current_equity_usd": 9885.26,
+  "updated_at": "2026-08-15T11:54:21+00:00"
+}

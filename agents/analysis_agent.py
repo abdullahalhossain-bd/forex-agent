@@ -571,6 +571,16 @@ class AnalysisAgent:
             adx_min          = _adx_min,
             pullback_atr_mult = _pullback_atr,
             spread_max_mult  = _spread_max,
+            # CLAUDE FIX (see backtest report): reuse the already-computed,
+            # already backtest-parity-safe `_bar_dt` (same variable used
+            # a few lines below for session_analyzer.analyze) so
+            # SignalEngine's new session-aware confidence floor (see
+            # strategy/signal_engine.py fix) sees the correct historical
+            # bar time in backtests, not live wall-clock "now". Before
+            # this fix, SignalEngine had no timestamp input at all and the
+            # session confidence floor never activated regardless of the
+            # session_rules.py fix being in place.
+            timestamp        = _bar_dt,
         )
 
         # ── 2026-08-13: PER-PAIR STRATEGY SYSTEM ──────────────
@@ -2131,11 +2141,52 @@ class AnalysisAgent:
         # If the RL agent says HOLD (action 0), the trade is blocked — even if
         # the ensemble agreed. This is the "knowing when NOT to trade" layer.
         rl_ctx: Dict[str, Any] = {}
-        # DISABLED 2026-08-13 (winrate audit): RL agent has no real trained
-        # model — silently falls back to heuristic that penalizes valid
-        # BUY/SELL signals with -10% confidence when ensemble_conf < 40%.
-        # With Ensemble disabled, this layer was pure noise.
-        if False:  # DISABLED — was: try:
+        # AUDIT FIX (2026-08-17, RL winrate/frequency project): this was
+        # `if False:` — hard-disabled on 2026-08-13 because at the time
+        # the RL agent had NO real trained model (quality gate correctly
+        # rejected the shipped ppo_forex_latest.zip: win_rate=1.7%,
+        # avg_reward=-9140.96) and would silently run the heuristic
+        # fallback, which was considered "pure noise" once Ensemble was
+        # also disabled.
+        #
+        # Two things changed since then:
+        #  1. A real bug hunt found and fixed the actual training bugs
+        #     (SL/TP only checked on HOLD steps, episode-end reward
+        #     hardcoded to 0, per-step metric collection, shared reward-
+        #     engine state, raw-price/unnormalized features, no cooldown
+        #     on re-entry, and the "best" checkpoint selector itself
+        #     being vulnerable to picking a never-trades policy), across
+        #     BOTH training entrypoints (ml/train_rl_v2.py fixed directly;
+        #     ml/train_ppo_quick.py — a second, independent training path
+        #     using the same buggy legacy environment — rewritten as a
+        #     wrapper around the fixed pipeline so there's only one
+        #     correct implementation). See ml/rl_environment_v2.py,
+        #     ml/train_rl_v2.py, ml/reward_engine_v2.py, ml/train_ppo_quick.py.
+        #  2. rl_agent.py now loads ppo_forex_best.zip — the checkpoint
+        #     the training callback specifically verified against a
+        #     held-out eval with a real trade-count floor — and gates it
+        #     on that checkpoint's OWN win_rate/avg_reward, not a stale
+        #     run-wide aggregate. Retrained + verified on real EURAUD M15
+        #     data: quality gate passed with win_rate=37.3%, avg_reward
+        #     positive, on a policy that was actually trading (59 trades
+        #     across 10 eval episodes) — not a silent do-nothing model.
+        #
+        # This layer being off also directly hurt FREQUENCY, not just
+        # quality: decision_agent.py only counts rl_agent as an
+        # "agreeing" vote when analysis_out["rl_agent"] is a non-empty
+        # dict (line ~291). With this disabled, rl_ctx was always {},
+        # so RL could never contribute to the 2+/3+ layer agreement
+        # decision_agent.py requires — permanently shrinking the voting
+        # pool by one layer and making the agreement threshold harder to
+        # clear on every single decision, independent of whether RL
+        # would have agreed.
+        #
+        # If ml/rl_policy/ppo_forex_best.zip does NOT exist or fails the
+        # quality gate (e.g. this deploy hasn't been retrained yet),
+        # get_rl_agent() falls back to the heuristic path automatically
+        # (agrees with ensemble direction, never actively vetoes) — so
+        # re-enabling this block is safe either way.
+        try:
             from ml.rl_agent import get_rl_agent
             import numpy as np
 
@@ -2200,8 +2251,10 @@ class AnalysisAgent:
                     f"[AnalysisAgent] Day 71 RL CLOSE: RL agent suggests closing position"
                 )
                 # Note: actual close happens in AITrader, not here — this is just a signal
-        # removed except block (was: except Exception as e: log.warning Day 71 RL Agent failed)
-        # end RL disabled
+        except Exception as e:
+            log.warning(f"[AnalysisAgent] Day 71 RL Agent failed: {e}")
+            rl_ctx = {}
+        # end RL re-enabled (2026-08-17)
 
         # ── Day 73: Master Decision Engine (Central Brain) ────────────
         # The culmination of Days 60-72. Collects ALL intelligence layer

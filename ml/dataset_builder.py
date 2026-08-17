@@ -15,6 +15,7 @@ The most recent 15% of data is ALWAYS the test set — never used in training.
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -30,6 +31,39 @@ import pandas as pd
 from utils.logger import get_logger
 
 log = get_logger("dataset_builder")
+
+
+def _load_barrier_config(pair: Optional[str] = None) -> Dict[str, Dict[str, float]]:
+    """Load config/barrier_config.py without being shadowed by the root
+    config.py module on the import path.
+
+    The project root contains both config.py and a config/ directory. A plain
+    `from config.barrier_config import BARRIER_CONFIG` can fail because the
+    top-level `config.py` file wins during import resolution. Loading the file by
+    path avoids that shadowing while keeping the tuned ATR widths available.
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    barrier_path = project_root / "config" / "barrier_config.py"
+    if not barrier_path.exists():
+        return {"_default": {"atr_multiplier": 1.5, "holding_period": 16, "prob_threshold": 0.55, "max_cost_R": 0.5}}
+
+    spec = importlib.util.spec_from_file_location("_forex_barrier_config", barrier_path)
+    if spec is None or spec.loader is None:
+        return {"_default": {"atr_multiplier": 1.5, "holding_period": 16, "prob_threshold": 0.55, "max_cost_R": 0.5}}
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    raw_cfg = getattr(module, "BARRIER_CONFIG", {})
+    if not isinstance(raw_cfg, dict):
+        return {"_default": {"atr_multiplier": 1.5, "holding_period": 16, "prob_threshold": 0.55, "max_cost_R": 0.5}}
+
+    resolved = dict(raw_cfg)
+    default_cfg = dict(resolved.get("_default", {"atr_multiplier": 1.5, "holding_period": 16, "prob_threshold": 0.55, "max_cost_R": 0.5}))
+    if pair is not None:
+        pair_cfg = resolved.get(pair.upper())
+        if isinstance(pair_cfg, dict):
+            return {"_default": default_cfg, **resolved, pair.upper(): pair_cfg}
+    return resolved
 
 
 @dataclass
@@ -94,6 +128,7 @@ class DatasetBuilder:
         labeling_method: str = "fixed_horizon",
         use_purged_split: bool = False,
         label_horizon: int = 0,
+        include_bootstrap: bool = False,
     ) -> Optional[Dataset]:
         """Load features + labels from the FeatureStore and split.
 
@@ -104,13 +139,25 @@ class DatasetBuilder:
             iloc-slice output.
           label_horizon: bars a label's window looks forward. Required
             (non-zero) when use_purged_split=True; ignored otherwise.
+          include_bootstrap: if True, include synthetic placeholder rows
+            written by ml.data_bootstrap (source='bootstrap') in the
+            training set. Default False = real data only. Only pass True
+            when the caller explicitly wants the bootstrap fallback rows
+            included for this run (e.g. train_models.py sets this to
+            whatever bootstrap_feature_store_if_needed() actually did, so
+            a run that padded the store with synthetic rows uses them
+            consistently instead of silently training on real-only data
+            that's still below min_samples).
         """
         try:
             from ml.feature_store import get_feature_store
             store = get_feature_store()
             # If min_samples not provided, fall back to global config
             min_samples_call = min_samples if min_samples is not None else MIN_TRAINING_SAMPLES
-            df = store.load_training_data(pair=pair, timeframe=timeframe, min_samples=min_samples_call)
+            df = store.load_training_data(
+                pair=pair, timeframe=timeframe, min_samples=min_samples_call,
+                include_bootstrap=include_bootstrap,
+            )
         except Exception as e:
             log.error(f"[DatasetBuilder] FeatureStore load failed: {e}")
             return None
@@ -157,8 +204,34 @@ class DatasetBuilder:
                     f"{required_cols} columns, missing: {required_cols - set(df.columns)}"
                 )
                 return None
-            from ml.triple_barrier_labels import get_triple_barrier_labeler
-            labeler = get_triple_barrier_labeler()
+            from ml.triple_barrier_labels import TripleBarrierLabeler, get_triple_barrier_labeler
+
+            # FIX (2026-08-17): the shared singleton from
+            # get_triple_barrier_labeler() always uses a fixed 2.0x/2.0x ATR
+            # barrier for every pair — it has no per-pair awareness. That's
+            # a real gap: a walk-forward backtest across 6 pairs (see
+            # config/barrier_config.py) found per-pair barrier widths that
+            # meaningfully change both win rate and net expectancy (e.g.
+            # GBPNOK needed 4.0x ATR just to overcome its own spread cost —
+            # at the old fixed 2.0x it back-tested to roughly break-even).
+            # If config/barrier_config.py is importable, use the pair's
+            # tuned width; otherwise fall back to the untouched singleton
+            # (byte-for-byte previous behavior — nothing breaks if that
+            # file isn't present).
+            try:
+                cfg_map = _load_barrier_config(pair)
+                cfg = cfg_map.get(pair.upper(), cfg_map.get("_default", {"atr_multiplier": 2.0, "holding_period": 16, "prob_threshold": 0.55, "max_cost_R": 0.5}))
+                labeler = TripleBarrierLabeler(
+                    take_profit_width=cfg["atr_multiplier"],
+                    stop_loss_width=cfg["atr_multiplier"],
+                )
+                log.info(f"[DatasetBuilder] {pair}: using tuned barrier "
+                         f"{cfg['atr_multiplier']}x ATR from config/barrier_config.py")
+            except Exception as e:
+                log.warning(f"[DatasetBuilder] config/barrier_config.py not available "
+                            f"({e}) — falling back to the untuned 2.0x/2.0x default")
+                labeler = get_triple_barrier_labeler()
+
             # Pass label_horizon as a per-call override (NOT a mutation of
             # labeler.holding_period) — get_triple_barrier_labeler() is a
             # shared singleton, and mutating shared state here would race

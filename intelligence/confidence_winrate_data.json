@@ -1,0 +1,170 @@
+{
+  "metadata": {
+    "generated_at": "2026-08-14",
+    "source": "confidence_winrate_report.md + 2026-08-14 engine recalibration",
+    "source_backtest": "2026-07-04 14:32:46",
+    "pairs_tested": 3,
+    "timeframes": ["M15", "H1", "H4"],
+    "combinations": 9,
+    "successful_runs": 9,
+    "suggested_decision_mode": "confluence",
+    "notes": "Data reconstructed from report. Re-run full backtest to refresh with larger sample."
+  },
+  "global_thresholds": {
+    "min_trades_for_reliability": 10,
+    "min_trades_for_high_reliability": 30,
+    "winrate_use_threshold": 0.50,
+    "winrate_caution_threshold": 0.40
+  },
+  "strategy_summary": [
+    {"strategy": "ict_amd", "trades": 11, "win_rate": 1.0, "avg_r": 49.85, "best_confidence": "Medium", "best_tactic": "ict_amd_default", "tier": "use"},
+    {"strategy": "candlestick_patterns", "trades": 3301, "win_rate": 0.378, "avg_r": 0.09, "best_confidence": "Low", "best_tactic": "Three Black Crows", "tier": "disable"},
+    {"strategy": "sr_zones", "trades": 16598, "win_rate": 0.368, "avg_r": 0.06, "best_confidence": "Medium", "best_tactic": "support", "tier": "disable"},
+    {"strategy": "cci_state", "trades": 2395, "win_rate": 0.354, "avg_r": 0.04, "best_confidence": "High", "best_tactic": "cci_227", "tier": "disable"},
+    {"strategy": "stop_hunt", "trades": 71, "win_rate": 0.352, "avg_r": 0.52, "best_confidence": "High", "best_tactic": "stop_hunt_default", "tier": "disable"}
+  ],
+  "per_confidence_winrates": {
+    "ict_amd": {
+      "High": {"trades": 3, "win_rate": 1.0, "tier": "use", "sample_reliability": "low_n"},
+      "Medium": {"trades": 8, "win_rate": 1.0, "tier": "use", "sample_reliability": "low_n"},
+      "Low": {"trades": 0, "win_rate": null, "tier": "no_data", "sample_reliability": "no_data"}
+    },
+    "stop_hunt": {
+      "High": {"trades": 44, "win_rate": 0.523, "tier": "use", "sample_reliability": "high_n"},
+      "Medium": {"trades": 20, "win_rate": 0.10, "tier": "disable", "sample_reliability": "med_n"},
+      "Low": {"trades": 7, "win_rate": 0.0, "tier": "disable", "sample_reliability": "low_n"}
+    },
+    "candlestick_patterns": {
+      "any": {"trades": 3301, "win_rate": 0.378, "tier": "disable", "sample_reliability": "high_n"}
+    },
+    "sr_zones": {
+      "any": {"trades": 16598, "win_rate": 0.368, "tier": "disable", "sample_reliability": "high_n"}
+    },
+    "cci_state": {
+      "any": {"trades": 2395, "win_rate": 0.354, "tier": "disable", "sample_reliability": "high_n"}
+    }
+  },
+  "confidence_to_action_map": {
+    "rules": [
+      {
+        "if_strategy": "ict_amd",
+        "if_confidence": "High",
+        "action": "trust",
+        "position_scale": 1.0,
+        "expected_winrate": 1.0,
+        "n": 3,
+        "notes": "Promising but tiny sample — cap risk in live"
+      },
+      {
+        "if_strategy": "ict_amd",
+        "if_confidence": "Medium",
+        "action": "trust",
+        "position_scale": 1.0,
+        "expected_winrate": 1.0,
+        "n": 8,
+        "notes": "Promising but tiny sample — cap risk in live"
+      },
+      {
+        "if_strategy": "ict_amd",
+        "if_confidence": "Low",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": null,
+        "n": 0,
+        "notes": "No historical data"
+      },
+      {
+        "if_strategy": "stop_hunt",
+        "if_confidence": "High",
+        "action": "trust",
+        "position_scale": 0.7,
+        "expected_winrate": 0.523,
+        "n": 44,
+        "notes": "Decent WR + n; reduce size for volatility"
+      },
+      {
+        "if_strategy": "stop_hunt",
+        "if_confidence": "Medium",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": 0.10,
+        "n": 20,
+        "notes": "10% WR — losing money"
+      },
+      {
+        "if_strategy": "stop_hunt",
+        "if_confidence": "Low",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": 0.0,
+        "n": 7,
+        "notes": "0% WR"
+      },
+      {
+        "if_strategy": "candlestick_patterns",
+        "if_confidence": "any",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": 0.378,
+        "n": 3301,
+        "notes": "Below 40% threshold"
+      },
+      {
+        "if_strategy": "sr_zones",
+        "if_confidence": "any",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": 0.368,
+        "n": 16598,
+        "notes": "Below 40% threshold"
+      },
+      {
+        "if_strategy": "cci_state",
+        "if_confidence": "any",
+        "action": "skip",
+        "position_scale": 0.0,
+        "expected_winrate": 0.354,
+        "n": 2395,
+        "notes": "Below 40% threshold — but specific tactics can rescue"
+      }
+    ]
+  },
+  "per_tactic_winrates_top": {
+    "ict_amd": [
+      {"tactic": "ict_amd_default", "trades": 11, "win_rate": 1.0}
+    ],
+    "candlestick_patterns": [
+      {"tactic": "Three Black Crows", "trades": 5, "win_rate": 0.60},
+      {"tactic": "Dark Cloud Cover", "trades": 119, "win_rate": 0.487},
+      {"tactic": "Three Inside Down", "trades": 63, "win_rate": 0.476},
+      {"tactic": "Doji", "trades": 290, "win_rate": 0.459},
+      {"tactic": "Shooting Star", "trades": 192, "win_rate": 0.458},
+      {"tactic": "Hanging Man", "trades": 124, "win_rate": 0.452},
+      {"tactic": "Evening Star", "trades": 140, "win_rate": 0.436},
+      {"tactic": "Bearish Harami", "trades": 197, "win_rate": 0.431},
+      {"tactic": "Tweezer Top", "trades": 367, "win_rate": 0.406},
+      {"tactic": "Bearish Engulfing", "trades": 285, "win_rate": 0.40}
+    ],
+    "sr_zones": [
+      {"tactic": "support", "trades": 6728, "win_rate": 0.378},
+      {"tactic": "resistance", "trades": 9870, "win_rate": 0.360}
+    ],
+    "stop_hunt": [
+      {"tactic": "stop_hunt_default", "trades": 71, "win_rate": 0.352}
+    ]
+  },
+  "cci_top_tactics_by_winrate": {
+    "top_25": [
+      {"tactic": "cci_227", "trades": 6, "win_rate": 0.833},
+      {"tactic": "cci_111", "trades": 20, "win_rate": 0.70},
+      {"tactic": "cci_157", "trades": 10, "win_rate": 0.60},
+      {"tactic": "cci_-107", "trades": 15, "win_rate": 0.60},
+      {"tactic": "cci_-148", "trades": 10, "win_rate": 0.60},
+      {"tactic": "cci_164", "trades": 13, "win_rate": 0.538},
+      {"tactic": "cci_170", "trades": 11, "win_rate": 0.545},
+      {"tactic": "cci_-127", "trades": 11, "win_rate": 0.545},
+      {"tactic": "cci_-131", "trades": 7, "win_rate": 0.571},
+      {"tactic": "cci_-153", "trades": 7, "win_rate": 0.571}
+    ]
+  }
+}

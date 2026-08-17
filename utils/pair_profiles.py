@@ -224,6 +224,32 @@ PROFILES: dict[str, PairProfile] = {
         risk_per_trade=0.004,
         notes="Range trading. Sharp reversals. PF 1.06. Conservative risk.",
     ),
+    # Iteration-5 candidates
+    "USDSGD": PairProfile(
+        symbol="USDSGD", enabled=True, strategy="trend_follow",
+        min_confidence=55, min_aligned_factors=2, min_rr=2.0, adx_min=18.0,
+        session_filter="london_ny", pullback_atr_mult=1.5, spread_max_mult=2.0,
+        stop_atr_mult=1.8, target_atr_mult=3.5, max_trades_per_day=3,
+        risk_per_trade=0.005,
+        notes="Iteration-5 checkpointed long-run candidate conf=55",
+    ),
+    "GBPCAD": PairProfile(
+        symbol="GBPCAD", enabled=True, strategy="trend_follow",
+        min_confidence=55, min_aligned_factors=2, min_rr=2.0, adx_min=18.0,
+        session_filter="london_ny", pullback_atr_mult=1.5, spread_max_mult=2.0,
+        stop_atr_mult=1.8, target_atr_mult=3.5, max_trades_per_day=3,
+        risk_per_trade=0.005,
+        notes="Iteration-5 candidate conf=55",
+    ),
+    "EURAUD": PairProfile(
+        symbol="EURAUD", enabled=True, strategy="trend_follow",
+        min_confidence=55, min_aligned_factors=2, min_rr=2.0, adx_min=18.0,
+        session_filter="london_ny", pullback_atr_mult=1.5, spread_max_mult=2.0,
+        stop_atr_mult=1.8, target_atr_mult=3.5, max_trades_per_day=3,
+        risk_per_trade=0.005,
+        notes="Iteration-5 candidate conf=55",
+    ),
+
 }
 
 

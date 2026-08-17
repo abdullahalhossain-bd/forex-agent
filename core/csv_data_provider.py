@@ -257,6 +257,38 @@ class HistoricalCSVDataProvider(DataProvider):
         self._cursor = 0
         self._warned_default_spread = False
 
+        # Iteration-3: if H1/H4 CSVs were not found, resample from primary M15
+        # so SMCEngine (which calls DataFetcher.fetch_ohlcv for 4h/15m) gets
+        # real multi-TF structure instead of smc_score=0.
+        try:
+            from data.backtest_ohlcv_cache import (
+                register_from_m15, register_series, resample_ohlcv, set_asof,
+            )
+            for _tf in list(self._mtf_tfs):
+                _tn = _tf if _tf in ("H1", "H4", "D1") else _tf
+                if _tn not in self._mtf_dfs and self._primary_tf in ("M15", "M5", "M30"):
+                    try:
+                        _rs = resample_ohlcv(self._primary_df, _tn)
+                        if _rs is not None and not _rs.empty:
+                            self._mtf_dfs[_tn] = _rs
+                            log.info(
+                                f"[CSVProvider] Resampled {self._symbol} "
+                                f"{self._primary_tf}→{_tn} ({len(_rs)} bars)"
+                            )
+                    except Exception as _re:
+                        log.warning(f"[CSVProvider] resample {_tn} failed: {_re}")
+            # Register everything into the shared backtest OHLCV cache
+            register_series(self._symbol, self._primary_tf, self._primary_df)
+            for _tn, _df in self._mtf_dfs.items():
+                register_series(self._symbol, _tn, _df)
+            # also ensure M15 alias if primary is M15
+            if self._primary_tf == "M15":
+                register_from_m15(self._symbol, self._primary_df, also=tuple(
+                    t for t in ("H1", "H4") if t in self._mtf_dfs
+                ))
+        except Exception as _cache_e:
+            log.warning(f"[CSVProvider] backtest OHLCV cache register failed: {_cache_e}")
+
         # Decide ONCE which indicator chain is available, instead of
         # retrying the (possibly failing) import on every single bar.
         # This also stops the per-bar log spam when pandas_ta is missing.
@@ -302,6 +334,12 @@ class HistoricalCSVDataProvider(DataProvider):
         if bar_index >= len(self._primary_df):
             bar_index = len(self._primary_df) - 1
         self._cursor = bar_index
+        # Point-in-time fence for DataFetcher backtest cache (SMC/MTF)
+        try:
+            from data.backtest_ohlcv_cache import set_asof
+            set_asof(self._primary_df.index[self._cursor])
+        except Exception:
+            pass
 
     def current_time(self):
         """Return the timestamp of the bar at the cursor."""

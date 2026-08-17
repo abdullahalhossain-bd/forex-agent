@@ -18,9 +18,11 @@ DAILY_LOG_PATH = str(MEMORY_DIR / "daily_risk.json")
 class RiskEngine:
 
     MAX_RISK_PC      = 1.0
-    # 2026-08-12: TP 1:1.5 R:R — SL=1.5 ATR (~25p), TP=2.25 ATR (~37p)
-    # Historical analysis: break-even WR=43%, production expects 50%+ = profit
-    MIN_RR           = 1.5
+    # PARITY FIX (2026-08-15): align with risk/rr_policy.get_min_rr() /
+    # core.constants.MIN_RR_PROD (default 2.0). Hardcoded 1.5 caused
+    # RiskEngine to emit 1.5R TPs that orphan_consumers then rejected
+    # (RR 1.50 < 2.00) → systematic risk_rejected / 0 trades in backtest.
+    MIN_RR           = 2.0
     MAX_RR           = 5.0
     DAILY_LOSS_LIMIT = 3.0
     MAX_OPEN_TRADES  = 3
@@ -167,14 +169,26 @@ class RiskEngine:
 
         sl_pips     = round(sl_distance / self.pip) if self.pip > 0 else 10
 
+        try:
+            from risk.rr_policy import get_min_rr
+            try:
+                from core.constants import is_test_mode
+                _tm = bool(is_test_mode())
+            except Exception:
+                _tm = False
+            _min_rr = float(get_min_rr(test_mode=_tm))
+        except Exception:
+            _min_rr = float(self.MIN_RR)
+        _min_rr = max(0.5, min(float(self.MAX_RR), _min_rr))
+
         if signal == "BUY":
             sl_price = round(entry - sl_distance, 5)
-            tp_price = round(entry + sl_distance * self.MIN_RR, 5)
+            tp_price = round(entry + sl_distance * _min_rr, 5)
         else:
             sl_price = round(entry + sl_distance, 5)
-            tp_price = round(entry - sl_distance * self.MIN_RR, 5)
+            tp_price = round(entry - sl_distance * _min_rr, 5)
 
-        tp_pips  = round(sl_pips * self.MIN_RR)
+        tp_pips  = round(sl_pips * _min_rr)
         rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
 
         risk_usd = round(self.balance * self.MAX_RISK_PC / 100, 2)
