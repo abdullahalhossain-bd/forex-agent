@@ -42,21 +42,29 @@ __pycache__/
 *.onnx
 
 # =========================
-# Large historical / cache data
+# Large historical / cache data (generic, do NOT touch data/historical)
 # =========================
 data/history/
 data/cache/
 data/pipeline_cache/
 
 # =========================
-# Large data files
+# Large data files (only blocks files directly in data/, not subfolders)
 # =========================
 data/*.csv
 data/*.parquet
 data/*.feather
 
 # =========================
+# Explicitly allow data/historical CSV & JSON to be uploaded
+# (negation rules — must come AFTER the block rules above)
+# =========================
+!data/historical/
+!data/historical/**
+!data/historical/*.csv
+!data/historical/*.json
+
+# =========================
 # General generated files
 # =========================
-
 *.tmp

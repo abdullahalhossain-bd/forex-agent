@@ -1,0 +1,2648 @@
+[
+  {
+    "file": "AUDUSD_H1.csv",
+    "path": "data/AUDUSD_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6196,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "AUDUSD",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 2021,
+      "real_volume": 6196
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 50.0,
+      "mean": 5.09,
+      "zero_count": 2021,
+      "zero_pct": 32.62
+    },
+    "tick_volume_stats": {
+      "min": 122.0,
+      "max": 39160.0,
+      "mean": 3394.49,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6196,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.65789,
+        "high": 0.65804,
+        "low": 0.65693,
+        "close": 0.65713,
+        "tick_volume": 2531,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 0.65714,
+        "high": 0.65734,
+        "low": 0.65634,
+        "close": 0.65675,
+        "tick_volume": 2398,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.65675,
+        "high": 0.65679,
+        "low": 0.65581,
+        "close": 0.6562,
+        "tick_volume": 1664,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "AUDUSD_H4.csv",
+    "path": "data/AUDUSD_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "AUDUSD",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 706,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 18.0,
+      "mean": 3.81,
+      "zero_count": 706,
+      "zero_pct": 45.52
+    },
+    "tick_volume_stats": {
+      "min": 1167.0,
+      "max": 104529.0,
+      "mean": 13557.26,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.65675,
+        "high": 0.6568,
+        "low": 0.65554,
+        "close": 0.65586,
+        "tick_volume": 7019,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 0.65585,
+        "high": 0.65658,
+        "low": 0.65503,
+        "close": 0.65596,
+        "tick_volume": 12718,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 0.65596,
+        "high": 0.65655,
+        "low": 0.65586,
+        "close": 0.65646,
+        "tick_volume": 5978,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "AUDUSD_M15.csv",
+    "path": "data/AUDUSD_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24781,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "AUDUSD",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 5799,
+      "real_volume": 24781
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 131.0,
+      "mean": 5.92,
+      "zero_count": 5799,
+      "zero_pct": 23.4
+    },
+    "tick_volume_stats": {
+      "min": 5.0,
+      "max": 11581.0,
+      "mean": 848.77,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24781,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 0.65771,
+        "high": 0.65818,
+        "low": 0.65771,
+        "close": 0.65798,
+        "tick_volume": 664,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 0.65798,
+        "high": 0.65801,
+        "low": 0.6576,
+        "close": 0.65789,
+        "tick_volume": 571,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.65789,
+        "high": 0.65804,
+        "low": 0.65747,
+        "close": 0.65774,
+        "tick_volume": 725,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "EURUSD_H1.csv",
+    "path": "data/EURUSD_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6197,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "EURUSD",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 3746,
+      "real_volume": 6197
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 38.0,
+      "mean": 1.59,
+      "zero_count": 3746,
+      "zero_pct": 60.45
+    },
+    "tick_volume_stats": {
+      "min": 1.0,
+      "max": 49611.0,
+      "mean": 3963.17,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6197,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.17473,
+        "high": 1.17589,
+        "low": 1.17473,
+        "close": 1.17523,
+        "tick_volume": 3210,
+        "spread": 8,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 1.17522,
+        "high": 1.17575,
+        "low": 1.1741,
+        "close": 1.17427,
+        "tick_volume": 3232,
+        "spread": 8,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.17426,
+        "high": 1.17431,
+        "low": 1.17324,
+        "close": 1.17344,
+        "tick_volume": 2469,
+        "spread": 8,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "EURUSD_H4.csv",
+    "path": "data/EURUSD_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "EURUSD",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 1087,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 8.0,
+      "mean": 1.08,
+      "zero_count": 1087,
+      "zero_pct": 70.08
+    },
+    "tick_volume_stats": {
+      "min": 1846.0,
+      "max": 121159.0,
+      "mean": 15830.65,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.17426,
+        "high": 1.17431,
+        "low": 1.17112,
+        "close": 1.17177,
+        "tick_volume": 9802,
+        "spread": 0,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 1.1718,
+        "high": 1.17381,
+        "low": 1.17027,
+        "close": 1.17284,
+        "tick_volume": 14693,
+        "spread": 0,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 1.17283,
+        "high": 1.17465,
+        "low": 1.17282,
+        "close": 1.17402,
+        "tick_volume": 6726,
+        "spread": 8,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "EURUSD_M15.csv",
+    "path": "data/EURUSD_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24780,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "EURUSD",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 59,
+    "non_weekend_gaps": 7,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 13083,
+      "real_volume": 24780
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 129.0,
+      "mean": 2.02,
+      "zero_count": 13083,
+      "zero_pct": 52.8
+    },
+    "tick_volume_stats": {
+      "min": 1.0,
+      "max": 16730.0,
+      "mean": 991.18,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24780,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 1.17491,
+        "high": 1.17603,
+        "low": 1.17485,
+        "close": 1.17578,
+        "tick_volume": 777,
+        "spread": 8,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 1.17578,
+        "high": 1.17583,
+        "low": 1.17463,
+        "close": 1.17473,
+        "tick_volume": 786,
+        "spread": 8,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.17473,
+        "high": 1.17554,
+        "low": 1.17473,
+        "close": 1.17549,
+        "tick_volume": 831,
+        "spread": 8,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "GBPUSD_H1.csv",
+    "path": "data/GBPUSD_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6195,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "GBPUSD",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 1716,
+      "real_volume": 6195
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 68.0,
+      "mean": 4.38,
+      "zero_count": 1716,
+      "zero_pct": 27.7
+    },
+    "tick_volume_stats": {
+      "min": 130.0,
+      "max": 52934.0,
+      "mean": 4681.23,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6195,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.34892,
+        "high": 1.34914,
+        "low": 1.34659,
+        "close": 1.34675,
+        "tick_volume": 3390,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 1.34676,
+        "high": 1.34756,
+        "low": 1.34585,
+        "close": 1.34621,
+        "tick_volume": 3085,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.34621,
+        "high": 1.3463,
+        "low": 1.34497,
+        "close": 1.3462,
+        "tick_volume": 2321,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "GBPUSD_H4.csv",
+    "path": "data/GBPUSD_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "GBPUSD",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 541,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 18.0,
+      "mean": 3.24,
+      "zero_count": 541,
+      "zero_pct": 34.88
+    },
+    "tick_volume_stats": {
+      "min": 1848.0,
+      "max": 158069.0,
+      "mean": 18693.59,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.34621,
+        "high": 1.34633,
+        "low": 1.34225,
+        "close": 1.34324,
+        "tick_volume": 9933,
+        "spread": 2,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 1.34325,
+        "high": 1.34427,
+        "low": 1.34154,
+        "close": 1.342,
+        "tick_volume": 15268,
+        "spread": 2,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 1.34199,
+        "high": 1.34387,
+        "low": 1.34188,
+        "close": 1.34358,
+        "tick_volume": 7113,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "GBPUSD_M15.csv",
+    "path": "data/GBPUSD_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24776,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "GBPUSD",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 59,
+    "non_weekend_gaps": 7,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 5089,
+      "real_volume": 24776
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 215.0,
+      "mean": 5.47,
+      "zero_count": 5089,
+      "zero_pct": 20.54
+    },
+    "tick_volume_stats": {
+      "min": 11.0,
+      "max": 17234.0,
+      "mean": 1170.56,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24776,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 1.34917,
+        "high": 1.35014,
+        "low": 1.34917,
+        "close": 1.34973,
+        "tick_volume": 759,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 1.34973,
+        "high": 1.34974,
+        "low": 1.34869,
+        "close": 1.34891,
+        "tick_volume": 713,
+        "spread": 18,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.34892,
+        "high": 1.34914,
+        "low": 1.34814,
+        "close": 1.34882,
+        "tick_volume": 845,
+        "spread": 18,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "NZDUSD_H1.csv",
+    "path": "data/NZDUSD_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6196,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "NZDUSD",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 1134,
+      "real_volume": 6196
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 68.0,
+      "mean": 7.08,
+      "zero_count": 1134,
+      "zero_pct": 18.3
+    },
+    "tick_volume_stats": {
+      "min": 103.0,
+      "max": 36576.0,
+      "mean": 3116.03,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6196,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.60235,
+        "high": 0.60244,
+        "low": 0.60104,
+        "close": 0.6011,
+        "tick_volume": 2307,
+        "spread": 20,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 0.6011,
+        "high": 0.60141,
+        "low": 0.60054,
+        "close": 0.60092,
+        "tick_volume": 2192,
+        "spread": 20,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.60091,
+        "high": 0.60101,
+        "low": 0.60029,
+        "close": 0.60089,
+        "tick_volume": 1447,
+        "spread": 20,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "NZDUSD_H4.csv",
+    "path": "data/NZDUSD_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "NZDUSD",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 397,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 20.0,
+      "mean": 4.58,
+      "zero_count": 397,
+      "zero_pct": 25.6
+    },
+    "tick_volume_stats": {
+      "min": 817.0,
+      "max": 104471.0,
+      "mean": 12445.16,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.60091,
+        "high": 0.60152,
+        "low": 0.60018,
+        "close": 0.60034,
+        "tick_volume": 6375,
+        "spread": 10,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 0.60035,
+        "high": 0.60141,
+        "low": 0.59968,
+        "close": 0.60091,
+        "tick_volume": 11446,
+        "spread": 10,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 0.60091,
+        "high": 0.60166,
+        "low": 0.60079,
+        "close": 0.60163,
+        "tick_volume": 3687,
+        "spread": 20,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "NZDUSD_M15.csv",
+    "path": "data/NZDUSD_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24781,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "NZDUSD",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 3759,
+      "real_volume": 24781
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 182.0,
+      "mean": 8.55,
+      "zero_count": 3759,
+      "zero_pct": 15.17
+    },
+    "tick_volume_stats": {
+      "min": 4.0,
+      "max": 10535.0,
+      "mean": 779.15,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24781,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 0.60225,
+        "high": 0.60272,
+        "low": 0.60223,
+        "close": 0.60253,
+        "tick_volume": 584,
+        "spread": 20,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 0.60253,
+        "high": 0.60257,
+        "low": 0.60223,
+        "close": 0.60234,
+        "tick_volume": 522,
+        "spread": 20,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.60235,
+        "high": 0.60244,
+        "low": 0.60168,
+        "close": 0.60184,
+        "tick_volume": 628,
+        "spread": 20,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCAD_H1.csv",
+    "path": "data/USDCAD_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6196,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "USDCAD",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 1469,
+      "real_volume": 6196
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 90.0,
+      "mean": 4.77,
+      "zero_count": 1469,
+      "zero_pct": 23.71
+    },
+    "tick_volume_stats": {
+      "min": 71.0,
+      "max": 34102.0,
+      "mean": 3076.87,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6196,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.36589,
+        "high": 1.3674,
+        "low": 1.36561,
+        "close": 1.36722,
+        "tick_volume": 1850,
+        "spread": 22,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 1.36724,
+        "high": 1.3679,
+        "low": 1.36676,
+        "close": 1.3675,
+        "tick_volume": 1883,
+        "spread": 22,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.3675,
+        "high": 1.36793,
+        "low": 1.36728,
+        "close": 1.36762,
+        "tick_volume": 1401,
+        "spread": 22,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCAD_H4.csv",
+    "path": "data/USDCAD_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "USDCAD",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 632,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 22.0,
+      "mean": 3.13,
+      "zero_count": 632,
+      "zero_pct": 40.75
+    },
+    "tick_volume_stats": {
+      "min": 790.0,
+      "max": 91156.0,
+      "mean": 12289.2,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 1.3675,
+        "high": 1.36876,
+        "low": 1.36663,
+        "close": 1.36842,
+        "tick_volume": 5959,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 1.36841,
+        "high": 1.37247,
+        "low": 1.36763,
+        "close": 1.37153,
+        "tick_volume": 12608,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 1.37152,
+        "high": 1.37161,
+        "low": 1.36969,
+        "close": 1.36985,
+        "tick_volume": 5292,
+        "spread": 22,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCAD_M15.csv",
+    "path": "data/USDCAD_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24781,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "USDCAD",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 4272,
+      "real_volume": 24781
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 195.0,
+      "mean": 5.74,
+      "zero_count": 4272,
+      "zero_pct": 17.24
+    },
+    "tick_volume_stats": {
+      "min": 13.0,
+      "max": 11131.0,
+      "mean": 769.34,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24781,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 1.36535,
+        "high": 1.36545,
+        "low": 1.36499,
+        "close": 1.36524,
+        "tick_volume": 339,
+        "spread": 22,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 1.36524,
+        "high": 1.36591,
+        "low": 1.36521,
+        "close": 1.36589,
+        "tick_volume": 298,
+        "spread": 22,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 1.36589,
+        "high": 1.36624,
+        "low": 1.36561,
+        "close": 1.36595,
+        "tick_volume": 455,
+        "spread": 22,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCHF_H1.csv",
+    "path": "data/USDCHF_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6196,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "USDCHF",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 1283,
+      "real_volume": 6196
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 139.0,
+      "mean": 7.61,
+      "zero_count": 1283,
+      "zero_pct": 20.71
+    },
+    "tick_volume_stats": {
+      "min": 139.0,
+      "max": 26762.0,
+      "mean": 2492.76,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6196,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.79533,
+        "high": 0.79564,
+        "low": 0.79491,
+        "close": 0.79547,
+        "tick_volume": 2813,
+        "spread": 19,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 0.79547,
+        "high": 0.79591,
+        "low": 0.79514,
+        "close": 0.79583,
+        "tick_volume": 2481,
+        "spread": 19,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.79583,
+        "high": 0.79688,
+        "low": 0.79577,
+        "close": 0.79661,
+        "tick_volume": 2175,
+        "spread": 19,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCHF_H4.csv",
+    "path": "data/USDCHF_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "USDCHF",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 454,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 20.0,
+      "mean": 4.78,
+      "zero_count": 454,
+      "zero_pct": 29.27
+    },
+    "tick_volume_stats": {
+      "min": 922.0,
+      "max": 65269.0,
+      "mean": 9954.78,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 0.79583,
+        "high": 0.79752,
+        "low": 0.79569,
+        "close": 0.79712,
+        "tick_volume": 8862,
+        "spread": 11,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 0.7971,
+        "high": 0.79783,
+        "low": 0.79534,
+        "close": 0.79536,
+        "tick_volume": 12309,
+        "spread": 11,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 0.79536,
+        "high": 0.79557,
+        "low": 0.79451,
+        "close": 0.79451,
+        "tick_volume": 4002,
+        "spread": 19,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDCHF_M15.csv",
+    "path": "data/USDCHF_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24781,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "USDCHF",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 4010,
+      "real_volume": 24781
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 286.0,
+      "mean": 9.34,
+      "zero_count": 4010,
+      "zero_pct": 16.18
+    },
+    "tick_volume_stats": {
+      "min": 7.0,
+      "max": 10340.0,
+      "mean": 623.32,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24781,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 0.79554,
+        "high": 0.79563,
+        "low": 0.79463,
+        "close": 0.79463,
+        "tick_volume": 633,
+        "spread": 20,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 0.79464,
+        "high": 0.79556,
+        "low": 0.79463,
+        "close": 0.79533,
+        "tick_volume": 634,
+        "spread": 19,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 0.79533,
+        "high": 0.79556,
+        "low": 0.79503,
+        "close": 0.79504,
+        "tick_volume": 737,
+        "spread": 19,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDJPY_H1.csv",
+    "path": "data/USDJPY_H1.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 6196,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 07:00:00+00:00",
+    "end_utc": "2026-07-24 20:00:00+00:00",
+    "date_range_days": 364.54,
+    "symbol": "USDJPY",
+    "timeframe": "H1",
+    "duplicate_timestamps": 0,
+    "gap_count": 56,
+    "non_weekend_gaps": 4,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 48,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 2130,
+      "real_volume": 6196
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 80.0,
+      "mean": 3.19,
+      "zero_count": 2130,
+      "zero_pct": 34.38
+    },
+    "tick_volume_stats": {
+      "min": 141.0,
+      "max": 30340.0,
+      "mean": 3366.14,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 6196,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 147.046,
+        "high": 147.407,
+        "low": 147.033,
+        "close": 147.375,
+        "tick_volume": 4086,
+        "spread": 13,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 08:00:00+00:00",
+        "open": 147.375,
+        "high": 147.823,
+        "low": 147.352,
+        "close": 147.746,
+        "tick_volume": 4548,
+        "spread": 13,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 147.747,
+        "high": 147.886,
+        "low": 147.72,
+        "close": 147.861,
+        "tick_volume": 2799,
+        "spread": 13,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDJPY_H4.csv",
+    "path": "data/USDJPY_H4.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 1551,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 09:00:00+00:00",
+    "end_utc": "2026-07-24 17:00:00+00:00",
+    "date_range_days": 364.33,
+    "symbol": "USDJPY",
+    "timeframe": "H4",
+    "duplicate_timestamps": 0,
+    "gap_count": 54,
+    "non_weekend_gaps": 2,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 17:00:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 17:00:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 17:00:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 17:00:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 17:00:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 12,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 605,
+      "real_volume": 1551
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 13.0,
+      "mean": 2.4,
+      "zero_count": 605,
+      "zero_pct": 39.01
+    },
+    "tick_volume_stats": {
+      "min": 1712.0,
+      "max": 75073.0,
+      "mean": 13441.61,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 1551,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 09:00:00+00:00",
+        "open": 147.747,
+        "high": 147.931,
+        "low": 147.597,
+        "close": 147.847,
+        "tick_volume": 11659,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 13:00:00+00:00",
+        "open": 147.846,
+        "high": 147.912,
+        "low": 147.521,
+        "close": 147.75,
+        "tick_volume": 18355,
+        "spread": 4,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 17:00:00+00:00",
+        "open": 147.751,
+        "high": 147.772,
+        "low": 147.523,
+        "close": 147.646,
+        "tick_volume": 9447,
+        "spread": 13,
+        "real_volume": 0
+      }
+    ]
+  },
+  {
+    "file": "USDJPY_M15.csv",
+    "path": "data/USDJPY_M15.csv",
+    "columns": [
+      "datetime_utc",
+      "open",
+      "high",
+      "low",
+      "close",
+      "tick_volume",
+      "spread",
+      "real_volume"
+    ],
+    "row_count": 24781,
+    "ts_col": "datetime_utc",
+    "bad_timestamps": 0,
+    "start_utc": "2025-07-25 06:30:00+00:00",
+    "end_utc": "2026-07-24 20:45:00+00:00",
+    "date_range_days": 364.59,
+    "symbol": "USDJPY",
+    "timeframe": "M15",
+    "duplicate_timestamps": 0,
+    "gap_count": 57,
+    "non_weekend_gaps": 5,
+    "gaps_sample": [
+      {
+        "start": "2025-07-25 20:45:00+00:00",
+        "end": "2025-07-27 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-01 20:45:00+00:00",
+        "end": "2025-08-03 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-08 20:45:00+00:00",
+        "end": "2025-08-10 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-15 20:45:00+00:00",
+        "end": "2025-08-17 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      },
+      {
+        "start": "2025-08-22 20:45:00+00:00",
+        "end": "2025-08-24 21:00:00+00:00",
+        "missing_bars": 192,
+        "is_weekend": true
+      }
+    ],
+    "nan_counts": {},
+    "zero_counts": {
+      "open": 0,
+      "high": 0,
+      "low": 0,
+      "close": 0,
+      "tick_volume": 0,
+      "spread": 6787,
+      "real_volume": 24781
+    },
+    "ohlc_violations": {
+      "high_lt_max_oc": 0,
+      "low_gt_min_oc": 0,
+      "high_lt_low": 0
+    },
+    "spread_stats": {
+      "min": 0.0,
+      "max": 249.0,
+      "mean": 4.11,
+      "zero_count": 6787,
+      "zero_pct": 27.39
+    },
+    "tick_volume_stats": {
+      "min": 12.0,
+      "max": 13489.0,
+      "mean": 841.71,
+      "zero_count": 0,
+      "zero_pct": 0.0
+    },
+    "real_volume_stats": {
+      "min": 0.0,
+      "max": 0.0,
+      "mean": 0.0,
+      "zero_count": 24781,
+      "zero_pct": 100.0
+    },
+    "timestamp_tz_aware": true,
+    "first_3_rows": [
+      {
+        "datetime_utc": "2025-07-25 06:30:00+00:00",
+        "open": 146.958,
+        "high": 147.045,
+        "low": 146.901,
+        "close": 146.943,
+        "tick_volume": 950,
+        "spread": 13,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 06:45:00+00:00",
+        "open": 146.945,
+        "high": 147.088,
+        "low": 146.945,
+        "close": 147.051,
+        "tick_volume": 916,
+        "spread": 13,
+        "real_volume": 0
+      },
+      {
+        "datetime_utc": "2025-07-25 07:00:00+00:00",
+        "open": 147.046,
+        "high": 147.207,
+        "low": 147.033,
+        "close": 147.089,
+        "tick_volume": 1090,
+        "spread": 13,
+        "real_volume": 0
+      }
+    ]
+  }
+]

@@ -74,8 +74,11 @@ class LiveMT5Provider(DataProvider):
         return self._market_agent.run()
 
     def current_time(self):
-        import datetime
-        return datetime.datetime.utcnow()
+        # P1-A R4 FIX: must return tz-aware UTC for parity with HistoricalCSVProvider.
+        # Previously returned datetime.utcnow() (NAIVE) which crashes callers that
+        # compare to tz-aware bar timestamps.
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc)
 
 
 class HistoricalMT5Provider(DataProvider):

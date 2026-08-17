@@ -19,6 +19,7 @@
 # ============================================================
 
 from datetime import datetime, timezone
+from typing import Optional
 
 import pandas as pd
 from utils.logger import get_logger
@@ -100,7 +101,9 @@ class SmartMoneyEngine:
         nearest_ob  = self.ob_detector.nearest_active(order_blocks, current_price, atr=atr)
         nearest_fvg = self.fvg_detector.nearest_active(fvgs, current_price, atr=atr)
 
-        kill_zone = self._current_kill_zone()
+        # P1-C §6b FIX: pass bar timestamp from df for backtest parity
+        bar_ts = df.index[-1].to_pydatetime() if hasattr(df.index[-1], 'to_pydatetime') else df.index[-1]
+        kill_zone = self._current_kill_zone(bar_timestamp=bar_ts)
 
         score, factors, direction = self._score_confluence(
             structure_result, liquidity_result, nearest_ob, nearest_fvg, htf_bias=None
@@ -219,7 +222,9 @@ class SmartMoneyEngine:
         m15_structure = m15_structure_engine.analyze(dfs["M15"])
         m15_liquidity = m15_liquidity_engine.analyze(dfs["M15"])
 
-        kill_zone = self._current_kill_zone()
+        # P1-C §6b FIX: pass bar timestamp from M15 df for backtest parity
+        bar_ts = dfs["M15"].index[-1].to_pydatetime() if hasattr(dfs["M15"].index[-1], 'to_pydatetime') else dfs["M15"].index[-1]
+        kill_zone = self._current_kill_zone(bar_timestamp=bar_ts)
 
         # ── Confluence scoring (H4 structure/liquidity drive bias,
         #    H1 zones add confluence, M15 confirms entry timing) ──
@@ -382,12 +387,22 @@ class SmartMoneyEngine:
     # ⭐ KILL ZONE ANALYSIS
     # ═══════════════════════════════════════════════════════
 
-    def _current_kill_zone(self) -> dict:
+    def _current_kill_zone(self, bar_timestamp: Optional[datetime] = None) -> dict:
         """
         বর্তমান UTC সময় কোন ICT kill zone-এর মধ্যে পড়ে কিনা বলো।
         SMC setup এই session-গুলোতে বেশি reliable ধরা হয়।
+
+        PARITY FIX (P1-C §6b): previously used datetime.now(timezone.utc) directly,
+        which breaks historical replay — every historical bar gets stamped with
+        the operator's current wall-clock kill zone, not the bar's actual UTC hour.
+        Callers now pass bar_timestamp from df.index[-1] for backtest parity.
         """
-        now = datetime.now(timezone.utc)
+        # P1-C §6b FIX: prefer caller-supplied bar timestamp for backtest parity
+        if bar_timestamp is None:
+            # Fall back to wall-clock UTC for live mode
+            now = datetime.now(timezone.utc)
+        else:
+            now = bar_timestamp
         hour = now.hour
 
         for name, (start, end) in KILL_ZONES.items():

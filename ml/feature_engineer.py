@@ -107,7 +107,7 @@ class FeatureEngineer:
         features.update(self._pattern_features(df, last, analysis_out))
 
         # ── 4. Context features ────────────────────────────────────
-        features.update(self._context_features(analysis_out, pair, timeframe))
+        features.update(self._context_features(analysis_out, pair, timeframe, df=df))
 
         # ── 5. Multi-timeframe features ────────────────────────────
         features.update(self._mtf_features(analysis_out))
@@ -380,7 +380,7 @@ class FeatureEngineer:
 
     # ── 4. Context features ───────────────────────────────────────
 
-    def _context_features(self, a: Dict, pair: str, timeframe: str) -> Dict[str, float]:
+    def _context_features(self, a: Dict, pair: str, timeframe: str, df: Optional[pd.DataFrame] = None) -> Dict[str, float]:
         f: Dict[str, float] = {}
 
         # Session one-hot encoding
@@ -394,10 +394,21 @@ class FeatureEngineer:
         )
 
         # Time features
-        # Timezone policy: use pd.Timestamp.now(tz="UTC") everywhere instead
-        # of datetime.now(timezone.utc)/datetime.utcnow() so every "now" value
-        # in the pipeline is the same tz-aware UTC type as DataFrame indices.
-        now = pd.Timestamp.now(tz="UTC")
+        # PARITY FIX (P1-D §0.5): previously used pd.Timestamp.now(tz="UTC") which
+        # breaks historical replay — every historical bar gets stamped with the
+        # operator's current wall-clock time, not the bar's actual UTC hour.
+        # Now: prefer df.index[-1] (the latest bar's timestamp) when available.
+        # Timezone policy: always tz-aware UTC, matching DataFrame indices.
+        if len(df.index) > 0 and hasattr(df.index[-1], 'hour'):
+            # df has tz-aware (or tz-naive) DatetimeIndex — use the bar's own timestamp
+            now = pd.Timestamp(df.index[-1])
+            if now.tz is None:
+                now = now.tz_localize("UTC")
+            else:
+                now = now.tz_convert("UTC")
+        else:
+            # Fall back to wall-clock for non-time-indexed df (should not happen in production)
+            now = pd.Timestamp.now(tz="UTC")
         f["hour_utc"] = float(now.hour)
         f["day_of_week"] = float(now.weekday())  # 0=Mon, 6=Sun
         f["is_weekend"] = 1.0 if now.weekday() >= 5 else 0.0
