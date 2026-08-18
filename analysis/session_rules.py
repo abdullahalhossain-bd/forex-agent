@@ -150,7 +150,21 @@ SESSION_STRATEGIES = {
         # note doesn't carry an "A+ only" label the way overlap's did, but
         # the empirical performance gap was just as large, so the same
         # numeric fix applies.
-        "min_confidence":    85,
+        #
+        # Phase F0-c (2026-08-18): lowered 85 → 75 based on data-backed
+        # diagnostic from main worker logs (1639 bars, 8 pairs):
+        #   - 111 NEW_YORK session-floor downgrades accumulated in
+        #     only ~150 bars/pair processed
+        #   - Most downgraded signals had confidence 78-82% (genuine
+        #     strong setups, not low-confidence noise)
+        #   - 85% floor was effectively blocking ~all trading during
+        #     NEW_YORK — empirically a near-trade-ban, not a quality gate
+        #   - User approved Option A (conservative): lower to 75% only
+        #     (not 70/60), retain base threshold (net>=4, factors>=3)
+        #   - Will re-validate after fresh 8-pair backtest; if winrate
+        #     is catastrophic, revert. If acceptable, this becomes new
+        #     production config.
+        "min_confidence":    75,
         "risk_multiplier":   1.0,
         "note":              "Follow London direction. Check order flow. Empirically weak in isolation -- treat with the same caution as the overlap window.",
     },
@@ -169,7 +183,10 @@ SESSION_STRATEGIES = {
         # essentially the entire loss. Raising min_confidence here to 85
         # (the level found to hold up out-of-sample) actually enforces
         # the "A+ only" label this session already carried.
-        "min_confidence":    85,
+        #
+        # Phase F0-c (2026-08-18): lowered 85 → 75 — same evidence-based
+        # change as NEW_YORK above. See NEW_YORK block for full rationale.
+        "min_confidence":    75,
         "risk_multiplier":   1.2,
         "note":              "Best trading window IF confidence is genuinely high. Empirically the highest-loss window otherwise -- wait for perfect setup.",
     },

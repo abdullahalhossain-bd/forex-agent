@@ -104,13 +104,76 @@ class HistoricalMT5Provider(DataProvider):
         self._cursor = 0  # index of the last closed bar included
         # Iteration-3: register M15 + resampled H1/H4 for SMCEngine via
         # DataFetcher backtest cache (same path live uses for multi-TF).
+        #
+        # Phase F0-d fix (2026-08-18): the previous version only registered
+        # the primary timeframe when tf_u wasn't M15 — meaning if primary
+        # was H1, the SMCEngine (which needs H4 and M15) got cache misses
+        # → "No data for SYMBOL 4h/15m" warnings → smc_score=0 →
+        # session fusion gate blocked → 0 trades in entire backtest.
+        # Now: try to load ALL available CSV files (M5/M15/H1/H4/D1) from
+        # data/historical/{symbol}/ — same as HistoricalCSVProvider does.
+        # Falls back to resampling from primary if CSVs not found.
         try:
-            from data.backtest_ohlcv_cache import register_from_m15, register_series
+            from data.backtest_ohlcv_cache import (
+                register_from_m15, register_series, resample_ohlcv,
+            )
+            import os as _os
+            import pandas as _pd
             tf_u = (timeframe or "").upper().replace(" ", "")
-            if tf_u in ("M15", "15M", "15"):
-                register_from_m15(symbol, df, also=("H1", "H4"))
-            else:
-                register_series(symbol, timeframe, df)
+            # Always register the primary timeframe
+            register_series(symbol, tf_u, df)
+            # Try to load each MTF CSV from data/historical/{symbol}/
+            _hist_dir = _os.path.join(
+                _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                "data", "historical", symbol
+            )
+            _loaded_tfs = {tf_u}
+            for _mtf_tf in ("M5", "M15", "H1", "H4", "D1"):
+                if _mtf_tf in _loaded_tfs:
+                    continue  # already loaded
+                _csv_path = _os.path.join(_hist_dir, f"{_mtf_tf}.csv")
+                if _os.path.exists(_csv_path):
+                    try:
+                        _mtf_df = _pd.read_csv(_csv_path)
+                        if "datetime_utc" in _mtf_df.columns:
+                            _mtf_df["datetime"] = _pd.to_datetime(_mtf_df["datetime_utc"], utc=True)
+                        elif "time" in _mtf_df.columns:
+                            _mtf_df["datetime"] = _pd.to_datetime(_mtf_df["time"], utc=True)
+                        else:
+                            _mtf_df["datetime"] = _pd.to_datetime(_mtf_df.iloc[:, 0], utc=True)
+                        _mtf_df = _mtf_df.set_index("datetime")
+                        _mtf_df.columns = [c.lower() for c in _mtf_df.columns]
+                        if not _mtf_df.empty:
+                            register_series(symbol, _mtf_tf, _mtf_df)
+                            _loaded_tfs.add(_mtf_tf)
+                            log.debug(f"[HistoricalMT5Provider] loaded {_mtf_tf} CSV for {symbol} ({len(_mtf_df)} bars)")
+                    except Exception as _e:
+                        log.debug(f"[HistoricalMT5Provider] failed to load {_mtf_tf} for {symbol}: {_e}")
+            # If M15 not loaded, resample from primary if primary is shorter
+            if "M15" not in _loaded_tfs and tf_u in ("M5", "M30"):
+                try:
+                    _rs = resample_ohlcv(df, "M15")
+                    if not _rs.empty:
+                        register_series(symbol, "M15", _rs)
+                        _loaded_tfs.add("M15")
+                except Exception: pass
+            # If H4 not loaded, resample from primary if primary is shorter (H1, M15, etc)
+            if "H4" not in _loaded_tfs and tf_u in ("M5", "M15", "M30", "H1"):
+                try:
+                    _rs = resample_ohlcv(df, "H4")
+                    if not _rs.empty:
+                        register_series(symbol, "H4", _rs)
+                        _loaded_tfs.add("H4")
+                except Exception: pass
+            # If H1 not loaded, resample from primary if primary is shorter
+            if "H1" not in _loaded_tfs and tf_u in ("M5", "M15", "M30"):
+                try:
+                    _rs = resample_ohlcv(df, "H1")
+                    if not _rs.empty:
+                        register_series(symbol, "H1", _rs)
+                        _loaded_tfs.add("H1")
+                except Exception: pass
+            log.info(f"[HistoricalMT5Provider] {symbol} registered TFs: {sorted(_loaded_tfs)}")
         except Exception as e:
             log.debug(f"[HistoricalMT5Provider] OHLCV cache register skipped: {e}")
 
@@ -230,20 +293,52 @@ class HistoricalMT5Provider(DataProvider):
 
         Falls back to {"bias":"NEUTRAL","confidence":"LOW"} if there
         isn't enough data to compute EMAs (matches live's failure path).
+
+        Phase F0-d fix (2026-08-18): ALSO return per-TF trends (h4_trend,
+        h1_trend, m15_trend) so trader.py:_pick_tf can resolve them
+        instead of getting 'unknown' → MTF trend alignment gate blocked
+        every trade.
         """
         try:
             if df_slice is None or len(df_slice) < 50:
-                return {"bias": "NEUTRAL", "confidence": "LOW"}
-            # Resample H1 → 4H and 1D, causal (closed bars only at each step).
-            # Use label='left' closed='left' so each 4H bar covers [t, t+4h)
-            # and we only use bars whose open is <= cursor time.
+                return {"bias": "NEUTRAL", "confidence": "LOW",
+                        "h4_trend": "unknown", "h1_trend": "unknown",
+                        "m15_trend": "unknown"}
             current_time = df_slice.index[-1]
             ohlc = df_slice[["open", "high", "low", "close"]].copy()
-            # Ensure volume column exists (resample needs it for some ops)
             if "volume" not in ohlc.columns:
                 ohlc["volume"] = 0.0
 
             bias_votes = []  # list of (bias, confidence) per tf
+            per_tf_trend = {}  # tf_label -> trend string
+
+            # Primary timeframe trend (use df_slice directly — usually H1)
+            try:
+                _ema_f = ohlc["close"].ewm(span=20, adjust=False).mean()
+                _ema_s = ohlc["close"].ewm(span=50, adjust=False).mean()
+                _last_c = float(ohlc["close"].iloc[-1])
+                _last_f = float(_ema_f.iloc[-1])
+                _last_s = float(_ema_s.iloc[-1])
+                if _last_c > _last_f > _last_s:
+                    per_tf_trend["h1_trend"] = "BULLISH"
+                elif _last_c > _last_f:
+                    per_tf_trend["h1_trend"] = "BULLISH"
+                elif _last_c < _last_f < _last_s:
+                    per_tf_trend["h1_trend"] = "BEARISH"
+                elif _last_c < _last_f:
+                    per_tf_trend["h1_trend"] = "BEARISH"
+                else:
+                    per_tf_trend["h1_trend"] = "NEUTRAL"
+            except Exception:
+                per_tf_trend["h1_trend"] = "unknown"
+
+            # M15 trend: only if primary is shorter (M5, M15) — otherwise use
+            # last 100 H1 bars' M15-proxy (i.e. recent 15-bar EMA on H1).
+            # For simplicity, treat the H1 primary as M15 too if primary is H1.
+            if timeframe.upper() in ("H1", "1H"):
+                per_tf_trend["m15_trend"] = per_tf_trend["h1_trend"]
+            else:
+                per_tf_trend["m15_trend"] = "unknown"
 
             for tf_label, rule in [("4h", "4h"), ("1d", "1D")]:
                 try:
@@ -251,8 +346,6 @@ class HistoricalMT5Provider(DataProvider):
                         "open": "first", "high": "max", "low": "min",
                         "close": "last", "volume": "sum",
                     }).dropna(subset=["open", "high", "low", "close"])
-                    # Causal: only 4H/1D bars that have CLOSED by current_time
-                    # (i.e. their open was at least 4h/1d ago).
                     if tf_label == "4h":
                         cutoff = current_time - pd.Timedelta(hours=4)
                     else:
@@ -260,7 +353,6 @@ class HistoricalMT5Provider(DataProvider):
                     resampled = resampled[resampled.index <= cutoff]
                     if len(resampled) < 50:
                         continue
-                    # EMA trend: 20 vs 50 vs 200 (or however many bars we have)
                     ema_fast = resampled["close"].ewm(span=20, adjust=False).mean()
                     ema_slow = resampled["close"].ewm(span=50, adjust=False).mean()
                     last_close = float(resampled["close"].iloc[-1])
@@ -268,33 +360,51 @@ class HistoricalMT5Provider(DataProvider):
                     last_slow = float(ema_slow.iloc[-1])
                     if last_close > last_fast > last_slow:
                         bias_votes.append(("BULLISH", "HIGH"))
+                        if tf_label == "4h":
+                            per_tf_trend["h4_trend"] = "BULLISH"
                     elif last_close > last_fast:
                         bias_votes.append(("BULLISH", "MEDIUM"))
+                        if tf_label == "4h":
+                            per_tf_trend["h4_trend"] = "BULLISH"
                     elif last_close < last_fast < last_slow:
                         bias_votes.append(("BEARISH", "HIGH"))
+                        if tf_label == "4h":
+                            per_tf_trend["h4_trend"] = "BEARISH"
                     elif last_close < last_fast:
                         bias_votes.append(("BEARISH", "MEDIUM"))
+                        if tf_label == "4h":
+                            per_tf_trend["h4_trend"] = "BEARISH"
                     else:
                         bias_votes.append(("NEUTRAL", "LOW"))
+                        if tf_label == "4h":
+                            per_tf_trend["h4_trend"] = "NEUTRAL"
                 except Exception:
                     continue
 
-            if not bias_votes:
-                return {"bias": "NEUTRAL", "confidence": "LOW"}
+            # Default missing trends
+            per_tf_trend.setdefault("h4_trend", "unknown")
+            per_tf_trend.setdefault("h1_trend", "unknown")
+            per_tf_trend.setdefault("m15_trend", "unknown")
 
-            # Aggregate: ≥75% agreement → HIGH, ≥50% → MEDIUM, else NEUTRAL/LOW
+            if not bias_votes:
+                return {"bias": "NEUTRAL", "confidence": "LOW", **per_tf_trend}
+
             bullish = sum(1 for b, _ in bias_votes if b == "BULLISH")
             bearish = sum(1 for b, _ in bias_votes if b == "BEARISH")
             total = len(bias_votes)
             if bullish >= 0.75 * total:
-                return {"bias": "BULLISH", "confidence": "HIGH" if bullish == total else "MEDIUM"}
+                return {"bias": "BULLISH",
+                        "confidence": "HIGH" if bullish == total else "MEDIUM",
+                        **per_tf_trend}
             if bearish >= 0.75 * total:
-                return {"bias": "BEARISH", "confidence": "HIGH" if bearish == total else "MEDIUM"}
+                return {"bias": "BEARISH",
+                        "confidence": "HIGH" if bearish == total else "MEDIUM",
+                        **per_tf_trend}
             if bullish > bearish:
-                return {"bias": "BULLISH", "confidence": "LOW"}
+                return {"bias": "BULLISH", "confidence": "LOW", **per_tf_trend}
             if bearish > bullish:
-                return {"bias": "BEARISH", "confidence": "LOW"}
-            return {"bias": "NEUTRAL", "confidence": "LOW"}
+                return {"bias": "BEARISH", "confidence": "LOW", **per_tf_trend}
+            return {"bias": "NEUTRAL", "confidence": "LOW", **per_tf_trend}
         except Exception as e:
             log.debug(f"[HistoricalMT5Provider] MTF bias computation failed: {e}")
             return {"bias": "NEUTRAL", "confidence": "LOW"}
