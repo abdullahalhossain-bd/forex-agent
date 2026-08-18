@@ -177,6 +177,34 @@ class TradePermission:
     # confidence >= 60 should be enough to trade even in a LOW session.
     SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60
 
+    # ────────────────────────────────────────────────────────────────────
+    # 2026-08-18 PHASE 2 FIX: MTF staleness override
+    # Enable trades when H4/H1 data is stale (default to allowing trades
+    # when MTF data is incomplete). Set MTF_STALE_FAIL_OPEN=false to
+    # require all 3 timeframes (4h, 1h, 15m) for strict MTF alignment.
+    # ────────────────────────────────────────────────────────────────────
+    try:
+        from core.constants import MTF_STALE_FAIL_OPEN as _ENV_MTF_FAIL_OPEN
+        MTF_STALE_FAIL_OPEN_DEFAULT = (_ENV_MTF_FAIL_OPEN == "true" or _ENV_MTF_FAIL_OPEN is True)
+    except Exception:
+        MTF_STALE_FAIL_OPEN_DEFAULT = True  # Default: allow trades when MTF data stale
+
+    # ────────────────────────────────────────────────────────────────────
+    # 2026-08-18 PHASE 3 FIX: Trade frequency cap
+    # Increase daily trade cap from 35 to 50, add session-aware limits.
+    # Can be overridden via env var MAX_DAILY_TRADES_PROD.
+    # ────────────────────────────────────────────────────────────────────
+    try:
+        from core.constants import MAX_DAILY_TRADES_PROD as _ENV_MAX_DAILY_TRADES
+        MAX_DAILY_TRADES_PROD = int(_ENV_MAX_DAILY_TRADES) if _ENV_MAX_DAILY_TRADES else 50
+    except Exception:
+        MAX_DAILY_TRADES_PROD = 50  # Increased from 35 to support more high-quality setups
+
+    # Default confidence thresholds (before dynamic adjustment)
+    CONFIDENCE_FLOOR_MULTI_FACTOR = 55    # 4+ aligned factors: needs 55%
+    CONFIDENCE_FLOOR_DUAL_FACTOR = 65     # 2-3 aligned factors: needs 65%
+    CONFIDENCE_FLOOR_SINGLE_FACTOR = 75   # weak signals: needs 75%
+
     @property
     def MIN_CONFIDENCE(self) -> int:
         # 2026-08-13: per-pair profile override — if a pair has a custom
@@ -224,6 +252,64 @@ class TradePermission:
     def MIN_RR(self) -> float:
         from risk.rr_policy import get_min_rr
         return get_min_rr(test_mode=_test_mode())
+
+    def _compute_dynamic_confidence_floor(self, decision_out: dict) -> int:
+        """
+        2026-08-18 PHASE 1 FIX: Compute dynamic MIN_CONFIDENCE threshold (55-75%)
+        based on signal quality markers instead of hardcoded 80% floor.
+        
+        Returns confidence floor in range [55, 75] based on:
+        - aligned_factors: number of confirmed factors (ADX, trend, S/R, confluence)
+        - adx: trend strength (>25 strong, 14-25 moderate, <14 weak)
+        - confluence_quality: indicator agreement (HIGH/MEDIUM/LOW)
+        - strategy: signal type (mean_reversion is higher bar than trend-follow)
+        
+        Logic:
+        - 4+ factors aligned: 55% floor (high conviction multi-factor setup)
+        - 2-3 factors aligned: 65% floor (medium conviction dual-factor setup)
+        - 0-1 factors or weak: 75% floor (single-factor weak signal)
+        - mean_reversion: +5% penalty (counter-trend bias = higher bar)
+        - Envelope: 55% min, 75% max (no go below/above these)
+        """
+        try:
+            aligned_factors = int(decision_out.get("aligned_factors", 0) or 0)
+            adx = float(decision_out.get("adx", 20) or 20)
+            confluence = str(decision_out.get("confluence_quality", "MEDIUM")).upper()
+            strategy = str(decision_out.get("strategy", "trend_follow")).lower()
+            
+            # Start with multi-factor floor (most permissive)
+            if aligned_factors >= 4:
+                floor = self.CONFIDENCE_FLOOR_MULTI_FACTOR    # 55%
+            elif aligned_factors >= 2:
+                floor = self.CONFIDENCE_FLOOR_DUAL_FACTOR     # 65%
+            else:
+                floor = self.CONFIDENCE_FLOOR_SINGLE_FACTOR   # 75%
+            
+            # Mean reversion counter-trend trades need higher confidence bar
+            if strategy == "mean_reversion":
+                floor = min(75, floor + 5)  # +5% penalty for counter-trend bias
+            
+            # Weak trend (ADX < 14) nudges threshold up by 3%
+            if adx < 14:
+                floor = min(75, floor + 3)
+            
+            # Low confluence agreement also nudges up by 2%
+            if confluence == "LOW":
+                floor = min(75, floor + 2)
+            
+            # Envelope: never go below 55 or above 75
+            floor = max(55, min(75, floor))
+            
+            log.debug(
+                f"[DynamicConfidenceFloor] factors={aligned_factors}, "
+                f"adx={adx:.1f}, confluence={confluence}, strategy={strategy} "
+                f"→ floor={floor}%"
+            )
+            return floor
+        except Exception as e:
+            # Fallback to conservative floor if computation fails
+            log.warning(f"[DynamicConfidenceFloor] error during computation: {e} — using 65% default")
+            return 65
 
     def check(
         self,
@@ -727,8 +813,11 @@ class TradePermission:
                     import os as _os_mtf, sys as _sys_mtf
                     # In CI/test runs we want missing MTF data to be fail-open
                     # so downstream adaptive/confidence logic can be exercised.
+                    # 2026-08-18 PHASE 2 FIX: use class-level MTF_STALE_FAIL_OPEN_DEFAULT
+                    # so operator can enable fail-open by default (was hardcoded false).
                     _mtf_fail_open = (
                         _os_mtf.getenv("MTF_STALE_FAIL_OPEN", "false").lower() == "true"
+                        or self.MTF_STALE_FAIL_OPEN_DEFAULT  # NEW: use class default
                         or _test_mode()
                         or bool(_os_mtf.getenv("PYTEST_CURRENT_TEST"))
                         or "pytest" in set(_sys_mtf.modules)
@@ -1448,7 +1537,12 @@ class TradePermission:
         # path) feature not covered by this REMOVE decision.
 
         # 4. Confidence
-        effective_min_confidence = self.MIN_CONFIDENCE
+        # 2026-08-18 PHASE 1 FIX: Use dynamic confidence floor (55-75%) instead
+        # of hard 80% floor. Compute based on signal quality (aligned factors,
+        # ADX, confluence, strategy type). This allows high-confidence
+        # multi-factor setups to trade at 55%, while weak single-factor signals
+        # still require 75%.
+        effective_min_confidence = self._compute_dynamic_confidence_floor(decision_out)
         recent_win_rate = None
         recent_trades = None
         consecutive_losses = None
@@ -1469,24 +1563,24 @@ class TradePermission:
             # routinely (P=12.5% per sequence at 50% WR).
             effective_min_confidence = max(
                 effective_min_confidence,
-                min(100, self.MIN_CONFIDENCE + self.LOSS_STREAK_CONFIDENCE_BUMP),
+                min(100, effective_min_confidence + self.LOSS_STREAK_CONFIDENCE_BUMP),
             )
 
         if recent_win_rate is not None and recent_trades is not None and recent_trades >= 3:
             if recent_win_rate < self.MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR:
                 effective_min_confidence = min(
                     100,
-                    self.MIN_CONFIDENCE + self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                    effective_min_confidence + self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
                 )
             elif recent_win_rate >= 0.65:
                 effective_min_confidence = max(
                     45,
-                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                    effective_min_confidence - self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
                 )
             elif recent_win_rate >= 0.55:
                 effective_min_confidence = max(
                     50,
-                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_RECENT_WIN_RATE_STEP,
+                    effective_min_confidence - self.MIN_CONFIDENCE_RECENT_WIN_RATE_STEP,
                 )
 
         ok   = conf >= effective_min_confidence

@@ -51,7 +51,7 @@ def _env_int(name: str, default: int) -> int:
 
 # Defaults — overridable via .env
 DEFAULT_MIN_DAILY_TRADES = 3
-DEFAULT_MAX_DAILY_TRADES = 35
+DEFAULT_MAX_DAILY_TRADES = 50  # 2026-08-18 PHASE 3 FIX: increased from 35 to 50
 
 
 @dataclass
@@ -99,12 +99,38 @@ class TradeFrequencyController:
     def trade_count_today(self) -> int:
         return len(self.trades_today())
 
+    def _get_session_aware_max_trades(self) -> int:
+        """
+        2026-08-18 PHASE 3 FIX: Return session-aware MAX_DAILY_TRADES.
+        Different forex sessions have different liquidity:
+        - Asia session (00-08 GMT): lower liquidity → lower cap (30 trades)
+        - London overlap (08-12 GMT): high liquidity → standard cap (50 trades)
+        - NY overlap (12-21 GMT): high liquidity → standard cap (50 trades)
+        - NY close (21-00 GMT): lower liquidity → lower cap (35 trades)
+        """
+        now = datetime.now(timezone.utc)
+        hour = now.hour
+        
+        if 8 <= hour < 21:  # London + NY = high liquidity
+            return 50
+        elif 0 <= hour < 8:  # Asia = low liquidity
+            return 30
+        else:  # NY close (21-00) = medium liquidity
+            return 35
+
     def can_trade_now(self) -> bool:
-        """True if we haven't hit the daily max yet."""
+        """
+        True if we haven't hit the session-aware daily max yet.
+        2026-08-18 PHASE 3 FIX: use session-aware cap instead of fixed global cap.
+        """
         count = self.trade_count_today()
-        if count >= self._max_daily:
+        session_max = self._get_session_aware_max_trades()
+        
+        if count >= session_max:
             log.warning(
-                f"[TradeFrequency] BLOCKED — {count}/{self._max_daily} trades today (daily cap hit) | source=risk/trade_frequency.py:can_trade_now() | config=MAX_DAILY_TRADES={self._max_daily}"
+                f"[TradeFrequency] BLOCKED — {count}/{session_max} trades today "
+                f"(session-aware cap hit) | source=risk/trade_frequency.py:can_trade_now() "
+                f"| config=MAX_DAILY_TRADES={self._max_daily}"
             )
             return False
         return True
@@ -114,7 +140,9 @@ class TradeFrequencyController:
     def status(self) -> Dict:
         """Current status — used by dashboard and adaptive threshold logic."""
         count = self.trade_count_today()
-        if count >= self._max_daily:
+        session_max = self._get_session_aware_max_trades()
+        
+        if count >= session_max:
             status = "AT_MAX"
             recommendation = "block_new_trades"
         elif count < self._min_daily:
@@ -135,10 +163,10 @@ class TradeFrequencyController:
         return {
             "trades_today":     count,
             "min_required":     self._min_daily,
-            "max_allowed":      self._max_daily,
+            "max_allowed":      session_max,  # Use session-aware max
             "status":           status,
             "recommendation":   recommendation,
-            "remaining_trades": max(0, self._max_daily - count),
+            "remaining_trades": max(0, session_max - count),
         }
 
     def daily_summary(self) -> Dict:

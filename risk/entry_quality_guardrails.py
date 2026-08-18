@@ -1878,6 +1878,34 @@ def run_all_entry_quality_checks(
 
     passed_count = sum(1 for r in results if r.passed)
     confidence_penalty = 0
+
+    # 2026-08-18 PHASE 4 FIX: Conditional penalties
+    # Adjust penalty severity based on market context:
+    # - Strong trend (ADX > 25): reduce penalties by 30% (quality more relaxed in trends)
+    # - Weak trend (ADX < 14): increase penalties by 15% (quality stricter in choppy)
+    # - High win rate (>55%): reduce penalties by 20% (quality more relaxed when winning)
+    # - Consecutive losses (>3): increase penalties by 15% (quality stricter after losses)
+    _penalty_multiplier = 1.0
+    
+    try:
+        adx = float(ind_ctx.get("adx", 20) or 20)
+        consecutive_losses = int(ind_ctx.get("consecutive_losses", 0) or 0)
+        recent_win_rate = float(ind_ctx.get("recent_win_rate", 0.5) or 0.5)
+        
+        if adx > 25:  # Strong trending market
+            _penalty_multiplier *= 0.70  # 30% penalty reduction
+        elif adx < 14:  # Weak choppy market
+            _penalty_multiplier *= 1.15  # 15% penalty increase
+        
+        if recent_win_rate > 0.55:  # Hot streak
+            _penalty_multiplier *= 0.80  # 20% penalty reduction
+        elif consecutive_losses > 3:  # Losing streak
+            _penalty_multiplier *= 1.15  # 15% penalty increase
+    except (TypeError, KeyError, ValueError):
+        # If context is missing, use standard (1.0) multiplier
+        pass
+    
+    _penalty_multiplier = max(0.5, min(2.0, _penalty_multiplier))  # Envelope: 50%-200%
     # NEW — attribution: which rule contributed how much of the total
     # penalty. Keyed by the same flag_name used in _PENALTY_MAP/_DISPLAY_NAMES
     # (not a display string), so downstream code can match it reliably.
@@ -1903,7 +1931,9 @@ def run_all_entry_quality_checks(
                 per_check_report.append(f"{display:<22} BLOCK (extreme)")
                 extreme_block_reason = extreme_block_reason or r.reason
             else:
-                penalty = _PENALTY_MAP.get(r.flag_name, 3)
+                # 2026-08-18 PHASE 4 FIX: apply conditional penalty multiplier
+                base_penalty = _PENALTY_MAP.get(r.flag_name, 3)
+                penalty = max(1, int(base_penalty * _penalty_multiplier))  # min 1 to avoid zero-penalty
                 confidence_penalty += penalty
                 penalty_by_rule[r.flag_name] = penalty_by_rule.get(r.flag_name, 0) - penalty
                 per_check_report.append(f"{display:<22} FAIL (-{penalty})")
