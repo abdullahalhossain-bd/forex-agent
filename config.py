@@ -254,9 +254,55 @@ MONITORING_INTERVAL = 60  # seconds between health checks
 # `core.llm_key_manager.get_llm_key_manager()` (`get_groq_client()` /
 # `get_gemini_client()`) for any actual API call.
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+# 2026-08-20 fix: this default was still "llama-3.1-8b-instant", which the
+# comment above this block already documents as deprecated by Groq on
+# 2026-06-17 (same day as llama-3.3-70b-versatile). ai/ai_analyst.py and
+# agents/master_analyst.py were already migrated to "openai/gpt-oss-20b";
+# this constant (currently unused elsewhere in the codebase, but kept for
+# any future caller) was missed. Matching it here for consistency.
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+
+# ── GROQ_MODEL sanity check (2026-08-20 fix) ─────────────────────
+# "groq/compound" and "groq/compound-mini" are Groq's AGENTIC tool-use
+# systems (built-in web search / code execution / browsing), not plain
+# chat-completion models. They're a poor fit for this bot's structured
+# trade-decision JSON calls, and have been reported (Groq's own docs +
+# third-party issue trackers) to intermittently return 413 "Request
+# Entity Too Large" even for prompts well under their advertised 131K
+# context window — independent of anything this bot's prompt-building
+# code can trim. Warn loudly at boot rather than let the operator
+# discover it as a wall of "Groq failed attempt 1/3 ... 413" retries
+# in the per-symbol analysis logs.
+GROQ_MODEL_LOOKS_AGENTIC = "compound" in GROQ_MODEL.lower()
+
+def validate_groq_model_config(logger=None) -> bool:
+    """Warn if GROQ_MODEL is an agentic 'compound' system rather than a
+    plain chat model. Returns True if GROQ_MODEL looks fine.
+    Call once at boot (see main.py initialize())."""
+    if not GROQ_MODEL_LOOKS_AGENTIC:
+        return True
+    msg_lines = [
+        "=" * 60,
+        "  CONFIG WARNING: GROQ_MODEL is an agentic 'compound' system",
+        f"    GROQ_MODEL (configured) = {GROQ_MODEL}",
+        "  'compound' / 'compound-mini' are Groq's tool-using agent",
+        "  systems (web search, code execution, browsing) — not plain",
+        "  chat models. They are known to intermittently return HTTP",
+        "  413 'Request Entity Too Large' on ordinary prompts, and are",
+        "  not designed for this bot's structured trade-JSON calls.",
+        "  Fix: set GROQ_MODEL in .env to a standard chat model, e.g.",
+        "    GROQ_MODEL=openai/gpt-oss-20b",
+        "=" * 60,
+    ]
+    if logger is not None:
+        for line in msg_lines:
+            logger.warning(line)
+    else:
+        for line in msg_lines:
+            print(line)
+    return False
 # OpenRouter is now FALLBACK #2 in the cascade (was previously disabled).
 # To enable: set OPENROUTER_API_KEY in .env (one key is enough).
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
@@ -338,6 +384,54 @@ MT5_FALLBACK_TO_SIMULATION = os.getenv("MT5_FALLBACK_TO_SIMULATION", "true").low
 #   $50k → MAX_LOT=1.00
 #   $100k→ MAX_LOT=2.00
 MAX_LOT = float(os.getenv("MAX_LOT", "0.20"))
+
+# ── MAX_LOT / balance sanity check (2026-08-20 fix) ─────────────
+# RiskEngine's safety guard (risk/risk_engine.py) rejects any trade where
+# MAX_LOT caps the lot to less than MIN_RISK_FRACTION_OF_INTENDED of the
+# intended risk, rather than silently under-risking. That guard is
+# correct and should stay — but when MAX_LOT is simply misconfigured for
+# the account size, the guard's symptom is a wall of per-symbol
+# "MAX_LOT cap shrinks actual risk to X%" rejections buried in the logs,
+# with no single place that says *why*. This check surfaces the root
+# cause once, loudly, at boot.
+#
+# Recommended MAX_LOT scales ~linearly with balance (see table above:
+# $10k→0.20, $50k→1.00, $100k→2.00, i.e. roughly balance / 50,000).
+RECOMMENDED_MAX_LOT = round(max(0.05, INITIAL_BALANCE / 50000.0), 2)
+MAX_LOT_SEVERELY_UNDERSIZED = MAX_LOT < RECOMMENDED_MAX_LOT * 0.5
+
+def validate_max_lot_config(logger=None) -> bool:
+    """Warn loudly if MAX_LOT is inconsistent with INITIAL_BALANCE.
+
+    Returns True if MAX_LOT looks fine, False if it's severely undersized
+    (which will cause RiskEngine to systematically reject trades via its
+    "MAX_LOT cap shrinks actual risk" guard). Call this once at boot
+    (see main.py initialize()) so the operator sees ONE clear message
+    instead of discovering it symbol-by-symbol in risk-rejection logs.
+    """
+    if not MAX_LOT_SEVERELY_UNDERSIZED:
+        return True
+    msg_lines = [
+        "=" * 60,
+        "  CONFIG WARNING: MAX_LOT looks undersized for INITIAL_BALANCE",
+        f"    INITIAL_BALANCE = ${INITIAL_BALANCE:,.2f}",
+        f"    MAX_LOT (configured) = {MAX_LOT}",
+        f"    MAX_LOT (recommended) ≈ {RECOMMENDED_MAX_LOT}  "
+        f"(balance / 50,000, min 0.05)",
+        "  With this gap, RiskEngine's safety guard will reject most/all",
+        "  trades rather than silently under-risk them (see",
+        "  risk/risk_engine.py 'MAX_LOT cap shrinks actual risk' reject).",
+        "  Fix: set MAX_LOT in .env to match your account size, e.g.",
+        f"    MAX_LOT={RECOMMENDED_MAX_LOT}",
+        "=" * 60,
+    ]
+    if logger is not None:
+        for line in msg_lines:
+            logger.warning(line)
+    else:
+        for line in msg_lines:
+            print(line)
+    return False
 
 # Maximum LLM calls per symbol cycle.  Each cycle fires:
 #   - SentimentModel (1 call)            — from sentiment_data provider

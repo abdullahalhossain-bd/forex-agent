@@ -47,7 +47,11 @@ try:
     _key_manager = get_llm_key_manager()
     _groq_client = _key_manager.get_groq_client()
     if _groq_client is not None:
-        MODEL = _os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        # 2026-08-20 fix: llama-3.3-70b-versatile was decommissioned by
+        # Groq (404 model_not_found) — default already updated elsewhere
+        # (ai/ai_analyst.py, agents/master_analyst.py, config.py), missed
+        # here.
+        MODEL = _os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
         LLM_AVAILABLE = True
         log.info(f"[DeepAnalyzer] Groq client initialized | model={MODEL}")
     if not LLM_AVAILABLE:
@@ -63,7 +67,7 @@ except Exception as e:
         try:
             from groq import Groq as _Groq
             _groq_client = _Groq(api_key=_groq_key)
-            MODEL = _os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+            MODEL = _os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
             LLM_AVAILABLE = True
             log.info(f"[DeepAnalyzer] Groq client initialized (single-key) | model={MODEL}")
         except Exception as _e:

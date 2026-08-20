@@ -33,7 +33,11 @@ LLM_AVAILABLE = False
 _groq_client = None
 _gemini_client = None
 _key_manager = None
-MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+# 2026-08-20 fix: llama-3.3-70b-versatile was decommissioned by Groq
+# (404 model_not_found) — every other module's default was already
+# updated after the 2026-06-17 incident (see ai/ai_analyst.py,
+# agents/master_analyst.py, config.py), this one was missed.
+MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
 MAX_TOKENS = 1200
 REVIEW_LOG_DIR = str(MEMORY_DIR / "daily_reviews")
 

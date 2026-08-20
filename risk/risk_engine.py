@@ -282,8 +282,29 @@ class RiskEngine:
         # FINAL, post-cap lot so every consumer of risk_usd/risk_pc sees
         # the real number. The pre-cap intended values are kept alongside
         # under *_intended for audit/backtest transparency.
-        risk_usd_intended = risk_usd
-        risk_pc_intended  = self.MAX_RISK_PC
+        #
+        # BUG FIX (2026-08-20): risk_usd_intended/risk_pc_intended were
+        # previously taken from `risk_usd`/`self.MAX_RISK_PC` captured
+        # BEFORE the leverage_mult (Day 97+ Book Rule, line ~252) and
+        # correlation_adjustment multipliers were applied to lot_raw.
+        # Those two multipliers are INTENTIONAL, strategy-level risk
+        # reductions (not the accidental under-risking the safety guard
+        # below exists to catch) — but comparing risk_pc_max_by_lot
+        # against the pre-multiplier 0.50% target double-counted them:
+        # e.g. leverage_mult=0.5 alone made every high-leverage-account
+        # trade register as "50% under-risked" before MAX_LOT even
+        # entered the picture, systematically over-triggering the
+        # "MAX_LOT cap shrinks actual risk" reject below on legitimate,
+        # only-mildly-undersized MAX_LOT configs (see 2026-08-20 log:
+        # lot_intended=2.48 (already leverage/corr-adjusted) vs
+        # MAX_LOT=1.98 is a real ~20% shrink, not the 60% the old code
+        # reported). Now computed from lot_raw AFTER all intentional
+        # multipliers (leverage_mult, correlation_adjustment) — i.e.
+        # what the strategy actually wants to risk right before the
+        # MAX_LOT cap is applied — matching what the field's own
+        # docstring below ("before MAX_LOT capping") already promised.
+        risk_usd_intended = round(lot_raw * sl_pips * pip_val, 2)
+        risk_pc_intended  = round((risk_usd_intended / self.balance) * 100, 4) if self.balance > 0 else 0.0
         # P5 fix: explicit "max allowed by lot cap" — what risk_usd WOULD be
         # if we used MAX_LOT exactly. Previously this was implicit in the
         # if/else below; now it's a named field so the operator can see all

@@ -41,6 +41,26 @@ class AIAnalyst:
     GROQ_MODEL   = os.getenv("GROQ_MODEL") or "openai/gpt-oss-20b"
     GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 
+    # 2026-08-20 fix: mirror agents/master_analyst.py's reasoning-model
+    # handling (see that file's 2026-08-19 comment). GROQ_MODEL defaults
+    # to a gpt-oss reasoning model, which reserves part of its token
+    # budget for internal chain-of-thought before writing the actual
+    # answer. _call_groq() below was still using a flat
+    # AI_ANALYST_MAX_TOKENS=700 with no reasoning_effort — the reasoning
+    # consumed the whole budget before any JSON was written, so every
+    # response failed to parse ("Could not parse LLM JSON — deferring to
+    # rule-engine signal", every symbol, every cycle). This was already
+    # fixed once in master_analyst.py but missed here.
+    GROQ_REASONING_MAX_TOK = int(os.getenv("GROQ_REASONING_MAX_TOKENS", "4000"))
+    GROQ_REASONING_EFFORT  = os.getenv("GROQ_REASONING_EFFORT", "low")
+
+    @staticmethod
+    def _is_reasoning_model(model_name: str) -> bool:
+        """True for gpt-oss-family models, which reserve part of their
+        token budget for internal chain-of-thought before emitting the
+        answer. Kept in sync with agents/master_analyst.py's helper."""
+        return "gpt-oss" in (model_name or "").lower()
+
     # 2026-07-25: Ollama has been COMPLETELY REMOVED from this layer.
     # See analyze() docstring for the new provider cascade order
     # (Groq → Gemini → OpenRouter). These OLLAMA_* class attributes
@@ -669,6 +689,8 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                 log.warning("No Groq client available — falling back")
                 return None
             try:
+                _is_reasoning = self._is_reasoning_model(self.GROQ_MODEL)
+                _max_tok = self.GROQ_REASONING_MAX_TOK if _is_reasoning else int(os.getenv("AI_ANALYST_MAX_TOKENS", "700"))
                 create_kwargs = dict(
                     model=self.GROQ_MODEL,
                     messages=[{"role": "user", "content": prompt}],
@@ -690,8 +712,16 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
                     # meaningful fraction of cycles, not just wasting tokens.
                     # 700 gives headroom for a full analysis string without
                     # materially undoing the Day 90 cost savings.
-                    max_tokens=int(os.getenv("AI_ANALYST_MAX_TOKENS", "700")),
+                    #
+                    # 2026-08-20 fix: for reasoning models (gpt-oss family),
+                    # 700 is nowhere near enough — chain-of-thought alone can
+                    # burn well past that before any JSON is written. Use the
+                    # same larger reasoning budget + low effort as
+                    # master_analyst.py instead.
+                    max_tokens=_max_tok,
                 )
+                if _is_reasoning:
+                    create_kwargs["reasoning_effort"] = self.GROQ_REASONING_EFFORT
                 if deadline is not None:
                     # BUGFIX (audit follow-up): request-level timeout so a
                     # hung/slow socket call is actually aborted by the SDK's

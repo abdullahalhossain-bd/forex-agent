@@ -1427,6 +1427,40 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             )
             raise
 
+        # AUDIT FIX (2026-08-20): parse_llm_json() can return a JSON
+        # **array** instead of an object whenever the LLM wraps its
+        # response in `[...]` (some models do this, especially under
+        # certain prompt phrasings or when they interpret "return JSON"
+        # as "return a JSON list of one item"). The code below assumed
+        # `data` was always a dict and called `data.setdefault(...)`
+        # directly, which crashed with
+        # "AttributeError: 'list' object has no attribute 'setdefault'"
+        # every time this happened — observed on AUDCHF in production,
+        # silently discarding that cycle's MasterAnalyst judgment and
+        # falling back to the rule engine only, even though the LLM had
+        # actually produced usable content (just wrapped in a list).
+        # Normalize: if it's a list, salvage the first dict element
+        # inside it rather than discarding the whole response; only
+        # raise (triggering the existing rule-engine fallback upstream)
+        # if there's truly nothing usable.
+        if isinstance(data, list):
+            log.warning(
+                f"[MasterAnalyst] LLM returned a JSON array instead of an "
+                f"object ({len(data)} item(s)) — attempting to salvage the "
+                f"first dict element instead of discarding the response"
+            )
+            data = next((item for item in data if isinstance(item, dict)), None)
+            if data is None:
+                raise ValueError(
+                    "MasterAnalyst LLM response was a JSON array with no "
+                    "dict elements — nothing to parse"
+                )
+        elif not isinstance(data, dict):
+            raise ValueError(
+                f"MasterAnalyst LLM response was JSON type "
+                f"'{type(data).__name__}', expected object or array-of-object"
+            )
+
         data.setdefault("market_story", "Market analysis pending.")
         data.setdefault("key_levels", [])
         data.setdefault("trade_plan", {
@@ -1437,6 +1471,25 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         data.setdefault("risks", [])
         data.setdefault("self_critique", "")
         data.setdefault("no_trade_reason", "")
+
+        # AUDIT FIX (2026-08-20): setdefault("trade_plan", {...}) only
+        # protects against the KEY being absent — if the LLM returned
+        # trade_plan as e.g. a string or null (present but wrong type),
+        # setdefault is a no-op and the next line's `.get("signal", ...)`
+        # would raise AttributeError just like the list bug above. Guard
+        # the type explicitly so a malformed trade_plan degrades to the
+        # same safe WAIT default instead of crashing the cycle.
+        if not isinstance(data.get("trade_plan"), dict):
+            log.warning(
+                f"[MasterAnalyst] trade_plan was type "
+                f"'{type(data.get('trade_plan')).__name__}', not a dict — "
+                f"replacing with safe WAIT default"
+            )
+            data["trade_plan"] = {
+                "signal": "WAIT", "entry": None, "sl": None,
+                "tp1": None, "tp2": None, "confidence": 0,
+                "reasoning": "Insufficient data (malformed trade_plan)."
+            }
 
         sig = data["trade_plan"].get("signal", "WAIT").upper()
         if sig not in ("BUY", "SELL", "WAIT"):

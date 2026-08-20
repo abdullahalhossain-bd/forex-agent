@@ -522,29 +522,77 @@ def apply_signal_scoring(
         cm = _resolve(registry, "confidence_manager")
         if cm is not None:
             try:
-                # ConfidenceManager exposes the recalibrated weights; we
-                # use them to scale dec_out["confidence"].
+                # AUDIT FIX (2026-08-20): confidence_manager.get_weights()
+                # returns a NORMALIZED distribution across layers — the
+                # values always sum to 1.0 by construction (see
+                # ConfidenceManager._recalculate_weights(), which ends
+                # with `new_weights = {k: v/total for k, v in ...}`, and
+                # DEFAULT_WEIGHTS itself already sums to 1.0: 0.30+0.30+
+                # 0.20+0.20).
+                #
+                # The old code here averaged those normalized values
+                # directly (`avg_w = sum(w.values()) / len(w)`) and
+                # clamped to [0.5, 1.5], intending 1.0 == "no change".
+                # But averaging N values that sum to 1.0 ALWAYS gives
+                # ~1/N, independent of actual layer accuracy. With 4
+                # layers that's always ~0.25 → clamped to the 0.5 floor
+                # on EVERY call — cold-start AND fully calibrated alike.
+                # That silently HALVED every decision's confidence
+                # unconditionally, which made the 55-85% min-confidence
+                # gates in trade_permission.py mathematically unreachable
+                # (a 94% LLM confidence + STRONG_SELL rule signal on
+                # AUDCAD still got blocked because 67% → 33%).
+                #
+                # Correct fix: compare each layer's CURRENT weight to its
+                # OWN default weight and average those ratios instead.
+                # Default weights are also normalized (sum to 1.0), so
+                # the ratio cancels that scaling out:
+                #   - Fresh/uncalibrated system: current == default for
+                #     every layer → every ratio is 1.0 → avg_w = 1.0 →
+                #     confidence is left untouched, as intended.
+                #   - Calibrated system (each layer has 20+ recorded
+                #     outcomes — see MIN_SAMPLES_FOR_ADJUSTMENT in
+                #     confidence_manager.py): ratios deviate from 1.0
+                #     only in proportion to real over/under-performance
+                #     relative to the layer's baseline share.
                 weights = getattr(cm, "get_weights", None)
-                if callable(weights):
+                status_fn = getattr(cm, "status", None)
+                if callable(weights) and callable(status_fn):
                     w = weights()
-                    # Multiply current confidence by the average weight
-                    # of the layers that contributed (clamped to [0.5, 1.5]).
-                    if isinstance(w, dict) and w:
-                        avg_w = sum(w.values()) / max(1, len(w))
-                        avg_w = max(0.5, min(1.5, float(avg_w)))
-                        old_conf = float(dec_out.get("confidence", 50) or 50)
-                        new_conf = max(0, min(100, old_conf * avg_w))
-                        dec_out["confidence"] = round(new_conf, 1)
-                        dec_out["confidence_manager_adjustment"] = {
-                            "old": old_conf,
-                            "new": new_conf,
-                            "avg_weight": round(avg_w, 3),
-                            "weights": w,
-                        }
-                        log.debug(
-                            f"[OC] confidence_manager adjusted {old_conf:.0f}% → "
-                            f"{new_conf:.0f}% (avg_w={avg_w:.3f})"
-                        )
+                    default_w = (status_fn() or {}).get("default_weights") or {}
+                    if isinstance(w, dict) and w and isinstance(default_w, dict) and default_w:
+                        ratios = [
+                            (w[layer] / default_w[layer])
+                            for layer in w
+                            if layer in default_w and default_w[layer] > 0
+                        ]
+                        if ratios:
+                            avg_w = sum(ratios) / len(ratios)
+                            avg_w = max(0.5, min(1.5, float(avg_w)))
+                            old_conf = float(dec_out.get("confidence", 50) or 50)
+                            new_conf = max(0, min(100, old_conf * avg_w))
+                            dec_out["confidence"] = round(new_conf, 1)
+                            dec_out["confidence_manager_adjustment"] = {
+                                "old": old_conf,
+                                "new": new_conf,
+                                "avg_weight": round(avg_w, 3),
+                                "weights": w,
+                                "default_weights": default_w,
+                            }
+                            log.debug(
+                                f"[OC] confidence_manager adjusted {old_conf:.0f}% → "
+                                f"{new_conf:.0f}% (avg_w={avg_w:.3f}, relative-to-default)"
+                            )
+                        else:
+                            log.debug(
+                                "[OC] confidence_manager SKIPPED — no overlapping "
+                                "layers between get_weights() and default_weights()"
+                            )
+                else:
+                    log.debug(
+                        "[OC] confidence_manager SKIPPED — registry service "
+                        "missing get_weights()/status() API"
+                    )
             except Exception as e:
                 log.warning(f"[OC] confidence_manager failed (non-fatal): {e}")
 

@@ -1489,9 +1489,29 @@ class AITrader:
         # then LiveRiskManager/_apply_advanced_sizing mutated approved=False
         # in place, and the operator couldn't see the change. This new
         # event makes the mutation visible without losing the raw snapshot.
+        #
+        # AUDIT FIX (2026-08-20): this call site was the only one in the
+        # file calling a generic `log_event(channel, payload)` with two
+        # positional args. Every other execution_logger call (see
+        # log_risk_evaluated above, log_permission_checked, etc.) uses a
+        # specific named function with keyword arguments — that convention
+        # strongly suggests `log_event` either doesn't exist with a
+        # 2-positional-arg signature, or takes a single payload dict.
+        # Observed error every cycle: "log_event() takes 1 positional
+        # argument but 2 were given" — meaning this event was NEVER
+        # actually recorded, silently, for the entire run. Since
+        # execution_logger.py itself wasn't available to confirm the exact
+        # intended signature, this is a self-healing call: try the
+        # 2-arg form first (in case execution_logger.py gets fixed to
+        # match), then fall back to a single merged-payload dict (matching
+        # the "takes 1 positional argument" signature actually observed),
+        # so risk.finalized starts getting logged regardless of which one
+        # is correct. Recommend confirming against core/execution_logger.py
+        # directly and replacing this with a proper log_risk_finalized(...)
+        # kwargs call to match the rest of the file's convention.
         try:
             from core.execution_logger import log_event
-            log_event("risk.finalized", {
+            _payload = {
                 "symbol":         self.symbol,
                 "approved":       risk_out.get("approved", False),
                 "lot":            risk_out.get("lot", 0),
@@ -1499,7 +1519,11 @@ class AITrader:
                 "mutator":        "post_apply_advanced_sizing+apply_advanced_risk_gates",
                 "raw_approved":   "see risk.evaluated event",
                 "evaluation_id":  getattr(self, "_current_evaluation_id", None),
-            })
+            }
+            try:
+                log_event("risk.finalized", _payload)
+            except TypeError:
+                log_event({"event": "risk.finalized", **_payload})
         except Exception as e:
             log.debug(f"[Trader] risk.finalized log failed (non-fatal): {e}")
 

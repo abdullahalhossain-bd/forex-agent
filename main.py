@@ -245,6 +245,25 @@ class ForexAISystem:
         except Exception:
             pass
 
+        # 2026-08-20 fix: surface MAX_LOT/balance mismatches at boot, once,
+        # instead of letting the operator discover them one symbol at a
+        # time in "MAX_LOT cap shrinks actual risk" risk-rejection logs.
+        try:
+            from config import validate_max_lot_config
+            validate_max_lot_config(logger=log)
+        except Exception:
+            pass
+
+        # 2026-08-20 fix: same idea for GROQ_MODEL — warn once at boot if
+        # it's an agentic 'compound' system rather than a plain chat
+        # model, instead of a wall of "Groq failed ... 413" retries in
+        # the per-symbol analysis logs.
+        try:
+            from config import validate_groq_model_config
+            validate_groq_model_config(logger=log)
+        except Exception:
+            pass
+
         # Override config-driven settings if CLI args were supplied.
         self._apply_cli_overrides()
 
