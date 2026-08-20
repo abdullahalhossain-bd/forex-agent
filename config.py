@@ -83,6 +83,32 @@ MAX_RISK_PER_PAIR = 0.005          # max 0.5% risk on a single pair (was 2%)
 MARKET = "forex"
 DATA_SOURCE = "yfinance"
 
+# 2026-08-20 fix: Exness (and many other brokers) append a suffix to every
+# symbol — e.g. "EURUSD" is actually "EURUSDm" on this account (confirmed
+# via symbol.py's live MT5 audit: all 121 tradeable Exness symbols end in
+# "m"). SYMBOLS below was defined with plain names ("EURUSD", "GBPUSD",
+# ...) and had NO suffix logic anywhere in this file, which means every
+# order/quote request would silently fail to resolve on MT5 ("symbol not
+# found") even though the pair list itself was fine.
+#
+# Fix: append the broker suffix to every symbol when building SYMBOLS,
+# without removing or renaming any pair in the underlying lists below.
+# Override via .env if you switch brokers/accounts:
+#   MT5_SYMBOL_SUFFIX=m      (Exness "m" accounts — current default)
+#   MT5_SYMBOL_SUFFIX=       (broker uses bare names, no suffix)
+BROKER_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+
+
+def _with_broker_suffix(pairs):
+    """Append BROKER_SYMBOL_SUFFIX to each pair, without altering the
+    original (suffix-less) pair name lists elsewhere in this file."""
+    if not BROKER_SYMBOL_SUFFIX:
+        return list(pairs)
+    return [
+        p if p.endswith(BROKER_SYMBOL_SUFFIX) else f"{p}{BROKER_SYMBOL_SUFFIX}"
+        for p in pairs
+    ]
+
 # Complete pair universe: 7 majors + 21 minors/crosses + 2 metals = 30 pairs.
 # Per user request — agent trades the FULL forex universe + precious metals.
 # Each pair gets its own AITrader instance in AutonomousTraderSystem.
@@ -136,7 +162,9 @@ _MAJOR_PAIRS = [
 
 # SYMBOLS will be finalized after the disabled-reference list below
 # is defined to avoid forward-reference NameError during import.
-SYMBOLS = list(_PROFILE_PAIRS) if _PROFILE_PAIRS else []
+# Suffix fix applied here too: _PROFILE_PAIRS comes from
+# utils/pair_profiles.py and was also missing the broker suffix.
+SYMBOLS = _with_broker_suffix(_PROFILE_PAIRS) if _PROFILE_PAIRS else []
 
 # Previous 48-pair list (DISABLED for live trading safety):
 # To re-enable a pair, add it to utils/pair_profiles.py PROFILES dict
@@ -191,7 +219,9 @@ _DISABLED_SYMBOLS_REFERENCE = [
 # ]
 
 # Build the full 48-pair universe if pair_profiles did not supply active pairs.
-FULL_PAIR_UNIVERSE = _MAJOR_PAIRS + _DISABLED_SYMBOLS_REFERENCE
+# All 48 original pairs are kept exactly as-is — only the broker suffix is
+# added so they resolve correctly against live MT5 (Exness) symbols.
+FULL_PAIR_UNIVERSE = _with_broker_suffix(_MAJOR_PAIRS + _DISABLED_SYMBOLS_REFERENCE)
 SYMBOLS = FULL_PAIR_UNIVERSE
 
 # ── Timeframes ─────────────────────────────────────────────────

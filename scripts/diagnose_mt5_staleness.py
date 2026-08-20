@@ -78,6 +78,27 @@ else:
     symbols_str = os.getenv("SYMBOLS", "EURUSD,GBPUSD,USDJPY,USDCHF,AUDUSD,USDCAD,NZDUSD,XAUUSD")
     source = ".env SYMBOLS (or default majors)"
 symbols = [s.strip() for s in symbols_str.split(",") if s.strip()]
+
+# 2026-08-20 fix: this script queried mt5.symbol_info() with bare names
+# ("EURUSD"), but Exness (and most brokers) require a suffix ("EURUSDm").
+# Every symbol came back "symbol_info() is None — not found", which made
+# the diagnostic useless (it never got far enough to report real age
+# data). Same fix as config.py / pair_profiles.py / data/fetcher.py —
+# append the broker suffix (default "m") unless the caller already
+# included one.
+_MT5_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+
+
+def _to_broker_symbol(sym: str) -> str:
+    if not _MT5_SYMBOL_SUFFIX:
+        return sym
+    if sym.endswith(_MT5_SYMBOL_SUFFIX):
+        return sym
+    return f"{sym}{_MT5_SYMBOL_SUFFIX}"
+
+
+symbols = [_to_broker_symbol(s) for s in symbols]
+print(f"  Broker symbol suffix: '{_MT5_SYMBOL_SUFFIX}' (set MT5_SYMBOL_SUFFIX in .env to override)")
 print(f"  Symbols to check: {symbols}  (source: {source})")
 print()
 

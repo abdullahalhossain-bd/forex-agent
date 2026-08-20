@@ -16,6 +16,41 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 # ─────────────────────────────────────────────────────────────
+# BROKER SYMBOL SUFFIX (case-sensitive!) — e.g. Exness "m" accounts
+# ─────────────────────────────────────────────────────────────
+# 2026-08-20 fix: trader.log showed every MT5 fetch failing —
+# "AUDJPYM", "EURUSDM", etc. — because MT5 symbol names are
+# case-sensitive and this broker's real symbols are lowercase-suffixed
+# ("AUDJPYm", "EURUSDm"). The old _normalize_symbol() called
+# .upper() on the RAW symbol (suffix included), turning a valid
+# broker symbol into one that doesn't exist. Same env var as
+# config.py's BROKER_SYMBOL_SUFFIX, so both stay in sync.
+_MT5_BROKER_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+
+
+def _strip_mt5_suffix(symbol: str) -> str:
+    """Remove a trailing broker suffix (case-insensitive match) to get
+    the bare pair name, e.g. "EURUSDm" -> "EURUSD". No-op if the
+    suffix isn't configured or isn't present."""
+    s = str(symbol).strip()
+    suffix = _MT5_BROKER_SUFFIX
+    if suffix and len(s) > len(suffix) and s[-len(suffix):].lower() == suffix.lower():
+        return s[: -len(suffix)]
+    return s
+
+
+def _to_mt5_symbol(symbol: str) -> str:
+    """Append the broker suffix in the EXACT case the broker expects
+    (e.g. "m", not "M"). Only call this right before an actual MT5
+    call (symbol_select, copy_rates_from_pos, symbol_info_tick, ...).
+    Idempotent — safe to call on a symbol that already has the
+    correctly-cased suffix."""
+    s = _strip_mt5_suffix(symbol)
+    suffix = _MT5_BROKER_SUFFIX
+    return f"{s}{suffix}" if suffix else s
+
+
+# ─────────────────────────────────────────────────────────────
 # LOG SPAM GUARD — repeated per-symbol config errors
 # ─────────────────────────────────────────────────────────────
 # Bugfix: "[Finnhub] API key not set" (and same for AlphaVantage/
@@ -703,10 +738,16 @@ class DataFetcher:
             return self._broker_offset_cache or 0.0
 
         try:
-            tick = self._mt5_conn.get_tick(symbol)
+            # 2026-08-20 fix: normalize whatever form of symbol was passed
+            # in (bare "EURUSD", the default param, or an already-suffixed
+            # "EURUSDm") to the correctly-cased broker symbol before
+            # calling MT5's get_tick — same case-sensitivity issue as
+            # _fetch_mt5's copy_rates_from_pos/symbol_select calls.
+            mt5_symbol = _to_mt5_symbol(symbol)
+            tick = self._mt5_conn.get_tick(mt5_symbol)
             if tick is None or not getattr(tick, "time", None):
                 log.debug(
-                    f"[MT5] Dynamic tz offset: no live tick for {symbol} — "
+                    f"[MT5] Dynamic tz offset: no live tick for {mt5_symbol} — "
                     f"keeping previous offset ({self._broker_offset_cache or 0.0}h)"
                 )
                 return self._broker_offset_cache or 0.0
@@ -775,9 +816,18 @@ class DataFetcher:
 
             mt5_timeframe = TIMEFRAME_MAP[timeframe]
 
+            # 2026-08-20 fix: `symbol` here is the bare canonical form
+            # (e.g. "EURUSD") from _normalize_symbol(). MT5 needs the
+            # broker's real, case-sensitive symbol name (e.g. "EURUSDm"
+            # on Exness) — computed here, used ONLY for the actual MT5
+            # calls below. `symbol` stays bare for logging/tracking so
+            # it matches the keys used by mark_symbol_unavailable() /
+            # record_fetch_failure() elsewhere in this module.
+            mt5_symbol = _to_mt5_symbol(symbol)
+
             # Activate symbol in Market Watch — via the shared connection's
             # locked wrapper, not a direct mt5.symbol_select() call.
-            if not self._mt5_conn.symbol_select(symbol, True):
+            if not self._mt5_conn.symbol_select(mt5_symbol, True):
                 error_code, error_msg = mt5.last_error()
                 # code=-1 means symbol doesn't exist on this broker.
                 # Mark it so the system can skip it silently on future cycles
@@ -785,7 +835,7 @@ class DataFetcher:
                 if error_code == -1:
                     mark_symbol_unavailable(symbol)
                     log.info(
-                        f"[MT5] Symbol '{symbol}' not available on broker "
+                        f"[MT5] Symbol '{mt5_symbol}' not available on broker "
                         f"(code=-1) — marked unavailable, will be skipped"
                     )
                 # ── FIX: -10004 = "No IPC connection" means MT5 terminal
@@ -808,12 +858,12 @@ class DataFetcher:
                     # not a symbol issue. Next cycle may succeed.
                 else:
                     log.error(
-                        f"[MT5] Failed to select symbol '{symbol}': "
+                        f"[MT5] Failed to select symbol '{mt5_symbol}': "
                         f"code={error_code}, msg={error_msg}"
                     )
                 return None
 
-            log.debug(f"[MT5] Symbol selected: {symbol}")
+            log.debug(f"[MT5] Symbol selected: {mt5_symbol}")
 
             # Fetch candles from position 0 (most recent) backward — via the
             # shared connection's locked wrapper.
@@ -854,18 +904,18 @@ class DataFetcher:
             _sync_attempt = 0
             while True:
                 _sync_attempt += 1
-                candles = self._mt5_conn.copy_rates_from_pos(symbol, mt5_timeframe, 0, limit)
+                candles = self._mt5_conn.copy_rates_from_pos(mt5_symbol, mt5_timeframe, 0, limit)
 
                 if candles is None:
                     error_code, error_msg = mt5.last_error()
                     log.error(
-                        f"[MT5] copy_rates_from_pos failed for {symbol} {timeframe}: "
+                        f"[MT5] copy_rates_from_pos failed for {mt5_symbol} {timeframe}: "
                         f"code={error_code}, msg={error_msg}"
                     )
                     return None
 
                 if len(candles) == 0:
-                    log.warning(f"[MT5] No candles returned for {symbol} {timeframe}")
+                    log.warning(f"[MT5] No candles returned for {mt5_symbol} {timeframe}")
                     return None
 
                 # Convert numpy structured array → pandas DataFrame
@@ -879,7 +929,7 @@ class DataFetcher:
                 remaining = _retry_deadline - time.monotonic()
                 if remaining <= 0:
                     log.error(
-                        f"[MT5] {symbol} {timeframe}: still missing 'time' column "
+                        f"[MT5] {mt5_symbol} {timeframe}: still missing 'time' column "
                         f"after {_sync_attempt} attempts over "
                         f"{_COLD_START_RETRY_DEADLINE}s — MT5 history "
                         f"sync may be stuck. Skipping this cycle for real."
@@ -887,7 +937,7 @@ class DataFetcher:
                     return None
 
                 log.warning(
-                    f"[MT5] {symbol} {timeframe}: fetched candles missing "
+                    f"[MT5] {mt5_symbol} {timeframe}: fetched candles missing "
                     f"'time' column (got columns={list(df.columns)}) — "
                     f"likely MT5 still syncing history after startup "
                     f"(attempt {_sync_attempt}, {remaining:.0f}s remaining). "
@@ -922,7 +972,7 @@ class DataFetcher:
             # to convert broker wall-clock → true UTC, then attach
             # tzinfo=timezone.utc so downstream code (is_candle_closed,
             # check_data_staleness) can rely on the tz tag.
-            broker_offset_hours = self._get_broker_utc_offset_hours(symbol)
+            broker_offset_hours = self._get_broker_utc_offset_hours(mt5_symbol)
 
             # Convert 'time' from Unix seconds to datetime.
             # `pd.to_datetime(unit='s')` returns NAIVE UTC by default.
@@ -1989,15 +2039,27 @@ class DataFetcher:
 
     def _normalize_symbol(self, symbol: str) -> str:
         """
-        Normalize symbol to MT5 format (e.g., "EURUSD").
+        Normalize symbol to bare canonical MT5-style form (e.g., "EURUSD").
         
         Converts:
           - "EUR/USD" → "EURUSD"
           - "EURUSD=X" → "EURUSD"
           - "EUR/USDT" → "EURUSD"
           - "EURUSD" → "EURUSD"
+          - "EURUSDm" → "EURUSD"  (broker suffix stripped)
+
+        2026-08-20 fix: this used to call .upper() on the RAW symbol
+        BEFORE stripping the broker suffix, so a live symbol like
+        "EURUSDm" (Exness "m" accounts) became "EURUSDM" — invalid on
+        the broker (MT5 symbol names are case-sensitive), and also not
+        a match in SYMBOL_MAP or the yfinance/Alpha Vantage pair sets
+        below, breaking every fallback source too. Fix: strip the
+        broker suffix FIRST, then clean/uppercase the bare pair name
+        as before. The suffix is re-applied — in the correct case —
+        only at the point of the actual MT5 call, via _to_mt5_symbol()
+        in _fetch_mt5().
         """
-        symbol = str(symbol).upper().strip()
+        symbol = _strip_mt5_suffix(str(symbol).strip()).upper()
         # Use mapping if available
         if symbol in SYMBOL_MAP:
             return SYMBOL_MAP[symbol]

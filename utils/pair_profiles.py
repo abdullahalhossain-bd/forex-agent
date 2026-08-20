@@ -30,8 +30,31 @@ Usage:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
+
+# 2026-08-20 fix: config.py now appends a broker suffix (default "m", e.g.
+# Exness) to every symbol it hands out via SYMBOLS — so live pairs arrive
+# here as "EURUSDm", not "EURUSD". The PROFILES dict below is keyed on the
+# bare pair name. Without normalizing, get_pair_profile("EURUSDm") would
+# silently miss the dict and fall back to _DEFAULT_PROFILE for EVERY pair
+# (min_confidence=85, 5 factors, london_ny only) — quietly discarding all
+# of the backtest-tuned per-pair settings below with no error raised.
+#
+# Read the same env var config.py uses (not imported directly, to avoid a
+# circular import: config.py imports get_active_pairs from this module).
+_BROKER_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+
+
+def _strip_broker_suffix(symbol: str) -> str:
+    """Remove a trailing broker suffix (case-insensitive) so lookups match
+    the bare pair name PROFILES is keyed on. Leaves the input untouched if
+    no suffix is configured or none is present."""
+    sym = symbol.strip()
+    suffix = _BROKER_SYMBOL_SUFFIX
+    if suffix and len(sym) > len(suffix) and sym[-len(suffix):].lower() == suffix.lower():
+        return sym[: -len(suffix)]
+    return sym
 
 
 @dataclass(frozen=True)
@@ -258,12 +281,19 @@ def get_pair_profile(symbol: str) -> PairProfile:
 
     Falls back to _DEFAULT_PROFILE if the pair is not in PROFILES.
     """
-    sym = symbol.upper().strip()
+    original = symbol.strip()
+    sym = _strip_broker_suffix(original).upper()
     if sym in PROFILES:
-        return PROFILES[sym]
+        prof = PROFILES[sym]
+        # Keep the profile's tuned settings, but report back the actual
+        # broker symbol (e.g. "EURUSDm") the caller asked about, so
+        # downstream MT5 order/quote calls use the correct live ticker.
+        if prof.symbol != original:
+            return replace(prof, symbol=original)
+        return prof
     # Return default with the requested symbol name
     return PairProfile(
-        symbol=sym,
+        symbol=original,
         enabled=_DEFAULT_PROFILE.enabled,
         min_confidence=_DEFAULT_PROFILE.min_confidence,
         min_aligned_factors=_DEFAULT_PROFILE.min_aligned_factors,
