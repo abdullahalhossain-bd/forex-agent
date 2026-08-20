@@ -635,6 +635,24 @@ class MT5Connection:
             log.exception(f"[MT5Connection] copy_rates_from_pos error: {e}")
             return None
 
+    def copy_rates_range(self, symbol: str, timeframe, date_from, date_to):
+        """Thread-safe wrapper around mt5.copy_rates_range().
+
+        Unlike copy_rates_from_pos() (last N candles counting back from
+        *now*), this returns every candle between two datetimes — needed
+        for after-the-fact counterfactual analysis (e.g. "what did price
+        do after this blocked signal's timestamp?") where the window of
+        interest is in the past, not the most recent bars.
+        """
+        if not self._require_connected():
+            return None
+        try:
+            with self.MT5_LOCK:
+                return mt5.copy_rates_range(symbol, timeframe, date_from, date_to)
+        except Exception as e:
+            log.exception(f"[MT5Connection] copy_rates_range error: {e}")
+            return None
+
     # ==========================================================
     # RECONNECT
     # ==========================================================

@@ -136,7 +136,20 @@ class DevilsAdvocateGate:
         if self.uncertain_policy not in {"reject", "take"}:
             self.uncertain_policy = "reject"
 
-        self.timeout_sec = int(os.getenv("DEVILS_ADVOCATE_TIMEOUT_SEC", "6"))
+        # BUG FIX (2026-08-20 log audit): the old default of 6s made the
+        # Gemini fallback in _call_one_provider() structurally
+        # unreachable — that path bails out unless at least 10s remain
+        # before the shared deadline ("Gemini API rejects deadlines
+        # under 10s"). With a 6s total budget, Groq alone always
+        # consumed the whole window, so any transient Groq error (rate
+        # limit, malformed JSON, etc.) meant NO fallback was ever tried
+        # and review() raised straight into _resolve_failure(). Under
+        # the default fail_mode="fail_closed" this silently REJECTed
+        # otherwise fully-approved trades on ordinary, recoverable LLM
+        # hiccups. Default is now 25s: enough for a Groq attempt
+        # (typically <3s) plus the required >=10s Gemini window with
+        # margin, while still bounded well under one trading cycle.
+        self.timeout_sec = int(os.getenv("DEVILS_ADVOCATE_TIMEOUT_SEC", "25"))
         self.model_name = os.getenv("DEVILS_ADVOCATE_MODEL", "gpt-4.1-mini")
         self._last_error: Optional[str] = None
         self._audit = _DevilsAdvocateAuditLog()

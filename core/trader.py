@@ -1237,6 +1237,14 @@ class AITrader:
                 tp=risk_out.get("tp_price"),
                 reject_reason=risk_out.get("reject_reason"),
                 evaluation_id=getattr(self, "_current_evaluation_id", None),
+                # AUDIT FIX (2026-08-20): entry price was never logged here,
+                # only sl/tp — making it impossible to reconstruct "what
+                # would have happened" for a blocked trade after the fact
+                # (see tools/blocked_trade_outcome_audit.py). risk_out
+                # already carries it (risk/risk_engine.py sets
+                # result["entry"]); just wasn't being passed through.
+                entry=risk_out.get("entry"),
+                signal=dec_out.get("decision") if isinstance(dec_out, dict) else None,
             )
         except Exception as e:
             log.warning(f"Suppressed exception logging risk.evaluated: {e}")
@@ -1520,10 +1528,23 @@ class AITrader:
                 "raw_approved":   "see risk.evaluated event",
                 "evaluation_id":  getattr(self, "_current_evaluation_id", None),
             }
-            try:
-                log_event("risk.finalized", _payload)
-            except TypeError:
-                log_event({"event": "risk.finalized", **_payload})
+            # BUG FIX (2026-08-20 audit): execution_logger.log_event's real
+            # signature is log_event(event: str, **fields) — fields must be
+            # passed as keyword arguments, not a second positional dict.
+            # The old "self-healing" fallback (log_event({"event": ...,
+            # **_payload})) papered over the TypeError by passing the
+            # whole dict as the *event* positional argument itself, which
+            # log_event happily accepted (event is duck-typed) and wrote
+            # straight into the "event" field of the JSON record — producing
+            # {"event": {"event": "risk.finalized", "symbol": ..., ...}}
+            # instead of the flat {"event": "risk.finalized", "symbol": ...}
+            # shape every other event in execution.log uses. That nested
+            # shape silently breaks every log consumer that does
+            # obj.get("event") == "risk.finalized" (string compare against
+            # a dict never matches), so risk.finalized was invisible to
+            # tooling even though it *was* being written. Fix: call with
+            # the payload correctly unpacked as kwargs.
+            log_event("risk.finalized", **_payload)
         except Exception as e:
             log.debug(f"[Trader] risk.finalized log failed (non-fatal): {e}")
 
@@ -4091,6 +4112,21 @@ class AutonomousTraderSystem:
         # tracking is unified.  Each AITrader previously created its own
         # PaperTrader, leading to 6 independent balances for 6 symbols.
         self._shared_paper = PaperTrader(starting_balance=balance)
+        # BUG FIX (2026-08-20): the comment above describes a single
+        # shared PaperTrader, but it was never actually published to the
+        # ServiceRegistry under the "paper_trader" key. Every
+        # registry.try_resolve("paper_trader") call elsewhere (main.py,
+        # safety_guard, orphan_consumers) therefore always failed and
+        # silently fell back to constructing a brand-new, unrelated
+        # PaperTrader — defeating the "unified balance" goal above and
+        # spamming logs with repeated "PaperTrader ready" / "No closed
+        # trades in DB" messages every cycle. Register the real shared
+        # instance so those lookups succeed.
+        if registry is not None:
+            try:
+                registry.register_instance("paper_trader", self._shared_paper)
+            except Exception as e:
+                log.warning(f"[System] Failed to register shared paper_trader in registry: {e}")
 
         self.traders: dict[str, AITrader] = {
             symbol: self._build_trader(symbol) for symbol in self.symbols
