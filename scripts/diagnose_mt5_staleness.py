@@ -99,7 +99,7 @@ for sym in symbols:
         tick_age = now_utc.timestamp() - tick.time
         print(f"{sym:<10} last tick: {datetime.fromtimestamp(tick.time, timezone.utc).isoformat()} ({tick_age/60:.1f}m ago) bid={tick.bid} ask={tick.ask}")
 
-    for tf_name, tf_const in [("M15", mt5.TIMEFRAME_M15), ("H1", mt5.TIMEFRAME_H1)]:
+    for tf_name, tf_const in [("M15", mt5.TIMEFRAME_M15), ("H1", mt5.TIMEFRAME_H1), ("H4", mt5.TIMEFRAME_H4), ("D1", mt5.TIMEFRAME_D1)]:
         rates = mt5.copy_rates_from_pos(sym, tf_const, 0, 5)
         if rates is None or len(rates) == 0:
             print(f"{sym:<10} {tf_name:<5} NO DATA — {mt5.last_error()}")
@@ -118,6 +118,10 @@ for sym in symbols:
             status = "⚠️  STALE (>16min for M15)"
         elif age_corrected > 3660 and tf_name == "H1":
             status = "⚠️  STALE (>61min for H1)"
+        elif age_corrected > 14700 and tf_name == "H4":
+            status = "⚠️  STALE (>4h5m for H4)"
+        elif age_corrected > 90600 and tf_name == "D1":
+            status = "⚠️  STALE (>25h10m for D1)"
         else:
             status = "✅ Fresh"
 

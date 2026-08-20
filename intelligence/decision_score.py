@@ -71,8 +71,15 @@ class FactorScore:
 
     @property
     def is_meaningful(self) -> bool:
-        """A factor is meaningful if it has a clear direction + strength."""
-        return self.direction in ("BUY", "SELL") and self.strength >= 30
+        """A factor is meaningful if it has a clear direction + strength.
+
+        Threshold lowered 30 → 20 (2026-08-19): many real modules (technical
+        at 40% rule conf, currency bias at 25-35) were silently excluded from
+        aligned_factors, so live logs showed "1 factors (≥2)" even when MTF
+        and bias agreed. 20 still filters pure noise (<20) without erasing
+        moderate but valid directional votes.
+        """
+        return self.direction in ("BUY", "SELL") and self.strength >= 20
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

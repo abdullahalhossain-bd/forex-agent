@@ -373,8 +373,11 @@ class SessionAnalyzer:
           1. No SMC data yet            → PENDING, don't block.
           2. SMC score < session minimum → blocked.
           3. Session requires BOS but it's missing → blocked.
-          4. Otherwise → allowed, and fusion_score IS the SMC score
-             (no extra formula — what you see is what SMC actually found).
+          4. Otherwise → allowed, and smc_confluence_score IS the SMC
+             score (no extra formula — what you see is what SMC actually
+             found). Renamed from "fusion_score": nothing here fuses
+             session and SMC into one number — it's the raw SMC
+             confluence score, gated by session-specific requirements.
 
         Note: the old version also checked `require_ob` (order block
         required), but that flag is False for every session except
@@ -385,7 +388,7 @@ class SessionAnalyzer:
         Returns:
             {
                 "fusion_allowed": True,
-                "fusion_score": 72,
+                "smc_confluence_score": 72,
                 "fusion_grade": "A",
                 "issues": [],
                 "reason": "...",
@@ -399,7 +402,7 @@ class SessionAnalyzer:
                 # this: "SMC context not populated" should be a hard block at
                 # the live authorization layer, not a silent green light.
                 "fusion_allowed": False,
-                "fusion_score":   None,
+                "smc_confluence_score":   None,
                 "fusion_grade":   "PENDING",
                 "issues":         ["SMC context not populated — fusion BLOCKED (no structural data)"],
                 "reason":         "SMC analysis not yet available — trade DENIED until structural data is populated",
@@ -487,7 +490,7 @@ class SessionAnalyzer:
 
         return {
             "fusion_allowed": allowed,
-            "fusion_score":   fusion_score,
+            "smc_confluence_score":   fusion_score,
             "fusion_grade":   grade,
             "issues":         issues,
             "reason":         " | ".join(issues) if issues else f"All {session} requirements met",
@@ -513,7 +516,7 @@ class SessionAnalyzer:
 
         Parameters:
             compute_fusion: If True, compute session+SMC fusion score.
-                If False, skip fusion (returns fusion_score=None).
+                If False, skip fusion (returns smc_confluence_score=None).
                 Use False for the initial early-session call when SMC
                 context is not yet available — avoids misleading
                 "Fusion: ❌ (0/100)" log lines.
@@ -550,7 +553,7 @@ class SessionAnalyzer:
             # Pending — will be computed when SMC context is available
             fusion = {
                 "fusion_allowed": True,   # don't block on pending
-                "fusion_score":   None,   # None = not yet computed
+                "smc_confluence_score":   None,   # None = not yet computed
                 "fusion_grade":   "PENDING",
                 "issues":         ["SMC context not yet available — fusion deferred"],
                 "reason":         "Fusion pending SMC analysis",
@@ -560,7 +563,7 @@ class SessionAnalyzer:
         # Day 37+ fix: this intentionally does NOT hard-block on general
         # session score dropping below (min_confidence - 20) — that decision
         # is delegated to the downstream Risk Engine + TradePermission,
-        # which can weigh session_score/fusion_score alongside other risk
+        # which can weigh session_score/smc_confluence_score alongside other risk
         # factors this module doesn't see. That part is unchanged here.
         #
         # What IS restored (institutional review, Finding C-2): the
@@ -581,7 +584,7 @@ class SessionAnalyzer:
         # the downstream TradePermission gate (which was already fixed
         # in Round-5 + Round-10).
         fusion_allowed = fusion.get("fusion_allowed", True)
-        fusion_score = fusion.get("fusion_score", 0)
+        fusion_score = fusion.get("smc_confluence_score", 0)
         fusion_grade = fusion.get("fusion_grade", "")
 
         # Session gate: strategy + dead zone only. Fusion is enforced separately
@@ -662,10 +665,12 @@ class SessionAnalyzer:
         """
         MasterAnalyst + DecisionAgent-এ inject করার জন্য।
         """
-        # fusion_score may be None when compute_fusion=False (early pipeline call).
+        # smc_confluence_score may be None when compute_fusion=False (early pipeline call).
         # Convert to 0 for downstream consumers that do numeric comparisons
-        # (e.g. confluence_engine.py:269 `fusion_score >= 60`).
-        _fusion_score = result["fusion"]["fusion_score"]
+        # (e.g. confluence_engine.py _liquidity_factor(): `smc_confluence_score >= 60`).
+        # Renamed from fusion_score (2026-08) — this value is the raw SMC
+        # confluence score gated by session rules, not a session+SMC blend.
+        _fusion_score = result["fusion"]["smc_confluence_score"]
         if _fusion_score is None:
             _fusion_score = 0
 
@@ -690,7 +695,7 @@ class SessionAnalyzer:
             "session_score":          result["session_conf"]["session_score"],
             "session_grade":          result["session_conf"]["session_grade"],
             "fusion_allowed":         result["fusion"]["fusion_allowed"],
-            "fusion_score":           _fusion_score,
+            "smc_confluence_score":           _fusion_score,
             "fusion_grade":           result["fusion"]["fusion_grade"],
             "fusion_issues":          result["fusion"].get("issues", []),
             "preferred_pairs":        result["pair_preference"]["preferred_pairs"],
@@ -762,7 +767,7 @@ class SessionAnalyzer:
 
         print(f"  ── SMC + Session Fusion ──")
         print(f"  Fusion Allowed  :  {'✅' if fusion['fusion_allowed'] else '❌'}")
-        _fs = fusion['fusion_score']
+        _fs = fusion['smc_confluence_score']
         if _fs is None:
             print(f"  Fusion Score    :  ⏳ pending (SMC not yet available)  [{fusion['fusion_grade']}]")
         else:

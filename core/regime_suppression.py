@@ -65,10 +65,21 @@ class RegimeSuppressor:
         session: Optional[Dict[str, Any]] = None,
         news_ctx: Optional[Dict[str, Any]] = None,
         ind_ctx: Optional[Dict[str, Any]] = None,
+        bar_time: Optional["datetime"] = None,
     ) -> tuple[bool, str]:
         """Check if new entries should be suppressed for this symbol.
 
         Returns (should_suppress, reason).
+
+        FIX (2026-08-19 audit Bug 4): previously used wall-clock
+        datetime.now(timezone.utc) for the Friday-21:00-UTC check.
+        In a backtest launched on a Friday after 20:00 UTC, this
+        suppressed EVERY historical bar regardless of its own
+        timestamp — backtest returned ~0 trades. Now accepts an
+        optional `bar_time` parameter; when caller passes the bar's
+        historical timestamp, that timestamp is used instead.
+        Backward compatible: if bar_time is None (live mode), uses
+        wall-clock as before.
         """
         from datetime import datetime, timezone
 
@@ -114,7 +125,13 @@ class RegimeSuppressor:
                 return True, f"High-impact news pending — suppress entries"
 
         # 6. Friday late session suppression
-        now = datetime.now(timezone.utc)
+        # FIX (2026-08-19 audit Bug 4): use bar_time when provided so a
+        # backtest launched on a Friday after 20:00 UTC doesn't suppress
+        # every historical bar.
+        if bar_time is not None:
+            now = bar_time if bar_time.tzinfo else bar_time.replace(tzinfo=timezone.utc)
+        else:
+            now = datetime.now(timezone.utc)
         if now.weekday() == 4 and now.hour >= self.FRIDAY_SUPPRESS_HOUR_UTC:
             return True, f"Friday after {self.FRIDAY_SUPPRESS_HOUR_UTC}:00 UTC — weekend gap risk"
 

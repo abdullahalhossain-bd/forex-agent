@@ -297,10 +297,11 @@ def _is_forex_market_expected_open(now_utc: "pd.Timestamp") -> bool:
         if weekday == 4 and hour >= 21:  # Friday after ~21:00 UTC close
             return False
         return True
-    except Exception:
+    except Exception as e:
         # If anything about `now_utc` is unexpected, don't assert either
         # way — default to "market open" so genuine staleness still gets
         # flagged rather than silently waved through as a weekend gap.
+        log.debug(f"[DataFetcher] is_forex_market_open() check failed on now_utc={now_utc!r}: {type(e).__name__}: {e} — defaulting to OPEN")
         return True
 
 
@@ -435,8 +436,12 @@ class DataFetcher:
                 # If MT5 package is importable, assume mt5 source is available.
                 # Actual connection health is verified at fetch time.
                 return "mt5"
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning(
+                    f"[DataFetcher] MT5_AVAILABLE=True but `import MetaTrader5` "
+                    f"failed at source-selection time: {type(e).__name__}: {e} "
+                    f"— falling through to API providers"
+                )
 
         # TradingView fallback DISABLED — see docstring above.
         # try:
@@ -545,8 +550,7 @@ class DataFetcher:
         # I/O that was never going to succeed usefully.
         try:
             from core.constants import is_backtest_mode
-            if is_backtest_mode():
-                # Iteration-3: serve registered historical series (M15 + resampled
+            if is_backtest_mode():                # Iteration-3: serve registered historical series (M15 + resampled
                 # H1/H4) so SMCEngine / MTF paths work without live MT5.
                 # Returns None if nothing registered or asof not set — same
                 # fail-closed behaviour as before for unregistered symbols.
@@ -565,8 +569,8 @@ class DataFetcher:
                     f"[DataFetcher] backtest mode — no cache for {symbol} {timeframe}"
                 )
                 return None
-        except Exception:
-            pass
+        except Exception as _bt_mode_e:
+            log.debug(f"[DataFetcher] is_backtest_mode() check failed, assuming live mode: {_bt_mode_e}")
 
         log.debug(f"Fetching {symbol} | {timeframe} | {limit} candles...")
 
@@ -600,7 +604,8 @@ class DataFetcher:
         # old multi-provider fallback.
         try:
             from config import MT5_ONLY_MODE
-        except Exception:
+        except Exception as e:
+            log.debug(f"[DataFetcher] MT5_ONLY_MODE not in config ({e}), defaulting to True (fail-safe)")
             MT5_ONLY_MODE = True  # fail-safe default if config import fails
         if MT5_ONLY_MODE:
             _FALLBACK_ORDER = [("mt5", self._fetch_mt5)]
@@ -1016,7 +1021,29 @@ class DataFetcher:
                 _last_ts = df.index.max()
                 _now_utc = pd.Timestamp.now(tz='UTC')
                 if hasattr(_last_ts, 'tzinfo') and _last_ts.tzinfo:
-                    _delta = (_now_utc - _last_ts.to_pydatetime()).total_seconds()
+                    # BUGFIX (H1/H4/D1 false STALE): `_last_ts` is the bar's
+                    # OPEN time (MT5/pandas convention — index = bar open),
+                    # and the forming-candle guard above already drops the
+                    # in-progress bar, so `df.index.max()` is always the most
+                    # recent CLOSED bar's open time. Measuring `_delta` from
+                    # open time means a perfectly healthy feed shows an age
+                    # that climbs to nearly 2x the timeframe just before the
+                    # NEXT bar closes (e.g. an H1 bar that opened at :00 is
+                    # correctly still "the latest closed bar" right up until
+                    # :59 of the FOLLOWING hour, i.e. up to ~7200s old, not
+                    # ~3600s). The 1.5x multiplier below was sized as if
+                    # `_delta` were measured from CLOSE time, so H1/H4/D1
+                    # were false-flagging STALE for the last portion of every
+                    # period. Fix: measure from the bar's implied CLOSE time
+                    # (open + tf_seconds) instead, so a healthy bar's age
+                    # tops out at ~1x the timeframe, matching what the
+                    # multiplier was actually designed for.
+                    _tf_sec_for_close = {
+                        "M1": 60, "M5": 300, "M15": 900, "M30": 1800,
+                        "H1": 3600, "H4": 14400, "D1": 86400,
+                    }.get(timeframe.upper(), 3600)
+                    _last_close_ts = _last_ts.to_pydatetime() + timedelta(seconds=_tf_sec_for_close)
+                    _delta = (_now_utc - _last_close_ts).total_seconds()
                     if _delta < -60:
                         log.critical(
                             f"[MT5] Latest bar is {_delta:.0f}s in the FUTURE "
@@ -1028,10 +1055,7 @@ class DataFetcher:
                         # Stale data warning — but be timeframe-aware so
                         # we don't cry wolf on D1/H4 bars that legitimately
                         # only update once a day / every 4h.
-                        _tf_sec = {
-                            "M1": 60, "M5": 300, "M15": 900, "M30": 1800,
-                            "H1": 3600, "H4": 14400, "D1": 86400,
-                        }.get(timeframe.upper(), 3600)
+                        _tf_sec = _tf_sec_for_close
                         # Warn only if the bar is older than 1.5× its
                         # timeframe interval (allows for weekend gaps
                         # and the brief moment after a bar closes before
@@ -1619,8 +1643,10 @@ class DataFetcher:
                     "close": float(ohlc["4. close"]),
                     "volume": 0.0,
                 })
-            except Exception:
+            except Exception as e:
                 skipped += 1
+                if skipped <= 3:
+                    log.debug(f"[AlphaVantage] row {ts_str!r} parse failed: {type(e).__name__}: {e}")
                 continue
         if skipped:
             log.warning(f"[AlphaVantage] skipped {skipped} malformed row(s) for {symbol}")
@@ -1731,8 +1757,10 @@ class DataFetcher:
                     "close": float(r["c"]),
                     "volume": float(r.get("v", 0)),
                 })
-            except Exception:
+            except Exception as e:
                 skipped += 1
+                if skipped <= 3:
+                    log.debug(f"[Polygon] row {r!r} parse failed: {type(e).__name__}: {e}")
                 continue
         if skipped:
             log.warning(f"[Polygon] skipped {skipped} malformed row(s) for {symbol}")
@@ -1825,8 +1853,10 @@ class DataFetcher:
                     "close": float(data["c"][i]),
                     "volume": float(data["v"][i]) if i < len(data.get("v", [])) else 0,
                 })
-            except Exception:
+            except Exception as e:
                 skipped += 1
+                if skipped <= 3:
+                    log.debug(f"[Finnhub] row index={i} ts={ts} parse failed: {type(e).__name__}: {e}")
                 continue
         if skipped:
             log.warning(f"[Finnhub] skipped {skipped} malformed row(s) for {symbol}")
@@ -1925,8 +1955,10 @@ class DataFetcher:
                     "close": float(v["close"]),
                     "volume": 0.0,
                 })
-            except Exception:
+            except Exception as e:
                 skipped += 1
+                if skipped <= 3:
+                    log.debug(f"[TwelveData] row {v!r} parse failed: {type(e).__name__}: {e}")
                 continue
         if skipped:
             log.warning(f"[TwelveData] skipped {skipped} malformed row(s) for {symbol}")

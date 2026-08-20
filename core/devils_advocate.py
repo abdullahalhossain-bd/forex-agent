@@ -635,7 +635,14 @@ class DevilsAdvocateGate:
             # serve GPT models) but log it once so it's visible.
             groq_model = self.model_name
             if "gpt" in groq_model:
-                groq_model = "llama-3.1-8b-instant"
+                # FIX (2026-08-19 audit): "llama-3.1-8b-instant" was
+                # deprecated by Groq on 2026-06-17 and now 404s with
+                # model_not_found — every Devil's Advocate call on Groq
+                # was failing, which (by fail-closed design) silently
+                # REJECTed every fully-approved trade signal regardless
+                # of its actual quality. Groq's official migration target
+                # for llama-3.1-8b-instant is openai/gpt-oss-20b.
+                groq_model = "openai/gpt-oss-20b"
                 log.warning(
                     f"[DevilsAdvocate] configured model '{self.model_name}' is not "
                     f"available on Groq; using '{groq_model}' instead"

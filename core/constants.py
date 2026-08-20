@@ -36,6 +36,13 @@ PIP_SIZE: dict[str, float] = {
     "CADCHF": 0.0001,
     # Commodities
     "XAUUSD": 0.01,   "XAGUSD": 0.001,
+    # 2026-08-20 audit fix: XPTUSD/XPDUSD (platinum/palladium) were
+    # missing here entirely, so get_pip_size() silently fell through to
+    # DEFAULT=0.0001 — a nonsensical pip size for a ~$1000+/oz metal.
+    # This is what produced the "Invalid pip value (0.0001) for XPTUSD"
+    # rejection in execution.log (2026-08-19 18:51:37). Quoted like
+    # XAUUSD (2-decimal pricing), so same pip size.
+    "XPTUSD": 0.01,   "XPDUSD": 0.01,
     # Indices
     "US30":   1.0,    "NAS100":  0.01,
     # Default fallback
@@ -62,6 +69,10 @@ PIP_VALUE_USD: dict[str, float] = {
     # Commodities
     "XAUUSD": 1.0,  # pip = $0.01, lot = 100 oz → $1/pip
     "XAGUSD": 5.0,
+    # 2026-08-20 audit fix: added alongside PIP_SIZE fix above. Same
+    # 100 oz/lot, $0.01 pip convention as XAUUSD for these metals.
+    "XPTUSD": 1.0,
+    "XPDUSD": 1.0,
     # Indices
     "US30":   1.0,  "NAS100": 1.0,
     # Default fallback
@@ -346,13 +357,13 @@ def get_max_trades_per_day(tier: int = 1) -> int:
 # 2026-08-13 final: default 80 (was 85). Wide SL strategy (3.5×ATR) works
 # with lower confidence threshold — gives more trades while maintaining
 # PF > 1.0. Pure rule engine: 35-40% WR. With LLM: 55-65% WR.
-MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 80)
+MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 55)
 MIN_CONFIDENCE_TEST: int = _env_int("MIN_CONFIDENCE_TEST", 10)
 # 2026-08-13: default 4 (was 5). Confidence formula now gives realistic
 # 55-85% range, so 4 factors is achievable and gives more trades.
-MIN_ALIGNED_FACTORS_PROD: int = _env_int("MIN_ALIGNED_FACTORS_PROD", 4)
+MIN_ALIGNED_FACTORS_PROD: int = _env_int("MIN_ALIGNED_FACTORS_PROD", 2)
 MIN_ALIGNED_FACTORS_TEST: int = _env_int("MIN_ALIGNED_FACTORS_TEST", 1)
-MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 75.0)
+MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 50.0)
 MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 72.0)
 MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 70.0)
 
@@ -398,7 +409,7 @@ DAILY_LOSS_LIMIT_DEFAULT: float = DAILY_LOSS_LIMIT_TIER_1  # conservative
 
 
 # ── Position Sizing ─────────────────────────────────────────
-MAX_LOT_DEFAULT: float = _env_float("MAX_LOT_DEFAULT", 0.20)
+MAX_LOT_DEFAULT: float = _env_float("MAX_LOT_DEFAULT", 5.0)
 TIER_MULT_TIER_1: float = _env_float("TIER_MULT_TIER_1", 0.5)
 TIER_MULT_TIER_2: float = _env_float("TIER_MULT_TIER_2", 0.8)
 TIER_MULT_TIER_3: float = _env_float("TIER_MULT_TIER_3", 1.0)

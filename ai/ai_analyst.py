@@ -34,7 +34,11 @@ class AIAnalyst:
     # `os.getenv(key) or default` since os.getenv's default doesn't kick in
     # for a present-but-empty env var (e.g. "GEMINI_MODEL=" in .env), which
     # was sending model="" to Gemini and crashing every fallback call.
-    GROQ_MODEL   = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+    # 2026-08-19 fix: Groq deprecated BOTH llama-3.1-8b-instant and
+    # llama-3.3-70b-versatile on 2026-06-17 — every Groq call 404'd with
+    # model_not_found no matter which old name was in use. Migrated to
+    # Groq's official replacement for llama-3.1-8b-instant.
+    GROQ_MODEL   = os.getenv("GROQ_MODEL") or "openai/gpt-oss-20b"
     GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 
     # 2026-07-25: Ollama has been COMPLETELY REMOVED from this layer.
@@ -1067,6 +1071,12 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         instead, clearly flagged as LLM-unavailable.
         """
         rule_signal = rule_signal or {}
+        log.warning(
+            f"[AIAnalyst] FALLBACK TO RULE ENGINE | reason={reason} | "
+            f"rule_signal={rule_signal.get('signal', 'WAIT')} "
+            f"conf={rule_signal.get('confidence', 0)}% | "
+            f"active_provider={self.active_provider}"
+        )
         return {
             "analysis":         reason,
             "signal":           rule_signal.get("signal", "WAIT"),

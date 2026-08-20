@@ -177,7 +177,10 @@ class DecisionAgent:
     # layers. Raised to 0.65 so low participation is still visible (damps
     # confidence down) but no longer disproportionately punishes a clean
     # signal just because optional layers had nothing to say.
-    AGG_DAMPING_FLOOR = 0.65
+    # 2026-08-19 FIX: 0.65 → 0.75. Optional layers (ML/RL/unified) often
+    # abstain; 0.65 was crushing strong tech+LLM+master signals into ~30%.
+    # 0.75 still reflects low participation without over-punishing.
+    AGG_DAMPING_FLOOR = 0.75
 
     # Log-driven fix (2026-07-17): used by the SignalFusion authoritative
     # gate below.  Now an alias for the single consolidated floor.
@@ -295,12 +298,16 @@ class DecisionAgent:
 
         # 6/7. Unified Signal Engine consensus + Adaptive Decision
         # (confidence is a Low/Medium/High label here, not a number)
-        _label_conf = {"High": 85.0, "Medium": 60.0, "Low": 30.0}
+        # 2026-08-19 FIX: Low 30→45, Medium 60→65. Mapping fusion/adaptive
+        # "Low" to 30% was the main reason strong tech/LLM signals ended
+        # at ~33% after aggregate damping. 45% keeps Low as a real discount
+        # without tanking the whole decision below LiveRiskManager's floor.
+        _label_conf = {"High": 85.0, "Medium": 65.0, "Low": 45.0}
         unified_ctx = analysis_out.get("unified_signal") if isinstance(analysis_out, dict) else None
         if isinstance(unified_ctx, dict) and unified_ctx and not unified_ctx.get("error"):
             consensus = unified_ctx.get("consensus", {}) or {}
             u_action = consensus.get("action", "NO_TRADE")
-            u_conf = _label_conf.get(consensus.get("confidence", "Low"), 30.0)
+            u_conf = _label_conf.get(consensus.get("confidence", "Low"), 45.0)
             sources.append(("unified_signal", u_conf, 1.0, u_action in ("BUY", "SELL")))
 
             adaptive = unified_ctx.get("adaptive_decision", {}) or {}
@@ -313,7 +320,7 @@ class DecisionAgent:
                 # score=1.80 -> 180%), inflating the weighted-average aggregate
                 # confidence even when the engine's own label was "Low". Reuse
                 # the Low/Medium/High label mapping instead of rescaling score.
-                a_score = _label_conf.get(adaptive.get("confidence", "Low"), 30.0)
+                a_score = _label_conf.get(adaptive.get("confidence", "Low"), 45.0)
                 sources.append(("adaptive_decision", a_score, 1.0, a_action in ("BUY", "SELL")))
 
         # ── EXECUTION-PROOF AUDIT FIX: wire previously-dead outputs ──
@@ -682,7 +689,10 @@ class DecisionAgent:
         fusion_allowed     = bool(session_ctx.get("fusion_allowed", True))
         is_dead_zone       = bool(session_ctx.get("is_dead_zone", False))
         current_session    = session_ctx.get("current_session", "UNKNOWN")
-        fusion_score       = session_ctx.get("fusion_score", 0)
+        # Renamed from "fusion_score" (2026-08) — see
+        # session_analyzer.get_ai_context(): raw SMC confluence score
+        # gated by session rules, not a session+SMC blend.
+        fusion_score       = session_ctx.get("smc_confluence_score", 0)
         fusion_grade       = session_ctx.get("fusion_grade", "N/A")
 
         if not _test_mode:

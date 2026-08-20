@@ -763,14 +763,22 @@ def _run_backtest(args):
             bypass_checks = [gate.strip() for gate in args.bypass_gates.split(",") if gate.strip()]
             print(f"  Bypass gates: {bypass_checks}")
 
+        # FIX (2026-08-19 winrate/frequency audit):
+        # max_open_trades raised 3 -> 5 so concurrent signals can all enter.
+        # Old cap of 3 was rejecting 60-70% of bars as "max_trades" — see
+        # backtest rejection_stats in run2/*. Throttled frequency badly.
+        # 5 matches a typical Demo/Real account's per-symbol concurrency.
+        # max_hold_bars raised 100 -> 200 so winning trades have room to
+        # run to TP instead of timing out at 100 bars (which forced many
+        # winning setups into end-of-backtest/timeout closes at mid-move).
         result = run_unified_backtest(
             symbol=symbol,
             df=df,
             timeframe=timeframe,
             starting_balance=balance,
             warmup_bars=50,
-            max_open_trades=3,
-            max_hold_bars=100,
+            max_open_trades=5,
+            max_hold_bars=200,
             db_path=f"backtest/backtest_run_{symbol}_{timeframe}.db",
             verbose=True,
             bypass_checks=bypass_checks,

@@ -152,13 +152,19 @@ class BrokerSimulator:
     def _check_spread_limit(self, symbol: str, spread_pips: float | None = None) -> tuple[bool, str]:
         """Mirror live OrderManager spread rejection. Returns (allowed, reason).
         Live source: broker/spread_monitor.MAX_SPREAD_PIPS table.
+
+        FIX (2026-08-19 audit Bug 1): previously imported `get_spread_limit`
+        which does NOT exist in broker.spread_monitor — the ImportError was
+        silently swallowed and the function returned True for every call,
+        making the spread limit a no-op. Now imports only MAX_SPREAD_PIPS
+        (which DOES exist) so the limit table is actually consulted.
         """
         if not self.enforce_spread_limit:
             return True, ""
         try:
-            from broker.spread_monitor import MAX_SPREAD_PIPS, get_spread_limit
+            from broker.spread_monitor import MAX_SPREAD_PIPS
             spread = spread_pips if spread_pips is not None else self._get_spread_pips(symbol)
-            limit = get_spread_limit(symbol) if hasattr(globals().get("spread_monitor"), "get_spread_limit") else MAX_SPREAD_PIPS.get(symbol, 3.0)
+            limit = MAX_SPREAD_PIPS.get(symbol, 3.0)
             if spread > limit:
                 return False, f"Spread too wide ({spread:.2f} pips > {limit:.2f} pips limit)"
         except ImportError:
@@ -184,14 +190,21 @@ class BrokerSimulator:
         slew_p = max(0, np.random.normal(self.slippage_pips, self.slippage_stdev))
         slip = _pip_to_price(slew_p, symbol)
         half_spread = _half_spread_price(actual_spread_pips, symbol)
+        # FIX (2026-08-19 audit Bug 2): entry_price from unified_engine is
+        # BID-based (MT5 historical OHLC is BID). For BUY we want ASK fill
+        # (entry + slip + half_spread) — was correct. For SELL we want BID
+        # fill (entry - slip) — was wrongly subtracting half_spread again,
+        # understating SELL entry by half_spread on every trade.
         if direction.upper() == "BUY":
             fp = entry_price + slip + half_spread
-        else:
-            fp = entry_price - slip - half_spread
-        comm = self.commission_per_lot * lot
+        else:  # SELL — BID fill, no spread adjustment
+            fp = entry_price - slip
+        # FIX (2026-08-19 audit Bug 8): commission must be on FILLED lot,
+        # not requested lot. Move partial-fill decision above commission.
         al = lot
         if random.random() < self.partial_fill_prob:
             al = round(lot * random.uniform(0.5, 0.95), 2)
+        comm = self.commission_per_lot * al
         return SimulatedTrade(
             trade_id=self._tc, symbol=symbol, direction=direction.upper(),
             entry_time=bar_time.isoformat() if isinstance(bar_time, datetime) else str(bar_time),
@@ -214,18 +227,25 @@ class BrokerSimulator:
         slip_p = max(0, np.random.normal(self.slippage_pips * 0.5, self.slippage_stdev * 0.5))
         slip = _pip_to_price(slip_p, trade.symbol)
         if trade.direction == "BUY":
+            # FIX (2026-08-19 audit Bug 3): SL/TP for BUY are stored as BID
+            # levels (MT5 closes BUY at BID touching SL or TP). The trigger
+            # detection (bar_low <= SL) is BID-vs-BID — correct. The exit
+            # fill must also be at BID (no spread subtraction); was wrongly
+            # subtracting half_spread, understating every BUY exit by
+            # half_spread — eroded profit factor systematically.
             sl_hit = bar_low <= trade.stop_loss; tp_hit = bar_high >= trade.take_profit
             if sl_hit and tp_hit:
                 # Heuristic: assume the level closer to entry was hit first
                 if abs(trade.entry_price - trade.take_profit) < abs(trade.entry_price - trade.stop_loss):
-                    ep, er = trade.take_profit - half_spread - slip, "TP"
+                    ep, er = trade.take_profit - slip, "TP"
                 else:
-                    ep, er = trade.stop_loss - half_spread - slip, "SL"
-            elif sl_hit: ep, er = trade.stop_loss - half_spread - slip, "SL"
-            elif tp_hit: ep, er = trade.take_profit - half_spread - slip, "TP"
+                    ep, er = trade.stop_loss - slip, "SL"
+            elif sl_hit: ep, er = trade.stop_loss - slip, "SL"
+            elif tp_hit: ep, er = trade.take_profit - slip, "TP"
             else: return None
             pnl_p = (ep - trade.entry_price) / pip
         else:
+            # SELL: SL/TP are ASK levels. Exit fills at ASK (entry + half_spread).
             sl_hit = bar_high >= trade.stop_loss; tp_hit = bar_low <= trade.take_profit
             if sl_hit and tp_hit:
                 # Heuristic: assume the level closer to entry was hit first
@@ -255,7 +275,9 @@ class BrokerSimulator:
         slip_p = max(0, np.random.normal(self.slippage_pips * 0.5, self.slippage_stdev * 0.5))
         slip = _pip_to_price(slip_p, trade.symbol)
         if trade.direction == "BUY":
-            ep = close_price - half_spread - slip
+            # FIX (2026-08-19 audit Bug 3): close_price is bar close = BID.
+            # BUY closes at BID — no spread subtraction.
+            ep = close_price - slip
             pnl_p = (ep - trade.entry_price) / pip
         else:
             ep = close_price + half_spread + slip

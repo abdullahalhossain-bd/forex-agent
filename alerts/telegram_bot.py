@@ -126,7 +126,8 @@ def _get_rate_limiter() -> _RateLimiter:
         try:
             from config import TELEGRAM_MAX_MSG_PER_MIN
             limit = TELEGRAM_MAX_MSG_PER_MIN
-        except Exception:
+        except Exception as e:
+            log.debug(f"[Telegram] TELEGRAM_MAX_MSG_PER_MIN not in config ({e}), defaulting to 10/min")
             limit = 10
         _RATE_LIMITER = _RateLimiter(max_per_min=limit)
     return _RATE_LIMITER
@@ -697,7 +698,8 @@ async def cmd_status(update, context: ContextTypes.DEFAULT_TYPE):
     try:
         db    = TraderDB()
         stats = db.get_overall_stats()
-    except Exception:
+    except Exception as e:
+        log.warning(f"[Telegram] /status — TraderDB stats fetch failed ({type(e).__name__}: {e}), showing zeros")
         stats = {}
 
     status_str  = "⏸️ PAUSED" if IS_TRADING_PAUSED else "🚀 RUNNING"
@@ -772,7 +774,8 @@ async def cmd_calendar(update, context: ContextTypes.DEFAULT_TYPE):
         from fundamental.news_filter import NewsFilter
         nf       = NewsFilter()
         calendar = nf.get_weekly_calendar()
-    except Exception:
+    except Exception as e:
+        log.warning(f"[Telegram] /calendar — NewsFilter fetch failed ({type(e).__name__}: {e})")
         calendar = None
 
     if not calendar:

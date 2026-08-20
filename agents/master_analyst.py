@@ -56,7 +56,13 @@ MODEL = ""
 # absent from the environment, not when it's present-but-empty (e.g.
 # "GEMINI_MODEL=" in .env) — that empty-string case was reaching the Gemini
 # API as model="" and crashing every fallback call with "model is required".
-GROQ_MODEL = os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+# Fix (2026-08-19): Groq deprecated BOTH llama-3.1-8b-instant and
+# llama-3.3-70b-versatile on 2026-06-17 (see console.groq.com/docs/
+# deprecations). Every Groq call in this cascade was 404'ing with
+# model_not_found regardless of which of the two old names was configured,
+# silently forcing every cycle onto Gemini/OpenRouter fallback. Groq's
+# official migration target for llama-3.1-8b-instant is openai/gpt-oss-20b.
+GROQ_MODEL = os.getenv("GROQ_MODEL") or "openai/gpt-oss-20b"
 GEMINI_MODEL = os.getenv("GEMINI_MODEL") or "gemini-flash-lite-latest"
 # 2026-07-25: Ollama has been COMPLETELY REMOVED from this layer.
 # See _call_llm() docstring for the new provider cascade order
@@ -85,6 +91,28 @@ CEREBRAS_MAX_TOK = int(os.getenv("CEREBRAS_MAX_TOKENS", "4000"))
 # answer rather than reasoning. Override via .env if you want deeper
 # reasoning (low/medium/high — depends on what Cerebras' API accepts).
 CEREBRAS_REASONING_EFFORT = os.getenv("CEREBRAS_REASONING_EFFORT", "low")
+
+# FIX (2026-08-19): the Day 95 hotfix above was only ever applied to the
+# Cerebras branch. GROQ_MODEL can ALSO be a gpt-oss reasoning model
+# (e.g. openai/gpt-oss-120b — this is the DEFAULT-fallback name at
+# GROQ_MODEL's definition above, and it's what production .env actually
+# had configured) — and the plain Groq branch kept using MAX_TOK=800
+# with no reasoning_effort at all. Symptom matched exactly: every Groq
+# call to a gpt-oss model came back as an empty string ("LLM response
+# was empty.") because the whole 800-token budget was consumed by
+# internal chain-of-thought before any JSON was written. Mirror the
+# Cerebras fix here: reasoning models on Groq get their own larger
+# budget + a low reasoning_effort, detected the same way (name contains
+# "gpt-oss"). Plain chat models on Groq (llama-3.x etc.) are unaffected
+# — they keep using MAX_TOK exactly as before.
+GROQ_REASONING_MAX_TOK = int(os.getenv("GROQ_REASONING_MAX_TOKENS", "4000"))
+GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
+
+
+def _is_reasoning_model(model_name: str) -> bool:
+    """True for gpt-oss-family models, which reserve part of their token
+    budget for internal chain-of-thought before emitting the answer."""
+    return "gpt-oss" in (model_name or "").lower()
 
 try:
     from core.llm_key_manager import get_llm_key_manager
@@ -553,7 +581,10 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         session_score    = session_ctx.get("session_score", 0)
         session_grade    = session_ctx.get("session_grade", "C")
         fusion_allowed   = session_ctx.get("fusion_allowed", False)
-        fusion_score     = session_ctx.get("fusion_score", 0)
+        # Renamed from "fusion_score" (2026-08) — see
+        # session_analyzer.get_ai_context(): raw SMC confluence score
+        # gated by session rules, not a session+SMC blend.
+        fusion_score     = session_ctx.get("smc_confluence_score", 0)
         preferred_pairs  = session_ctx.get("preferred_pairs", [])
         gmt_time         = session_ctx.get("gmt_time", "N/A")
 
@@ -920,6 +951,8 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         # for the same context). Provenance (which LLM really produced
         # the cached text) is tracked separately in `_prov_cache_key` so
         # cache hits are logged accurately instead of implying "groq".
+        log.debug(f"[MasterAnalyst] _call_llm invoked | context_chars={len(context)}")
+
         _cache = None
         _cache_key = None
         _prov_cache_key = None
@@ -1023,24 +1056,50 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 )
                 break
             try:
-                resp = client.chat.completions.create(
+                # FIX (2026-08-19): GROQ_MODEL can be a gpt-oss reasoning
+                # model (e.g. the production .env value
+                # openai/gpt-oss-120b) — give it the same larger budget +
+                # low reasoning_effort the Cerebras branch already uses,
+                # instead of the plain-chat-model MAX_TOK=800 that was
+                # silently starving it and coming back empty every call.
+                _groq_is_reasoning = _is_reasoning_model(GROQ_MODEL)
+                _groq_max_tok = GROQ_REASONING_MAX_TOK if _groq_is_reasoning else MAX_TOK
+                groq_kwargs = dict(
                     model=GROQ_MODEL,
-                    max_tokens=MAX_TOK,
+                    max_tokens=_groq_max_tok,
                     temperature=0.2,
                     messages=[
                         {"role": "system", "content": self._SYSTEM},
                         {"role": "user", "content": user_prompt},
                     ],
                 )
+                if _groq_is_reasoning:
+                    groq_kwargs["reasoning_effort"] = GROQ_REASONING_EFFORT
+
+                resp = client.chat.completions.create(**groq_kwargs)
                 if _key_manager is not None:
                     usage = getattr(resp, "usage", None)
                     tokens_used = 0
                     if usage is not None:
                         tokens_used = getattr(usage, "total_tokens", 0) or 0
                     _key_manager.mark_groq_success(tokens_used=tokens_used, client=client)
-                _response = resp.choices[0].message.content.strip()
+                _response = (resp.choices[0].message.content or "").strip()
+
+                if not _response:
+                    # Reasoning model still came back empty (e.g. hit the
+                    # token cap mid-thought) — fail with a clear, actionable
+                    # message instead of a bare JSONDecodeError downstream.
+                    finish_reason = getattr(resp.choices[0], "finish_reason", "unknown")
+                    raise RuntimeError(
+                        f"Groq ({GROQ_MODEL}) returned empty content after "
+                        f"reasoning — finish_reason={finish_reason}. Try "
+                        f"raising GROQ_REASONING_MAX_TOKENS (current="
+                        f"{GROQ_REASONING_MAX_TOK}) or lowering "
+                        f"GROQ_REASONING_EFFORT (current={GROQ_REASONING_EFFORT})."
+                    )
+
                 # ── Day 90 — cache store (Day 101: correctly labeled) ──
-                _store_cache(_response, f"groq:{GROQ_MODEL}", MAX_TOK)
+                _store_cache(_response, f"groq:{GROQ_MODEL}", _groq_max_tok)
                 return _response
             except Exception as e:
                 info = log_llm_call_failure(
@@ -1336,6 +1395,10 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             except Exception:
                 pass
         _diag = " | ".join(_diag_parts) if _diag_parts else "no key manager diagnostics available"
+        log.error(
+            f"[MasterAnalyst] LLM cascade exhausted — every provider failed this cycle. "
+            f"Provider states: {_diag}"
+        )
         raise RuntimeError(
             f"[MasterAnalyst] No LLM client available (all keys failed). "
             f"Provider states: {_diag}. "
@@ -1541,7 +1604,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 _session_gate_penalty_applied = True
                 _session_gate_reasons.append(
                     f"fusion_allowed=False "
-                    f"(score={session_ctx.get('fusion_score', '?')}, "
+                    f"(score={session_ctx.get('smc_confluence_score', '?')}, "
                     f"grade={session_ctx.get('fusion_grade', '?')})"
                 )
                 _session_gate_multipliers.append(("fusion_allowed", _multiplier))
@@ -1602,6 +1665,11 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                         or "rate" in _reason_lower or "auth" in _reason_lower \
                         or "timeout" in _reason_lower or "429" in _reason_lower \
                         or "401" in _reason_lower or "403" in _reason_lower
+        log.warning(
+            f"[MasterAnalyst] FALLBACK TO RULE ENGINE | reason={reason} | "
+            f"rule_signal={sig} conf={conf}% | parse_failed={_parse_failed} | "
+            f"llm_unavailable={_unavailable}"
+        )
         return {
             "market_story":     f"LLM unavailable — using rule engine signal: {sig} ({conf}%)",
             "key_levels":       [],

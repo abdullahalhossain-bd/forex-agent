@@ -194,9 +194,14 @@ class MT5AlertEngine:
         if server_time is None:
             server_time = datetime.now(timezone.utc)
 
+        log.debug(
+            f"[AlertEngine] check_all: {len(self._alerts)} alert(s) registered, "
+            f"tick_data covers {len(tick_data)} symbol(s)"
+        )
         results = []
         for alert in self._alerts:
             if not alert.enabled:
+                log.debug(f"[AlertEngine] '{alert.name}' skipped — disabled")
                 continue
 
             # Check expiration
@@ -207,21 +212,32 @@ class MT5AlertEngine:
 
             # Check max retries
             if alert._fire_count >= alert.max_retries:
+                log.debug(
+                    f"[AlertEngine] '{alert.name}' skipped — max_retries reached "
+                    f"({alert._fire_count}/{alert.max_retries})"
+                )
                 continue
 
             # Check timeout (snooze)
             if alert._last_fired and alert.timeout_sec > 0:
                 elapsed = (server_time - alert._last_fired).total_seconds()
                 if elapsed < alert.timeout_sec:
+                    log.debug(
+                        f"[AlertEngine] '{alert.name}' skipped — snoozed "
+                        f"({elapsed:.0f}s/{alert.timeout_sec}s)"
+                    )
                     continue
 
             # Get current value for the alert's symbol
             symbol_data = tick_data.get(alert.symbol, {})
+            if not symbol_data:
+                log.debug(f"[AlertEngine] '{alert.name}' — no tick data for {alert.symbol}")
             result = self._check_condition(alert, symbol_data, server_time)
 
             if result.fired:
                 alert._last_fired = server_time
                 alert._fire_count += 1
+                log.debug(f"[AlertEngine] '{alert.name}' FIRED — {result.reason}")
                 self._execute_action(alert)
                 results.append(result)
 
@@ -288,10 +304,14 @@ class MT5AlertEngine:
         """Execute the alert's configured action."""
         handler = self._action_handlers.get(alert.action)
         if handler:
+            log.debug(f"[AlertEngine] executing action={alert.action.value} for '{alert.name}'")
             try:
                 handler(alert)
             except Exception as e:
-                log.error(f"[AlertEngine] Action handler error for '{alert.name}': {e}")
+                log.error(
+                    f"[AlertEngine] Action handler error for '{alert.name}' "
+                    f"(action={alert.action.value}): {type(e).__name__}: {e}"
+                )
         else:
             log.warning(f"[AlertEngine] No handler for action {alert.action}")
 
@@ -324,8 +344,15 @@ class MT5AlertEngine:
                 f"  Condition: `{alert.field.value} {alert.operator.value} {alert.value}`\n"
                 f"  Action: `{alert.action.value}`"
             ))
-        except Exception:
-            pass  # Telegram not configured — just log
+            log.debug(f"[AlertEngine] Telegram notification sent for '{alert.name}'")
+        except ImportError:
+            log.debug("[AlertEngine] Telegram not configured (alerts.telegram_bot not importable) — notification stayed local-only")
+        except Exception as e:
+            # BUGFIX: previously a bare `except: pass` — a genuine Telegram
+            # send failure (bad token, network down, chat_id wrong) was
+            # completely invisible. Now logged at WARNING so a persistently
+            # failing notification channel actually shows up in logs.
+            log.warning(f"[AlertEngine] Telegram notification failed for '{alert.name}': {type(e).__name__}: {e}")
 
     # ═══════════════════════════════════════════════════════════
     # RESET / STATUS

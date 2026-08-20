@@ -83,6 +83,7 @@ async def cmd_positions(update, context):
     if not _is_authorized(update):
         await _unauthorized_reply(update)
         return
+    log.debug(f"[TelegramExt] /positions requested by user_id={update.effective_user.id if update.effective_user else '?'}")
     from data.data_orchestrator import get_data_orchestrator
     orch = get_data_orchestrator()
 
@@ -141,19 +142,27 @@ async def cmd_close(update, context):
 
     msg = f"⏳ Closing position #{ticket}..."
     await _reply_md(update, msg)
+    log.debug(f"[TelegramExt] /close ticket={ticket} requested by user_id={update.effective_user.id if update.effective_user else '?'}")
 
     # Run the close in a thread (MT5 calls are blocking)
     # Fix: this code already runs inside a coroutine, so there IS a running
     # loop — asyncio.get_running_loop() is the correct, non-deprecated way
     # to fetch it (asyncio.get_event_loop() warns/will error when called
     # outside of a running loop context in newer Python versions).
-    success = await asyncio.get_running_loop().run_in_executor(
-        None, orch.close_position, ticket
-    )
+    try:
+        success = await asyncio.get_running_loop().run_in_executor(
+            None, orch.close_position, ticket
+        )
+    except Exception as e:
+        log.error(f"[TelegramExt] /close ticket={ticket} raised {type(e).__name__}: {e}")
+        await _reply_md(update, f"❌ Error closing position #{ticket}: {_escape_md(str(e))}")
+        return
 
     if success:
+        log.info(f"[TelegramExt] Position #{ticket} closed via Telegram command")
         await _reply_md(update, f"✅ Position #{ticket} closed successfully.")
     else:
+        log.warning(f"[TelegramExt] close_position({ticket}) returned falsy — see data_orchestrator logs")
         await _reply_md(update, f"❌ Failed to close position #{ticket}. Check logs.")
 
 
@@ -202,6 +211,10 @@ async def cmd_indicators(update, context):
     orch = get_data_orchestrator()
     df = orch.get_candles(symbol, "M15", limit=200)
     if df is None or len(df) < 30:
+        log.warning(
+            f"[TelegramExt] /indicators {symbol} — insufficient data "
+            f"({0 if df is None else len(df)} candles, need >=30)"
+        )
         await _reply_md(update, f"❌ Could not fetch data for {symbol}.")
         return
 
@@ -267,6 +280,7 @@ async def cmd_account(update, context):
 
     info = orch.get_account_info()
     if not info:
+        log.warning("[TelegramExt] /account — get_account_info() returned empty/None")
         await _reply_md(update, "❌ Could not fetch account info.")
         return
 
@@ -287,12 +301,13 @@ async def _reply_md(update, text: str):
     """Reply with Markdown formatting (Telegram parse_mode=MarkdownV2)."""
     try:
         await update.message.reply_text(text, parse_mode="MarkdownV2")
-    except Exception:
+    except Exception as e:
         # Fallback: send without markdown if formatting fails
+        log.debug(f"[TelegramExt] MarkdownV2 send failed ({type(e).__name__}: {e}), retrying as plain text")
         try:
             await update.message.reply_text(text.replace("*", "").replace("`", ""))
-        except Exception as e:
-            log.error(f"telegram_ext reply failed: {e}")
+        except Exception as e2:
+            log.error(f"[TelegramExt] reply failed (both Markdown and plain text): {type(e2).__name__}: {e2}")
 
 
 # ── Registration ──────────────────────────────────────────────────
@@ -381,6 +396,7 @@ async def notify_rich_signal(
     lines.append(f"\n_Source: `{source}`_")
 
     text = "\n".join(lines)
+    log.debug(f"[TelegramExt] notify_rich_signal: {pair} {direction} conf={conf}% -> chat_id={chat_id}")
     try:
         await bot.send_message(
             chat_id=chat_id,
@@ -388,9 +404,12 @@ async def notify_rich_signal(
             parse_mode="Markdown",
         )
     except Exception as e:
-        log.warning(f"notify_rich_signal failed: {e}")
+        log.warning(f"[TelegramExt] notify_rich_signal Markdown send failed: {type(e).__name__}: {e}")
         # Fallback plain text
         try:
             await bot.send_message(chat_id=chat_id, text=text.replace("*","").replace("`",""))
-        except Exception:
-            pass
+        except Exception as e2:
+            log.error(
+                f"[TelegramExt] notify_rich_signal FAILED completely for {pair} {direction} "
+                f"(both Markdown and plain text): {type(e2).__name__}: {e2}"
+            )

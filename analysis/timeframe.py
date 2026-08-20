@@ -78,7 +78,11 @@ class MultiTimeframeAnalyzer:
             if _staleness_available:
                 try:
                     max_age = compute_staleness_threshold(tf)
-                    staleness = check_data_staleness(df, max_age_sec=max_age)
+                    # Pass timeframe so age is measured from bar CLOSE (not open).
+                    # Prevents H1/H4 false-STALE right after a valid candle close.
+                    staleness = check_data_staleness(
+                        df, max_age_sec=max_age, timeframe=tf
+                    )
                     if staleness.get("is_stale"):
                         reason = staleness.get('reason') or ''
                         age = staleness.get('age_sec') if staleness.get('age_sec') is not None else None
@@ -159,14 +163,29 @@ class MultiTimeframeAnalyzer:
         else:
             bias, conf = 'NEUTRAL', 'LOW'
 
-        # B4a fix: downgrade confidence if some TFs were stale
+        # B4a fix: downgrade confidence if some TFs were stale.
+        # Softened: if the only stale TF is the highest (1d/D1) and we still
+        # have ≥2 fresh aligned TFs, keep MEDIUM instead of hard-forcing LOW.
+        # Intraday stale (1h/4h) still forces LOW — that is real data loss.
         if stale_tfs:
-            # Stale TFs present → cap confidence at LOW regardless of alignment
-            conf = 'LOW'
-            log.warning(
-                f"[MTF] get_bias: {len(stale_tfs)} TF(s) stale ({stale_tfs}) — "
-                f"confidence downgraded to LOW; bias={bias} based on {total} fresh TF(s)"
+            only_daily_stale = (
+                set(stale_tfs).issubset({"1d", "D1", "1D", "daily"})
+                and total >= 2
+                and conf in ("HIGH", "MEDIUM")
             )
+            if only_daily_stale:
+                conf = "MEDIUM"
+                log.warning(
+                    f"[MTF] get_bias: {len(stale_tfs)} TF(s) stale ({stale_tfs}) — "
+                    f"only Daily affected, confidence capped at MEDIUM; "
+                    f"bias={bias} based on {total} fresh TF(s)"
+                )
+            else:
+                conf = "LOW"
+                log.warning(
+                    f"[MTF] get_bias: {len(stale_tfs)} TF(s) stale ({stale_tfs}) — "
+                    f"confidence downgraded to LOW; bias={bias} based on {total} fresh TF(s)"
+                )
 
         return {
             'bias':       bias,

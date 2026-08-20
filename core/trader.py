@@ -1549,12 +1549,20 @@ class AITrader:
                 rs = get_regime_suppressor()
                 regime_ctx = market_out.get("regime", {})
                 ind_ctx = market_out.get("ind_ctx", {})
+                # FIX (2026-08-19 audit Bug 4): pass bar_time so regime
+                # suppression uses the historical bar's timestamp instead
+                # of wall-clock time when running a backtest on Friday UTC.
+                # `current_time` is set by unified_engine at line 354 from
+                # primary_df.index[i]; in live mode it's None, which
+                # preserves the old wall-clock behavior in regime_suppression.
+                _bar_time = market_out.get("bar_time") or market_out.get("current_time")
                 suppress, reason = rs.should_suppress(
                     symbol=self.symbol,
                     regime=regime_ctx,
                     session=session_ctx,
                     news_ctx=analysis_out.get("news_ctx", {}),
                     ind_ctx=ind_ctx,
+                    bar_time=_bar_time,
                 )
                 if suppress:
                     perm_out["allowed"] = False
@@ -1572,7 +1580,30 @@ class AITrader:
                 log.warning(f"Suppressed exception at line 825: {e}")
                 pass
 
-        if self._paper.has_open_position(self.symbol, perm_out.get("final_action")):
+        # FIX (2026-08-19 audit Bug 5): in mt5_demo mode, PaperTrader is
+        # NOT authoritative (stale open-position records after broker-side
+        # closes / sync failures block all subsequent entries forever — a
+        # known "orphan position" issue). Use _get_live_open_pairs() which
+        # reads real MT5 positions, the same authoritative source the
+        # correlation filter at line ~1603 already uses. PaperTrader is
+        # still authoritative in pure paper / backtest mode.
+        from core.constants import is_backtest_mode as _bt_dup_check
+        _use_paper_for_dup = (self.execution_mode != "mt5_demo") or _bt_dup_check()
+        if _use_paper_for_dup:
+            _dup_open = self._paper.has_open_position(self.symbol, perm_out.get("final_action"))
+        else:
+            # Live MT5 demo: read real positions
+            try:
+                _live_pairs = self._get_live_open_pairs()
+                _target_dir = perm_out.get("final_action")
+                _dup_open = any(
+                    (p.get("symbol") == self.symbol and
+                     str(p.get("signal","")).upper() == str(_target_dir).upper())
+                    for p in _live_pairs if isinstance(p, dict)
+                ) if _target_dir in ("BUY","SELL") else False
+            except Exception:
+                _dup_open = False  # fail open if MT5 unreachable
+        if _dup_open:
             perm_out["allowed"] = False
             perm_out["execution_allowed"] = False
             perm_out["final_action"] = "NO TRADE"

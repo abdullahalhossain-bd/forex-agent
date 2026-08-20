@@ -6,7 +6,7 @@
 # ============================================================
 
 from utils.logger import get_logger
-from core.constants import PIP_SIZE, CORRELATION_GROUPS, get_pip_size, get_pip_value_usd, clean_symbol, pips_to_price, MEMORY_DIR
+from core.constants import PIP_SIZE, CORRELATION_GROUPS, get_pip_size, get_pip_value_usd, get_live_pip_value_per_lot, clean_symbol, pips_to_price, MEMORY_DIR
 import json, os
 from datetime import datetime, date, timezone
 
@@ -17,7 +17,16 @@ DAILY_LOG_PATH = str(MEMORY_DIR / "daily_risk.json")
 
 class RiskEngine:
 
-    MAX_RISK_PC      = 1.0
+    # P1 fix (2026-08-19): MAX_RISK_PC was hardcoded to 1.0 (1%) here while
+    # config.py's RISK_PER_TRADE = 0.005 (0.5%) is the documented
+    # "production-safe" value used elsewhere (matches strict_risk_manager
+    # per config.py's own comment). RiskEngine never read it — every trade
+    # was silently sized at 2x the intended risk. Wired in the same
+    # pattern as MAX_LOT/DAILY_LOSS_LIMIT/MAX_OPEN_TRADES below: read from
+    # config at class-definition time, no try/except (fail loudly on boot
+    # if config.py is broken, per the P0-2 rule below).
+    from config import RISK_PER_TRADE as _CFG_RISK_PER_TRADE
+    MAX_RISK_PC      = float(_CFG_RISK_PER_TRADE) * 100  # config stores a fraction (0.005); RiskEngine uses a percent (0.5)
     # PARITY FIX (2026-08-15): align with risk/rr_policy.get_min_rr() /
     # core.constants.MIN_RR_PROD (default 2.0). Hardcoded 1.5 caused
     # RiskEngine to emit 1.5R TPs that orphan_consumers then rejected
@@ -192,7 +201,35 @@ class RiskEngine:
         rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
 
         risk_usd = round(self.balance * self.MAX_RISK_PC / 100, 2)
-        pip_val  = get_pip_value_usd(self.symbol)
+        # BUG FIX (Cent-account 100x unit mismatch): get_pip_value_usd() is a
+        # STATIC real-USD table. self.balance, however, comes from
+        # config.INITIAL_BALANCE / live MT5 sync — which on a Cent account
+        # is reported in CENTS (~100x real-USD). Mixing a cents-balance with
+        # a real-USD pip value inflates lot_raw ~100x (matches the observed
+        # "intended lot 11-15, actual risk 0.007-0.009%" symptom: MAX_LOT
+        # then clips the inflated lot back down, silently gutting the real
+        # risk taken). get_live_pip_value_per_lot() reads pip value from the
+        # live MT5 connection in the ACCOUNT'S OWN unit (same unit as
+        # balance), so risk_usd / (sl_pips * pip_val) is unit-consistent
+        # regardless of account type. It falls back to the static table
+        # (with a loud warning) only when no MT5 connection is available.
+        pip_val  = get_live_pip_value_per_lot(self.symbol)
+
+        # 2026-08-19 FIX: Guard against zero/negative/absurdly small pip
+        # value. Missing entries in PIP_VALUE_USD used to fall back to
+        # DEFAULT=10.0 (or bad live data), producing lot_raw of 49–118
+        # on XPDUSD/USDTRY and then MAX_LOT under-risk rejects. Reject
+        # early instead of letting the lot explode.
+        if pip_val is None or pip_val <= 0.01:
+            log.error(
+                f"[RiskEngine] Invalid pip_val={pip_val} for {self.symbol} — "
+                f"rejecting to avoid lot explosion"
+            )
+            return self._reject(
+                f"Invalid pip value ({pip_val}) for {self.symbol} — "
+                f"check PIP_VALUE_USD / live MT5 symbol_info"
+            )
+
         lot_raw  = risk_usd / (sl_pips * pip_val) if sl_pips > 0 else 0.01
 
         # Day 97+ Book Rule (Page 13): Leverage-adjusted position sizing.
@@ -203,6 +240,15 @@ class RiskEngine:
         # NOTIONAL exposure can be 100× balance).
         # P0-2 (Audit Fix): MAX_LOT is already loaded at class level —
         # no need for a second try/except import here.
+        # NOTE (2026-08-20 audit): confirmed by direct computation that
+        # this multiplier does NOT affect the reject/approve outcome of
+        # the risk-fraction safety guard further down — that guard's
+        # fraction (risk_pc_max_by_lot / risk_pc_intended) is a function
+        # of MAX_LOT, sl_pips, pip_val, and balance only, independent of
+        # lot_raw/leverage_mult. The actual 2026-08-19 mass-rejection
+        # incident (EURAUD/GBPNZD/AUDJPY/NZDCAD/etc. on a ~$99k account)
+        # was caused by MAX_LOT itself being undersized for the account,
+        # not by this multiplier — see config.MAX_LOT / .env fix.
         leverage_mult = 1.0
         if self.MAX_LOT > 1.0:
             leverage_mult = 0.5  # halve lot when high leverage allowed
@@ -262,6 +308,28 @@ class RiskEngine:
                 f"actual_risk_after_lot_cap={risk_pc:.4f}% (${risk_usd}) | "
                 f"lot_intended={lot_raw:.2f} lot_actual={lot} MAX_LOT={self.MAX_LOT}"
             )
+            # SAFETY GUARD (fix for silent risk starvation): if the lot cap
+            # shrinks actual risk to a small fraction of intended (default:
+            # below 50%), the trade is no longer executing the strategy's
+            # risk model — it's executing a near-random micro-lot. Reject
+            # instead of silently approving a trade whose real exposure the
+            # strategy never asked for. Threshold is configurable via
+            # config.MIN_RISK_FRACTION_OF_INTENDED (default 0.5).
+            try:
+                from config import MIN_RISK_FRACTION_OF_INTENDED as _MIN_FRAC
+                _min_frac = float(_MIN_FRAC)
+            except Exception:
+                _min_frac = 0.5
+            _risk_fraction = (risk_pc / risk_pc_intended) if risk_pc_intended > 0 else 1.0
+            if _risk_fraction < _min_frac:
+                return self._reject(
+                    f"MAX_LOT cap ({self.MAX_LOT}) shrinks actual risk to "
+                    f"{_risk_fraction*100:.1f}% of intended ({risk_pc:.4f}% vs "
+                    f"{risk_pc_intended:.2f}% target) — lot_intended={lot_raw:.2f} "
+                    f"is far above MAX_LOT. Reconciling MAX_LOT with intended "
+                    f"position size (or fixing the sizing formula/pip_value) "
+                    f"is required rather than silently under-risking."
+                )
         else:
             risk_pc = risk_pc_intended
 

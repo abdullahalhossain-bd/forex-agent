@@ -1104,13 +1104,26 @@ class LLMKeyManager:
     def get_cerebras_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._cerebras_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._cerebras_keys:
+                    log.debug(
+                        f"[LLM Keys] No available Cerebras keys "
+                        f"({len(self._cerebras_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No Cerebras keys configured")
+                return None
             key = available[self._cerebras_index % len(available)]
             self._cerebras_index += 1
         base_url = os.getenv("CEREBRAS_BASE_URL", "https://api.cerebras.ai/v1")
-        client = _OpenAICompatClient(key.key, base_url, "cerebras")
-        self._remember_client_key("cerebras", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "cerebras")
+            self._remember_client_key("cerebras", client, key)
+            log.debug(f"[LLM Keys] Using Cerebras key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] Cerebras constructor failed: {e}")
+            return None
 
     def mark_cerebras_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1120,18 +1133,38 @@ class LLMKeyManager:
     def mark_cerebras_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("cerebras", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] Cerebras key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] Cerebras failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_sambanova_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._sambanova_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._sambanova_keys:
+                    log.debug(
+                        f"[LLM Keys] No available SambaNova keys "
+                        f"({len(self._sambanova_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No SambaNova keys configured")
+                return None
             key = available[self._sambanova_index % len(available)]
             self._sambanova_index += 1
         base_url = os.getenv("SAMBANOVA_BASE_URL", "https://api.sambanova.ai/v1")
-        client = _OpenAICompatClient(key.key, base_url, "sambanova")
-        self._remember_client_key("sambanova", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "sambanova")
+            self._remember_client_key("sambanova", client, key)
+            log.debug(f"[LLM Keys] Using SambaNova key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] SambaNova constructor failed: {e}")
+            return None
 
     def mark_sambanova_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1141,18 +1174,38 @@ class LLMKeyManager:
     def mark_sambanova_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("sambanova", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] SambaNova key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] SambaNova failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_openrouter_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._openrouter_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._openrouter_keys:
+                    log.debug(
+                        f"[LLM Keys] No available OpenRouter keys "
+                        f"({len(self._openrouter_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No OpenRouter keys configured")
+                return None
             key = available[self._openrouter_index % len(available)]
             self._openrouter_index += 1
         base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-        client = _OpenAICompatClient(key.key, base_url, "openrouter")
-        self._remember_client_key("openrouter", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "openrouter")
+            self._remember_client_key("openrouter", client, key)
+            log.debug(f"[LLM Keys] Using OpenRouter key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] OpenRouter constructor failed: {e}")
+            return None
 
     def mark_openrouter_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1162,18 +1215,38 @@ class LLMKeyManager:
     def mark_openrouter_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("openrouter", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] OpenRouter key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] OpenRouter failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_github_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._github_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._github_keys:
+                    log.debug(
+                        f"[LLM Keys] No available GitHub Models keys "
+                        f"({len(self._github_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No GitHub Models keys configured")
+                return None
             key = available[self._github_index % len(available)]
             self._github_index += 1
         base_url = os.getenv("GITHUB_MODELS_BASE_URL", "https://models.inference.ai.azure.com")
-        client = _OpenAICompatClient(key.key, base_url, "github")
-        self._remember_client_key("github", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "github")
+            self._remember_client_key("github", client, key)
+            log.debug(f"[LLM Keys] Using GitHub Models key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] GitHub Models constructor failed: {e}")
+            return None
 
     def mark_github_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1183,18 +1256,38 @@ class LLMKeyManager:
     def mark_github_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("github", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] GitHub Models key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] GitHub Models failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_huggingface_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._huggingface_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._huggingface_keys:
+                    log.debug(
+                        f"[LLM Keys] No available Hugging Face keys "
+                        f"({len(self._huggingface_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No Hugging Face keys configured")
+                return None
             key = available[self._huggingface_index % len(available)]
             self._huggingface_index += 1
         base_url = os.getenv("HUGGINGFACE_BASE_URL", "https://api-inference.huggingface.co/v1")
-        client = _OpenAICompatClient(key.key, base_url, "huggingface")
-        self._remember_client_key("huggingface", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "huggingface")
+            self._remember_client_key("huggingface", client, key)
+            log.debug(f"[LLM Keys] Using Hugging Face key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] Hugging Face constructor failed: {e}")
+            return None
 
     def mark_huggingface_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1204,18 +1297,38 @@ class LLMKeyManager:
     def mark_huggingface_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("huggingface", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] Hugging Face key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] Hugging Face failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_claude_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._claude_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._claude_keys:
+                    log.debug(
+                        f"[LLM Keys] No available Claude keys "
+                        f"({len(self._claude_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No Claude keys configured")
+                return None
             key = available[self._claude_index % len(available)]
             self._claude_index += 1
         base_url = os.getenv("CLAUDE_BASE_URL", "https://api.anthropic.com/v1")
-        client = _OpenAICompatClient(key.key, base_url, "claude")
-        self._remember_client_key("claude", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "claude")
+            self._remember_client_key("claude", client, key)
+            log.debug(f"[LLM Keys] Using Claude key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] Claude constructor failed: {e}")
+            return None
 
     def mark_claude_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1225,18 +1338,38 @@ class LLMKeyManager:
     def mark_claude_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("claude", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] Claude key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] Claude failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_glm_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._glm_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._glm_keys:
+                    log.debug(
+                        f"[LLM Keys] No available GLM keys "
+                        f"({len(self._glm_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No GLM keys configured")
+                return None
             key = available[self._glm_index % len(available)]
             self._glm_index += 1
         base_url = os.getenv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4")
-        client = _OpenAICompatClient(key.key, base_url, "glm")
-        self._remember_client_key("glm", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "glm")
+            self._remember_client_key("glm", client, key)
+            log.debug(f"[LLM Keys] Using GLM key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] GLM constructor failed: {e}")
+            return None
 
     def mark_glm_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1246,18 +1379,38 @@ class LLMKeyManager:
     def mark_glm_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("glm", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] GLM key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] GLM failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_deepseek_client(self) -> Optional[Any]:
         with self._lock:
             available = [k for k in self._deepseek_keys if k.is_available]
-            if not available: return None
+            if not available:
+                if self._deepseek_keys:
+                    log.debug(
+                        f"[LLM Keys] No available DeepSeek keys "
+                        f"({len(self._deepseek_keys)} configured, all cooling down/rate-limited/disabled)"
+                    )
+                else:
+                    log.debug("[LLM Keys] No DeepSeek keys configured")
+                return None
             key = available[self._deepseek_index % len(available)]
             self._deepseek_index += 1
         base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-        client = _OpenAICompatClient(key.key, base_url, "deepseek")
-        self._remember_client_key("deepseek", client, key)
-        return client
+        try:
+            client = _OpenAICompatClient(key.key, base_url, "deepseek")
+            self._remember_client_key("deepseek", client, key)
+            log.debug(f"[LLM Keys] Using DeepSeek key #{key.index + 1}")
+            return client
+        except Exception as e:
+            log.debug(f"[LLM Keys] DeepSeek constructor failed: {e}")
+            return None
 
     def mark_deepseek_success(self, client: Optional[Any] = None) -> None:
         with self._lock:
@@ -1267,7 +1420,14 @@ class LLMKeyManager:
     def mark_deepseek_failure(self, error: str = "", rate_limited: bool = False, client: Optional[Any] = None) -> None:
         with self._lock:
             key = self._consume_client_key("deepseek", client)
-            if key is not None: key.mark_failure(error, rate_limited)
+            if key is not None:
+                key.mark_failure(error, rate_limited)
+                log.debug(
+                    f"[LLM Keys] DeepSeek key #{key.index + 1} failed "
+                    f"(rate_limited={rate_limited}, fail_count={key.fail_count}): {error[:120]}"
+                )
+            else:
+                log.debug(f"[LLM Keys] DeepSeek failure reported but no key could be matched to consume (client={client is not None})")
 
     # ── Property Checkers ──
 

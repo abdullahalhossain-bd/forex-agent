@@ -208,10 +208,18 @@ class ConfluenceEngine:
     # ── Factor collectors ───────────────────────────────────────────
 
     def _collect_factors(self, analysis_out: Dict[str, Any]) -> List[FactorScore]:
-        """Extract 7 factor scores from the AnalysisAgent's output dict."""
+        """Extract factor scores from the AnalysisAgent's output dict.
+
+        2026-08-19: added MTF bias factor. Previously only ~1/7 factors
+        typically cleared is_meaningful (session is always NEUTRAL by design;
+        news/intermarket often empty), so TradePermission saw
+        aligned_factors=1 and hard-blocked. MTF is a first-class directional
+        vote when multiple timeframes agree.
+        """
         factors: List[FactorScore] = []
         factors.append(self._smc_factor(analysis_out))
         factors.append(self._liquidity_factor(analysis_out))
+        factors.append(self._mtf_factor(analysis_out))
         factors.append(self._session_factor(analysis_out))
         factors.append(self._currency_strength_factor(analysis_out))
         factors.append(self._intermarket_factor(analysis_out))
@@ -326,14 +334,94 @@ class ConfluenceEngine:
             elif not smc_raw:
                 log.warning("[Confluence] liquidity factor: analysis_out['smc'] empty — NEUTRAL")
 
-        # Session fusion can add liquidity context
-        if isinstance(fusion, dict) and fusion.get("fusion_score", 0) >= 60:
+        # Session-gated SMC confluence can add liquidity context.
+        # Renamed from fusion_score (2026-08): this is the raw SMC
+        # confluence score gated by session rules, not a session+SMC blend —
+        # see session_analyzer.session_smc_fusion().
+        if isinstance(fusion, dict) and fusion.get("smc_confluence_score", 0) >= 60:
             strength = min(100, strength + 10)
 
         return FactorScore(
             name="liquidity", direction=direction, strength=strength,
             confidence=60, weight=20, reasoning=reasoning[:150],
             details={"sweep_type": sweep_type or "NONE"},
+        )
+
+
+    def _mtf_factor(self, a: Dict[str, Any]) -> FactorScore:
+        """Factor: Multi-timeframe bias alignment (1d/4h/1h/15m).
+
+        Counts how many HTF/LTF trends agree. Strong agreement is a real
+        institutional filter; without this factor, full MTF alignment never
+        increased aligned_factors (only technical often survived).
+        """
+        mtf = a.get("mtf_bias") or a.get("mtf") or {}
+        if not isinstance(mtf, dict):
+            mtf = {}
+        trends = mtf.get("trends") or {}
+        if not isinstance(trends, dict):
+            trends = {}
+
+        struct = a.get("mtf_structure_ctx") or a.get("structure_mtf") or {}
+        bias = a.get("bias_ctx") or {}
+
+        bull = 0
+        bear = 0
+        seen = 0
+        for key in ("1d", "D1", "4h", "H4", "1h", "H1", "15m", "M15"):
+            t = str(trends.get(key) or "").lower()
+            if not t or t in ("unknown", "none", ""):
+                continue
+            seen += 1
+            if "bull" in t:
+                bull += 1
+            elif "bear" in t:
+                bear += 1
+
+        collapsed = str(mtf.get("bias") or bias.get("bias") or "").upper()
+        ext = str(struct.get("external_bias") or struct.get("combined_bias") or "").upper()
+        int_b = str(struct.get("internal_bias") or "").upper()
+
+        direction = "NEUTRAL"
+        strength = 15.0
+        reasoning = "MTF neutral / insufficient TF data"
+
+        if seen >= 2:
+            if bull > bear and bull >= max(2, (seen + 1) // 2):
+                direction = "BUY"
+                strength = min(95.0, 40.0 + bull * 15.0)
+                reasoning = f"MTF aligned bullish ({bull}/{seen} TFs)"
+            elif bear > bull and bear >= max(2, (seen + 1) // 2):
+                direction = "SELL"
+                strength = min(95.0, 40.0 + bear * 15.0)
+                reasoning = f"MTF aligned bearish ({bear}/{seen} TFs)"
+            else:
+                reasoning = f"MTF mixed (bull={bull} bear={bear} of {seen})"
+        elif collapsed in ("BUY", "BULLISH"):
+            direction = "BUY"
+            strength = 50.0
+            reasoning = f"MTF collapsed bias BULLISH (conf={mtf.get('confidence', '?')})"
+        elif collapsed in ("SELL", "BEARISH"):
+            direction = "SELL"
+            strength = 50.0
+            reasoning = f"MTF collapsed bias BEARISH (conf={mtf.get('confidence', '?')})"
+        elif ext in ("BULLISH", "BUY") and int_b in ("BULLISH", "BUY", "NEUTRAL", "RANGING", ""):
+            direction = "BUY"
+            strength = 55.0
+            reasoning = f"structure MTF ext={ext} int={int_b or 'n/a'}"
+        elif ext in ("BEARISH", "SELL") and int_b in ("BEARISH", "SELL", "NEUTRAL", "RANGING", ""):
+            direction = "SELL"
+            strength = 55.0
+            reasoning = f"structure MTF ext={ext} int={int_b or 'n/a'}"
+
+        return FactorScore(
+            name="mtf",
+            direction=direction,
+            strength=float(strength),
+            confidence=70.0,
+            weight=15.0,
+            reasoning=reasoning[:150],
+            details={"bull": bull, "bear": bear, "seen": seen, "collapsed": collapsed},
         )
 
     def _session_factor(self, a: Dict[str, Any]) -> FactorScore:
@@ -519,18 +607,23 @@ class ConfluenceEngine:
         rule_conf = float(signal.get("confidence") or 0)
 
         direction = "NEUTRAL"
-        if bias_direction in ("BUY", "BULLISH"):
+        if bias_direction in ("BUY", "BULLISH", "STRONG_BUY"):
             direction = "BUY"
-        elif bias_direction in ("SELL", "BEARISH"):
+        elif bias_direction in ("SELL", "BEARISH", "STRONG_SELL"):
             direction = "SELL"
 
-        strength = rule_conf
+        # Floor strength when direction is clear so low rule_conf (30-40%)
+        # still counts toward aligned_factors (is_meaningful threshold 20).
+        if direction in ("BUY", "SELL"):
+            strength = max(rule_conf, 35.0)
+        else:
+            strength = rule_conf
         reasoning = signal.get("reasons") or f"rule signal {bias_direction}"
         if isinstance(reasoning, list):
             reasoning = "; ".join(str(r) for r in reasoning[:2])
 
         return FactorScore(
-            name="technical", direction=direction, strength=min(100, strength),
+            name="technical", direction=direction, strength=min(100.0, float(strength)),
             confidence=65, weight=10, reasoning=str(reasoning)[:100],
             details={"rule_signal": bias_direction, "rule_confidence": rule_conf},
         )

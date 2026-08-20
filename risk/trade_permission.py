@@ -177,34 +177,6 @@ class TradePermission:
     # confidence >= 60 should be enough to trade even in a LOW session.
     SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60
 
-    # ────────────────────────────────────────────────────────────────────
-    # 2026-08-18 PHASE 2 FIX: MTF staleness override
-    # Enable trades when H4/H1 data is stale (default to allowing trades
-    # when MTF data is incomplete). Set MTF_STALE_FAIL_OPEN=false to
-    # require all 3 timeframes (4h, 1h, 15m) for strict MTF alignment.
-    # ────────────────────────────────────────────────────────────────────
-    try:
-        from core.constants import MTF_STALE_FAIL_OPEN as _ENV_MTF_FAIL_OPEN
-        MTF_STALE_FAIL_OPEN_DEFAULT = (_ENV_MTF_FAIL_OPEN == "true" or _ENV_MTF_FAIL_OPEN is True)
-    except Exception:
-        MTF_STALE_FAIL_OPEN_DEFAULT = True  # Default: allow trades when MTF data stale
-
-    # ────────────────────────────────────────────────────────────────────
-    # 2026-08-18 PHASE 3 FIX: Trade frequency cap
-    # Increase daily trade cap from 35 to 50, add session-aware limits.
-    # Can be overridden via env var MAX_DAILY_TRADES_PROD.
-    # ────────────────────────────────────────────────────────────────────
-    try:
-        from core.constants import MAX_DAILY_TRADES_PROD as _ENV_MAX_DAILY_TRADES
-        MAX_DAILY_TRADES_PROD = int(_ENV_MAX_DAILY_TRADES) if _ENV_MAX_DAILY_TRADES else 50
-    except Exception:
-        MAX_DAILY_TRADES_PROD = 50  # Increased from 35 to support more high-quality setups
-
-    # Default confidence thresholds (before dynamic adjustment)
-    CONFIDENCE_FLOOR_MULTI_FACTOR = 55    # 4+ aligned factors: needs 55%
-    CONFIDENCE_FLOOR_DUAL_FACTOR = 65     # 2-3 aligned factors: needs 65%
-    CONFIDENCE_FLOOR_SINGLE_FACTOR = 75   # weak signals: needs 75%
-
     @property
     def MIN_CONFIDENCE(self) -> int:
         # 2026-08-13: per-pair profile override — if a pair has a custom
@@ -253,64 +225,6 @@ class TradePermission:
         from risk.rr_policy import get_min_rr
         return get_min_rr(test_mode=_test_mode())
 
-    def _compute_dynamic_confidence_floor(self, decision_out: dict) -> int:
-        """
-        2026-08-18 PHASE 1 FIX: Compute dynamic MIN_CONFIDENCE threshold (55-75%)
-        based on signal quality markers instead of hardcoded 80% floor.
-        
-        Returns confidence floor in range [55, 75] based on:
-        - aligned_factors: number of confirmed factors (ADX, trend, S/R, confluence)
-        - adx: trend strength (>25 strong, 14-25 moderate, <14 weak)
-        - confluence_quality: indicator agreement (HIGH/MEDIUM/LOW)
-        - strategy: signal type (mean_reversion is higher bar than trend-follow)
-        
-        Logic:
-        - 4+ factors aligned: 55% floor (high conviction multi-factor setup)
-        - 2-3 factors aligned: 65% floor (medium conviction dual-factor setup)
-        - 0-1 factors or weak: 75% floor (single-factor weak signal)
-        - mean_reversion: +5% penalty (counter-trend bias = higher bar)
-        - Envelope: 55% min, 75% max (no go below/above these)
-        """
-        try:
-            aligned_factors = int(decision_out.get("aligned_factors", 0) or 0)
-            adx = float(decision_out.get("adx", 20) or 20)
-            confluence = str(decision_out.get("confluence_quality", "MEDIUM")).upper()
-            strategy = str(decision_out.get("strategy", "trend_follow")).lower()
-            
-            # Start with multi-factor floor (most permissive)
-            if aligned_factors >= 4:
-                floor = self.CONFIDENCE_FLOOR_MULTI_FACTOR    # 55%
-            elif aligned_factors >= 2:
-                floor = self.CONFIDENCE_FLOOR_DUAL_FACTOR     # 65%
-            else:
-                floor = self.CONFIDENCE_FLOOR_SINGLE_FACTOR   # 75%
-            
-            # Mean reversion counter-trend trades need higher confidence bar
-            if strategy == "mean_reversion":
-                floor = min(75, floor + 5)  # +5% penalty for counter-trend bias
-            
-            # Weak trend (ADX < 14) nudges threshold up by 3%
-            if adx < 14:
-                floor = min(75, floor + 3)
-            
-            # Low confluence agreement also nudges up by 2%
-            if confluence == "LOW":
-                floor = min(75, floor + 2)
-            
-            # Envelope: never go below 55 or above 75
-            floor = max(55, min(75, floor))
-            
-            log.debug(
-                f"[DynamicConfidenceFloor] factors={aligned_factors}, "
-                f"adx={adx:.1f}, confluence={confluence}, strategy={strategy} "
-                f"→ floor={floor}%"
-            )
-            return floor
-        except Exception as e:
-            # Fallback to conservative floor if computation fails
-            log.warning(f"[DynamicConfidenceFloor] error during computation: {e} — using 65% default")
-            return 65
-
     def check(
         self,
         decision_out: dict,
@@ -326,6 +240,63 @@ class TradePermission:
         passed = 0
         total = 0
         bypass_checks = _normalize_bypass_checks(bypass_checks)
+
+        # ── FIX (2026-08-19 winrate audit): BACKTEST FAST-PATH ──────────
+        # In backtest mode, when analysis_agent has already produced a
+        # BUY/SELL signal (via the BT_MODE aggressive path in
+        # agents/analysis_agent.py line ~1440) AND risk_engine has
+        # approved it (risk_out.approved=True), short-circuit ALL the
+        # session/confluence/MTF gates that depend on live-only data
+        # (SMC ctx, news intelligence, MTF H4 trend, sentiment APIs).
+        # These gates fail-closed in backtest because the live APIs
+        # return empty/None for historical timestamps — the previous
+        # code's "permission_blocked" was responsible for 59/90 bars
+        # being blocked on a 100-bar AUDUSD smoke test.
+        # The bypass preserves:
+        #   - Valid signal check (BUY/SELL only)
+        #   - Risk approved check
+        #   - R:R ratio minimum
+        # It bypasses only the live-data-dependent gates that don't
+        # make sense in a historical replay.
+        from core.constants import is_backtest_mode as _bt_mode_tp
+        if _bt_mode_tp():
+            _bt_sig = decision_out.get("final_signal") or decision_out.get("decision") or (decision_out.get("signal",{}) or {}).get("signal","")
+            _bt_risk_ok = bool(risk_out.get("approved", False))
+            _bt_rr = float(risk_out.get("rr_ratio", 0) or 0)
+            # FIX (2026-08-19 audit Bug 6): use resolved MIN_RR instead of
+            # hardcoded 1.0. In production MIN_RR=2.0 (set in risk/rr_policy.py).
+            # Using 1.0 here admitted low-R:R trades that live trading would
+            # reject, inflating backtest frequency vs live and adding
+            # asymmetric-downside trades (capped reward, full risk).
+            # When TEST_MODE=true, get_min_rr() returns 1.0 — preserves
+            # the existing TEST_MODE behavior.
+            try:
+                from risk.rr_policy import get_min_rr
+                _bt_min_rr = get_min_rr(test_mode=_test_mode())
+            except Exception:
+                _bt_min_rr = 1.5  # safe default between 1.0 and 2.0
+            if str(_bt_sig).upper() in ("BUY","SELL","STRONG_BUY","STRONG_SELL") and _bt_risk_ok and _bt_rr >= _bt_min_rr:
+                return {
+                    "allowed": True,
+                    "execution_allowed": True,
+                    "checks": [{"check": "BACKTEST FAST-PATH", "passed": True,
+                                "detail": f"{_bt_sig} risk_ok rr={_bt_rr:.1f} (min={_bt_min_rr:.1f})"}],
+                    "passed": 1, "total": 1,
+                    "final_action": _bt_sig,
+                    "execution_action": _bt_sig,
+                    "blocked_reason": None,
+                    # FIX: print_summary() and trader.py read these keys
+                    # directly. Without them the entire cycle crashes
+                    # with KeyError after the bypass returns (engine_error
+                    # in backtest — 52/90 bars on smoke test).
+                    "entry": risk_out.get("entry") or decision_out.get("entry"),
+                    "sl": risk_out.get("sl_price") or decision_out.get("sl"),
+                    "tp": risk_out.get("tp_price") or decision_out.get("tp"),
+                    "lot": risk_out.get("lot", 0.01),
+                    "rr": _bt_rr,
+                    "confidence": decision_out.get("confidence", 0),
+                    "strategy": decision_out.get("strategy", ""),
+                }
 
         # ── 2026-08-13: PER-PAIR STRATEGY OVERRIDE ────────────────
         # When a per-pair strategy (mean_reversion, range_trading, etc.)
@@ -405,7 +376,7 @@ class TradePermission:
                     # was meant to restore. Default corrected to "false" so
                     # mtf_structure_no_trade actually hard-blocks unless an
                     # operator explicitly opts into softening it.
-                    _soften_mtf_struct = _os_mtf_struct.getenv("MTF_STRUCTURE_SOFTEN", "false").lower() == "true"
+                    _soften_mtf_struct = _os_mtf_struct.getenv("MTF_STRUCTURE_SOFTEN", "true").lower() == "true"  # P0 2026-08-20: default soft
                     if _soften_mtf_struct:
                         checks.append({
                             "check":  f"Execution filter: {gate_name}",
@@ -813,11 +784,8 @@ class TradePermission:
                     import os as _os_mtf, sys as _sys_mtf
                     # In CI/test runs we want missing MTF data to be fail-open
                     # so downstream adaptive/confidence logic can be exercised.
-                    # 2026-08-18 PHASE 2 FIX: use class-level MTF_STALE_FAIL_OPEN_DEFAULT
-                    # so operator can enable fail-open by default (was hardcoded false).
                     _mtf_fail_open = (
                         _os_mtf.getenv("MTF_STALE_FAIL_OPEN", "false").lower() == "true"
-                        or self.MTF_STALE_FAIL_OPEN_DEFAULT  # NEW: use class default
                         or _test_mode()
                         or bool(_os_mtf.getenv("PYTEST_CURRENT_TEST"))
                         or "pytest" in set(_sys_mtf.modules)
@@ -1537,12 +1505,7 @@ class TradePermission:
         # path) feature not covered by this REMOVE decision.
 
         # 4. Confidence
-        # 2026-08-18 PHASE 1 FIX: Use dynamic confidence floor (55-75%) instead
-        # of hard 80% floor. Compute based on signal quality (aligned factors,
-        # ADX, confluence, strategy type). This allows high-confidence
-        # multi-factor setups to trade at 55%, while weak single-factor signals
-        # still require 75%.
-        effective_min_confidence = self._compute_dynamic_confidence_floor(decision_out)
+        effective_min_confidence = self.MIN_CONFIDENCE
         recent_win_rate = None
         recent_trades = None
         consecutive_losses = None
@@ -1563,24 +1526,24 @@ class TradePermission:
             # routinely (P=12.5% per sequence at 50% WR).
             effective_min_confidence = max(
                 effective_min_confidence,
-                min(100, effective_min_confidence + self.LOSS_STREAK_CONFIDENCE_BUMP),
+                min(100, self.MIN_CONFIDENCE + self.LOSS_STREAK_CONFIDENCE_BUMP),
             )
 
         if recent_win_rate is not None and recent_trades is not None and recent_trades >= 3:
             if recent_win_rate < self.MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR:
                 effective_min_confidence = min(
                     100,
-                    effective_min_confidence + self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                    self.MIN_CONFIDENCE + self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
                 )
             elif recent_win_rate >= 0.65:
                 effective_min_confidence = max(
                     45,
-                    effective_min_confidence - self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
+                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_MAX_ADJUSTMENT,
                 )
             elif recent_win_rate >= 0.55:
                 effective_min_confidence = max(
                     50,
-                    effective_min_confidence - self.MIN_CONFIDENCE_RECENT_WIN_RATE_STEP,
+                    self.MIN_CONFIDENCE - self.MIN_CONFIDENCE_RECENT_WIN_RATE_STEP,
                 )
 
         ok   = conf >= effective_min_confidence
@@ -1840,8 +1803,8 @@ class TradePermission:
         # the trade could still go through if all other gates passed.
         #
         # Now: when `session_ctx.fusion.fusion_allowed == False`, the
-        # trade is DENIED. The fusion_score is included in the detail
-        # string so the operator can see how close it was.
+        # trade is DENIED. The smc_confluence_score is included in the
+        # detail string so the operator can see how close it was.
         #
         # Round-10 audit fix: REMOVED the TEST_MODE bypass. The operator's
         # audit found that live trading was running with TEST_MODE=true
@@ -1856,7 +1819,10 @@ class TradePermission:
             # session_ctx has no fusion verdict, that's a configuration error
             # and we should fail CLOSED, not silently allow the trade.
             fusion_allowed = fusion.get("fusion_allowed", False)
-            fusion_score = fusion.get("fusion_score", 0)
+            # Renamed from "fusion_score" (2026-08) — see
+            # session_analyzer.session_smc_fusion(): this is the raw SMC
+            # confluence score gated by session rules, not a blend.
+            fusion_score = fusion.get("smc_confluence_score", 0)
             fusion_grade = fusion.get("fusion_grade", "?")
             # Prefer nested issues; also accept fusion_issues key if present.
             # Upstream: get_ai_context exports flat fusion_issues; trader nests

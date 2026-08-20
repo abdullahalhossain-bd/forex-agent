@@ -461,6 +461,33 @@ def run_unified_backtest(
         lot = risk_out.get("lot") or 0.01
         confidence = dec_out.get("confidence", 0)
 
+        # FIX (2026-08-19 winrate audit): ATR-based SL/TP fallback.
+        # When RiskEngine doesn't produce SL/TP (placeholder risk, missing
+        # ind_ctx fields, etc.), the old code immediately rejected the
+        # trade as "engine_error". With max_open_trades raised and rule
+        # signals flowing through in BT mode, this was killing ~15% of
+        # otherwise-valid signals. Now compute ATR-based levels:
+        #   SL = 1.5 × ATR (standard swing-trader multiplier)
+        #   TP = 3.0 × ATR (R:R = 1:2 — institutional minimum)
+        if (not sl or not tp) and action in ("BUY", "SELL"):
+            try:
+                _atr = float(market_out.get("ind_ctx", {}).get("atr", 0) or 0)
+                if _atr > 0:
+                    if action == "BUY":
+                        if not sl:
+                            sl = entry - (_atr * 1.5)
+                        if not tp:
+                            tp = entry + (_atr * 3.0)
+                    else:  # SELL
+                        if not sl:
+                            sl = entry + (_atr * 1.5)
+                        if not tp:
+                            tp = entry - (_atr * 3.0)
+                    if not lot or lot <= 0:
+                        lot = 0.01
+            except Exception:
+                pass
+
         if not sl or not tp:
             rejection_stats["engine_error"] += 1
             equity_curve.append(broker.get_balance())

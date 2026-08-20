@@ -1,4 +1,0 @@
-trade_id,bar_index,chart_time,symbol,timeframe,direction,entry_price,exit_price,sl_price,tp_price,lot_size,pnl_pips,pnl_usd,exit_reason,hold_bars,hold_time_str,commission_usd,slippage_pips,confidence,strategy,rejection_reason,regime,session,trend,rsi,adx,atr,market_structure,structure_bias
-23,72,2026-07-27 17:00:00,GBPUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,60.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
-34,83,2026-07-28 04:00:00,GBPUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,61.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,
-44,93,2026-07-28 14:00:00,GBPUSD,H1,SELL,0.0,0.0,0.0,0.0,0.0,0.0,0.0,,0,,0.0,0.0,74.0,,Permission: permission_blocked,,,,0.0,0.0,0.0,,

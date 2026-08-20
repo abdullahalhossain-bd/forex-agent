@@ -56,22 +56,72 @@ class MarketDNAService:
         self._cluster_stats: dict = {}  # cluster_id → ClusterStats dict
         self._model_id: Optional[str] = None
         self._loaded = False
+        # BUGFIX (2026-08-19 audit): previously `self._loaded = True` was
+        # set unconditionally at the top of _try_load(), so if the DB
+        # tables didn't exist yet (setup_market_dna.py never run), the
+        # service latched into "give up forever" for the rest of the
+        # process lifetime. Every predict_for_bar() call after that first
+        # failure silently returned state=UNKNOWN -> position_multiplier
+        # =0.25, i.e. EVERY trade for the rest of the run was silently
+        # sized at 25% with no further indication why. Now: a schema-
+        # missing failure is tracked separately and retried periodically
+        # (see _SCHEMA_RETRY_INTERVAL_SEC) so the service self-heals once
+        # an operator runs setup_market_dna.py, without requiring a
+        # process restart. Real (non-schema) errors still latch — those
+        # indicate a genuine problem worth investigating, not a "not set
+        # up yet" state.
+        self._schema_missing = False
+        self._last_schema_retry: float = 0.0
+
+    _SCHEMA_RETRY_INTERVAL_SEC = 900  # re-check every 15 min once tables appear
 
     def _try_load(self) -> bool:
         """Try to load the active model from DB. Returns True if loaded."""
         if self._loaded:
             return self._detector is not None
-        self._loaded = True
+
+        if self._schema_missing:
+            # We've already confirmed the market_dna tables don't exist.
+            # Don't hammer sqlite with a query every single bar — but do
+            # periodically retry in case setup_market_dna.py was run
+            # since our last check, so the live process can pick up the
+            # model without a restart.
+            import time as _time
+            if _time.monotonic() - self._last_schema_retry < self._SCHEMA_RETRY_INTERVAL_SEC:
+                return False
+            self._last_schema_retry = _time.monotonic()
 
         try:
             # Find the ACTIVE model in DB
             with sqlite3.connect(str(_get_db_path())) as conn:
+                # Explicitly check table existence first so we can tell
+                # "not set up yet" (expected, retry later) apart from a
+                # genuine DB error (permission, corruption — latch and
+                # stop retrying, that needs a human to look at it).
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='market_dna_models'"
+                ).fetchone()
+                if not exists:
+                    if not self._schema_missing:
+                        log.warning(
+                            "[MarketDNA Service] 'market_dna_models' table does not "
+                            "exist yet — Market DNA has never been set up on this DB. "
+                            "Run setup_market_dna.py to enable regime-aware position "
+                            "sizing. Until then, EVERY trade will be sized at 25% "
+                            "(position_multiplier=0.25) via the UNKNOWN-state fallback "
+                            f"— will re-check every {self._SCHEMA_RETRY_INTERVAL_SEC}s."
+                        )
+                    self._schema_missing = True
+                    return False
+
                 row = conn.execute(
                     "SELECT model_id, model_path FROM market_dna_models "
                     "WHERE status='ACTIVE' ORDER BY trained_at DESC LIMIT 1"
                 ).fetchone()
+            self._schema_missing = False  # schema exists — stop the periodic-retry path
             if not row:
                 log.info("[MarketDNA Service] No ACTIVE model in DB — returning UNKNOWN until trained")
+                self._loaded = True
                 return False
 
             model_id, model_path = row

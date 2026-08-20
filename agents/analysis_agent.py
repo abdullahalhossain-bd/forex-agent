@@ -256,13 +256,28 @@ class AnalysisAgent:
         # timestamp (last index of the OHLC frame built for this bar)
         # when available; falls back to live "now" otherwise, so
         # live/demo/real behavior is unchanged.
+        #
+        # 2026-08-19 hotfix: the block below was unconditionally using the
+        # bar's OPEN timestamp (df.index[-1]) as `_bar_dt`, INCLUDING in
+        # live trading — there was no is_backtest_mode() guard. That meant
+        # every live session/dead-zone/transition decision (and downstream
+        # TradePermission gating) was silently based on the last CLOSED
+        # candle's open time instead of actual wall-clock "now", off by
+        # 0-15/30+ min depending on timeframe. The original intent (per
+        # comment above) was backtest-parity ONLY. Gate it explicitly so
+        # live mode always gets `_bar_dt = None` → SessionAnalyzer falls
+        # back to real datetime.now(timezone.utc), matching the pattern
+        # already used elsewhere in this file (see is_backtest_mode()
+        # usage around line ~963).
         _bar_dt = None
-        try:
-            _df = market_output.get("df")
-            if _df is not None and len(_df) > 0:
-                _bar_dt = _df.index[-1].to_pydatetime()
-        except Exception:
-            _bar_dt = None
+        from core.constants import is_backtest_mode as _is_bt_for_session
+        if _is_bt_for_session():
+            try:
+                _df = market_output.get("df")
+                if _df is not None and len(_df) > 0:
+                    _bar_dt = _df.index[-1].to_pydatetime()
+            except Exception:
+                _bar_dt = None
 
         session_result = self.session_analyzer.analyze(
             pair           = symbol,
@@ -901,11 +916,13 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] NewsAPI provider error: {e}")
 
         # ── Day 63: Re-run Session with SMC context ───────────
-        # 2026-08-13 fix: pass dt=_bar_dt (computed at line 219-225 from the
-        # historical bar's timestamp). Without this, SessionAnalyzer defaults
-        # to datetime.now(timezone.utc) — applying wall-clock session tags
-        # to historical bars in backtest (e.g. a 14:00 GMT bar replayed at
-        # 03:00 GMT machine-time gets tagged "DEAD_ZONE" → blocked).
+        # 2026-08-13 fix: pass dt=_bar_dt (computed above, backtest-only as
+        # of the 2026-08-19 hotfix). In backtest this is the historical
+        # bar's own timestamp, so SessionAnalyzer doesn't misapply
+        # wall-clock session tags to old bars (e.g. a 14:00 GMT bar
+        # replayed at 03:00 GMT machine-time getting tagged "DEAD_ZONE").
+        # In live mode `_bar_dt` is None → SessionAnalyzer uses real
+        # datetime.now(timezone.utc), as it should.
         session_result = self.session_analyzer.analyze(
             pair        = symbol,
             smc_ctx     = smc_ctx,
@@ -1414,6 +1431,21 @@ class AnalysisAgent:
         except Exception:
             pass
 
+        # FIX (2026-08-19 winrate audit): in BACKTEST mode, also use the
+        # AGGRESSIVE rule-signal path — the same path TEST_MODE uses.
+        # Without this, backtest (TEST_MODE=false) went through the full
+        # 12-gate pipeline that requires MasterAnalyst LLM (unavailable
+        # in backtest), Confluence Engine (always AVOID because no SMC
+        # ctx in backtest), and Ensemble (disabled). Net result: ~70% of
+        # bars were downgraded to WAIT/NO TRADE — wasted data.
+        # Now in backtest, rule engine BUY/SELL with conf>=30 (raised
+        # from TEST_MODE's 10 — backtest should still need SOME quality)
+        # flows through directly, and downstream DecisionAgent's BT_MODE
+        # bypass (already exists at line ~565) consumes it.
+        from core.constants import is_backtest_mode as _bt_mode_check
+        _bt_mode = _bt_mode_check()
+        _bt_aggressive = _bt_mode  # backtest = aggressive rule-signal path
+
         rule_sig_raw = signal_result.get("signal", "WAIT")
         rule_conf = signal_result.get("confidence", 0)
         rule_sig_normalized = rule_sig_raw
@@ -1422,13 +1454,20 @@ class AnalysisAgent:
         elif "STRONG_SELL" in str(rule_sig_raw):
             rule_sig_normalized = "SELL"
 
-        if _test_mode and rule_sig_normalized in ("BUY", "SELL") and rule_conf >= 10:
+        if (_test_mode or _bt_aggressive) and rule_sig_normalized in ("BUY", "SELL") and rule_conf >= (10 if _test_mode else 30):
             final_signal = rule_sig_normalized
-            log.info(
-                f"[AnalysisAgent] -> {final_signal} "
-                f"(TEST_MODE AGGRESSIVE: Rule={rule_sig_raw} {rule_conf}% — "
-                f"BYPASSING all gates for MT5 verification)"
-            )
+            if _bt_mode:
+                log.info(
+                    f"[AnalysisAgent] -> {final_signal} "
+                    f"(BACKTEST MODE: Rule={rule_sig_raw} {rule_conf}% — "
+                    f"bypassing consensus gates for honest signal replay)"
+                )
+            else:
+                log.info(
+                    f"[AnalysisAgent] -> {final_signal} "
+                    f"(TEST_MODE AGGRESSIVE: Rule={rule_sig_raw} {rule_conf}% — "
+                    f"BYPASSING all gates for MT5 verification)"
+                )
 
             # ── /DEBUG ──────────────────────────────────────────────
 
@@ -1546,16 +1585,23 @@ class AnalysisAgent:
             _fusion_issues_str = "; ".join(
                 (session_ctx.get("fusion_issues") or [])[:2]
             ) or "no detail"
+            # Renamed from "fusion_score" (2026-08) — see
+            # session_analyzer.get_ai_context(): raw SMC confluence score
+            # gated by session rules, not a session+SMC blend. The
+            # execution_filters["fusion"]["fusion_score"] output key below
+            # is this module's own field name and is left as-is — rename
+            # it too if any downstream consumer of execution_filters reads
+            # session_ctx's old key name specifically.
             execution_filters["fusion"] = {
                 "blocked": True,
                 "reason": (
                     f"Fusion gate: SMC fusion rejected for "
                     f"{session_ctx.get('current_session', '?')} "
-                    f"(score={session_ctx.get('fusion_score', 0)}/100, "
+                    f"(score={session_ctx.get('smc_confluence_score', 0)}/100, "
                     f"grade={session_ctx.get('fusion_grade', 'N/A')}) — "
                     f"{_fusion_issues_str}"
                 ),
-                "fusion_score": session_ctx.get("fusion_score", 0),
+                "fusion_score": session_ctx.get("smc_confluence_score", 0),
                 "fusion_grade": session_ctx.get("fusion_grade"),
                 "fusion_issues": session_ctx.get("fusion_issues") or [],
             }
@@ -1831,6 +1877,15 @@ class AnalysisAgent:
 
             # Build a unified analysis dict for the confluence engine
             unified_analysis = {
+                # FIX (2026-08-19): confluence_engine._smc_factor() /
+                # _liquidity_factor() read a.get("smc") — the RAW SMCEngine
+                # result (signal/confluence_score/grade/direction/h4/m15),
+                # NOT the prefixed smc_ctx summary. "smc" was never included
+                # here, so a.get("smc") always fell back to {} and every
+                # cycle logged "[Confluence] liquidity factor:
+                # analysis_out['smc'] empty — NEUTRAL" even though smc_result
+                # (populated at line ~749) was valid and non-empty.
+                "smc": smc_result,
                 "smc_ctx": smc_ctx,
                 "session_ctx": session_ctx,
                 "intermarket_ctx": intermarket_ctx,
@@ -1839,6 +1894,11 @@ class AnalysisAgent:
                 "news_intelligence": news_intel_ctx,
                 "signal": signal_result,
                 "bias_ctx": bias_ctx,
+                # 2026-08-19: feed MTF + structure into ConfluenceEngine so
+                # aligned_factors can count multi-TF agreement (was missing →
+                # live logs showed 1 factor even when all TFs were bullish).
+                "mtf_bias": mtf_bias if isinstance(mtf_bias, dict) else {"bias": mtf_bias},
+                "mtf_structure_ctx": mtf_structure_ctx if isinstance(mtf_structure_ctx, dict) else {},
             }
 
             # ── /DEBUG ──────────────────────────────────────────────────────
@@ -2236,9 +2296,15 @@ class AnalysisAgent:
                         f"BYPASSED (TEST_MODE=true), keeping {final_signal}"
                     )
                 elif ensemble_conf < 40:
-                    _apply_confidence_penalty(signal_result, 10, "rl_hold", "analysis")
+                    # 2026-08-19 FIX: rl_hold penalty 10 → 3. RL HOLD is
+                    # advisory caution, not a hard quality failure. -10 was
+                    # crushing final confidence into the ~30% range even when
+                    # tech/LLM were strong (64/74), causing LiveRiskManager
+                    # to block at the 50% floor. Soft -3 keeps the warning
+                    # without killing otherwise valid setups.
+                    _apply_confidence_penalty(signal_result, 3, "rl_hold", "analysis")
                     log.warning(
-                        f"[AnalysisAgent] Day 71 RL penalty: Ensemble said {final_signal} "
+                        f"[AnalysisAgent] Day 71 RL penalty (-3): Ensemble said {final_signal} "
                         f"but conf={ensemble_conf:.0f}% < 40% — {rl_action.reason[:80]}"
                     )
                 else:
@@ -2636,19 +2702,23 @@ class AnalysisAgent:
             if isinstance(mtf_structure_ctx, dict):
                 _mtf_perm = mtf_structure_ctx.get("mtf_trade_permission")
                 _mtf_conflict = mtf_structure_ctx.get("mtf_conflict", False)
-                if _mtf_perm == "NO_TRADE" and df_h4 is not None:
+                # P0 (2026-08-20): only hard-block on true HTF/LTF conflict.
+                # NO_TRADE without conflict (or WAIT_CONFIRM) must not kill
+                # risk-approved trades. Soften via env still honored downstream.
+                import os as _os_mtf_af
+                _soften = _os_mtf_af.getenv("MTF_STRUCTURE_SOFTEN", "true").lower() in (
+                    "1", "true", "yes",
+                )
+                if (
+                    _mtf_perm == "NO_TRADE"
+                    and df_h4 is not None
+                    and _mtf_conflict
+                    and not _soften
+                ):
                     execution_filters["mtf_structure_no_trade"] = {
                         "blocked": True,
                         "reason": (
-                            f"MTF structure: {_mtf_perm}"
-                            + (" (HTF/LTF conflict)" if _mtf_conflict else "")
-                            # BUG FIX: mtf_structure_ctx is the get_ai_context()
-                            # output, whose key is "mtf_combined_bias" — not
-                            # "combined_bias" (that key only exists on the raw
-                            # analyze() dict). The old lookup always missed and
-                            # fell back to "?", making every single block look
-                            # like an unresolved/data-missing bias regardless
-                            # of what the engine actually computed.
+                            f"MTF structure: {_mtf_perm} (HTF/LTF conflict)"
                             + f" — bias={mtf_structure_ctx.get('mtf_combined_bias', '?')}"
                         ),
                     }
@@ -2656,6 +2726,19 @@ class AnalysisAgent:
                         f"[AnalysisAgent] Execution filter: MTF structure NO_TRADE "
                         f"on {symbol} — analysis verdict {final_signal} PRESERVED, "
                         f"will be hard-blocked by TradePermission"
+                    )
+                elif _mtf_perm == "NO_TRADE" and df_h4 is not None:
+                    execution_filters["mtf_structure_no_trade"] = {
+                        "blocked": False,
+                        "reason": (
+                            f"MTF structure NO_TRADE advisory "
+                            f"(conflict={_mtf_conflict}, soften={_soften}) "
+                            f"— bias={mtf_structure_ctx.get('mtf_combined_bias', '?')}"
+                        ),
+                    }
+                    log.info(
+                        f"[AnalysisAgent] MTF structure NO_TRADE on {symbol} treated as "
+                        f"advisory (conflict={_mtf_conflict}, soften={_soften}) — not hard-blocking"
                     )
                 elif _mtf_perm == "NO_TRADE":
                     log.debug(

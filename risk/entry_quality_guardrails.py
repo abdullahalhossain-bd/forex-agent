@@ -53,10 +53,14 @@ log = logging.getLogger(__name__)
 # audit's own §19 ablation plan (baseline vs hard-block: trade count,
 # win rate, expectancy, and — critically — how many newly-blocked trades
 # would actually have won) before being locked on unconditionally.
-# Set SL_SWING_ANCHOR_HARD_BLOCK=false to restore the old penalty-only
-# behavior.
+# 2026-08-19 FIX: default flipped true → false.
+# RiskEngine places SL via ATR×mult (typically 1.5×ATR). Requiring every
+# stop to sit within 0.5×ATR of a swing made almost all ATR-based stops
+# hard-block, killing valid setups without improving expectancy.
+# Unanchored SLs still receive a soft confidence penalty (_PENALTY_MAP).
+# Set SL_SWING_ANCHOR_HARD_BLOCK=true to re-enable strict hard-block mode.
 SL_SWING_ANCHOR_HARD_BLOCK = os.getenv(
-    "SL_SWING_ANCHOR_HARD_BLOCK", "true"
+    "SL_SWING_ANCHOR_HARD_BLOCK", "false"
 ).strip().lower() in ("1", "true", "yes")
 
 
@@ -94,7 +98,13 @@ DEFAULT_PULLBACK_MIN_PCT    = 0.10    # OR ≥10% retracement of the move
 # unanchored stop to newly fail, so it's a strictly safer direction to
 # move this constant.
 DEFAULT_SL_SWING_LOOKBACK   = 50      # check last 50 bars for swing low/high
-DEFAULT_SL_PROXIMITY_ATR    = 0.5     # SL within 0.5×ATR of a swing = "anchored"
+# 2026-08-19 FIX: 0.5 → 1.5. RiskEngine SL is typically 1.5×ATR from entry.
+# A stop placed just beyond a swing (structure + small ATR buffer) is still
+# a valid structural stop; 0.5×ATR was so tight it only accepted stops that
+# sat almost exactly on the swing wick — unrealistic for ATR-based sizing.
+# Quality is preserved: stops farther than 1.5×ATR from any swing still
+# fail the check and take a soft penalty.
+DEFAULT_SL_PROXIMITY_ATR    = 1.5     # SL within 1.5×ATR of a swing = "anchored"
 
 # Flag 3 — TP structure validation
 DEFAULT_TP_STRUCTURE_LOOKBACK = 100   # check last 100 bars for prior tests
@@ -1832,7 +1842,8 @@ def run_all_entry_quality_checks(
         # everything. New values are gentler: max ~15% penalty for worst case.
         "chasing_filter":             3,   # was 8 — momentum exhaustion
         "indecision_candles":         2,   # was 5 — small body candles
-        "sl_swing_anchor":            1,   # was 3 — WARNING: not structurally anchored
+        "sl_swing_anchor":            2,   # 2026-08-19: was 1; soft penalty when >1.5×ATR from any swing (quality signal, not hard kill)
+
         "tp_structure_validation":    1,   # was 3 — WARNING: unconfirmed territory
         "indicator_confluence":       2,   # was 5 — low momentum / weak breakout
         "round_number_tp":            1,   # was 2 — minor
@@ -1860,21 +1871,15 @@ def run_all_entry_quality_checks(
     }
 
     # Extreme hard-blocks: only these keep should_execute=False
+    # - averaging into losers / opposite stacking (portfolio safety)
+    # - SL on WRONG SIDE of entry (caught via reason keyword)
+    # 2026-08-19 FIX: removed "sl_swing_anchor" from severity-respected
+    # flags. Unanchored ATR stops are a soft quality signal (penalty),
+    # not a hard kill. Truly invalid SL (wrong side of entry) still
+    # hard-blocks via _EXTREME_REASON_KW = {"WRONG SIDE"}.
     _EXTREME_FLAGS = {"averaging_into_losers", "opposite_direction_stacking"}
     _EXTREME_REASON_KW = {"WRONG SIDE"}
-
-    # P0 audit fix (2026-08-14): sl_swing_anchor's "not anchored" branch
-    # can now self-report severity="BLOCK" (see SL_SWING_ANCHOR_HARD_BLOCK
-    # above). Scoped narrowly to this one flag_name — deliberately NOT a
-    # blanket "respect every check's severity field" change, because
-    # several other checks (chasing_filter, tp_structure_validation,
-    # indecision_candles, rejection_wick_at_entry, fresh_high_rejection,
-    # exhaustion_filter) also internally set severity="BLOCK" in some
-    # branches, and the 2026-08-13 soft-scoring redesign (see comment
-    # below) intentionally downgrades those to penalties. Widening this
-    # to all of them is a separate, larger decision — not part of the
-    # audit's §18 Fix #2 scope — and should not happen silently here.
-    _SEVERITY_RESPECTED_FLAGS = {"sl_swing_anchor"}
+    _SEVERITY_RESPECTED_FLAGS = set()  # was {"sl_swing_anchor"} — no longer hard-blocks on unanchored
 
     passed_count = sum(1 for r in results if r.passed)
     confidence_penalty = 0

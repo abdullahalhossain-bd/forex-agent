@@ -1088,11 +1088,20 @@ class OrderManager:
         if info_check and sl_n and tp_n:
             tick = mt5.symbol_info_tick(broker_symbol)
             if tick is not None:
-                ref_price = tick.ask if direction == "BUY" else tick.bid
+                # FIX (2026-08-19 audit Bug 7): for SELL, MT5 interprets
+                # SL/TP as ASK levels (SL triggers when ASK reaches it).
+                # The old code used tick.bid for SELL, which let SL sit
+                # between BID and ASK (inside the spread) — MT5 then
+                # rejected with retcode=10016 (TRADE_RETCODE_INVALID_STOPS),
+                # classified as permanent/non-retryable. Use tick.ask for
+                # both BUY and SELL so the chained comparison correctly
+                # requires TP below current ASK and SL above current ASK
+                # for SELL (or SL below ASK and TP above ASK for BUY).
+                ref_price = tick.ask  # use ASK for both directions
                 if direction == "BUY" and not (sl_n < ref_price < tp_n):
-                    return {"ok": False, "reason": f"Invalid SL/TP for BUY: SL={sl_n} price={ref_price} TP={tp_n}"}
+                    return {"ok": False, "reason": f"Invalid SL/TP for BUY: SL={sl_n} ask={ref_price} TP={tp_n}"}
                 if direction == "SELL" and not (tp_n < ref_price < sl_n):
-                    return {"ok": False, "reason": f"Invalid SL/TP for SELL: TP={tp_n} price={ref_price} SL={sl_n}"}
+                    return {"ok": False, "reason": f"Invalid SL/TP for SELL: TP={tp_n} ask={ref_price} SL={sl_n}"}
 
         return {
             "ok": True,

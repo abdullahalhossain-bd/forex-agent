@@ -40,6 +40,17 @@ class SignalEngine:
         adx_min:          float = 18.0,
         pullback_atr_mult: float = 1.0,
         spread_max_mult:  float = 2.0,
+        # FIX (2026-08-19): accept `timestamp` kwarg for parity with
+        # analysis/signal_engine.py. analysis_agent.py imports THIS
+        # strategy/signal_engine.py and passes timestamp=_bar_dt. The old
+        # signature rejected it with TypeError, which was caught by the
+        # unified_engine's try/except as "engine_error" — killing the
+        # entire cycle on every single bar. Now silently accepted for
+        # signature compatibility; the session-aware confidence floor is
+        # already disabled in backtest mode via is_backtest_mode() check
+        # in analysis/signal_engine.py's copy, and this strategy copy is
+        # the one actually imported (see agents/analysis_agent.py:63).
+        timestamp:        object = None,
     ) -> dict:
         """
         Rule-based signal generation with HTF trend gate (2026-08-12 winrate audit).

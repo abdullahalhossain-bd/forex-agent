@@ -28,6 +28,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, Optional
 
 from analysis.structure import MarketStructureEngine
@@ -203,19 +204,43 @@ class MTFStructureEngine:
 
     def _trading_permission(self, ext_bias: str, int_bias: str, conflict: bool) -> str:
         """
-        TRADE_ALLOWED  : aligned (best case)
-        WAIT_CONFIRM   : partial / one tier missing
-        NO_TRADE       : conflict or both neutral
+        TRADE_ALLOWED  : HTF + LTF aligned directional (best case)
+        WAIT_CONFIRM   : partial / one tier missing / both neutral-ranging
+        NO_TRADE       : true directional conflict only
+
+        Soften mode (env MTF_STRUCTURE_SOFTEN=true|1|yes):
+            true conflict → WAIT_CONFIRM instead of NO_TRADE so downstream
+            can still size-down / require extra confluence rather than
+            hard-blocking every H4↔H1 disagreement.
+
+        Rationale for not treating "both neutral" as NO_TRADE:
+            Neutral/ranging structure is common in London-NY overlap chop.
+            Hard-blocking there silenced valid mean-reversion and breakout
+            setups that other engines (session, patterns, regime) already
+            gate. WAIT_CONFIRM lets TradePermission apply softer rules.
         """
+        # P0 (2026-08-20): default SOFTEN=true so true conflict becomes
+        # WAIT_CONFIRM instead of NO_TRADE. Live logs showed risk-approved
+        # 90% conf trades killed solely by mtf_structure_no_trade.
+        # Set MTF_STRUCTURE_SOFTEN=false to restore hard NO_TRADE on conflict.
+        soften = os.getenv("MTF_STRUCTURE_SOFTEN", "true").lower() in (
+            "1", "true", "yes",
+        )
+
         if conflict:
-            return "NO_TRADE"
+            return "WAIT_CONFIRM" if soften else "NO_TRADE"
+
         if ext_bias in ("BULLISH", "BEARISH") and int_bias == ext_bias:
             return "TRADE_ALLOWED"
-        if ext_bias in ("BULLISH", "BEARISH") and int_bias in ("NEUTRAL", "RANGING"):
+
+        if ext_bias in ("BULLISH", "BEARISH") and int_bias in ("NEUTRAL", "RANGING", "UNKNOWN"):
             return "WAIT_CONFIRM"   # HTF clear, LTF not yet confirming
+
         if int_bias in ("BULLISH", "BEARISH") and ext_bias in ("NEUTRAL", "RANGING", "UNKNOWN"):
             return "WAIT_CONFIRM"   # LTF signal but HTF unclear
-        return "NO_TRADE"
+
+        # Both neutral / ranging / unknown — wait, do not hard-block
+        return "WAIT_CONFIRM"
 
     # ═══════════════════════════════════════════════════════
     # NOTE BUILDER
@@ -231,6 +256,8 @@ class MTFStructureEngine:
             return f"Conflict: {self.external_tf}={ext_bias} vs {self.internal_tf}={int_bias} — avoid trades"
         if alignment == "ALIGNED":
             return f"Aligned {ext_bias} — high-probability {ext_bias.lower()} setups allowed"
+        if ext_bias in ("NEUTRAL", "RANGING") and int_bias in ("NEUTRAL", "RANGING"):
+            return f"Both tiers neutral/ranging (ext={ext_bias}, int={int_bias}) — wait, not a hard block"
         return f"Partial: ext={ext_bias}, int={int_bias} — wait for confirmation"
 
     # ═══════════════════════════════════════════════════════

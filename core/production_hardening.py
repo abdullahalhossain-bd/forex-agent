@@ -164,56 +164,144 @@ class DynamicCorrelationMatrix:
                 viol.append({"existing_pair": ep, "correlation": round(c, 3)})
         return {"passed": len(viol) == 0, "reason": f"Max corr={mx:.2f}", "max_correlation": round(mx, 3), "violations": viol} if viol else {"passed": True, "reason": f"Max corr={mx:.2f}", "max_correlation": round(mx, 3)}
 
-def check_data_staleness(df, max_age_sec=120):
-    if df is None or len(df) == 0: return {"is_stale": True, "age_sec": 999, "reason": "No data"}
+def _weekend_closed_seconds(start: datetime, end: datetime) -> float:
+    """Approximate non-trading seconds (Sat 00:00 → Sun 24:00 UTC) between two datetimes.
+
+    Forex is closed from Friday ~21/22:00 UTC to Sunday ~21/22:00 UTC, but the
+    exact broker rollover varies. Counting full Sat+Sun is a safe, conservative
+    underestimate of closed time (we never *inflate* age by accident).
+    """
+    if end <= start:
+        return 0.0
+    closed = 0.0
+    # Walk calendar days from start.date() to end.date()
+    day = start.date()
+    end_day = end.date()
+    while day <= end_day:
+        # weekday(): Mon=0 … Sat=5, Sun=6
+        if day.weekday() >= 5:
+            day_start = datetime(day.year, day.month, day.day, tzinfo=start.tzinfo or timezone.utc)
+            day_end = day_start + timedelta(days=1)
+            overlap_start = max(start, day_start)
+            overlap_end = min(end, day_end)
+            if overlap_end > overlap_start:
+                closed += (overlap_end - overlap_start).total_seconds()
+        day += timedelta(days=1)
+    return closed
+
+
+def check_data_staleness(df, max_age_sec=120, *, adjust_weekend: bool = True,
+                         timeframe: str = None):
+    """Return staleness verdict for the newest bar in *df*.
+
+    Age is measured from the **bar close time** when *timeframe* is known
+    (open + tf_seconds). MT5 indexes bars by open time; right after a bar
+    closes the open-based age is already ~1 full interval — without this
+    adjustment H1/H4 false-positive as STALE within minutes of a valid close.
+
+    Parameters
+    ----------
+    df : DataFrame with DatetimeIndex (bar open times)
+    max_age_sec : threshold from compute_staleness_threshold()
+    adjust_weekend : subtract Sat+Sun closed hours (D1/H4 weekend-safe)
+    timeframe : optional TF code ('1h', 'H1', '1d', …). When set, age
+        is computed from expected close of the last bar instead of open.
+    """
+    if df is None or len(df) == 0:
+        return {"is_stale": True, "age_sec": 999, "reason": "No data"}
     try:
-        # Adapters are not required to return rows in chronological order.
-        # Use the newest timestamp rather than trusting positional order.
-        last = df.index.max()
-        if hasattr(last, 'to_pydatetime'):
-            last = last.to_pydatetime()
-        if hasattr(last, 'tzinfo') and last.tzinfo:
-            now = datetime.now(last.tzinfo)
+        # Newest bar by open-time index
+        last_open = df.index.max()
+        if hasattr(last_open, 'to_pydatetime'):
+            last_open = last_open.to_pydatetime()
+        if hasattr(last_open, 'tzinfo') and last_open.tzinfo:
+            now = datetime.now(last_open.tzinfo)
         else:
-            # Naive timestamp — assume UTC (matches is_candle_closed behavior)
-            last = last.replace(tzinfo=timezone.utc)
+            last_open = last_open.replace(tzinfo=timezone.utc)
             now = datetime.now(timezone.utc)
-        age = (now - last).total_seconds()
-        # Negative age means the bar is in the future — broker tz bug.
-        if age < 0:
-            log.critical(
-                f"[check_data_staleness] NEGATIVE AGE ({age:.0f}s) — "
-                f"last bar timestamp is in the FUTURE. This is the broker-"
-                f"timezone bug. last={last.isoformat()} now={now.isoformat()}"
-            )
+
+        # Prefer age-from-close when TF is known (closed-bar pipeline)
+        tf_sec = 0
+        if timeframe:
+            try:
+                tf_sec = int(timeframe_to_seconds(timeframe))
+            except Exception:
+                tf_sec = 0
+        last_close = last_open + timedelta(seconds=tf_sec) if tf_sec > 0 else last_open
+
+        raw_age = (now - last_close).total_seconds()
+        # Still forming: close is in the future → treat as age 0 (fresh forming bar)
+        if raw_age < 0:
+            # Distinguish broker-tz future bar (open itself in future) vs forming
+            open_age = (now - last_open).total_seconds()
+            if open_age < 0:
+                log.critical(
+                    f"[check_data_staleness] NEGATIVE OPEN AGE ({open_age:.0f}s) — "
+                    f"last bar OPEN is in the FUTURE (broker tz bug). "
+                    f"last_open={last_open.isoformat()} now={now.isoformat()}"
+                )
+                return {
+                    "is_stale": False,
+                    "age_sec": round(open_age, 1),
+                    "last_timestamp": str(df.index.max()),
+                    "reason": f"FUTURE_BAR (open_age={open_age:.0f}s) — broker tz mislabeled as UTC",
+                }
+            # Forming bar — not stale
             return {
-                "is_stale": False,  # not stale, but wrong tz
-                "age_sec": round(age, 1),
-                "last_timestamp": str(df.index[-1]),
-                "reason": f"FUTURE_BAR (age={age:.0f}s) — broker tz mislabeled as UTC",
+                "is_stale": False,
+                "age_sec": 0.0,
+                "raw_age_sec": round(raw_age, 1),
+                "weekend_sec": 0.0,
+                "last_timestamp": str(df.index.max()),
+                "reason": f"Fresh (forming bar, closes in {-raw_age:.0f}s)",
             }
+
+        age = raw_age
+        weekend_sec = 0.0
+        if adjust_weekend and raw_age > 3600:
+            weekend_sec = _weekend_closed_seconds(last_close, now)
+            age = max(0.0, raw_age - weekend_sec)
+
         is_stale = age > max_age_sec
         if is_stale:
-            # Enhanced reason: help operator distinguish tz bug vs genuinely stale feed
             age_h = age / 3600.0
+            raw_h = raw_age / 3600.0
             broker_offset = os.getenv("MT5_BROKER_TZ_OFFSET_HOURS", "0")
             if age_h >= 2.5 and broker_offset != "0":
-                # Age is suspiciously close to a whole number of hours AND an offset is set.
-                # This often means the offset is wrong (broker is actually UTC+0).
                 reason = (
-                    f"Stale {age:.0f}s ({age_h:.1f}h) — WARNING: age ≈ MT5_BROKER_TZ_OFFSET_HOURS ({broker_offset}h). "
+                    f"Stale {age:.0f}s ({age_h:.1f}h effective, raw {raw_h:.1f}h from close) — "
+                    f"WARNING: age ≈ MT5_BROKER_TZ_OFFSET_HOURS ({broker_offset}h). "
                     f"Run scripts/diagnose_mt5_staleness.py to verify the offset. "
                     f"If the broker is actually UTC+0, set MT5_BROKER_TZ_OFFSET_HOURS=0."
                 )
+            elif weekend_sec > 0:
+                reason = (
+                    f"Stale {age:.0f}s ({age_h:.1f}h effective after −{weekend_sec/3600:.1f}h weekend, "
+                    f"raw {raw_h:.1f}h from close) — MT5 terminal may be disconnected. "
+                    f"Check: terminal window open? symbols subscribed? broker server reachable?"
+                )
             else:
                 reason = (
-                    f"Stale {age:.0f}s ({age_h:.1f}h) — MT5 terminal may be disconnected. "
+                    f"Stale {age:.0f}s ({age_h:.1f}h from close) — MT5 terminal may be disconnected. "
                     f"Check: terminal window open? symbols subscribed? broker server reachable?"
                 )
         else:
             reason = "Fresh"
-        return {"is_stale": is_stale, "age_sec": round(age, 1), "last_timestamp": str(df.index[-1]), "reason": reason}
-    except Exception as e: return {"is_stale": True, "age_sec": 999, "reason": str(e)}
+            if weekend_sec > 0 and raw_age > max_age_sec:
+                reason = (
+                    f"Fresh (weekend-adjusted: raw {raw_age:.0f}s − {weekend_sec:.0f}s weekend "
+                    f"= {age:.0f}s ≤ threshold {max_age_sec}s)"
+                )
+        return {
+            "is_stale": is_stale,
+            "age_sec": round(age, 1),
+            "raw_age_sec": round(raw_age, 1),
+            "weekend_sec": round(weekend_sec, 1),
+            "last_timestamp": str(df.index.max()),
+            "reason": reason,
+        }
+    except Exception as e:
+        return {"is_stale": True, "age_sec": 999, "reason": str(e)}
 
 def is_candle_closed(timeframe, last_bar_time, current_time=None):
     """
@@ -351,12 +439,14 @@ TIMEFRAME_SECONDS = {
 }
 DEFAULT_TIMEFRAME_SECONDS = 3600  # fallback for unknown codes (≈ H1)
 
-# Lowercase form ("15m", "1h", "4h", "1d") → MT5-style code ("M15", "H1", ...)
-# Accepts both forms in timeframe_to_seconds() so callers don't need to
-# pre-normalize.
+# Forms that after .upper() are NOT already keys of TIMEFRAME_SECONDS.
+# "15m".upper() → "15M", "1h".upper() → "1H", "1d".upper() → "1D", etc.
 _LOWERCASE_TF_MAP = {
     "1M": "M1", "5M": "M5", "15M": "M15", "30M": "M30",
     "1H": "H1", "4H": "H4", "1D": "D1",
+    # bare aliases sometimes seen in config / MTF_CHAIN
+    "D": "D1", "DAILY": "D1", "DAY": "D1",
+    "H": "H1", "HOURLY": "H1",
 }
 
 
@@ -375,10 +465,11 @@ def timeframe_to_seconds(timeframe: str) -> int:
     """
     if not timeframe:
         return DEFAULT_TIMEFRAME_SECONDS
-    key = timeframe.upper()
-    # Resolve "15M" → "M15" form via the lowercase map
+    key = timeframe.upper().strip()
+    # Resolve "15M"/"1H"/"1D" → "M15"/"H1"/"D1" form via the lowercase map
     if key in _LOWERCASE_TF_MAP:
         key = _LOWERCASE_TF_MAP[key]
+    # Also accept already-correct keys and bare forms like "D1", "H1"
     return TIMEFRAME_SECONDS.get(key, DEFAULT_TIMEFRAME_SECONDS)
 
 
@@ -390,28 +481,53 @@ def compute_staleness_threshold(timeframe: str, *,
     based on the trader's timeframe.
 
     Increased buffer because we only analyze CLOSED bars (forming bar is dropped).
-    Right after a new candle opens, the last closed bar can already be 
+    Right after a new candle opens, the last closed bar can already be
     almost a full interval old + network latency.
 
-    Threshold formula:
-        threshold = max(timeframe_to_seconds(tf) + buffer_sec, min_floor_sec) * multiplier
+    Threshold formula (intraday):
+        threshold = max(tf_sec + buffer_sec, min_floor_sec) * multiplier
 
-    Examples with multiplier=1.5:
-        M15 → max(900+300, 120) * 1.5 = 1800s  (30 min)
-        H1  → max(3600+300, 120) * 1.5 = 5850s (~97 min)
-        H4  → max(14400+300, 120) * 1.5 = 22050s (~6.1h)
-        D1  → max(86400+300, 120) * 1.5 = 130050s (~36h)
+    D1 special-case (weekend-safe):
+        Forex daily bars do not print Sat/Sun. A last closed D1 bar that
+        opened Friday evening is routinely 40–60 h old by Monday/Tuesday
+        afternoon. The generic 1.5× formula yields only ~36 h and false-
+        positives every weekend. We therefore:
+          • use a higher default multiplier for D1 (2.5× → ~60 h), and
+          • enforce an absolute floor of 72 h so a normal weekend gap
+            never marks Daily as STALE when the feed is healthy.
+        Both values are overridable via env:
+          MT5_STALE_BAR_MULTIPLIER_D1  (default 2.5)
+          MT5_STALE_D1_FLOOR_SEC       (default 259200 = 72 h)
+
+    Examples with default multiplier=1.5 (intraday) / 2.5 (D1):
+        M15 → max(900+300, 120) * 1.5   = 1800s   (30 min)
+        H1  → max(3600+300, 120) * 1.5  = 5850s   (~97 min)
+        H4  → max(14400+300, 120) * 1.5 = 22050s  (~6.1 h)
+        D1  → max( max(86400+300,120)*2.5 , 259200 ) = 259200s (72 h)
     """
     tf_sec = timeframe_to_seconds(timeframe)
+    key = (timeframe or "").upper().strip()
+    is_daily = key in ("D1", "1D", "DAILY", "1DAY") or tf_sec >= 86400
 
-    # Optional multiplier from .env (default 1.5 for extra safety on closed-bar logic)
     try:
-        multiplier = float(os.getenv("MT5_STALE_BAR_MULTIPLIER", "1.5"))
+        if is_daily:
+            multiplier = float(os.getenv("MT5_STALE_BAR_MULTIPLIER_D1",
+                                         os.getenv("MT5_STALE_BAR_MULTIPLIER", "2.5")))
+        else:
+            multiplier = float(os.getenv("MT5_STALE_BAR_MULTIPLIER", "1.5"))
     except (ValueError, TypeError):
-        multiplier = 1.5
+        multiplier = 2.5 if is_daily else 1.5
 
-    threshold = max(tf_sec + buffer_sec, min_floor_sec)
-    return int(threshold * multiplier)
+    threshold = max(tf_sec + buffer_sec, min_floor_sec) * multiplier
+
+    if is_daily:
+        try:
+            d1_floor = int(os.getenv("MT5_STALE_D1_FLOOR_SEC", "259200"))  # 72 h
+        except (ValueError, TypeError):
+            d1_floor = 259200
+        threshold = max(threshold, d1_floor)
+
+    return int(threshold)
 
 
 def get_last_closed_bar_time(df, timeframe, current_time=None):
