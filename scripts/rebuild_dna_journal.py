@@ -7,9 +7,17 @@ After the system has been running and closing trades, run this to
 replace the synthetic trade outcomes (from setup_and_train_market_dna.py)
 with real trade history. This makes the cluster stats accurate.
 
+2026-08-20 FIX:
+  - trades table uses open_time (not entry_time)
+  - direction column is `type` (BUY/SELL)
+  - pnl column is `pnl` (not pnl_usd)
+  - pair may have broker suffix (EURUSDM) — also search clean name
+  - history data lives under data/history/{PAIR}/ as well as data/
+
 Usage:
   python scripts/rebuild_dna_journal.py
-  python scripts/rebuild_dna_journal.py --model-id dna_20260805150000
+  python scripts/rebuild_dna_journal.py --model-id dna_20260820T173327
+  python scripts/rebuild_dna_journal.py --pair EURUSD
 """
 from __future__ import annotations
 
@@ -40,6 +48,19 @@ def get_db_path() -> Path:
         return Path(DB_PATH)
 
 
+def _clean_pair(pair: str) -> str:
+    """Strip common broker suffixes (m, ., #, pro, etc.)."""
+    if not pair:
+        return pair
+    p = str(pair).upper().strip()
+    for suf in ("M", ".", "#", "PRO", "A", "B", "C"):
+        if p.endswith(suf) and len(p) > len(suf) + 3:
+            candidate = p[: -len(suf)]
+            if len(candidate) in (6, 7):
+                return candidate
+    return p
+
+
 def get_active_model() -> dict:
     """Get the currently ACTIVE market_dna model."""
     db = get_db_path()
@@ -54,20 +75,53 @@ def get_active_model() -> dict:
 
 
 def get_closed_trades(pair: str = None) -> pd.DataFrame:
-    """Get closed trades from the DB."""
+    """Get closed trades from the DB.
+
+    Schema (confirmed via PRAGMA table_info):
+      id, pair, timeframe, type, entry, sl, tp, lot, confidence,
+      open_time, close_time, exit_price, result, pnl, pnl_pips, ...
+      status, context_json, mt5_ticket
+    """
     db = get_db_path()
     with sqlite3.connect(str(db)) as conn:
         if pair:
+            clean = _clean_pair(pair)
             df = pd.read_sql_query(
-                "SELECT * FROM trades WHERE status='CLOSED' AND pair=? ORDER BY entry_time",
-                conn, params=(pair,)
+                "SELECT * FROM trades WHERE status='CLOSED' "
+                "AND (pair=? OR pair=? OR pair LIKE ?) "
+                "ORDER BY open_time",
+                conn,
+                params=(pair, clean, f"{clean}%"),
             )
         else:
             df = pd.read_sql_query(
-                "SELECT * FROM trades WHERE status='CLOSED' ORDER BY entry_time",
-                conn
+                "SELECT * FROM trades WHERE status='CLOSED' ORDER BY open_time",
+                conn,
             )
     return df
+
+
+def _find_history_csv(pair: str, timeframe: str = "H1") -> Path | None:
+    """Locate OHLCV file for a pair (handles broker suffix + history layout)."""
+    clean = _clean_pair(pair)
+    candidates = [
+        DATA_DIR / f"{pair}_{timeframe}.csv",
+        DATA_DIR / f"{clean}_{timeframe}.csv",
+        DATA_DIR / "history" / clean / f"{clean}_{timeframe}.csv",
+        DATA_DIR / "history" / pair / f"{pair}_{timeframe}.csv",
+        DATA_DIR / "history" / clean / f"{clean}_{timeframe}.parquet",
+        DATA_DIR / "history" / pair / f"{pair}_{timeframe}.parquet",
+    ]
+    if timeframe == "H1":
+        candidates += [
+            DATA_DIR / f"{clean}_M15.csv",
+            DATA_DIR / "history" / clean / f"{clean}_M15.csv",
+            DATA_DIR / "history" / clean / f"{clean}_M15.parquet",
+        ]
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
 
 
 def assign_clusters_to_trades(trades_df: pd.DataFrame, detector) -> pd.DataFrame:
@@ -82,24 +136,35 @@ def assign_clusters_to_trades(trades_df: pd.DataFrame, detector) -> pd.DataFrame
         pair = trade.get("pair") or trade.get("symbol")
         if not pair:
             continue
-        # Find the CSV for this pair
-        csv_path = DATA_DIR / f"{pair}_H1.csv"
-        if not csv_path.exists():
-            # Try M15
-            csv_path = DATA_DIR / f"{pair}_M15.csv"
-        if not csv_path.exists():
+
+        csv_path = _find_history_csv(pair, "H1")
+        if csv_path is None:
+            log.warning(f"No history file for {pair} — skip trade id={trade.get('id')}")
             continue
 
-        # Load and add indicators
-        df = pd.read_csv(csv_path)
+        try:
+            if csv_path.suffix == ".parquet":
+                df = pd.read_parquet(csv_path)
+            else:
+                df = pd.read_csv(csv_path)
+        except Exception as e:
+            log.warning(f"Could not read {csv_path}: {e}")
+            continue
+
         time_col = None
-        for c in ["datetime_utc", "datetime", "time"]:
+        for c in ["datetime_utc", "datetime", "time", "timestamp"]:
             if c in df.columns:
                 time_col = c
                 break
         if time_col:
             df[time_col] = pd.to_datetime(df[time_col], utc=True)
             df.set_index(time_col, inplace=True)
+        elif not isinstance(df.index, pd.DatetimeIndex):
+            log.warning(f"No time column in {csv_path}")
+            continue
+        else:
+            df.index = pd.to_datetime(df.index, utc=True)
+
         if "volume" not in df.columns:
             df["volume"] = df.get("tick_volume", 1000)
         if "time" not in df.columns:
@@ -107,31 +172,52 @@ def assign_clusters_to_trades(trades_df: pd.DataFrame, detector) -> pd.DataFrame
 
         try:
             df = add_indicators(df, drop_nan=True)
-        except Exception:
+        except Exception as e:
+            log.warning(f"add_indicators failed for {pair}: {e}")
             continue
 
-        # Find the entry bar
-        entry_time = pd.to_datetime(trade.get("entry_time"), utc=True)
-        if entry_time is None:
+        # Schema fix: open_time (not entry_time)
+        raw_time = trade.get("open_time") or trade.get("entry_time")
+        if raw_time is None:
             continue
-        # Find closest bar to entry time
-        idx = df.index.get_indexer([entry_time], method="nearest")[0]
+        entry_time = pd.to_datetime(raw_time, utc=True)
+
+        try:
+            idx = df.index.get_indexer([entry_time], method="nearest")[0]
+        except Exception:
+            continue
         if idx < 0 or idx >= len(df):
             continue
         entry_bar = df.iloc[[idx]]
 
-        # Predict cluster
+        # Schema fix: type (BUY/SELL), pnl (not pnl_usd)
+        direction = trade.get("type") or trade.get("direction") or trade.get("side")
+        pnl_val = trade.get("pnl")
+        if pnl_val is None:
+            pnl_val = trade.get("pnl_usd") or 0
         try:
-            result = detector.predict_live(entry_bar)
+            pnl_val = float(pnl_val)
+        except (TypeError, ValueError):
+            pnl_val = 0.0
+
+        result_label = trade.get("result")
+        if result_label in ("WIN", "LOSS", "BREAKEVEN"):
+            outcome = result_label if result_label != "BREAKEVEN" else "BE"
+        else:
+            outcome = "WIN" if pnl_val > 0 else ("LOSS" if pnl_val < 0 else "BE")
+
+        try:
+            pred = detector.predict_live(entry_bar)
             results.append({
                 "trade_id": trade.get("id"),
-                "cluster_id": result.get("cluster_id"),
-                "state": result.get("state"),
-                "direction": trade.get("direction") or trade.get("side"),
-                "outcome": "WIN" if (trade.get("pnl_usd") or 0) > 0 else "LOSS",
-                "pnl": float(trade.get("pnl_usd") or 0),
+                "cluster_id": pred.get("cluster_id"),
+                "state": pred.get("state"),
+                "direction": direction,
+                "outcome": outcome,
+                "pnl": pnl_val,
             })
-        except Exception:
+        except Exception as e:
+            log.warning(f"predict_live failed trade id={trade.get('id')}: {e}")
             continue
 
     return pd.DataFrame(results)
@@ -147,7 +233,6 @@ def main():
     print("  REBUILD MARKET DNA JOURNAL")
     print("=" * 60)
 
-    # Get active model
     model_info = get_active_model()
     if not model_info:
         print("  FAIL: No ACTIVE market_dna model found.")
@@ -163,12 +248,10 @@ def main():
         print(f"  FAIL: Model file not found: {model_path}")
         return
 
-    # Load detector
     from analysis.market_dna import MarketDNADetector
     detector = MarketDNADetector.load(model_path)
     print(f"  Loaded detector with {detector.n_clusters_} clusters")
 
-    # Get closed trades
     trades_df = get_closed_trades(args.pair)
     print(f"  Found {len(trades_df)} closed trades in DB")
 
@@ -177,7 +260,6 @@ def main():
         print("  Run this script again after the system has closed some real trades.")
         return
 
-    # Assign clusters to trades
     print("\n  Assigning clusters to trades...")
     clustered = assign_clusters_to_trades(trades_df, detector)
     print(f"  Clustered {len(clustered)} trades")
@@ -186,17 +268,13 @@ def main():
         print("  FAIL: Could not assign clusters to any trades")
         return
 
-    # Build new journal
     from analysis.dna_journal import build_cluster_journal
     stats = build_cluster_journal(clustered, model_id=model_id)
 
-    # Save to DB (replace existing)
     db = get_db_path()
     now = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(str(db)) as conn:
-        # Delete old stats for this model
         conn.execute("DELETE FROM market_dna_cluster_stats WHERE model_id=?", (model_id,))
-        # Insert new stats
         for s in stats:
             conn.execute(
                 """INSERT INTO market_dna_cluster_stats

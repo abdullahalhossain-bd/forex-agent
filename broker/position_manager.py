@@ -783,6 +783,9 @@ class PositionManager:
 
     def print_status(self) -> None:
         positions = self.order_manager.get_open_positions()
+        if positions is None:
+            log.warning("[PositionManager] Status unavailable — MT5 unreachable, position count UNKNOWN")
+            positions = []
         bar = "═" * 48
         log.info(bar)
         log.info("  🤖  POSITION MANAGER STATUS")

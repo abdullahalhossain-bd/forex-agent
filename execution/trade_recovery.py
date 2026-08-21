@@ -77,6 +77,18 @@ def recover_mt5_state(
         result["errors"].append(f"open_positions_fetch: {e}")
         return result
 
+    if mt5_open is None:
+        # BUG FIX (2026-08-21): get_open_positions() now returns None (not
+        # []) when MT5 is unreachable, so startup recovery must not treat
+        # that as "confirmed zero open positions" — doing so risked
+        # silently forgetting real open trades on a bad boot.
+        log.warning(
+            "[TradeRecovery] MT5 unreachable during startup recovery — "
+            "position state UNKNOWN, aborting recovery (will retry)"
+        )
+        result["errors"].append("open_positions_fetch: MT5 unreachable (None)")
+        return result
+
     mt5_open_tickets = {p["ticket"] for p in mt5_open}
     result["open_positions"] = len(mt5_open)
     log.info(f"[TradeRecovery] Found {len(mt5_open)} open MT5 position(s)")

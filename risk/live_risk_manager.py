@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, asdict
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
@@ -229,6 +230,18 @@ class LiveRiskManager:
         self.drawdown_monitor = get_drawdown_monitor()
         self.risk_reporter = get_risk_reporter()
         self._trades_today = 0
+        # BUG FIX (2026-08-21): _trades_today was never reset across calendar
+        # days. reset_daily() existed but nothing ever called it (unlike
+        # circuit_breaker.reset_daily(), which IS called every cycle from
+        # core/trader.py). Result: this counter just accumulated trades
+        # across the entire process lifetime — e.g. 2 trades yesterday +
+        # trades today could silently hit the tier's max_trades_per_day cap
+        # and block ALL new entries even on a day with zero real trades yet.
+        # Fix: track the calendar date the counter belongs to, and
+        # self-heal at the top of check_trade_permission() (in addition to
+        # exposing reset_daily() for callers who want to invoke it
+        # explicitly, same pattern as CircuitBreaker.reset_daily()).
+        self._trades_today_date = date.today().isoformat()
         self._consecutive_losses = 0  # legacy in-memory cache — reads now go through StreakTracker
         # H5 FIX: optional learning agent for tier promotion stats
         self.learning_agent = None
@@ -466,8 +479,29 @@ class LiveRiskManager:
         log.info("[LiveRiskManager] Learning agent attached for tier promotion stats")
 
     def reset_daily(self) -> None:
-        """Reset daily counters (called at start of each trading day)."""
-        self._trades_today = 0
+        """Reset daily counters (called at start of each trading day).
+
+        Idempotent / date-aware, mirroring CircuitBreaker.reset_daily():
+        safe to call every cycle — only actually resets when the calendar
+        date has changed since the last reset.
+        """
+        today = date.today().isoformat()
+        if self._trades_today_date != today:
+            old_count = self._trades_today
+            self._trades_today = 0
+            self._trades_today_date = today
+            log.info(
+                f"[LiveRiskManager] Daily reset — new trading day "
+                f"({old_count} trades carried over from previous day, now 0)"
+            )
+
+    def _maybe_reset_daily(self) -> None:
+        """Self-healing safety net: call this at the top of any gate that
+        reads/writes _trades_today, in case the caller forgot to invoke
+        reset_daily() explicitly (this was the actual root cause of the
+        2026-08-21 'Max trades/day reached (20/20)' false block — nothing
+        outside this class ever called reset_daily())."""
+        self.reset_daily()
 
     def check_trade_permission(
         self,
@@ -505,6 +539,10 @@ class LiveRiskManager:
         Returns:
             TradePermission with allowed + lot + reject_reason.
         """
+        # Self-heal the daily trade counter in case reset_daily() was never
+        # wired into the caller's main loop (see 2026-08-21 bug note above).
+        self._maybe_reset_daily()
+
         perm = TradePermission(sl_pips=sl_pips, tp_pips=tp_pips)
         tier = self.current_tier
 

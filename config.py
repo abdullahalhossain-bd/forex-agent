@@ -218,11 +218,25 @@ _DISABLED_SYMBOLS_REFERENCE = [
 #     "XAUUSD", "XAGUSD",
 # ]
 
-# Build the full 48-pair universe if pair_profiles did not supply active pairs.
-# All 48 original pairs are kept exactly as-is — only the broker suffix is
-# added so they resolve correctly against live MT5 (Exness) symbols.
+# Build the full 48-pair universe ONLY as a fallback for when pair_profiles
+# supplied nothing at all (e.g. import failure) — NOT as an unconditional
+# override. All 48 original pairs are kept exactly as-is — only the broker
+# suffix is added so they resolve correctly against live MT5 (Exness) symbols.
+#
+# 2026-08-20 CRITICAL FIX: this used to be `SYMBOLS = FULL_PAIR_UNIVERSE`
+# unconditionally, silently discarding the profile-based SYMBOLS assigned
+# at line 167 and re-enabling every pair in _DISABLED_SYMBOLS_REFERENCE —
+# including exotics like SGDJPY, HKDJPY, MXNJPY, USDCNH, USDHKD, USDMXN,
+# USDTHB that have NO backtested profile and are explicitly documented
+# above as disabled for live-trading safety. That's exactly what was
+# spamming trader.log with "MT5 fetch failed" / "IPC connection lost"
+# for those symbols every cycle — they were never supposed to be live.
+# Now: only fall back to the full universe if the safety-gated profile
+# list (_PROFILE_PAIRS) came back empty (i.e. utils/pair_profiles import
+# failed), so the 10 backtested/enabled pairs stay authoritative.
 FULL_PAIR_UNIVERSE = _with_broker_suffix(_MAJOR_PAIRS + _DISABLED_SYMBOLS_REFERENCE)
-SYMBOLS = FULL_PAIR_UNIVERSE
+if not _PROFILE_PAIRS:
+    SYMBOLS = FULL_PAIR_UNIVERSE
 
 # ── Timeframes ─────────────────────────────────────────────────
 DEFAULT_TIMEFRAME = "15m"

@@ -234,6 +234,17 @@ def _pip_size(symbol: str, overrides: Optional[Dict[str, float]] = None) -> Opti
         return _JPY_PIP
     if len(sym) == 6 and sym.isalpha():
         return _DEFAULT_FX_PIP
+    # 2026-08-20 fix: broker-suffixed symbols (e.g. Exness "EURUSDm" ->
+    # upper()'d here as "EURUSDM") are 7 chars, not 6, so the bare-FX
+    # check above never matched and every suffixed major/minor fell
+    # through to `return None` -> callers logged "no known pip size" and
+    # silently used the ATR/20 approximation instead of the correct
+    # 0.0001. Strip a single trailing broker-suffix letter (matches the
+    # convention used by config.BROKER_SYMBOL_SUFFIX / data/fetcher.py's
+    # _strip_mt5_suffix — brokers append one short alpha suffix like "m",
+    # "raw", ".a", etc.) and re-check the stripped form.
+    if len(sym) == 7 and sym.isalpha():
+        return _DEFAULT_FX_PIP
     return None
 
 

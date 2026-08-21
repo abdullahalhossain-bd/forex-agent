@@ -854,6 +854,17 @@ class DataFetcher:
                             f"(debounced, next log in 60s)"
                         )
                         self._last_ipc_log_ts[symbol] = now
+                    # BUG FIX (2026-08-21): previously this only logged and
+                    # hoped the next cycle would work by itself. But -10004
+                    # doesn't flip is_alive()'s health-check flag (that
+                    # checks terminal_info(), a separate MT5 API context
+                    # that can stay "up" while symbol_select/copy_rates
+                    # keep failing) — so nothing ever forced a reconnect,
+                    # and this could repeat for 30+ consecutive cycles
+                    # until the catastrophic-error-cycle threshold killed
+                    # and restarted the whole process. Actively escalate
+                    # to a forced reconnect after a few consecutive hits.
+                    self._mt5_conn.note_ipc_failure()
                     # Don't mark symbol unavailable — it's a connection issue,
                     # not a symbol issue. Next cycle may succeed.
                 else:
@@ -864,6 +875,7 @@ class DataFetcher:
                 return None
 
             log.debug(f"[MT5] Symbol selected: {mt5_symbol}")
+            self._mt5_conn.note_ipc_success()
 
             # Fetch candles from position 0 (most recent) backward — via the
             # shared connection's locked wrapper.

@@ -15,6 +15,20 @@ Level 3 — Maximum Drawdown (default 15%)
 
 The kill switch is persistent — once triggered, it stays active until
 the cooldown period expires or a human manually resets it.
+
+────────────────────────────────────────────────────────────────────
+2026-08-20 CRITICAL FIX — Paper equity poisoning protection
+────────────────────────────────────────────────────────────────────
+Previously peak_balance could be poisoned by PaperTrader / config
+INITIAL_BALANCE_USD when that value was much higher than live MT5
+equity (e.g. peak=$99,159 vs live=$10,000 → 89.9% false drawdown →
+Level 3 permanent lock).
+
+Fix:
+  1. If peak > 3× current live balance → treat as corrupt, reset peak
+     to current balance and clear Level 3.
+  2. Peak is only ever raised by real live balance increases.
+  3. manual_reset also clears peak corruption side-effects.
 """
 
 from __future__ import annotations
@@ -40,13 +54,9 @@ class KillSwitch:
 
     # Default thresholds
     DAILY_LOSS_LIMIT = 0.03       # default — overridden by config below
-    # Day 81+ hotfix: load from config (default 20.0% = 0.20).
-    # Was hard-coded 0.03 (3%) — user wants 20%.
     try:
         DAILY_LOSS_LIMIT = float(_CFG_DLL) / 100.0  # percent → fraction
     except Exception as e:
-        # P0 fix: fail-closed on safety-critical config (mirrors circuit_breaker.py:54).
-        # Previously silently fell back to 0.20 (20% daily loss) — too permissive.
         import logging as _logging
         _log = _logging.getLogger("kill_switch")
         _log.critical(f"[KillSwitch] DAILY_LOSS_LIMIT_PCT config load failed: {e}; "
@@ -58,6 +68,11 @@ class KillSwitch:
     WEEKLY_COOLDOWN_DAYS = 7      # 1 week pause
     DRAWDOWN_COOLDOWN_DAYS = 30   # manual reset required
 
+    # ── Paper-equity poisoning protection ──────────────────────────
+    # If stored peak is more than this multiple of current live balance,
+    # treat the peak as corrupt (came from paper/config, not live MT5).
+    PEAK_CORRUPTION_RATIO = 3.0
+
     def __init__(self):
         self._lock = threading.RLock()
         self._state = self._load()
@@ -65,50 +80,55 @@ class KillSwitch:
     def _load(self) -> Dict[str, Any]:
         """
         Day 102+ CRITICAL hotfix: FAIL CLOSED on corruption, not open.
-
-        Previously, any read error (corrupt JSON, missing file, permission
-        error) returned a fresh all-False state — silently disabling the
-        kill switch and allowing trades. A kill switch that silently
-        disables itself on corruption is worse than no kill switch.
-
-        Now: on corruption, return a state with level_3_active=True
-        (FULL STOP) so trading is blocked until a human investigates.
-        This mirrors the fail-closed behavior already used by
-        CircuitBreaker and RiskEngine.
         """
-        if STATE_PATH.exists():
-            try:
-                state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-                # Validate required keys — if any are missing, treat as corrupt
-                required_keys = (
+        try:
+            if STATE_PATH.exists():
+                data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
+                required = (
                     "level_1_active", "level_2_active", "level_3_active",
                     "daily_loss_pct", "weekly_loss_pct", "current_drawdown_pct",
                 )
-                if not all(k in state for k in required_keys):
-                    raise ValueError(f"missing required keys: {required_keys}")
-                return state
-            except Exception as e:
+                if all(k in data for k in required):
+                    return data
                 log.critical(
-                    f"[KillSwitch] STATE FILE CORRUPT ({e}) — "
-                    f"FAILING CLOSED (Level 3 FULL STOP). "
-                    f"Manual reset required after investigation."
+                    "[KillSwitch] STATE FILE CORRUPT (missing keys) — "
+                    "forcing Level 3 until manual intervention"
                 )
-                # Fail closed: trigger Level 3 (max drawdown = full stop)
                 return {
                     "level_1_active": False,
                     "level_1_until": None,
                     "level_2_active": False,
                     "level_2_until": None,
-                    "level_3_active": True,  # ← BLOCKS ALL TRADING
+                    "level_3_active": True,
                     "level_3_until": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
-                    "daily_loss_pct": 999999.0,
-                    "weekly_loss_pct": 999999.0,
+                    "daily_loss_pct": 0.0,
+                    "weekly_loss_pct": 0.0,
                     "current_drawdown_pct": 999999.0,
                     "peak_balance": 0.0,
                     "last_reset": datetime.now(timezone.utc).isoformat(),
                     "pause_reason": "STATE FILE CORRUPT — manual intervention required",
                     "_corrupt": True,
                 }
+        except Exception as e:
+            log.critical(
+                f"[KillSwitch] STATE FILE unreadable ({e}) — "
+                f"forcing Level 3 until manual intervention"
+            )
+            return {
+                "level_1_active": False,
+                "level_1_until": None,
+                "level_2_active": False,
+                "level_2_until": None,
+                "level_3_active": True,
+                "level_3_until": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                "daily_loss_pct": 0.0,
+                "weekly_loss_pct": 0.0,
+                "current_drawdown_pct": 999999.0,
+                "peak_balance": 0.0,
+                "last_reset": datetime.now(timezone.utc).isoformat(),
+                "pause_reason": "STATE FILE CORRUPT — manual intervention required",
+                "_corrupt": True,
+            }
         return {
             "level_1_active": False,
             "level_1_until": None,
@@ -124,16 +144,7 @@ class KillSwitch:
         }
 
     def _save(self) -> None:
-        """
-        Day 102+ CRITICAL hotfix: atomic write (temp file + os.replace).
-
-        Previously used direct STATE_PATH.write_text() — if the process
-        crashed mid-write (or the disk filled, or another writer raced),
-        the state file would be left truncated/corrupt. Combined with
-        the old fail-open _load(), this would silently disable the kill
-        switch on the next read. Atomic write guarantees the file is
-        either fully-written or untouched.
-        """
+        """Atomic write (temp file + os.replace)."""
         import tempfile
         STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = None
@@ -147,12 +158,10 @@ class KillSwitch:
             ) as tmp_f:
                 json.dump(self._state, tmp_f, indent=2)
                 tmp_path = tmp_f.name
-            # os.replace is atomic on the same filesystem
             import os
             os.replace(tmp_path, str(STATE_PATH))
         except Exception as e:
             log.warning(f"[KillSwitch] save failed: {e}")
-            # Cleanup temp file if rename failed
             if tmp_path is not None:
                 try:
                     import os
@@ -167,16 +176,7 @@ class KillSwitch:
         daily_pnl: float = 0.0,
         weekly_pnl: float = 0.0,
     ) -> Dict[str, Any]:
-        """Check all kill switch levels.
-
-        Returns:
-            {
-                "trading_allowed": bool,
-                "level": 0/1/2/3,
-                "reason": str,
-                "cooldown_until": str or None,
-            }
-        """
+        """Check all kill switch levels."""
         with self._lock:
             now = datetime.now(timezone.utc)
 
@@ -194,21 +194,36 @@ class KillSwitch:
                         log.warning(f"Suppressed exception at line 116: {e}")
                         pass
 
-            # Level 3 (highest priority)
+            # ── CRITICAL FIX: detect & heal paper-equity peak poisoning ──
+            peak = float(self._state.get("peak_balance", 0) or 0)
+            if peak <= 0:
+                peak = float(initial_balance or 0)
+
+            if (
+                peak > 0
+                and balance > 0
+                and peak > balance * self.PEAK_CORRUPTION_RATIO
+            ):
+                log.critical(
+                    f"[KillSwitch] CORRUPT peak_balance detected "
+                    f"(peak=${peak:,.2f} vs live balance=${balance:,.2f}, "
+                    f"ratio={peak / balance:.1f}x > {self.PEAK_CORRUPTION_RATIO}x). "
+                    f"Resetting peak to current live balance and clearing Level 3."
+                )
+                peak = balance
+                self._state["peak_balance"] = peak
+                self._state["level_3_active"] = False
+                self._state["level_3_until"] = None
+                self._state["current_drawdown_pct"] = 0.0
+                self._state["last_reset"] = now.isoformat()
+                self._save()
+
+            # Level 3 (highest priority) — only after corruption heal
             if self._state.get("level_3_active"):
-                # Bug #33 fix: save state before early return so drawdown
-                # tracking isn't lost if the process crashes.
                 self._save()
                 return self._block(3, "MAXIMUM DRAWDOWN — FULL STOP. Human reset required.")
 
-            # Calculate drawdown from PEAK balance (not initial).
-            # Bug #8 fix: previously used initial_balance, so once the account
-            # became profitable, drawdown was negative (e.g. initial=$10k,
-            # peak=$20k, balance=$14k → old: (10k-14k)/10k = -0.4 → never
-            # triggered). Now uses peak_balance like DrawdownMonitor does.
-            peak = self._state.get("peak_balance", 0)
-            if peak <= 0:
-                peak = initial_balance
+            # Calculate drawdown from PEAK balance
             if balance > peak:
                 peak = balance
             self._state["peak_balance"] = peak
@@ -279,10 +294,31 @@ class KillSwitch:
             if self._state.get(key):
                 self._state[key] = False
                 self._state[f"level_{level}_until"] = None
+                if level == 3:
+                    self._state["current_drawdown_pct"] = 0.0
+                self._state["last_reset"] = datetime.now(timezone.utc).isoformat()
                 self._save()
                 log.info(f"[KillSwitch] Level {level} manually reset")
                 return True
             return False
+
+    def force_reset_peak(self, new_peak: float) -> None:
+        """Operator helper: force peak_balance to a known-good live equity value.
+
+        Use after a paper/config poisoning incident, e.g.:
+            get_kill_switch().force_reset_peak(10000.0)
+        """
+        with self._lock:
+            old = self._state.get("peak_balance", 0)
+            self._state["peak_balance"] = float(new_peak)
+            self._state["current_drawdown_pct"] = 0.0
+            self._state["level_3_active"] = False
+            self._state["level_3_until"] = None
+            self._state["last_reset"] = datetime.now(timezone.utc).isoformat()
+            self._save()
+            log.warning(
+                f"[KillSwitch] peak_balance force-reset: ${old:,.2f} → ${new_peak:,.2f}"
+            )
 
     def status(self) -> Dict[str, Any]:
         with self._lock:
@@ -293,6 +329,7 @@ class KillSwitch:
                 "daily_loss_pct": self._state.get("daily_loss_pct", 0),
                 "weekly_loss_pct": self._state.get("weekly_loss_pct", 0),
                 "current_drawdown_pct": self._state.get("current_drawdown_pct", 0),
+                "peak_balance": self._state.get("peak_balance", 0),
                 "thresholds": {
                     "daily": self.DAILY_LOSS_LIMIT,
                     "weekly": self.WEEKLY_LOSS_LIMIT,

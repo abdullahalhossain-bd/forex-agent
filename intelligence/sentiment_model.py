@@ -285,7 +285,13 @@ class SentimentModel:
                     model=GROQ_MODEL,
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.1,
-                    max_tokens=400,
+                    # 2026-08-20 fix: 400 was too tight — the JSON schema
+                    # here has sentiment/tone/currency/impact_score/
+                    # keywords/summary/confidence, and got cut off
+                    # mid-string ("Unterminated string starting at...")
+                    # whenever the model's summary ran long. 700 gives
+                    # enough headroom without materially increasing cost.
+                    max_tokens=700,
                 )
                 raw = resp.choices[0].message.content
 
@@ -300,7 +306,16 @@ class SentimentModel:
                 log.debug(f"[SentimentModel] Groq failed: {e}")
 
         # Gemini Fallback
-        if raw is None:
+        # 2026-08-20 fix: was `if raw is None` — Groq sometimes returns an
+        # EMPTY STRING (not None) for `resp.choices[0].message.content`
+        # (e.g. finish_reason=length with 0 tokens emitted, or a filtered
+        # response). An empty string is falsy but not None, so the old
+        # check silently treated it as "Groq succeeded" and skipped every
+        # fallback — landing straight in the JSON parser with "" and
+        # producing "Expecting value: line 1 column 1 (char 0)" every
+        # time instead of trying Gemini/OpenRouter. `not raw` catches
+        # both None and "".
+        if not raw:
             gemini_client = _key_manager.get_gemini_client() if _key_manager is not None else _gemini_client
             if gemini_client is not None:
                 try:
@@ -333,7 +348,7 @@ class SentimentModel:
         # Cascade is now Groq → Gemini → OpenRouter (matching
         # AIAnalyst / MasterAnalyst). Ollama was NEVER used in this
         # layer (no _call_ollama here), so no removal needed.
-        if raw is None and _key_manager is not None and _key_manager.has_any_openrouter:
+        if not raw and _key_manager is not None and _key_manager.has_any_openrouter:
             try:
                 or_client = _key_manager.get_openrouter_client()
                 if or_client is not None:
@@ -342,7 +357,7 @@ class SentimentModel:
                         model=or_model,
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.1,
-                        max_tokens=400,
+                        max_tokens=700,  # same fix as Groq — avoid mid-JSON truncation
                     )
                     raw = resp.choices[0].message.content
                     _key_manager.mark_openrouter_success()
@@ -353,7 +368,7 @@ class SentimentModel:
                     _key_manager.mark_openrouter_failure(str(e), is_rate_limited)
                 log.debug(f"[SentimentModel] OpenRouter failed: {e}")
 
-        if raw is None:
+        if not raw:
             return None
 
         # Parse JSON

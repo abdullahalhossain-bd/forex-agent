@@ -100,6 +100,53 @@ class MT5Connection:
         # when to run the periodic account_info() auth check.
         self._health_check_count = 0
 
+        # BUG FIX (2026-08-21): symbol_select()/copy_rates_from_pos() can
+        # fail with MT5 error code -10004 ("no IPC connection") even while
+        # terminal_info() (used by is_alive()) keeps succeeding — these
+        # hit separate internal MT5 API contexts that can desync. Because
+        # nothing previously flagged self.connected=False or called
+        # reconnect() on a -10004, a stuck IPC channel could silently
+        # fail every single data fetch for many cycles in a row (33+ seen
+        # in production) until the whole process crashed on the
+        # catastrophic-error-cycle threshold and restarted (which happens
+        # to re-run mt5.initialize()). This counter + note_ipc_failure()
+        # lets callers (e.g. DataFetcher on -10004) force an active
+        # reconnect after a few consecutive failures instead of just
+        # hoping the next cycle works.
+        self._consecutive_ipc_failures: int = 0
+        self.IPC_FAILURE_RECONNECT_THRESHOLD: int = 3
+
+    def note_ipc_failure(self) -> bool:
+        """Call this whenever a raw MT5 data/trade call fails with
+        code=-10004 (IPC connection lost) despite is_alive() reporting the
+        connection as healthy. After IPC_FAILURE_RECONNECT_THRESHOLD
+        consecutive calls to this method, forces an active reconnect()
+        rather than passively waiting for the next cycle to maybe work.
+
+        Returns True if a reconnect was attempted this call.
+        """
+        self._consecutive_ipc_failures += 1
+        if self._consecutive_ipc_failures >= self.IPC_FAILURE_RECONNECT_THRESHOLD:
+            log.warning(
+                f"[MT5Connection] {self._consecutive_ipc_failures} consecutive "
+                f"-10004 IPC failures despite terminal appearing alive — "
+                f"forcing active reconnect (not waiting for catastrophic "
+                f"error-cycle threshold)"
+            )
+            self._consecutive_ipc_failures = 0
+            self.connected = False  # force _require_connected() to reconnect
+            # Invalidate the is_alive() cache so the next health check
+            # can't short-circuit on a stale "healthy" result.
+            self._last_health_check_result = False
+            self._last_health_check_ts = 0.0
+            return self.reconnect()
+        return False
+
+    def note_ipc_success(self) -> None:
+        """Call this after any successful MT5 data/trade call to reset
+        the consecutive -10004 counter."""
+        self._consecutive_ipc_failures = 0
+
     # ==========================================================
     # SINGLETON FACTORY
     # ==========================================================
@@ -155,21 +202,6 @@ class MT5Connection:
     # ==========================================================
 
     def connect(self) -> bool:
-        # PERF FIX: backtests never need a live MT5 connection (all price
-        # data comes from the CSV provider), but nothing here checked
-        # is_backtest_mode() — so AITrader construction paid a full
-        # connect-retry-fail cycle (MAX_RETRIES x RETRY_DELAY_SEC, ~12s per
-        # trader.log evidence) once per run even though it always fails on
-        # a headless/CI machine, and even on the real Windows box it's pure
-        # dead weight during backtesting. Fail fast instead.
-        try:
-            from core.constants import is_backtest_mode
-            if is_backtest_mode():
-                log.debug("[MT5Connection] backtest mode — skipping live MT5 connect")
-                return False
-        except Exception:
-            pass
-
         if not MT5_AVAILABLE:
             log.error("MetaTrader5 package not installed")
             return False
@@ -226,6 +258,15 @@ class MT5Connection:
             self.connected_at = datetime.utcnow()
             self.last_ping = datetime.utcnow()
             self._consecutive_failures = 0
+
+            # Notify fetcher's cold-start window tracker (write-once).
+            # Only the VERY FIRST connect starts the sync deadline;
+            # mid-session reconnects reuse already-synced terminal state.
+            try:
+                from data.fetcher import set_mt5_first_connected_at
+                set_mt5_first_connected_at(time.time())
+            except Exception:
+                pass  # non-critical; fetcher will treat cold_start=False
 
             self._print_connected_banner()
             return True
@@ -310,23 +351,7 @@ class MT5Connection:
                 with self.MT5_LOCK:
                     terminal = mt5.terminal_info()
 
-                # BUGFIX: terminal_info() returning a non-None struct only
-                # proves the terminal PROCESS answered the IPC call — it
-                # says nothing about whether that terminal is actually
-                # connected to the broker's trade server. terminal_info()
-                # exposes exactly that as `.connected`, and this check was
-                # ignoring it entirely. Result: if the terminal's broker-side
-                # connection dropped (network blip, server-side kick, feed
-                # outage) while the terminal process itself stayed up,
-                # is_alive() kept returning True forever — health checks
-                # "passed", ensure_connected()/_require_connected() never
-                # triggered reconnect(), and every symbol's OHLCV fetch kept
-                # returning the same last-cached bars indefinitely (visible
-                # in trader.log as bar staleness climbing in lockstep with
-                # wall-clock time across ALL timeframes and ALL symbols
-                # simultaneously — the signature of a frozen feed, not a
-                # per-symbol data problem).
-                if terminal is not None and getattr(terminal, "connected", False):
+                if terminal is not None:
                     self.last_ping = datetime.utcnow()
                     self._consecutive_failures = 0
 
@@ -359,25 +384,6 @@ class MT5Connection:
                     self._last_health_check_ts = _time.time()
                     self._last_health_check_result = True
                     return True
-
-                # Distinguish the two failure modes for diagnosability:
-                # terminal is None -> IPC itself is dead (process gone/hung).
-                # terminal is not None but .connected is False -> terminal
-                # process is fine but it has lost its link to the broker's
-                # trade server (this is the case that used to be missed).
-                if terminal is None:
-                    log.debug(
-                        f"[MT5Connection] terminal_info() returned None "
-                        f"(attempt {attempt}/{attempts}) — IPC channel to "
-                        f"terminal appears down."
-                    )
-                else:
-                    log.debug(
-                        f"[MT5Connection] terminal_info() returned but "
-                        f".connected=False (attempt {attempt}/{attempts}) — "
-                        f"terminal process is up but not connected to the "
-                        f"broker trade server."
-                    )
 
                 if attempt < attempts:
                     time.sleep(self.HEALTH_CHECK_RETRY_DELAY)
@@ -534,49 +540,6 @@ class MT5Connection:
             return None
 
     # ==========================================================
-    # SYMBOL INFO  (fix: was missing entirely — every caller of
-    # mt5_conn.symbol_info() was silently falling back to the static
-    # USD pip-value table, which is wrong by ~100x on Cent accounts.
-    # See core/constants.py:get_live_pip_value_per_lot().)
-    # ==========================================================
-
-    def symbol_info(self, symbol: str):
-        """Thread-safe wrapper around mt5.symbol_info().
-
-        Returns the broker's live SymbolInfo struct (point, digits,
-        trade_tick_value, trade_tick_size, trade_contract_size, etc.)
-        for `symbol`, or None if unavailable. Callers that need pip
-        value / contract-size math (e.g. get_live_pip_value_per_lot)
-        depend on this actually working — do not remove.
-        """
-        if not self._require_connected():
-            return None
-
-        try:
-            with self.MT5_LOCK:
-                # symbol_info() only returns data for symbols that are
-                # currently selected in Market Watch — make sure it's
-                # selected first so this doesn't silently return None
-                # for symbols the terminal hasn't shown yet.
-                info = mt5.symbol_info(symbol)
-                if info is None:
-                    mt5.symbol_select(symbol, True)
-                    info = mt5.symbol_info(symbol)
-
-            if info is None:
-                log.warning(
-                    f"[MT5Connection] symbol_info({symbol}) returned None "
-                    f"(symbol not found / not selectable on this broker)"
-                )
-                return None
-
-            return info
-
-        except Exception as e:
-            log.exception(f"[MT5Connection] symbol_info error: {e}")
-            return None
-
-    # ==========================================================
     # POSITIONS
     # ==========================================================
 
@@ -633,24 +596,6 @@ class MT5Connection:
                 return mt5.copy_rates_from_pos(symbol, timeframe, start_pos, count)
         except Exception as e:
             log.exception(f"[MT5Connection] copy_rates_from_pos error: {e}")
-            return None
-
-    def copy_rates_range(self, symbol: str, timeframe, date_from, date_to):
-        """Thread-safe wrapper around mt5.copy_rates_range().
-
-        Unlike copy_rates_from_pos() (last N candles counting back from
-        *now*), this returns every candle between two datetimes — needed
-        for after-the-fact counterfactual analysis (e.g. "what did price
-        do after this blocked signal's timestamp?") where the window of
-        interest is in the past, not the most recent bars.
-        """
-        if not self._require_connected():
-            return None
-        try:
-            with self.MT5_LOCK:
-                return mt5.copy_rates_range(symbol, timeframe, date_from, date_to)
-        except Exception as e:
-            log.exception(f"[MT5Connection] copy_rates_range error: {e}")
             return None
 
     # ==========================================================
