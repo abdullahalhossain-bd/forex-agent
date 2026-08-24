@@ -2504,7 +2504,18 @@ class AITrader:
                 try:
                     try:
                         from execution.execution_router import _check_absolute_safety
-                        _safe, _safety_reason = _check_absolute_safety(self.symbol)
+                        # Pass shared MT5Connection so LiveFeed doesn't race unlocked
+                        # and so broker-suffixed tick lookup can use the live session.
+                        _mt5 = None
+                        try:
+                            _mt5 = self._resolve_mt5_connection()
+                        except Exception:
+                            _mt5 = None
+                        if _mt5 is None and getattr(self, "_router", None) is not None:
+                            _mt5 = getattr(self._router, "_mt5_conn", None)
+                        _safe, _safety_reason = _check_absolute_safety(
+                            self.symbol, mt5_conn=_mt5
+                        )
                     except Exception as _e:
                         _safe, _safety_reason = True, f"safety pre-check unavailable: {_e}"
 
@@ -3997,16 +4008,20 @@ class AITrader:
         run_coro_sync(coro)
 
     def _clean_symbol(self, symbol: str) -> str:
-        # Round-14 fix: see backtest/simulator.py — blanket "USDT"->"USD"
-        # replace corrupted USDTRY/USDTHB (matched "USDT" mid-string, not
-        # just as a Tether-quote suffix). Note: this method is also
-        # defined again near line ~3370 in this same class — that later
-        # definition wins at runtime (Python keeps the last one), so this
-        # copy is currently dead code, but fixing both for consistency.
-        cleaned = str(symbol).upper().replace("/", "").replace("=X", "").strip()
-        if cleaned.endswith("USDT"):
-            cleaned = cleaned[:-1]
-        return cleaned
+        # BUG FIX (2026-08-24): this and the later duplicate near line
+        # ~5018 each carried their own `str(symbol).upper()...` logic,
+        # which mangles a broker-suffixed symbol like "EURUSDm" into
+        # "EURUSDM" (capital M) because .upper() ran BEFORE the suffix
+        # was stripped — see core/constants.py's strip_mt5_suffix() for
+        # the full explanation. `clean_symbol` is already imported from
+        # core.constants at the top of this file (Line 63) and has the
+        # fix applied there in one place — delegate to it instead of
+        # keeping a second, drifting copy of the same logic. Note: this
+        # method is also defined again near line ~5018 in this same
+        # class — that later definition wins at runtime (Python keeps
+        # the last one), so this copy is currently dead code, but
+        # fixing both for consistency.
+        return clean_symbol(symbol)
 
     def _error_result(self, reason: str) -> dict:
         log.error(f"Pipeline failed: {reason}")
@@ -5016,16 +5031,17 @@ class AutonomousTraderSystem:
         }
 
     def _clean_symbol(self, symbol: str) -> str:
-        # Round-14 fix: see backtest/simulator.py — blanket "USDT"->"USD"
-        # replace corrupted real FX codes containing "USDT" as a
-        # substring: USDTRY (USD/Turkish Lira) -> USDRY, USDTHB
-        # (USD/Thai Baht) -> USDHB. This is the definition that actually
-        # runs (Python keeps the last of two same-named methods in this
-        # class — see the now-dead duplicate near line 2533).
-        cleaned = str(symbol).upper().replace("/", "").replace("=X", "").strip()
-        if cleaned.endswith("USDT"):
-            cleaned = cleaned[:-1]
-        return cleaned
+        # BUG FIX (2026-08-24): was `str(symbol).upper()...` run directly
+        # on the raw symbol, which mangles a broker-suffixed symbol like
+        # "EURUSDm" into "EURUSDM" (capital M) since .upper() ran before
+        # the lowercase "m" suffix was stripped — see core/constants.py's
+        # strip_mt5_suffix() for the full explanation. This is the
+        # definition that actually runs at runtime (Python keeps the
+        # last of two same-named methods in this class — see the now-dead
+        # duplicate near line ~3999). Delegate to the already-imported
+        # core.constants.clean_symbol (Line 63) instead of a local copy
+        # of the same "USDT"-strip logic, so both fixes live in one place.
+        return clean_symbol(symbol)
 
     # ── Day 37+ runtime unification: health & introspection ──────────
     def health_status(self) -> dict:

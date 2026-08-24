@@ -51,17 +51,72 @@ def _mt5_positions_get(retries: int = 2, delay: float = 0.3, **kwargs):
 # ─────────────────────────────────────────────────────────────
 # PIP SIZE MAP
 # ─────────────────────────────────────────────────────────────
+# CRITICAL FIX (2026-08-24 audit): two independent bugs here, both live-money
+# impacting for _check_trailing()'s SL distance and _check_breakeven()'s
+# profit-pip gate:
+#
+# 1) `symbol.upper()[:6]` happened to strip the broker's "m" suffix only by
+#    accident (every FX/metal ISO code is exactly 6 chars, so truncating to
+#    6 chars discarded whatever suffix followed). It breaks the moment the
+#    broker uses a *prefix* instead of a suffix, or a multi-char suffix that
+#    isn't purely trailing. Now uses the same core/constants.strip_mt5_suffix()
+#    helper already used in live_feed.py's SPREAD_LIMITS_PIPS fix, so there's
+#    one canonical place that knows how to undo the broker's symbol mangling.
+#
+# 2) The map only covered 7 of the ~48 pairs in config.SYMBOLS. Every JPY
+#    cross except USDJPY (EURJPY, GBPJPY, AUDJPY, NZDJPY, CADJPY, CHFJPY,
+#    SGDJPY, HKDJPY, MXNJPY) fell through to DEFAULT=0.0001 — 100x too small
+#    for a JPY pair (real pip size 0.01). Any position on one of those pairs
+#    would get: TRAIL_DISTANCE_PIPS * 0.0001 instead of * 0.01 as the trailing
+#    SL offset, i.e. a stop ~100x tighter than intended, and profit_pips in
+#    _check_breakeven()/health scoring would read ~100x too high — a real
+#    position could be stopped out on normal noise or wrongly flagged as
+#    deep-in-profit. Fixed by preferring the *live broker point* (matches
+#    mt5-technical.md guidance: never hardcode pip size) with the static map
+#    only as a fallback when MT5 is unavailable (e.g. backtest/offline use).
 PIP_SIZE = {
-    "EURUSD": 0.0001, "GBPUSD": 0.0001,
-    "USDJPY": 0.01,   "USDCHF": 0.0001,
-    "AUDUSD": 0.0001, "USDCAD": 0.0001,
-    "XAUUSD": 0.1,
+    "EURUSD": 0.0001, "GBPUSD": 0.0001, "USDJPY": 0.01, "USDCHF": 0.0001,
+    "AUDUSD": 0.0001, "USDCAD": 0.0001, "NZDUSD": 0.0001,
+    "EURGBP": 0.0001, "EURJPY": 0.01, "EURCHF": 0.0001, "EURAUD": 0.0001,
+    "EURCAD": 0.0001, "EURNZD": 0.0001,
+    "GBPJPY": 0.01, "GBPCHF": 0.0001, "GBPAUD": 0.0001, "GBPCAD": 0.0001, "GBPNZD": 0.0001,
+    "AUDJPY": 0.01, "AUDCHF": 0.0001, "AUDCAD": 0.0001, "AUDNZD": 0.0001,
+    "NZDJPY": 0.01, "NZDCHF": 0.0001, "NZDCAD": 0.0001,
+    "CADJPY": 0.01, "CADCHF": 0.0001, "CHFJPY": 0.01,
+    "XAUUSD": 0.1, "XAGUSD": 0.01, "XPTUSD": 0.1, "XPDUSD": 0.1,
+    "USDTRY": 0.0001, "USDZAR": 0.0001,
+    "EURNOK": 0.0001, "EURSEK": 0.0001, "GBPSEK": 0.0001, "GBPNOK": 0.0001,
+    "AUDSGD": 0.0001, "NZDSGD": 0.0001, "SGDJPY": 0.01,
+    "HKDJPY": 0.01, "MXNJPY": 0.01,
+    "USDCNH": 0.0001, "USDHKD": 0.0001, "USDSGD": 0.0001,
+    "USDMXN": 0.0001, "USDTHB": 0.0001,
     "DEFAULT": 0.0001,
 }
 
 
 def _pip(symbol: str) -> float:
-    key = symbol.upper()[:6]
+    """Pip size for `symbol`, broker-suffix-agnostic.
+
+    Tries live MT5 `point` first (correct for any symbol/broker, including
+    ones not in the static map below); falls back to the static map — keyed
+    by suffix-stripped, upper-cased ISO code — for offline/backtest use or
+    if MT5 isn't reachable right now.
+    """
+    try:
+        from broker.mt5_connection import MT5_AVAILABLE
+        if MT5_AVAILABLE:
+            import MetaTrader5 as mt5
+            info = mt5.symbol_info(symbol)
+            if info is not None and info.point:
+                # JPY pairs / most metals quote pip as 10x point (5-digit
+                # broker pricing); point itself is the tick size, not the pip.
+                digits = getattr(info, "digits", None)
+                return info.point * 10 if digits in (3, 5) else info.point
+    except Exception:
+        pass  # best-effort — fall through to the static map below
+
+    from core.constants import strip_mt5_suffix
+    key = strip_mt5_suffix(symbol).upper()
     return PIP_SIZE.get(key, PIP_SIZE["DEFAULT"])
 
 

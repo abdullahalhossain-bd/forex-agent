@@ -67,7 +67,7 @@ def _log_event(event: str, **fields):
         pass
 
 
-def _check_absolute_safety(symbol: str) -> tuple[bool, str]:
+def _check_absolute_safety(symbol: str, mt5_conn=None) -> tuple[bool, str]:
     try:
         from config import ABSOLUTE_SAFETY, TEST_MODE
         if not ABSOLUTE_SAFETY:
@@ -76,11 +76,28 @@ def _check_absolute_safety(symbol: str) -> tuple[bool, str]:
         pass
 
     try:
+        # BUG FIX (2026-08-24): AITrader stores clean_symbol() (bare USDCAD).
+        # Exness MT5 symbols are suffixed (USDADm). Passing the bare name to
+        # LiveFeed/is_safe_to_trade → symbol_info_tick returns None → false
+        # "MT5 unavailable or no tick data" and Devil's Advocate is skipped.
+        try:
+            from core.constants import to_broker_symbol
+            broker_symbol = to_broker_symbol(symbol)
+        except Exception:
+            broker_symbol = symbol
+
         from data.live_feed import get_live_feed
-        feed = get_live_feed()
-        safe, reason = feed.is_safe_to_trade(symbol)
+        feed = get_live_feed(mt5_conn=mt5_conn)
+        safe, reason = feed.is_safe_to_trade(broker_symbol)
+        if not safe and broker_symbol != symbol:
+            # Retry bare name only if broker form failed for unexpected reasons
+            # (some accounts use unsuffixed names). Prefer broker form result.
+            pass
         if not safe:
-            log.warning(f"[ABSOLUTE_SAFETY] BLOCKED {symbol}: {reason}")
+            log.warning(
+                f"[ABSOLUTE_SAFETY] BLOCKED {symbol}"
+                f"{f' (broker={broker_symbol})' if broker_symbol != symbol else ''}: {reason}"
+            )
         return safe, reason
     except Exception as e:
         log.error(
@@ -481,7 +498,15 @@ class ExecutionRouter:
         elif flagged["flag_name"] == "chasing_filter" and details.get("pullback_pips") is not None:
             # Require at least the minimum pullback the filter itself
             # defines (10 pips / 10%, whichever check_chasing_filter used).
-            pip = 0.01 if str(decision_result.get("symbol", "")).upper().endswith("JPY") else 0.0001
+            # BUG FIX (2026-08-24): was `str(symbol).upper().endswith("JPY")`
+            # on the RAW symbol. This broker appends a lowercase "m" suffix
+            # (e.g. "USDJPYm"), so .upper() turned it into "USDJPYM" — which
+            # no longer ends in "JPY", silently using the wrong (10x too
+            # small) pip size for every suffixed JPY pair. Strip the broker
+            # suffix first — see core/constants.py's strip_mt5_suffix().
+            from core.constants import strip_mt5_suffix
+            _sym_for_jpy_check = strip_mt5_suffix(str(decision_result.get("symbol", ""))).upper()
+            pip = 0.01 if _sym_for_jpy_check.endswith("JPY") else 0.0001
             required_pips = 10.0
             offset = required_pips * pip
             if entry is not None:
@@ -571,7 +596,7 @@ class ExecutionRouter:
             return self._fail("mt5 disconnected after poll timeout")
 
         # ── ABSOLUTE_SAFETY hard gate ─────────────────────────────
-        safe, reason = _check_absolute_safety(symbol)
+        safe, reason = _check_absolute_safety(symbol, mt5_conn=self._mt5_conn)
         if not safe:
             log.warning(
                 f"[ExecutionRouter] ABSOLUTE_SAFETY blocked trade — "

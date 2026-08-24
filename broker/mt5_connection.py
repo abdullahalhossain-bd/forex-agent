@@ -522,12 +522,39 @@ class MT5Connection:
             return None
 
         try:
+            # BUG FIX (2026-08-24): bare internal symbols (USDCAD) must be
+            # tried as broker form (USDADm) on Exness / MT5_SYMBOL_SUFFIX.
+            candidates = [symbol]
+            try:
+                from core.constants import to_broker_symbol
+                broker = to_broker_symbol(symbol)
+                if broker and broker not in candidates:
+                    candidates.append(broker)
+            except Exception:
+                pass
+
+            tick = None
+            used = symbol
             with self.MT5_LOCK:
-                tick = mt5.symbol_info_tick(symbol)
+                for sym in candidates:
+                    tick = mt5.symbol_info_tick(sym)
+                    if tick is not None:
+                        used = sym
+                        break
+                    # Ensure symbol is in Market Watch then retry once
+                    try:
+                        mt5.symbol_select(sym, True)
+                        tick = mt5.symbol_info_tick(sym)
+                        if tick is not None:
+                            used = sym
+                            break
+                    except Exception:
+                        pass
 
             if tick is None:
                 log.warning(
                     f"[MT5Connection] No tick for {symbol}"
+                    f"{f' (tried {candidates})' if len(candidates) > 1 else ''}"
                 )
                 return None
 
@@ -586,6 +613,75 @@ class MT5Connection:
         except Exception as e:
             log.exception(f"[MT5Connection] symbol_select error: {e}")
             return False
+
+    def symbol_info(self, symbol: str):
+        """Thread-safe wrapper around mt5.symbol_info().
+
+        BUG FIX (2026-08-24): this method didn't exist on MT5Connection at
+        all. core/constants.py's get_live_pip_value_per_lot() calls
+        `mt5_conn.symbol_info(symbol)` to derive real pip value/point/digits
+        from the broker; with no such method it raised AttributeError,
+        which was being swallowed and silently replaced with a hardcoded
+        $10/pip fallback. On a cent account (or any non-standard contract
+        size) that fallback can be off by ~100x, which makes every
+        position-sizing calculation downstream unsafe. Route it through
+        _require_connected() + MT5_LOCK like every other wrapper here
+        rather than calling mt5.symbol_info() directly against the global
+        module (that direct-call pattern is what caused the LiveFeed lock
+        bypass documented in live_feed.py).
+        """
+        if not self._require_connected():
+            return None
+        try:
+            candidates = [symbol]
+            try:
+                from core.constants import to_broker_symbol
+                broker = to_broker_symbol(symbol)
+                if broker and broker not in candidates:
+                    candidates.append(broker)
+            except Exception:
+                pass
+            info = None
+            with self.MT5_LOCK:
+                for sym in candidates:
+                    info = mt5.symbol_info(sym)
+                    if info is not None:
+                        break
+                    try:
+                        mt5.symbol_select(sym, True)
+                        info = mt5.symbol_info(sym)
+                        if info is not None:
+                            break
+                    except Exception:
+                        pass
+            if info is None:
+                log.warning(
+                    f"[MT5Connection] symbol_info returned None for {symbol} "
+                    f"(tried {candidates}; not found/not selected in Market Watch?)"
+                )
+            return info
+        except Exception as e:
+            log.exception(f"[MT5Connection] symbol_info error: {e}")
+            return None
+
+    @property
+    def lock(self) -> Lock:
+        """Public alias for MT5_LOCK.
+
+        BUG FIX (2026-08-24): LiveFeed._mt5_lock() does
+        `getattr(self._mt5_conn, "lock", None)` to borrow this connection's
+        lock for its own tick polling. MT5Connection only ever exposed the
+        lock as the class attribute `MT5_LOCK` (all-caps), so that getattr
+        always returned None — even when a shared MT5Connection *was*
+        correctly injected into LiveFeed via get_live_feed(mt5_conn=...).
+        LiveFeed silently fell back to the unlocked no-op context every
+        time, defeating the entire point of the injection: tick polling
+        could still race order execution elsewhere. This alias makes the
+        already-shared class-level lock visible under the name LiveFeed
+        actually looks for, with no change to existing `self.MT5_LOCK`
+        usage anywhere in this file.
+        """
+        return self.MT5_LOCK
 
     def copy_rates_from_pos(self, symbol: str, timeframe, start_pos: int, count: int):
         """Thread-safe wrapper around mt5.copy_rates_from_pos()."""

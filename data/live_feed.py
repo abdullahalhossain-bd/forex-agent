@@ -15,6 +15,13 @@ FIX (Day 82+):
   - is_safe_to_trade() এ TEST_MODE-এ শুধু trade_mode==0 চেক করে।
     velocity/spread দিয়ে block হয় না।
   - ABSOLUTE_SAFETY=false হলে সব check skip হয়।
+
+BUG FIX (2026-08-24):
+  - get_snapshot / is_safe_to_trade now resolve bare internal symbols
+    (USDCAD) to broker form (USDCADm) via core.constants.to_broker_symbol
+    before mt5.symbol_info_tick / symbol_info. Without this, Exness (and
+    similar) accounts return no tick → absolute_safety false-blocks and
+    Devil's Advocate is skipped.
 """
 from __future__ import annotations
 
@@ -92,7 +99,36 @@ SPREAD_LIMITS_PIPS: Dict[str, float] = {
 
 
 def _get_spread_limit(symbol: str) -> float:
-    return SPREAD_LIMITS_PIPS.get(symbol.upper(), SPREAD_LIMITS_PIPS["DEFAULT"])
+    # BUG FIX (2026-08-24): was `symbol.upper()` on the RAW symbol. This
+    # broker appends a lowercase "m" suffix (e.g. "EURUSDm"), so .upper()
+    # turned it into "EURUSDM" — 7 characters, which never matches any
+    # 6-character key above and silently fell through to the generic
+    # DEFAULT spread limit (10.0 pips) for every suffixed symbol instead
+    # of its real, tighter/looser limit. Strip the suffix first — see
+    # core/constants.py's strip_mt5_suffix().
+    from core.constants import strip_mt5_suffix
+    key = strip_mt5_suffix(symbol).upper()
+    return SPREAD_LIMITS_PIPS.get(key, SPREAD_LIMITS_PIPS["DEFAULT"])
+
+
+def _broker_symbol_candidates(symbol: str) -> list[str]:
+    """Bare internal name (USDCAD) + broker form (USDCADm), de-duplicated.
+
+    Order: broker form first (Exness), then original. Used by every
+    symbol_info_tick / symbol_info call in this module.
+    """
+    candidates: list[str] = []
+    try:
+        from core.constants import to_broker_symbol
+        broker = to_broker_symbol(symbol)
+        if broker:
+            candidates.append(broker)
+    except Exception:
+        pass
+    raw = str(symbol or "").strip()
+    if raw and raw not in candidates:
+        candidates.append(raw)
+    return candidates or [str(symbol)]
 
 
 # ── Tick snapshot ─────────────────────────────────────────────
@@ -183,6 +219,28 @@ class LiveFeed:
         self._mt5_conn = mt5_conn
         self._warned_unlocked = False
 
+    def set_mt5_conn(self, mt5_conn) -> None:
+        """Late-inject a shared, locked MT5Connection into an already-built
+        singleton.
+
+        Needed because get_live_feed() only honors mt5_conn on the call
+        that *creates* _FEED — every later caller (e.g. execution_router.py)
+        is silently ignored once some earlier, connection-less caller (e.g.
+        a HealthMonitor / startup poller) has already built the singleton
+        unlocked. This lets a later, "real" caller upgrade the singleton
+        from unlocked to locked instead of racing it forever.
+        """
+        if mt5_conn is None:
+            return
+        if self._mt5_conn is not None:
+            return  # already locked to a connection — don't swap underneath callers
+        self._mt5_conn = mt5_conn
+        self._warned_unlocked = False
+        log.info(
+            "[LiveFeed] Shared MT5Connection injected post-construction — "
+            "tick polling is now locked."
+        )
+
     # ── Internal: locked MT5 access ─────────────────────────────
 
     def _mt5_lock(self):
@@ -214,19 +272,39 @@ class LiveFeed:
                 log.debug(f"[LiveFeed] shared MT5Connection unavailable for {symbol}")
                 return None
 
+        # BUG FIX (2026-08-24): try broker-suffixed name first (USDCADm),
+        # then bare (USDCAD). Exness and many brokers require the suffix.
+        candidates = _broker_symbol_candidates(symbol)
+        tick = None
+        info = None
+        used_sym = symbol
+
         with self._mt5_lock():
-            tick = mt5.symbol_info_tick(symbol)
-            info = mt5.symbol_info(symbol) if tick is not None else None
+            for sym in candidates:
+                tick = mt5.symbol_info_tick(sym)
+                if tick is not None and getattr(tick, "time", 0) != 0:
+                    used_sym = sym
+                    info = mt5.symbol_info(sym)
+                    break
+                try:
+                    mt5.symbol_select(sym, True)
+                    tick = mt5.symbol_info_tick(sym)
+                    if tick is not None and getattr(tick, "time", 0) != 0:
+                        used_sym = sym
+                        info = mt5.symbol_info(sym)
+                        break
+                except Exception:
+                    pass
 
         if tick is None or tick.time == 0:
-            log.debug(f"[LiveFeed] No tick for {symbol}")
+            log.debug(f"[LiveFeed] No tick for {symbol} (tried {candidates})")
             return None
 
         digits = info.digits if info else 5
         spread_points = tick.ask - tick.bid
         spread_pips = round(spread_points * (10 ** (digits - 1)), 2) if digits else 0
 
-        # Push to rolling buffer
+        # Push to rolling buffer (keyed by caller symbol for stable history)
         now = time.time()
         record = {
             "time":   now,
@@ -240,14 +318,14 @@ class LiveFeed:
         self._last_fetch[symbol] = now
 
         # Compute intelligence metrics from the buffer
-        velocity       = self._compute_velocity(buf, now)
-        pressure       = self._compute_pressure(buf)
-        spread_median  = self._compute_spread_median(buf)
+        velocity        = self._compute_velocity(buf, now)
+        pressure        = self._compute_pressure(buf)
+        spread_median   = self._compute_spread_median(buf)
         spread_multiple = (spread_pips / spread_median) if spread_median > 0 else 1.0
-        liquidity      = self._classify_liquidity(spread_pips, spread_multiple, velocity)
+        liquidity       = self._classify_liquidity(spread_pips, spread_multiple, velocity)
 
         return TickSnapshot(
-            symbol=symbol,
+            symbol=used_sym,
             bid=tick.bid,
             ask=tick.ask,
             spread_pips=spread_pips,
@@ -343,33 +421,43 @@ class LiveFeed:
         ABSOLUTE_SAFETY gate — returns (safe, reason).
 
         DAY 82+ FIX:
-          TEST_MODE=true のとき: trade_mode==0 だけ block、
-          spread/velocity/liquidity は無視する。
-          これにより off-hours でも verification trade が通る。
+          TEST_MODE=true: only trade_mode==0 blocks; spread/velocity ignored.
+          PRODUCTION (TEST_MODE=false): per-symbol spread limit + EXPLOSIVE block.
 
-          PRODUCTION (TEST_MODE=false): symbol のデフォルト spread 閾値を
-          使用し、EXPLOSIVE と over-limit spread をブロックする。
+        BUG FIX (2026-08-24): symbol resolved via broker candidates so
+        bare USDCAD still finds USDCADm ticks on Exness.
         """
         if max_spread_multiple is None:
             max_spread_multiple = 10.0
 
         _test_mode = TEST_MODE
 
-        # ── TEST_MODE: trade_mode チェックのみ ──────────────────
+        # ── TEST_MODE: trade_mode check only ──────────────────
         if _test_mode:
             if not MT5_AVAILABLE:
-                # MT5 なければ pass — paper/simulation で動作
+                # MT5 না থাকলে pass — paper/simulation-এ চলবে
                 return True, "OK (TEST_MODE, MT5 unavailable)"
             try:
+                candidates = _broker_symbol_candidates(symbol)
+                info = None
                 with self._mt5_lock():
-                    info = mt5.symbol_info(symbol)
+                    for sym in candidates:
+                        info = mt5.symbol_info(sym)
+                        if info is not None:
+                            break
+                        try:
+                            mt5.symbol_select(sym, True)
+                            info = mt5.symbol_info(sym)
+                            if info is not None:
+                                break
+                        except Exception:
+                            pass
                 if info is not None and info.trade_mode == 0:
                     log.warning(
                         f"[ABSOLUTE_SAFETY] {symbol} trade_mode=0 — "
                         f"truly disabled by broker"
                     )
                     return False, f"{symbol} trade_mode=0 (disabled by broker)"
-                # trade_mode=4 (Full) বা অন্য যেকোনো — allow
                 return True, f"OK (TEST_MODE, trade_mode={getattr(info, 'trade_mode', '?')})"
             except Exception as e:
                 log.warning(f"[ABSOLUTE_SAFETY] trade_mode check failed: {e} — allowing")
@@ -406,13 +494,20 @@ def get_live_feed(mt5_conn=None) -> LiveFeed:
 
     Args:
         mt5_conn: Optional shared MT5Connection (see LiveFeed.__init__)
-            to inject on first creation — pass the same instance used
-            by data.fetcher.get_data_fetcher() / data_orchestrator.py /
+            to inject — pass the same instance used by
+            data.fetcher.get_data_fetcher() / data_orchestrator.py /
             execution_router.py so tick polling shares their lock
-            instead of racing it. Ignored on subsequent calls once the
-            singleton already exists.
+            instead of racing it.
+
+            NOTE: no longer ignored on subsequent calls. If the
+            singleton already exists but was built without a
+            connection (e.g. an earlier caller didn't have one yet),
+            passing mt5_conn here will upgrade it in place via
+            LiveFeed.set_mt5_conn() rather than being silently dropped.
     """
     global _FEED
     if _FEED is None:
         _FEED = LiveFeed(mt5_conn=mt5_conn)
+    elif mt5_conn is not None:
+        _FEED.set_mt5_conn(mt5_conn)
     return _FEED

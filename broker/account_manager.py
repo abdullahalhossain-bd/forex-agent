@@ -189,36 +189,80 @@ class AccountManager:
         """
         AI চায় 'EURUSD' কিন্তু broker এর কাছে 'EURUSD.m' বা 'EURUSDm'
         থাকতে পারে। mt5.symbols_get() দিয়ে actual matching symbol খুঁজে দেয়।
+
+        BUG FIX (2026-08-24): never upper-case a suffixed symbol into
+        USDCADM — strip suffix first for matching, and prefer the
+        configured broker form (MT5_SYMBOL_SUFFIX) as an exact probe.
         """
         if not MT5_AVAILABLE:
             return None
- 
-        requested = requested_symbol.upper().strip()
- 
-        exact_match = mt5.symbols_get(f"*{requested}*")
-        if exact_match:
-            for s in exact_match:
-                if s.name.upper() == requested:
-                    return s.name
- 
-        all_symbols = mt5.symbols_get()
+
+        raw = str(requested_symbol or "").strip()
+        if not raw:
+            return None
+
+        try:
+            from core.constants import to_broker_symbol, strip_mt5_suffix
+            bare = strip_mt5_suffix(raw).upper().replace("/", "").replace("=X", "").strip()
+            broker = to_broker_symbol(raw)
+        except Exception:
+            bare = raw.upper().replace("/", "").replace("=X", "").strip()
+            broker = raw
+
+        # 1) Exact probes: broker form first (Exness USDADm), then raw, then bare
+        for probe in (broker, raw, bare):
+            if not probe:
+                continue
+            try:
+                info = mt5.symbol_info(probe)
+                if info is not None:
+                    if not info.visible:
+                        mt5.symbol_select(probe, True)
+                    return info.name
+            except Exception:
+                pass
+
+        # 2) Wildcard search on bare name
+        try:
+            exact_match = mt5.symbols_get(f"*{bare}*") or ()
+        except Exception:
+            exact_match = ()
+        for s in exact_match:
+            name_upper = s.name.upper()
+            if name_upper == bare or name_upper == (broker or "").upper():
+                return s.name
+            cleaned = name_upper.replace(".", "")
+            # strip a single trailing broker letter suffix (m/i/c/pro etc.)
+            if len(cleaned) > 6 and cleaned.startswith(bare):
+                return s.name
+            if cleaned.endswith("M") and cleaned[:-1].replace("M", "", 1) == bare:
+                return s.name
+            if cleaned == bare or bare in name_upper:
+                return s.name
+
+        # 3) Full scan fallback
+        try:
+            all_symbols = mt5.symbols_get() or ()
+        except Exception:
+            all_symbols = ()
         if not all_symbols:
             log.error("[AccountManager] symbols_get() থেকে কিছু পাওয়া যায়নি")
             return None
- 
+
         for s in all_symbols:
             name_upper = s.name.upper()
-            cleaned = (
-                name_upper.replace(".", "").replace("M", "", 1)
-                if name_upper.endswith("M") else name_upper
-            )
-            if cleaned == requested or requested in name_upper:
-                log.info(f"[AccountManager] Symbol resolved: '{requested}' → '{s.name}'")
+            cleaned = name_upper.replace(".", "")
+            if cleaned.endswith("M"):
+                cleaned_bare = cleaned[:-1]
+            else:
+                cleaned_bare = cleaned
+            if cleaned_bare == bare or cleaned == bare or bare in name_upper:
+                log.info(f"[AccountManager] Symbol resolved: '{raw}' → '{s.name}'")
                 return s.name
- 
-        log.error(f"[AccountManager] কোনো matching symbol পাওয়া যায়নি: {requested}")
+
+        log.error(f"[AccountManager] কোনো matching symbol পাওয়া যায়নি: {raw} (bare={bare}, broker={broker})")
         return None
- 
+
     # ─────────────────────────────────────────────
     # MARKET STATUS CHECK  (Bonus 2)
     # ─────────────────────────────────────────────

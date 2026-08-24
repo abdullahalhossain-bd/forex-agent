@@ -5,8 +5,58 @@
 # ALL other modules MUST import from here — no local duplicates.
 # ============================================================
 
+import os
 import shutil
 from pathlib import Path
+
+# ── Broker symbol suffix (e.g. "EURUSDm") ──────────────────
+# BUG FIX (2026-08-24): get_pip_size(), get_pip_value_usd(), and
+# clean_symbol() all used to call .upper() directly on the RAW
+# symbol. This broker's suffix is lowercase ("m", e.g. "EURUSDm"),
+# so .upper() on the raw string turned it into "EURUSDM" — a
+# 7-character key with a trailing capital M that never matches any
+# entry in PIP_SIZE / PIP_VALUE_USD (keyed by the bare 6-char pair,
+# e.g. "EURUSD"). Every suffixed symbol silently fell through to the
+# "DEFAULT" fallback value instead of its real pip size/value, which
+# is exactly the kind of silent mismatch that corrupts risk-%
+# position sizing. Fix: strip the suffix BEFORE upper-casing, same
+# fix already applied in data/fetcher.py's _strip_mt5_suffix().
+MT5_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+
+
+def strip_mt5_suffix(symbol: str) -> str:
+    """Remove a trailing broker suffix (case-insensitive match) so
+    downstream .upper()/lookup logic never sees e.g. "EURUSDm" and
+    mangles it into "EURUSDM". No-op if the suffix isn't configured
+    or isn't present on this symbol."""
+    s = str(symbol).strip()
+    suffix = MT5_SYMBOL_SUFFIX
+    if suffix and len(s) > len(suffix) and s[-len(suffix):].lower() == suffix.lower():
+        return s[: -len(suffix)]
+    return s
+
+
+def to_broker_symbol(symbol: str) -> str:
+    """Append MT5_SYMBOL_SUFFIX for broker/MT5 calls (e.g. USDCAD → USDADm).
+
+    Internal code uses clean_symbol() (bare names). MT5 Exness symbols need
+    the configured suffix. Always use this (or AccountManager.resolve_symbol)
+    before symbol_info_tick / order_send / Market Watch lookups.
+    Idempotent if the suffix is already present (any case).
+    """
+    s = str(symbol or "").strip()
+    if not s:
+        return s
+    suffix = MT5_SYMBOL_SUFFIX or ""
+    if not suffix:
+        return s
+    if len(s) > len(suffix) and s[-len(suffix):].lower() == suffix.lower():
+        # Keep broker's original casing for the base; normalize suffix to config
+        return s[: -len(suffix)] + suffix
+    # Preserve common uppercase base + configured suffix casing
+    base = strip_mt5_suffix(s).upper().replace("/", "").replace("=X", "").strip()
+    return f"{base}{suffix}"
+
 
 # ── Project Root ────────────────────────────────────────────
 # Bug #19 fix: import from config.py (the single source of truth)
@@ -173,7 +223,7 @@ MT5_MAGIC_NUMBER = 424242
 
 def get_pip_size(symbol: str) -> float:
     """Get pip size for a symbol, with safe fallback."""
-    clean = symbol.upper().replace("/", "").replace("=X", "").strip()
+    clean = strip_mt5_suffix(symbol).upper().replace("/", "").replace("=X", "").strip()
     return PIP_SIZE.get(clean, PIP_SIZE["DEFAULT"])
 
 
@@ -191,7 +241,7 @@ def get_pip_value_usd(symbol: str) -> float:
     whenever a live MT5 connection is available; this function should
     only be the last-resort fallback when MT5 is unreachable.
     """
-    clean = symbol.upper().replace("/", "").replace("=X", "").strip()
+    clean = strip_mt5_suffix(symbol).upper().replace("/", "").replace("=X", "").strip()
     return PIP_VALUE_USD.get(clean, PIP_VALUE_USD["DEFAULT"])
 
 
@@ -281,7 +331,7 @@ def clean_symbol(symbol: str) -> str:
     # USDTHB -> USDHB (the "USDT" substring matched mid-string, not
     # just as a Tether-quote suffix). Only strip a trailing "T" when
     # the symbol genuinely ends in "USDT" (e.g. BTCUSDT -> BTCUSD).
-    cleaned = str(symbol).upper().replace("/", "").replace("=X", "").strip()
+    cleaned = strip_mt5_suffix(str(symbol)).upper().replace("/", "").replace("=X", "").strip()
     if cleaned.endswith("USDT"):
         cleaned = cleaned[:-1]
     return cleaned
@@ -550,15 +600,15 @@ def reset_backtest_memory() -> None:
 
 # Final sanity guard: ensure MIN_RR_PROD resolves to the intended
 # production default (2.0) unless explicitly overridden via env.
-    try:
-        # Only force the default when pytest explicitly set an env
-        # marker `PYTEST_CURRENT_TEST` (this happens during test runs
-        # in many harnesses). Do NOT treat 'pytest' in sys.modules as
-        # TEST_MODE — that caused gates to be bypassed during collection.
-        if _os.getenv("PYTEST_CURRENT_TEST"):
-            MIN_RR_PROD = 2.0
-        else:
-            v = _os.getenv("MIN_RR_PROD", "").strip()
-            MIN_RR_PROD = float(v) if v else 2.0
-    except Exception:
+try:
+    # Only force the default when pytest explicitly set an env
+    # marker PYTEST_CURRENT_TEST (this happens during test runs
+    # in many harnesses). Do NOT treat 'pytest' in sys.modules as
+    # TEST_MODE — that caused gates to be bypassed during collection.
+    if _os.getenv("PYTEST_CURRENT_TEST"):
         MIN_RR_PROD = 2.0
+    else:
+        v = _os.getenv("MIN_RR_PROD", "").strip()
+        MIN_RR_PROD = float(v) if v else 2.0
+except Exception:
+    MIN_RR_PROD = 2.0

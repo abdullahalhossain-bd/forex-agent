@@ -154,5 +154,17 @@
     "spread_pips": 0.1,
     "latency_ms": 270,
     "timestamp": "2026-08-20T05:44:24+00:00"
+  },
+  {
+    "ticket": 4590846419,
+    "pair": "USDCADm",
+    "direction": "BUY",
+    "requested": 1.38543,
+    "executed": 1.3854300000000002,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.4,
+    "latency_ms": 77,
+    "timestamp": "2026-08-24T18:20:29+00:00"
   }
 ]
