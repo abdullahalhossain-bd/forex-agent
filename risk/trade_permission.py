@@ -3,6 +3,7 @@
 import json
 
 from utils.logger import get_logger
+from utils.confidence_trace import confidence_trace
 
 log = get_logger("trade_permission")
 
@@ -628,6 +629,12 @@ class TradePermission:
                         f"penalty=-{SR_MISALIGNMENT_PENALTY}, "
                         f"conf: {_conf_before_sr:.0f}% -> {conf:.0f}%"
                     )
+                    confidence_trace.record(
+                        module="sr_misalignment",
+                        before=_conf_before_sr,
+                        after=conf,
+                        reason=f"S/R misalignment penalty (-{SR_MISALIGNMENT_PENALTY})",
+                    )
                 checks.append({
                     "check":  "S/R zone alignment",
                     "passed": sr_ok,
@@ -1120,6 +1127,13 @@ class TradePermission:
                             _detail += (
                                 f", penalty=-{_eq_penalty}, "
                                 f"conf: {_conf_before_eq:.0f}% -> {conf:.0f}%"
+                            )
+                            confidence_trace.record(
+                                module="entry_quality_guardrails",
+                                before=_conf_before_eq,
+                                after=conf,
+                                reason=f"quality={_quality_score}/100, penalty=-{_eq_penalty}",
+                                details={"penalty_by_rule": _eq_penalty_by_rule},
                             )
                         else:
                             _detail += ", all checks passed"

@@ -97,6 +97,7 @@ except Exception:
     _FUSION_V3_AVAILABLE = False
 
 from utils.logger import get_logger
+from utils.confidence_trace import confidence_trace
 
 log = get_logger("decision_agent")
 
@@ -414,6 +415,10 @@ class DecisionAgent:
         # block entirely (e.g. an early return before line ~610) doesn't
         # display a stale confidence value from a previous symbol's cycle.
         self._last_fusion_conf = 0.0
+        # 2026-08-25: reset the shared confidence trace at the top of every
+        # decision cycle so it doesn't carry stale entries from a previous
+        # symbol/cycle into this one's dec_out["confidence_trace"].
+        confidence_trace.reset()
 
         final_signal  = analysis_out.get("final_signal", "NO TRADE")
         rule_signal   = analysis_out.get("signal", {}).get("signal", "NO TRADE")
@@ -546,6 +551,13 @@ class DecisionAgent:
         log.info(
             f"[DecisionAgent] Aggregate confidence (all layers): "
             f"{_preserved_conf:.0f}% | " + " | ".join(_agg_breakdown)
+        )
+        confidence_trace.record(
+            module="aggregate_confidence",
+            before=max(float(rule_conf or 0), float(llm_conf_for_vote or 0), float(master_conf_for_vote or 0)),
+            after=_preserved_conf,
+            reason="Weighted average across all voting layers, damped by participation ratio",
+            details={"breakdown": _agg_breakdown},
         )
 
         # Day 41 Sentiment
@@ -1357,6 +1369,16 @@ class DecisionAgent:
                 reasons.append(
                     f"🎯 Day53 Confidence: {confidence_engine_result.get('reason')} "
                     f"({old_conf}% → {adj_conf}%)"
+                )
+                confidence_trace.record(
+                    module="confidence_engine",
+                    before=old_conf,
+                    after=adj_conf,
+                    reason=str(confidence_engine_result.get("reason", "")),
+                    details={
+                        "bayesian_penalty": confidence_engine_result.get("bayesian_penalty"),
+                        "sample_size": confidence_engine_result.get("sample_size"),
+                    },
                 )
 
         # ──────────────────────────────────────────────────────────

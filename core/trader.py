@@ -1287,12 +1287,78 @@ class AITrader:
         dec_out["tp_pips"] = risk_out.get("tp_pips", dec_out.get("tp_pips", 0))
         dec_out["rr"]     = risk_out.get("rr_ratio", dec_out.get("rr", 0))
 
+        # 2026-08-25: auto-correct SL/TP that aren't structurally anchored
+        # BEFORE Devil's Advocate ever reviews the trade, instead of letting
+        # its RISK_STRUCTURE pillar hard-reject over it. Snaps to the
+        # nearest real swing; falls back to the original values if no safe
+        # correction exists (see auto_correct_sl_tp docstring).
+        try:
+            _df_for_correction = market_out.get("df")
+            _entry_for_correction = risk_out.get("entry") or dec_out.get("entry")
+            if _df_for_correction is not None and _entry_for_correction and dec_out.get("sl") and dec_out.get("tp"):
+                from risk.entry_quality_guardrails import auto_correct_sl_tp
+                _corr = auto_correct_sl_tp(
+                    df=_df_for_correction,
+                    symbol=self.symbol,
+                    direction=dec_out.get("decision") or dec_out.get("final_action") or "",
+                    entry_price=_entry_for_correction,
+                    stop_loss=dec_out["sl"],
+                    take_profit=dec_out["tp"],
+                )
+                if _corr["sl_corrected"] or _corr["tp_corrected"]:
+                    for _note in _corr["notes"]:
+                        log.info(f"[Trader] {self.symbol}: {_note}")
+                    dec_out["sl"] = risk_out["sl_price"] = _corr["sl"]
+                    dec_out["tp"] = risk_out["tp_price"] = _corr["tp"]
+                    # Recompute pip distances/RR so downstream reporting matches.
+                    _pip = 0.01 if "JPY" in self.symbol.upper() else (
+                        1.0 if "XAU" in self.symbol.upper() else 0.0001
+                    )
+                    _sl_pips = abs(_entry_for_correction - _corr["sl"]) / _pip
+                    _tp_pips = abs(_corr["tp"] - _entry_for_correction) / _pip
+                    dec_out["sl_pips"] = risk_out["sl_pips"] = round(_sl_pips, 1)
+                    dec_out["tp_pips"] = risk_out["tp_pips"] = round(_tp_pips, 1)
+                    if _sl_pips > 0:
+                        dec_out["rr"] = risk_out["rr_ratio"] = round(_tp_pips / _sl_pips, 2)
+        except Exception as e:
+            log.warning(f"Suppressed exception during SL/TP auto-correction: {e}")
+
         # Round-30 fix F1: pass df into dec_out so trade_permission's
         # entry_quality_guardrails can access OHLCV data. Without this,
         # the guardrails code looks for decision_out.get("_df"), finds
         # None, and silently skips all 12 entry-quality checks.
         dec_out["_df"] = market_out.get("df")
         dec_out["_symbol"] = self.symbol
+
+        # 2026-08-25: wire REAL recent-performance stats from the circuit
+        # breaker into dec_out/ind_ctx. Bug found: trade_permission.py's
+        # loss-streak confidence-bar bump AND entry_quality_guardrails.py's
+        # regime-aware penalty multiplier both read
+        # decision_out.get("recent_win_rate"/"recent_trades"/"consecutive_losses")
+        # and ind_ctx.get(same) — but nothing in the live pipeline ever set
+        # those keys, so both always saw the hardcoded defaults (0, 0, 0.5)
+        # and the entire adaptive mechanism (in EITHER direction) silently
+        # never fired. CircuitBreaker.get_status() already tracks this
+        # correctly per-symbol; it just wasn't connected. Net effect of
+        # connecting it is confidence-POSITIVE more often than negative:
+        # the hot-streak discount (-20%/-30% penalty reduction, win rate
+        # >55%) can now actually trigger, while the loss-streak bump was
+        # already tuned down in past audits (+5, not +20) specifically so
+        # it doesn't crush normal variance.
+        try:
+            _cb_status = self._circuit_breaker.get_status()
+            _cb_wr_pct = float(_cb_status.get("recent_win_rate", 0) or 0)
+            _cb_trades = int(_cb_status.get("total_trades", 0) or 0)
+            _cb_losses = int(_cb_status.get("consecutive_losses", 0) or 0)
+            dec_out["recent_win_rate"] = _cb_wr_pct / 100.0   # trade_permission expects 0-1
+            dec_out["recent_trades"] = _cb_trades
+            dec_out["consecutive_losses"] = _cb_losses
+            _ind_ctx_ref = market_out.get("ind_ctx")
+            if isinstance(_ind_ctx_ref, dict):
+                _ind_ctx_ref["recent_win_rate"] = _cb_wr_pct / 100.0
+                _ind_ctx_ref["consecutive_losses"] = _cb_losses
+        except Exception as e:
+            log.warning(f"Suppressed exception wiring circuit-breaker stats into dec_out/ind_ctx: {e}")
 
         # 2026-07-23 fix: same silent-gap pattern as the _df fix above.
         # trade_permission's entry_quality_guardrails AND the newly-wired
@@ -1566,6 +1632,17 @@ class AITrader:
             bypass_checks=bypass_checks,
             symbol=self.symbol,  # 2026-08-13: per-pair profile
         )
+
+        # 2026-08-25: snapshot the shared confidence trace into dec_out so
+        # it survives into the final result dict (read at result-build time
+        # below) instead of staying an orphaned, never-populated field.
+        try:
+            from utils.confidence_trace import confidence_trace as _conf_trace
+            dec_out["confidence_trace"] = _conf_trace.to_list()
+            if _conf_trace.entries:
+                log.info(f"[Trader] {self.symbol}: confidence trace — {_conf_trace.summary()}")
+        except Exception as e:
+            log.warning(f"Suppressed exception snapshotting confidence_trace: {e}")
 
         # Day 97+ Book Page 15: Signal Persistence Filter
         # Suppress entries when signal is flip-flopping (unstable)

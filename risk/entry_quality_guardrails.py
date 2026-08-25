@@ -631,6 +631,119 @@ def check_tp_structure_validation(
 
 
 # ═════════════════════════════════════════════════════════════
+# AUTO-CORRECTION: snap an imperfect SL/TP to real structure
+# instead of letting downstream gates (e.g. Devil's Advocate)
+# hard-reject the trade over it.
+# ═════════════════════════════════════════════════════════════
+
+def auto_correct_sl_tp(
+    df: pd.DataFrame,
+    symbol: str,
+    direction: str,
+    entry_price: float,
+    stop_loss: float,
+    take_profit: float,
+    atr_buffer: float = 0.15,
+) -> dict:
+    """
+    2026-08-25: when SL/TP aren't structurally "perfect" (not anchored to
+    a real swing), don't rely on Devil's Advocate to catch and reject it —
+    snap them onto the nearest valid swing here, deterministically, before
+    DA ever sees the trade. Only touches SL/TP that actually fail their
+    check; a genuinely well-placed SL/TP is returned unchanged.
+
+    Never makes things worse: if no usable swing exists, or the corrected
+    price would land on the wrong side of entry / flip RR negative, the
+    original value is kept and the failure is left for the soft-penalty
+    scoring in run_all_entry_quality_checks() to handle instead.
+
+    Returns:
+        {
+            "sl": float,            # corrected (or original) SL
+            "tp": float,            # corrected (or original) TP
+            "sl_corrected": bool,
+            "tp_corrected": bool,
+            "notes": [str, ...],
+        }
+    """
+    notes: list[str] = []
+    corrected_sl, corrected_tp = stop_loss, take_profit
+    sl_corrected = tp_corrected = False
+
+    if df is None or entry_price is None:
+        return {
+            "sl": stop_loss, "tp": take_profit,
+            "sl_corrected": False, "tp_corrected": False, "notes": notes,
+        }
+
+    atr = _atr(df)
+    d = (direction or "").upper()
+
+    # ── SL: snap to nearest swing if unanchored ─────────────────
+    try:
+        sl_check = check_sl_swing_anchor(df, symbol, d, stop_loss, entry_price)
+        if not sl_check.passed and sl_check.reason and "WRONG SIDE" not in sl_check.reason:
+            nearest = sl_check.details.get("nearest_swing")
+            if nearest is not None and atr > 0:
+                buffer = atr * atr_buffer
+                candidate = (nearest - buffer) if d == "BUY" else (nearest + buffer)
+                still_correct_side = (candidate < entry_price) if d == "BUY" else (candidate > entry_price)
+                if still_correct_side:
+                    corrected_sl = candidate
+                    sl_corrected = True
+                    notes.append(
+                        f"SL auto-corrected {stop_loss:.5f} -> {corrected_sl:.5f} "
+                        f"(snapped to swing {nearest:.5f} + {atr_buffer}xATR buffer)"
+                    )
+    except Exception as e:
+        notes.append(f"SL auto-correct skipped: {e}")
+
+    # ── TP: snap to nearest validated structural swing ──────────
+    try:
+        tp_check = check_tp_structure_validation(df, symbol, d, take_profit, entry_price)
+        if not tp_check.passed and tp_check.reason and "WRONG SIDE" not in tp_check.reason:
+            nearest = tp_check.details.get("nearest_swing")
+            if nearest is not None:
+                still_correct_side = (nearest > entry_price) if d == "BUY" else (nearest < entry_price)
+                # Guard against a degenerate/zero-distance target.
+                min_dist = (atr * 0.5) if atr > 0 else 0
+                if still_correct_side and abs(nearest - entry_price) > min_dist:
+                    corrected_tp = nearest
+                    tp_corrected = True
+                    notes.append(
+                        f"TP auto-corrected {take_profit:.5f} -> {corrected_tp:.5f} "
+                        f"(snapped to nearest validated swing)"
+                    )
+    except Exception as e:
+        notes.append(f"TP auto-correct skipped: {e}")
+
+    # ── Sanity: never hand back a corrected pair with negative RR ──
+    try:
+        orig_risk = abs(entry_price - stop_loss)
+        orig_reward = abs(take_profit - entry_price)
+        new_risk = abs(entry_price - corrected_sl)
+        new_reward = abs(corrected_tp - entry_price)
+        if orig_risk > 0 and orig_reward > 0 and new_risk > 0:
+            orig_rr = orig_reward / orig_risk
+            new_rr = new_reward / new_risk if new_risk > 0 else 0
+            if new_rr < orig_rr * 0.5:
+                # Correction would gut the RR too much — keep original.
+                corrected_sl, corrected_tp = stop_loss, take_profit
+                sl_corrected = tp_corrected = False
+                notes.append("Auto-correction reverted — would have degraded RR by >50%")
+    except Exception:
+        pass
+
+    return {
+        "sl": corrected_sl,
+        "tp": corrected_tp,
+        "sl_corrected": sl_corrected,
+        "tp_corrected": tp_corrected,
+        "notes": notes,
+    }
+
+
+# ═════════════════════════════════════════════════════════════
 # FLAG 4: Indecision Candle Filter — skip stalling entries
 # ═════════════════════════════════════════════════════════════
 
