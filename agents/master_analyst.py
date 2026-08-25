@@ -108,6 +108,58 @@ CEREBRAS_REASONING_EFFORT = os.getenv("CEREBRAS_REASONING_EFFORT", "low")
 GROQ_REASONING_MAX_TOK = int(os.getenv("GROQ_REASONING_MAX_TOKENS", "4000"))
 GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
 
+# FIX (2026-08-25 audit — Groq 413 "Request too large"): production logs
+# showed calls failing with e.g. "Limit 8000, Requested 8019" on the
+# account's TPM (tokens per minute) budget — a near-miss overshoot by
+# only ~19 tokens, not a huge oversized prompt. The prompt (system +
+# market-intelligence context) was sent to Groq with zero size checking,
+# so any cycle whose context happened to be a little larger than usual
+# (more active modules/signals in the market snapshot) tipped it over
+# the account's TPM ceiling and burned a whole retry cycle for nothing.
+# Groq (and most providers) count the *reserved* max_tokens output
+# budget against the same per-minute limit as the input prompt, so the
+# real budget available for the prompt is TPM_BUDGET - reserved_output -
+# a safety margin. When the estimated prompt exceeds that, trim the
+# context (from the middle, keeping the head/tail which usually carry
+# the most decision-relevant summary lines) instead of sending a request
+# that Groq is guaranteed to reject.
+GROQ_TPM_BUDGET = int(os.getenv("GROQ_TPM_BUDGET", "8000"))
+GROQ_TPM_SAFETY_MARGIN = int(os.getenv("GROQ_TPM_SAFETY_MARGIN", "150"))
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token-count heuristic (~4 chars/token for English/JSON-ish
+    text). Not exact, but good enough to stay clear of a hard TPM wall
+    with a safety margin — precise tokenization isn't worth a new
+    dependency just to avoid a 413."""
+    return (len(text) // 4) + 1
+
+
+def _fit_context_to_budget(context: str, available_tokens: int) -> str:
+    """Trim `context` so its estimated token count fits `available_tokens`.
+
+    Keeps the head and tail of the context (where summary/decision-critical
+    lines tend to live) and drops from the middle, rather than a blind
+    tail-truncation that could silently cut off the most important part.
+    """
+    if available_tokens <= 0:
+        return context[:200]  # degenerate case — still send *something* sensible
+    est = _estimate_tokens(context)
+    if est <= available_tokens:
+        return context
+    trimmed_note = "\n...[context trimmed to fit Groq TPM budget]...\n"
+    # Reserve room for the note itself so the final trimmed string
+    # (head + note + tail) actually fits available_tokens, instead of
+    # overshooting by however many tokens the note costs.
+    note_tokens = _estimate_tokens(trimmed_note)
+    body_budget_tokens = max(100, available_tokens - note_tokens)
+    target_chars = max(200, body_budget_tokens * 4)
+    if target_chars >= len(context):
+        return context
+    head_chars = int(target_chars * 0.6)
+    tail_chars = target_chars - head_chars
+    return context[:head_chars] + trimmed_note + context[-tail_chars:]
+
 
 def _is_reasoning_model(model_name: str) -> bool:
     """True for gpt-oss-family models, which reserve part of their token
@@ -1064,13 +1116,39 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
                 # silently starving it and coming back empty every call.
                 _groq_is_reasoning = _is_reasoning_model(GROQ_MODEL)
                 _groq_max_tok = GROQ_REASONING_MAX_TOK if _groq_is_reasoning else MAX_TOK
+                # FIX (2026-08-25 audit — Groq 413 near-miss overshoot):
+                # size-check + trim BEFORE sending, instead of letting
+                # Groq reject an oversized request and burning a retry.
+                _reserved_for_output = _groq_max_tok + GROQ_TPM_SAFETY_MARGIN
+                _available_for_prompt = GROQ_TPM_BUDGET - _reserved_for_output
+                _system_tok = _estimate_tokens(self._SYSTEM)
+                _prompt_tok = _estimate_tokens(user_prompt)
+                _groq_user_prompt = user_prompt
+                if (_system_tok + _prompt_tok) > _available_for_prompt:
+                    _budget_for_context = max(300, _available_for_prompt - _system_tok - 100)
+                    _fitted_context = _fit_context_to_budget(context, _budget_for_context)
+                    if _fitted_context != context:
+                        log.warning(
+                            f"[MasterAnalyst] Groq prompt est. {_system_tok + _prompt_tok} "
+                            f"tokens > available budget {_available_for_prompt} "
+                            f"(TPM={GROQ_TPM_BUDGET}, reserved_output={_reserved_for_output}) "
+                            f"— trimming context to avoid a guaranteed 413."
+                        )
+                        _groq_user_prompt = (
+                            "Here is the complete market intelligence package (session-aware AND "
+                            "macro/intermarket-aware) for analysis:\n\n"
+                            f"{_fitted_context}\n\n"
+                            "IMPORTANT: Check session_intelligence block first, then "
+                            "global_market_intelligence block. Follow session rules and macro rules strictly.\n"
+                            "Provide your professional trade decision as JSON."
+                        )
                 groq_kwargs = dict(
                     model=GROQ_MODEL,
                     max_tokens=_groq_max_tok,
                     temperature=0.2,
                     messages=[
                         {"role": "system", "content": self._SYSTEM},
-                        {"role": "user", "content": user_prompt},
+                        {"role": "user", "content": _groq_user_prompt},
                     ],
                 )
                 if _groq_is_reasoning:

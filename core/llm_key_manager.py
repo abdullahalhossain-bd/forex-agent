@@ -126,11 +126,21 @@ def classify_llm_error(error: Exception) -> dict:
         # Promote to TPD so it gets the multi-hour cooldown below.
         is_tpd = True
         is_rate_limited = True
+    quota_kind, quota_limit = (
+        _extract_daily_quota_kind_and_limit(err_lower, error_str) if is_tpd else ("unknown", None)
+    )
     return {
         "error_str": error_str,
         "error_type": type(error).__name__,
         "rate_limited": is_rate_limited,
         "tpd_exhausted": is_tpd,
+        # FIX (Gemini RPD misclassification): "tpd_exhausted" is kept as-is
+        # for backward compat (callers treat it as "daily-scoped, switch
+        # keys"), but quota_kind/quota_limit let callers/log lines say
+        # what's *actually* exhausted — request count vs tokens — instead
+        # of always assuming tokens.
+        "quota_kind": quota_kind,
+        "quota_limit": quota_limit,
         "rpm_limited": is_rpm,
         "auth_failed": (
             "401" in error_str
@@ -232,7 +242,49 @@ GROQ_DEFAULT_RETRY_COOLDOWN = 1800
 # identify TPD exhaustion but can't parse an exact retry-after, fall
 # back to a multi-hour cooldown instead.
 TPD_FALLBACK_COOLDOWN = 60 * 60 * 3     # 3h — used only when TPD is detected but unparsable
+# FIX (Gemini free-tier RPD misclassification — audit follow-up): Gemini's
+# free-tier 429 body reports a *request-count* daily quota (metric name
+# "generate_content_free_tier_requests", e.g. "limit: 20") — not a token
+# budget. The old classifier matched the generic word "quota" and lumped
+# this in with Groq's TPD (token) exhaustion, both logging it as "daily
+# token budget EXHAUSTED" (misleading — no tokens are being counted here,
+# only request count) and cooling down for only TPD_FALLBACK_COOLDOWN (3h).
+# A 20-req/day wall does not reset in 3h, so the key was retried and
+# 429'd again well before quota actually cleared, burning through the
+# whole rotation pool (13 keys) in one session. Use a longer fallback
+# specifically for request-count daily quotas, configurable via env.
+RPD_FALLBACK_COOLDOWN = int(os.getenv("LLM_RPD_FALLBACK_COOLDOWN_SEC", str(60 * 60 * 12)))  # 12h default
 RPM_MAX_COOLDOWN = 120                  # RPM/TPM limits reset fast; cap the cooldown so the key isn't held out too long
+
+
+def _extract_daily_quota_kind_and_limit(err_lower: str, error_str: str) -> tuple[str, Optional[int]]:
+    """Distinguish a *request-count* daily quota from a *token* daily quota,
+    and pull out the numeric limit when the provider includes one
+    (e.g. Gemini's "..._requests, limit: 20, model: ...").
+
+    Returns (kind, limit) where kind is "requests", "tokens", or "unknown".
+    """
+    is_request_quota = (
+        "free_tier_requests" in err_lower
+        or "requests_per_day" in err_lower
+        or "request quota" in err_lower
+        or ("quota" in err_lower and "request" in err_lower and "token" not in err_lower)
+    )
+    is_token_quota = (
+        "tpd" in err_lower
+        or "tokens per day" in err_lower
+        or "token budget" in err_lower
+        or ("quota" in err_lower and "token" in err_lower)
+    )
+    kind = "requests" if is_request_quota else ("tokens" if is_token_quota else "unknown")
+    limit = None
+    m = re.search(r"limit[:\s]+(\d+)", err_lower)
+    if m:
+        try:
+            limit = int(m.group(1))
+        except ValueError:
+            limit = None
+    return kind, limit
 
 
 def parse_groq_retry_after(error_str: str) -> int:
@@ -481,15 +533,33 @@ class KeyHealth:
             )
             parsed = parse_groq_retry_after(error)
             if is_tpd:
+                # FIX (Gemini RPD misclassification — audit follow-up):
+                # this used to always log "TPD (daily token budget)" and
+                # always use the 3h TPD_FALLBACK_COOLDOWN, even for
+                # providers (Gemini free tier) whose daily quota is a
+                # *request count*, not a token budget. A 20-req/day wall
+                # doesn't clear in 3h, so the key got retried and re-429'd
+                # well before it actually recovered — burning through the
+                # whole rotation pool in one session. Detect which kind of
+                # daily quota this actually is and pick label + cooldown
+                # accordingly.
+                quota_kind, quota_limit = _extract_daily_quota_kind_and_limit(err_lower, error)
+                if quota_kind == "requests":
+                    label = "RPD (daily request quota)"
+                    fallback = RPD_FALLBACK_COOLDOWN
+                else:
+                    label = "TPD (daily token budget)"
+                    fallback = TPD_FALLBACK_COOLDOWN
                 # If the provider gave us an exact "try again in Xh Ym"
                 # duration, trust it. Otherwise assume a multi-hour wait
-                # rather than the generic 5-minute default — a TPD-capped
-                # key will not recover in 5 minutes.
-                cooldown = parsed if parsed != DEFAULT_RETRY_COOLDOWN else TPD_FALLBACK_COOLDOWN
+                # rather than the generic 5-minute default — a daily-quota-
+                # capped key will not recover in 5 minutes.
+                cooldown = parsed if parsed != DEFAULT_RETRY_COOLDOWN else fallback
                 self.rate_limited_until = time.time() + cooldown
+                limit_note = f" (limit={quota_limit}/day)" if quota_limit else ""
                 log.warning(
                     f"[LLM Keys] {self.provider} key #{self.index + 1} "
-                    f"TPD (daily token budget) EXHAUSTED — disabled for {cooldown}s "
+                    f"{label} EXHAUSTED{limit_note} — disabled for {cooldown}s "
                     f"(~{cooldown/3600:.1f}h). Rotating to next account."
                 )
             elif is_rpm:

@@ -50,3 +50,4 @@
 {"ts": "2026-08-21T06:18:42.983969+00:00", "symbol": "SYSTEM", "stage": "trader_loop_exit", "error": "Trader exited unexpectedly (restart #22)"}
 {"ts": "2026-08-21T06:19:15.968561+00:00", "symbol": "SYSTEM", "stage": "trader_loop_exit", "error": "Trader exited unexpectedly (restart #23)"}
 {"ts": "2026-08-24T17:08:26.394207+00:00", "symbol": "SYSTEM", "stage": "trader_loop_exit", "error": "Trader exited unexpectedly (restart #1)"}
+{"ts": "2026-08-25T04:13:30.299983+00:00", "symbol": "SYSTEM", "stage": "trader_loop_exit", "error": "Trader exited unexpectedly (restart #1)"}
