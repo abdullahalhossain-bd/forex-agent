@@ -24432,3 +24432,102 @@ RuntimeError: [MasterAnalyst] No LLM client available (all keys failed). Provide
 2026-08-25 13:47:20 | DEBUG    | telegram.Bot              | Calling Bot API endpoint `sendMessage` with parameters `{'chat_id': '6657485998', 'text': 'FOREX AI System Stopped', 'parse_mode': <ParseMode.MARKDOWN>}`
 2026-08-25 13:47:20 | INFO     | main                      | Keyboard interrupt — stopping
 2026-08-25 13:47:20 | INFO     | root                      | [System] Stop requested — shutting down gracefully
+2026-08-25 13:50:31 | INFO     | main                      | ============================================================
+2026-08-25 13:50:31 | INFO     | main                      |   FOREX AI AUTONOMOUS TRADING SYSTEM — Booting
+2026-08-25 13:50:31 | INFO     | main                      | ============================================================
+2026-08-25 13:50:31 | INFO     | main                      |   Booting runtime (24 phases)...
+2026-08-25 13:50:31 | INFO     | main                      |   Config: MAX_LOT=1.98 | APPROVAL_MODE=3 | MAX_OPEN_TRADES=20
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'bootstrap' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'persistence' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'data' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'market' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'research' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'fundamental' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'analysis' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'ai' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'agents' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'strategy' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'hybrid' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'risk' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'safety' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'execution' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'broker' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'analytics' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'reports' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'learning' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'dashboard' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'alerts' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'automation' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'webhook' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'orchestrator' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'runtime' boot fn registered
+2026-08-25 13:50:31 | DEBUG    | core.lifecycle            | Phase 'orphan_integration' boot fn registered
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 14 Groq key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 13 Gemini key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Cerebras key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 SambaNova key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 OpenRouter key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GitHub Models key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 1 Hugging Face key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 Claude key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 GLM key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Keys] Loaded 0 DeepSeek key(s)
+2026-08-25 13:50:32 | INFO     | llm_key_manager           | [LLM Throttle] Loaded config parameters successfully.
+2026-08-25 13:50:32 | INFO     | core.runtime              | LLM KeyManager wired: Groq=14 keys (14 active), Gemini=13 keys (13 active)
+2026-08-25 13:50:32 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:50:32 | INFO     | main.boot                 |   [OK] bootstrap      (0.050s) - config, paths, event_bus, metrics, health_monitor
+2026-08-25 13:50:36 | INFO     | database.db               | Database ready: D:\Projects\forex\database\trader.db
+2026-08-25 13:51:20 | INFO     | trade_memory              | [TradeMemory] Running without vector memory — sentence-transformers not installed; semantic search disabled. Install with pip install -U sentence-transformers to enable.
+2026-08-25 13:51:20 | DEBUG    | core.service_registry     | Registered service 'learning_engine' (eager=False, deps=[])
+2026-08-25 13:51:20 | DEBUG    | core.service_registry     | Registered service 'analysis_history' (eager=False, deps=[])
+2026-08-25 13:51:20 | DEBUG    | core.service_registry     | Registered service 'knowledge_store' (eager=False, deps=[])
+2026-08-25 13:51:20 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:20 | INFO     | main.boot                 |   [OK] persistence    (48.278s) - db, trade_memory, learning_engine, analysis_history, knowledge_store
+2026-08-25 13:51:21 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-25 13:51:21 | INFO     | mt5_connection            |   🤖  AI TRADER — MT5 CONNECTION
+2026-08-25 13:51:21 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-25 13:51:21 | INFO     | mt5_connection            |   Connected : Exness-MT5Trial7
+2026-08-25 13:51:21 | INFO     | mt5_connection            |   Account   : 434119023
+2026-08-25 13:51:21 | INFO     | mt5_connection            |   Status    : ✅ Ready
+2026-08-25 13:51:21 | INFO     | mt5_connection            |   Balance   : $10002.71
+2026-08-25 13:51:21 | INFO     | mt5_connection            | ════════════════════════════════════════════
+2026-08-25 13:51:21 | INFO     | data.fetcher              | [OK] DataFetcher initialized | source: mt5
+2026-08-25 13:51:22 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:22 | INFO     | main.boot                 |   [OK] data           (2.139s) - data_fetcher, data_validator, indicators, data_updater
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'market_scanner' (eager=False, deps=[])
+2026-08-25 13:51:22 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:22 | INFO     | main.boot                 |   [OK] market         (0.026s) - market_scanner, correlation_filter, opportunity_ranker, mt5_connection
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'research_agent' (eager=False, deps=[])
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'hypothesis_engine' (eager=False, deps=[])
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'experiment_runner' (eager=False, deps=[])
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'research_report' (eager=False, deps=[])
+2026-08-25 13:51:22 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:22 | INFO     | main.boot                 |   [OK] research       (0.014s) - research_agent, hypothesis_engine, experiment_runner, research_report
+2026-08-25 13:51:22 | DEBUG    | core.service_registry     | Registered service 'fundamental_sentiment' (eager=False, deps=[])
+2026-08-25 13:51:23 | DEBUG    | llm_key_manager           | [LLM Keys] Using Groq key #1
+2026-08-25 13:51:23 | INFO     | sentiment_model           | [SentimentModel] Groq client initialized | model=openai/gpt-oss-20b
+2026-08-25 13:51:23 | INFO     | core.runtime              | Day 66 NewsIntelligence engine wired
+2026-08-25 13:51:23 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:23 | INFO     | main.boot                 |   [OK] fundamental    (1.429s) - news_filter, fundamental_sentiment, news_intelligence
+2026-08-25 13:51:23 | INFO     | core.runtime              | Day 67 ConfluenceEngine wired
+2026-08-25 13:51:24 | INFO     | core.runtime              | Day 68 FeatureStore wired (45414 feature rows, 43458 labels)
+2026-08-25 13:51:25 | INFO     | core.runtime              | Day 69 ModelStore wired (197 models on disk)
+2026-08-25 13:51:25 | INFO     | core.runtime              | [ModelStore] registry/disk consistency OK (304 model file(s) verified)
+2026-08-25 13:51:25 | INFO     | core.runtime              | Day 69 ModelPredictor wired (ensemble prediction ready)
+2026-08-25 13:51:25 | INFO     | core.runtime              | Day 70 EnsembleEngine wired (brain fusion layer ready)
+2026-08-25 13:51:26 | INFO     | rl_agent                  | [RL Agent] PPO model loaded from D:\Projects\forex\ml\rl_policy\ppo_forex_best.zip (passed: 10 episodes, 23.1% win_rate, avg_reward=-7.33)
+2026-08-25 13:51:26 | INFO     | core.runtime              | Day 71 RL Agent wired (source=ppo, model_loaded=True)
+2026-08-25 13:51:26 | INFO     | core.runtime              | Day 72 ValidationEngine wired (validated=0 approved=0 champion=none)
+2026-08-25 13:51:26 | DEBUG    | core.event_bus            | bus: system.startup <- runtime
+2026-08-25 13:51:26 | INFO     | main.boot                 |   [OK] analysis       (2.344s) - intermarket_engine, session_analyzer_analytics, confluence_engine, feature_engineer, feature_store, label_generator, data_preprocessor, feature_selector, dataset_builder, model_evaluator, model_store, model_trainer, model_predictor, voting_engine, confidence_fusion, ensemble_store, ensemble_engine, reward_engine, rl_agent, rl_policy_store, cv_splitter, walk_forward_validator, monte_carlo_simulator, regime_tester, sensitivity_tester, validation_engine
+2026-08-25 13:51:27 | DEBUG    | llm_key_manager           | [LLM Keys] Using Groq key #2
+2026-08-25 13:51:27 | INFO     | ai_analyst                | Groq client initialized | model=openai/gpt-oss-20b
+2026-08-25 13:51:33 | DEBUG    | llm_key_manager           | [LLM Keys] Using Gemini key #1
+2026-08-25 13:51:33 | INFO     | ai_analyst                | Gemini client initialized (fallback ready) | model=gemini-3.5-flash
+2026-08-25 13:51:34 | DEBUG    | llm_key_manager           | [LLM Keys] Using Groq key #3
+2026-08-25 13:51:34 | INFO     | master_analyst            | [MasterAnalyst] Groq client initialized | model=openai/gpt-oss-20b
+2026-08-25 13:51:41 | DEBUG    | tensorflow                | Falling back to TensorFlow client; we recommended you install the Cloud TPU client directly with pip install cloud-tpu-client.
+2026-08-25 13:51:42 | DEBUG    | h5py._conv                | Creating converter from 7 to 5
+2026-08-25 13:51:42 | DEBUG    | h5py._conv                | Creating converter from 5 to 7
+2026-08-25 13:51:42 | DEBUG    | h5py._conv                | Creating converter from 7 to 5
+2026-08-25 13:51:42 | DEBUG    | h5py._conv                | Creating converter from 5 to 7

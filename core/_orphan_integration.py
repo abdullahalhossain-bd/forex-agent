@@ -820,6 +820,12 @@ def boot_orphan_integration(registry: ServiceRegistry) -> PhaseResult:
     try:
         from analysis.mtf_analyzer import MTFAnalyzer as _MTFAnalyzer
         try:
+            # NOTE (2026-08-25 log-audit): 'EURUSD' here is only a
+            # construction-time placeholder — this instance is a shared
+            # singleton reused for every pair. orphan_consumers.py's
+            # enrich_market_context() repoints `.symbol` to the actual
+            # pair being processed before every analyze() call. Do not
+            # rely on this literal for the analyzed symbol.
             _service = _MTFAnalyzer(symbol='EURUSD')  # noqa: E501
         except TypeError:
             # Symbol is a function/dataclass with required args

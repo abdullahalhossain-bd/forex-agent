@@ -152,6 +152,24 @@ def enrich_market_context(
         mtf = _resolve(registry, "mtf_analyzer")
         if mtf is not None:
             try:
+                # BUGFIX (2026-08-25, log-audit): the registry holds ONE
+                # shared MTFAnalyzer singleton, constructed once at startup
+                # via _orphan_integration.py with a fixed placeholder
+                # symbol ('EURUSD'). MTFAnalyzer.analyze() fetches its own
+                # candles internally using self.symbol — it never looked at
+                # `df`/`symbol` passed to this function. Every cycle for
+                # every pair (GBPCAD, EURAUD, ...) was silently scoring
+                # against EURUSD's own H4->H1->M15->M5 bias instead of its
+                # own, because self.symbol was never updated after
+                # construction. Confirmed in production log: "[mtf_analyzer]
+                # MTF Analysis started: EURUSD" logged during an EURAUD
+                # cycle. MTFAnalyzer has no other per-symbol cached state
+                # (OB/FVG detectors are stateless, take df per-call), so it
+                # is safe to just repoint the shared instance's symbol
+                # before each call instead of constructing a new instance
+                # per pair.
+                if getattr(mtf, "symbol", None) != symbol:
+                    mtf.symbol = symbol
                 # MTFAnalyzer.analyze() takes regime_ctx and pulls its own
                 # data from MT5. We pass the current regime so it doesn't
                 # have to recompute.
