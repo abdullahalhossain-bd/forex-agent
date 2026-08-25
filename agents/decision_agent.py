@@ -1496,6 +1496,43 @@ class DecisionAgent:
                 tp = _fb_tp
                 reasons.append("ℹ️ TP missing from Master/Risk — using ATR-based fallback")
 
+        # BUGFIX (2026-08-25): defensive orientation check. master_ctx's
+        # sl/tp are computed by MasterAnalyst FOR MASTERANALYST'S OWN
+        # SIGNAL DIRECTION. If some upstream layer (e.g. a "confirmation"
+        # override) later flips `decision` to the OPPOSITE direction
+        # without recomputing SL/TP, entry/sl/tp end up oriented for the
+        # wrong side — e.g. a BUY decision with SL above entry and TP
+        # below entry (a SELL-shaped setup). That silently produces a
+        # nonsensical/zero RRR downstream (FusionV3 logs "RRR is 1:0.00")
+        # instead of surfacing the real bug: direction and price levels
+        # disagreeing. Validate orientation here and recompute a
+        # correctly-oriented ATR-based SL/TP for `decision` if they
+        # don't match, rather than silently passing mismatched levels on.
+        if decision in ("BUY", "SELL") and entry and sl and tp:
+            try:
+                _entry_f, _sl_f, _tp_f = float(entry), float(sl), float(tp)
+                _oriented_ok = (
+                    (decision == "BUY" and _sl_f < _entry_f < _tp_f)
+                    or (decision == "SELL" and _tp_f < _entry_f < _sl_f)
+                )
+            except (TypeError, ValueError):
+                _oriented_ok = False
+            if not _oriented_ok:
+                _fb_sl, _fb_tp = _fallback_sl_tp(decision, entry, ind_ctx, market_out.get("regime", {}))
+                reasons.append(
+                    f"⚠️ SL/TP orientation mismatch for {decision} "
+                    f"(entry={entry}, sl={sl}, tp={tp} looked like the opposite "
+                    f"direction's setup) — discarded and recomputed ATR-based "
+                    f"SL/TP for {decision}"
+                )
+                log.warning(
+                    f"[DecisionAgent] SL/TP orientation mismatch for decision="
+                    f"{decision} | stale entry={entry} sl={sl} tp={tp} — "
+                    f"recomputing ATR-based fallback instead of passing "
+                    f"mismatched levels to FusionV3"
+                )
+                sl, tp = _fb_sl, _fb_tp
+
         return self._result(
             decision, adj_conf, risk_out, reasons,
             entry=entry, sl=sl, tp=tp,

@@ -1946,6 +1946,19 @@ class AnalysisAgent:
                 # live logs showed 1 factor even when all TFs were bullish).
                 "mtf_bias": mtf_bias if isinstance(mtf_bias, dict) else {"bias": mtf_bias},
                 "mtf_structure_ctx": mtf_structure_ctx if isinstance(mtf_structure_ctx, dict) else {},
+                # BUGFIX (2026-08-25): _currency_strength_factor() reads
+                # a.get("symbol") / a.get("pair") to split "EURAUD" into
+                # base="EUR"/quote="AUD" and compare their individual
+                # currency_strengths (its base/quote-differential fallback
+                # path, used whenever no explicit pair_bias/macro_pair_bias
+                # is set). Neither key was ever included in this dict, so
+                # `pair` was always "" inside that method, `len(pair) >= 6`
+                # was always False, and that fallback path could never
+                # fire — even when currency_strengths data was present in
+                # currency_strength_ctx. Silently dropped one of the two
+                # ways this factor can produce a directional vote.
+                "symbol": symbol,
+                "pair": symbol,
             }
 
             # ── /DEBUG ──────────────────────────────────────────────────────
@@ -2011,19 +2024,47 @@ class AnalysisAgent:
                         f"(quality={decision.setup_quality}, factors={decision.aligned_factors}/{decision.total_factors})"
                     )
             elif decision.should_trade and decision.direction in ("BUY", "SELL"):
-                # Confluence confirms — use its calibrated confidence
-                final_signal = decision.direction
-                log.info(
-                    f"[AnalysisAgent] Day 67 Confluence confirms {decision.direction} "
-                    f"| Quality={decision.setup_quality} | Conf={decision.confidence:.0f}% | "
-                    f"Factors={decision.aligned_factors}/{decision.total_factors} | "
-                    f"Net={decision.net_score:+.1f}"
-                )
-                try:
-                    master_ctx["master_confidence"] = decision.confidence
-                    _track_confidence(master_ctx, "confluence", decision.confidence)
-                except Exception:
-                    pass
+                # BUGFIX (2026-08-25): this branch used to overwrite final_signal
+                # with decision.direction UNCONDITIONALLY — even when it disagreed
+                # with the existing Rule/LLM signal (e.g. Rule=SELL, LLM=SELL, but
+                # Confluence itself only had 2/8 factors aligned at 32% confidence
+                # and said BUY). That's a genuine conflict, not a "confirmation",
+                # but the code treated it as one and silently flipped direction.
+                # Everything downstream (MasterAnalyst's SL/TP, FusionV3's RRR
+                # check) still assumed the OLD direction, producing nonsensical
+                # SL/TP orientation and a fake RRR=1:0.00 downgrade. Only accept
+                # Confluence as a genuine "confirmation" when it agrees with the
+                # signal already on the table; otherwise flag the conflict and
+                # keep the existing final_signal.
+                if final_signal in ("BUY", "SELL") and decision.direction != final_signal:
+                    execution_filters["confluence_conflict"] = {
+                        "existing_signal": final_signal,
+                        "confluence_direction": decision.direction,
+                        "confluence_confidence": decision.confidence,
+                        "confluence_quality": decision.setup_quality,
+                        "factors": f"{decision.aligned_factors}/{decision.total_factors}",
+                    }
+                    log.warning(
+                        f"[AnalysisAgent] Day 67 Confluence DISAGREES: engine says "
+                        f"{decision.direction} but existing signal is {final_signal} "
+                        f"(quality={decision.setup_quality}, conf={decision.confidence:.0f}%, "
+                        f"factors={decision.aligned_factors}/{decision.total_factors}) — "
+                        f"keeping {final_signal}, NOT flipping direction"
+                    )
+                else:
+                    # Confluence confirms — use its calibrated confidence
+                    final_signal = decision.direction
+                    log.info(
+                        f"[AnalysisAgent] Day 67 Confluence confirms {decision.direction} "
+                        f"| Quality={decision.setup_quality} | Conf={decision.confidence:.0f}% | "
+                        f"Factors={decision.aligned_factors}/{decision.total_factors} | "
+                        f"Net={decision.net_score:+.1f}"
+                    )
+                    try:
+                        master_ctx["master_confidence"] = decision.confidence
+                        _track_confidence(master_ctx, "confluence", decision.confidence)
+                    except Exception:
+                        pass
         except Exception as e:
             log.warning(f"[AnalysisAgent] Day 67 ConfluenceEngine failed: {e}")
             confluence_ctx = {"error": str(e)}
@@ -2668,10 +2709,32 @@ class AnalysisAgent:
         # Previously only used in backtest → live/backtest mismatch.
         # Now scores zones detected by the unified engine, producing
         # a zone_score that the decision system can use.
+        #
+        # BUGFIX (2026-08-25): this used to read
+        # `unified_signal_ctx.get("sd_zones_result", {})` — a key that
+        # NO code anywhere in the repo ever sets. UnifiedSignalEngine's
+        # `_build_unified_result()` never returns "sd_zones_result"
+        # (decision_bridge.py reads the same dead key and its own
+        # comment confirms it: "UnifiedSignalEngine has no live
+        # supply/demand-zone engine wired in... left inactive"). So
+        # `sd_zones` was always {}, `zone_score_data` was always None,
+        # `unified_signal_ctx["zone_score"]` was never actually set on
+        # the success path, and decision_agent.py's zone_score
+        # confidence modifier (±5-7%, see its own "EXECUTION-PROOF
+        # AUDIT FIX" comment) was silently a no-op every single cycle —
+        # despite OddEnhancerScorer() being instantiated and this whole
+        # block running every cycle regardless.
+        #
+        # The real demand/supply zone data already exists in this same
+        # function: `supply_demand_ctx["supply_demand"]` (set at
+        # ~line 649 via the actual SupplyDemandZones().detect(df) call)
+        # has exactly the {"demand_zones": [...], "supply_zones": [...]}
+        # shape this block expects. Read from there instead of the
+        # never-populated unified_signal_ctx key.
         try:
             from analysis.odd_enhancers import OddEnhancerScorer
             scorer = OddEnhancerScorer()
-            sd_zones = unified_signal_ctx.get("sd_zones_result", {})
+            sd_zones = supply_demand_ctx.get("supply_demand", {}) or {}
             zone_score_data = None
             if sd_zones and sd_zones.get("demand_zones"):
                 nearest_demand = sd_zones["demand_zones"][0]
@@ -2697,6 +2760,7 @@ class AnalysisAgent:
         except Exception as e:
             log.warning(f"[AnalysisAgent] Odd Enhancers scoring failed: {e}")
             unified_signal_ctx["zone_score"] = None
+
 
         # ── EXECUTION-PROOF AUDIT FIX: Wire previously-dead outputs ──
         # The CONSUMPTION-MAP audit (worklog.md Task ID: CONSUMPTION-MAP)
