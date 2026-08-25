@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "updated_at": "2026-08-24T19:44:34.828312+00:00",
+  "min_losses_required": 2,
+  "recommended_vetoes": [],
+  "candidates": [],
+  "note": "Proposals only — do not auto-apply to trading logic"
+}

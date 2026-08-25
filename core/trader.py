@@ -3361,6 +3361,26 @@ class AITrader:
         for trade in closed_now:
             context = trade.get("context") or {}
             memory_trade_id = context.get("memory_trade_id")
+            # BUGFIX (2026-08-25 audit): `memory_trade_id` here is actually
+            # the JSON-side TradeMemory id from on_signal_generated() —
+            # incremented on EVERY decision cycle (WAIT included), not just
+            # real trades. It is NOT the SQLite `trades` table row id.
+            # PaperTrader._build_trade_record() stashed this JSON id under
+            # `context["memory_trade_id"]`, and this code then passed it
+            # straight into `self._mistake_analyzer.analyze_closed_trade()`,
+            # which calls `self.memory.db.get_trade_by_id()` against the
+            # SQLite DB — a completely different id space. Once the two
+            # counters drift apart (guaranteed after enough WAIT cycles),
+            # this either finds no row or, worse, silently returns some
+            # OTHER trade's entry/sl/tp/pattern data mislabeled as this
+            # trade's loss analysis. See execution/paper_trader.py's
+            # `trade["context"]["db_trade_id"] = trade_id` for the actual
+            # SQLite id, added alongside `memory_trade_id` (kept for the
+            # JSON-side `on_trade_closed()` call below, which DOES key off
+            # the JSON id). Fall back to `memory_trade_id` only for older
+            # trades opened before this fix / paths that never set
+            # db_trade_id (e.g. still relying on orphan-id fallback below).
+            db_trade_id = context.get("db_trade_id") or memory_trade_id
             rr_ratio = context.get("rr_ratio") or trade.get("rr_ratio", 0)
             trade["rr_ratio"] = rr_ratio
 
@@ -3460,7 +3480,7 @@ class AITrader:
                 try:
                     self._memory.on_trade_closed(memory_trade_id, trade["result"], trade["pnl"])
                     if self._mistake_analyzer:
-                        self._mistake_analyzer.analyze_closed_trade(memory_trade_id)
+                        self._mistake_analyzer.analyze_closed_trade(db_trade_id)
                 except Exception as e:
                     log.warning(f"[Learning] Close sync failed for memory trade #{memory_trade_id}: {e}")
                 # Day 102+ hotfix: also backfill the JSON-side LearningAgent

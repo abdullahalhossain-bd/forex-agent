@@ -166,5 +166,17 @@
     "spread_pips": 1.4,
     "latency_ms": 77,
     "timestamp": "2026-08-24T18:20:29+00:00"
+  },
+  {
+    "ticket": 4591191998,
+    "pair": "EURUSDm",
+    "direction": "SELL",
+    "requested": 1.16623,
+    "executed": 1.16622,
+    "slippage": 1e-05,
+    "slippage_pips": 0.1,
+    "spread_pips": 0.8,
+    "latency_ms": 4453,
+    "timestamp": "2026-08-24T19:48:24+00:00"
   }
 ]

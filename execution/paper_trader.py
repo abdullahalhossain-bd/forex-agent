@@ -109,6 +109,14 @@ class PaperTrader:
         trade = self._build_trade_record(result, symbol, signal_type, filled_entry, slippage_pips)
         trade_id = self.db.save_trade_open(trade)
         trade["id"] = trade_id
+        # BUGFIX (2026-08-25 audit): stash the REAL SQLite `trades` row id
+        # into context separately from `memory_trade_id` (which is the
+        # unrelated JSON TradeMemory signal-id — see core/trader.py's
+        # _process_closed_trades() for the full explanation). Without
+        # this, core/trader.py had no way to look up this trade's actual
+        # row for post-close mistake analysis; it was passing the wrong
+        # id space into AdvancedMistakeAnalyzer.analyze_closed_trade().
+        trade["context"]["db_trade_id"] = trade_id
         self.open_positions.append(trade)
 
         log.info(

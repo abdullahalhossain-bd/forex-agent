@@ -204,6 +204,12 @@ ANALYSIS_HISTORY_PATH: Path = MEMORY_DIR / "analysis_history.json"
 CIRCUIT_BREAKER_PATH: Path = MEMORY_DIR / "circuit_breaker_state.json"
 PENDING_APPROVALS_PATH: Path = MEMORY_DIR / "pending_approvals.json"
 
+# Loss/mistake audit trail (learning/mistake_analyzer.py). Every closed
+# LOSS trade's root-cause analysis (error_type, what_happened, lesson)
+# is appended here as JSON, in addition to the `mistakes` SQLite table,
+# so it can be read/reviewed without a DB client.
+MISTAKES_JSON_PATH: Path = MEMORY_DIR / "mistakes.json"
+
 # ── Day 58: Autonomous Risk Manager State Paths ───────────
 DRAWDOWN_STATE_PATH: Path = MEMORY_DIR / "drawdown_state.json"
 CAPITAL_STATE_PATH: Path = MEMORY_DIR / "capital_allocation_state.json"

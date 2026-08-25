@@ -265,26 +265,45 @@ class AdvancedMistakeAnalyzer:
                     "confidence_adjustment": -2
                 }
 
-            # SQLite ও প্যাটার্ন মেমোরিতে সেভ করা
+            # SQLite + memory/mistakes.json এ সেভ করা (full context সহ, যাতে
+            # ডাউনস্ট্রিম অ্যানালাইসিস — যেমন devil's advocate আপডেট —
+            # শুধু error_type/lesson না, আসল ট্রেড ডেটার উপরও ভিত্তি করতে পারে)
             mistake_data = {
                 "trade_id": trade.get("id"),
                 "pair": trade.get("pair"),
                 "error_type": analysis.get("error_type"),
                 "what_happened": analysis.get("what_happened"),
-                "lesson": analysis.get("lesson")
+                "lesson": analysis.get("lesson"),
+                "confidence_adjustment": analysis.get("confidence_adjustment"),
+                "signal": trade.get("signal"),
+                "entry": trade.get("entry"),
+                "sl": trade.get("sl"),
+                "tp": trade.get("tp"),
+                "spread": spread,
+                "rr_ratio": trade.get("rr_ratio"),
+                "confidence": trade.get("confidence"),
+                "pnl": pnl,
+                "trend": trade_snapshot.get("trend"),
+                "regime": trade_snapshot.get("regime"),
+                "rsi": trade_snapshot.get("rsi"),
+                "pattern": trade_snapshot.get("pattern"),
             }
             self.memory.db.save_mistake(mistake_data)
 
             # Pattern memory ও ভেক্টরে পুশ
+            # BUGFIX (2026-08-25 audit): PatternMemory.add_losing_pattern()'s
+            # real signature is (symbol, regime, pattern, pnl_pips) — this
+            # call was passing a single dict as `symbol` plus an unexpected
+            # `lesson=` kwarg, which raised TypeError on every closed loss.
+            # Caught silently by the except below, so pattern_memory.json
+            # never actually recorded a single loss. Call it correctly.
             try:
-                self.memory.pattern.add_losing_pattern({
-                    "pair": trade.get('pair'),
-                    "signal": trade.get('signal'),
-                    "pattern": trade_snapshot.get('pattern'),
-                    "regime": trade_snapshot.get('regime'),
-                    "rsi": trade_snapshot.get('rsi'),
-                    "pnl": pnl
-                }, lesson=analysis.get("lesson"))
+                self.memory.pattern.add_losing_pattern(
+                    symbol=trade.get('pair'),
+                    regime=trade_snapshot.get('regime'),
+                    pattern=trade_snapshot.get('pattern'),
+                    pnl_pips=trade.get('pnl_pips', pnl),
+                )
             except Exception as e:
                 log.warning(f"[MistakeAnalyzer] Pattern memory update failed: {e}")
 
@@ -312,16 +331,17 @@ class AdvancedMistakeAnalyzer:
             f"{trade_snapshot.get('pattern')} pattern. R:R was 1:{trade.get('rr_ratio')}."
         )
 
+        # BUGFIX (2026-08-25 audit): same signature mismatch as the loss
+        # path above — a single dict was passed where (symbol, regime,
+        # pattern, pnl_pips) positional args are required, raising
+        # TypeError on every single WIN, silently swallowed below.
         try:
-            self.memory.pattern.add_winning_pattern({
-                "pair": trade.get('pair'),
-                "signal": trade.get('signal'),
-                "pattern": trade_snapshot.get('pattern'),
-                "regime": trade_snapshot.get('regime'),
-                "rsi": trade_snapshot.get('rsi'),
-                "pnl": pnl,
-                "rr": trade.get('rr_ratio')
-            })
+            self.memory.pattern.add_winning_pattern(
+                symbol=trade.get('pair'),
+                regime=trade_snapshot.get('regime'),
+                pattern=trade_snapshot.get('pattern'),
+                pnl_pips=trade.get('pnl_pips', pnl),
+            )
         except Exception as e:
             log.warning(f"[MistakeAnalyzer] Pattern memory update failed: {e}")
 

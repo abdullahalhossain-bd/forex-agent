@@ -398,7 +398,6 @@ class DevilsAdvocateGate:
             news_ctx = analysis_out.get("news_ctx")
             if isinstance(news_ctx, dict):
                 news_risk = news_ctx.get("risk_level", "unknown")
-
         # ── Normalize upstream key aliases ─────────────────────────────
         # structure_engine.get_ai_context uses structure_bos / structure_choch;
         # DA historically only looked for bos / choch. Also accept values
@@ -524,6 +523,66 @@ class DevilsAdvocateGate:
                 else:
                     evidence[k] = v
 
+        # ── Entry-quality guardrails (deterministic, non-LLM checks) ──────
+        # risk/entry_quality_guardrails.py already computes exactly the
+        # things a human reviewer would check by hand (SL swing-anchored?
+        # TP structurally validated? exhaustion? indecision candles? fresh
+        # high/low rejection? rejection psychology?) — it runs upstream in
+        # risk/trade_permission.py and its full result dict is already
+        # sitting on trade_context["perm_out"]["entry_quality_detail"], but
+        # this reviewer never looked at it. That meant the LLM was asked to
+        # judge "is the SL protected / is the TP reachable" from vague
+        # htf/structure hints while a real, already-computed answer sat
+        # unused one dict away. Surface it explicitly, including which
+        # individual flags failed, so both the LLM and the deterministic
+        # HTF-conflict check below can use it, and so it's preserved in the
+        # audit log for later backtesting (see analysis/devils_advocate_backtest.py).
+        entry_quality_detail = self._g(trade_context.get("perm_out"), "entry_quality_detail", default={}) or {}
+        failed_checks = [
+            r.get("flag_name")
+            for r in (entry_quality_detail.get("results") or [])
+            if isinstance(r, dict) and not r.get("passed", True)
+        ]
+        evidence["entry_quality"] = {
+            "passed_count": entry_quality_detail.get("passed_count", "unknown"),
+            "total_count": entry_quality_detail.get("total_count", "unknown"),
+            "quality_score": entry_quality_detail.get("quality_score", "unknown"),
+            "failed_checks": failed_checks if failed_checks else "none",
+            "failed_check_count": len(failed_checks),
+            "warnings": entry_quality_detail.get("warnings", []),
+            "block_reason": entry_quality_detail.get("block_reason"),
+        }
+
+        # ── Deterministic HTF-conflict flag ────────────────────────────
+        # "No strong opposing HTF trend" (sideways/unknown) and "HTF
+        # actively trends against the signal" are NOT the same evidence
+        # weight — the former is neutral, the latter is a real
+        # contradiction. Compute this mechanically (not left to the LLM
+        # to notice) so it can be both enforced in the prompt and recorded
+        # for backtesting regardless of what the model says about it.
+        sig_u = str(signal).upper()
+        h4_l = str(evidence["htf"]["h4_trend"]).lower()
+        h1_l = str(evidence["htf"]["h1_trend"]).lower()
+        _bull_kw = ("bull", "buy", "long", "up")
+        _bear_kw = ("bear", "sell", "short", "down")
+
+        def _opposes(trend_l: str) -> bool:
+            if trend_l in ("unknown", "sideways", "neutral", "ranging", ""):
+                return False
+            if sig_u == "BUY":
+                return any(k in trend_l for k in _bear_kw)
+            if sig_u == "SELL":
+                return any(k in trend_l for k in _bull_kw)
+            return False
+
+        htf_conflict = _opposes(h4_l) or _opposes(h1_l)
+        evidence["context"]["htf_conflict"] = htf_conflict
+        evidence["context"]["htf_conflict_note"] = (
+            "HTF genuinely trends AGAINST the signal (real contradiction)"
+            if htf_conflict else
+            "HTF does not actively oppose the signal (this is NOT the same as HTF supporting it)"
+        )
+
         return evidence
 
     # ------------------------------------------------------------------
@@ -536,21 +595,49 @@ class DevilsAdvocateGate:
                 "You are an independent Devil's Advocate reviewer for an already-generated "
                 "trade thesis. Do not generate a signal, do not predict direction, and do not "
                 "replace the strategy. Assume the proposed direction may be wrong: you are not "
-                "rewarded for agreeing with the thesis. Your only task is to find the strongest "
-                "falsification of the thesis using the evidence provided, and to state plainly "
-                "when the evidence is too thin to have an opinion (UNCERTAIN). "
-                "IMPORTANT policy on RANGING markets: a RANGING or sideways regime alone is "
-                "NOT sufficient grounds to REJECT when evidence.structure.bos / "
-                "evidence.structure.choch ACTUALLY agree with the proposed signal direction "
-                "(check the real evidence field, not just the absence of an opposing claim in "
-                "the thesis) AND a mapped S/R or supply/demand zone is present AND "
-                "reward-to-risk meets the minimum. In that case prefer TAKE (or UNCERTAIN if "
-                "other hard contradictions exist). Do REJECT when structure breaks the "
-                "opposite way of the signal, or HTF trend is strongly against the signal, or "
-                "the signal is entering at/near a swing level that would invalidate it on a "
-                "normal continuation. A thesis whose only claim is 'no strong opposing HTF "
-                "trend' (an absence-of-opposition claim, not real support) is NOT sufficient "
-                "grounds for TAKE by itself. "
+                "rewarded for agreeing with the thesis. Your real job is not 'is there enough "
+                "evidence FOR this trade' -- it is 'is there evidence AGAINST it that survives "
+                "scrutiny'. Actively hunt for reasons to REJECT before you look for reasons to "
+                "confirm. "
+                "\n\nScore each of these 5 pillars independently as PASS / WARN / FAIL with a "
+                "one-line reason, using ONLY the evidence fields given (never invent data):\n"
+                "  1. STRUCTURE -- do evidence.structure.bos AND evidence.structure.choch AND "
+                "evidence.htf.m15_structure AND evidence.htf.h1_trend actually agree with each "
+                "other AND with the signal direction? One bullish BOS alone is NOT enough -- "
+                "check for mutual consistency across all of these, not just one field.\n"
+                "  2. LOCATION -- is entry away from an immediate opposing barrier (session/PDH/"
+                "PDL/prior swing/liquidity pool) in evidence.location? For BUY, is there room "
+                "before the next resistance/session high? For SELL, room before the next "
+                "support/session low? Entering right into a wall the signal must break through "
+                "is a location failure even if direction is right.\n"
+                "  3. RISK_STRUCTURE -- is the SL genuinely swing-anchored (not just N pips away "
+                "-- would normal market noise plausibly hit it)? Is the TP's path free of a "
+                "structural obstacle (evidence.location, evidence.entry_quality)? RR clearing "
+                "the minimum bar is necessary but NOT sufficient on its own -- a mathematically "
+                "fine RR with an unreachable TP is still a risk-structure failure.\n"
+                "  4. MOMENTUM -- is evidence.structure.displacement real, or 'NONE'/'unknown'? "
+                "A break with no displacement is weaker evidence than one with it, especially "
+                "for a continuation trade -- treat 'NONE' as a real negative, not neutral.\n"
+                "  5. REGIME_HTF -- evidence.context.htf_conflict is a precomputed, mechanical "
+                "signal: true means HTF genuinely trends AGAINST the signal (real contradiction, "
+                "should usually fail this pillar); false only means HTF is not actively opposing "
+                "-- it does NOT mean HTF supports the trade. Do not treat 'not opposing' as "
+                "'supporting'. Also weigh evidence.momentum.volatility_regime: a RANGING regime "
+                "combined with NO displacement deserves real scrutiny (range breaks are often "
+                "false breakouts); RANGING with genuine aligned structure and displacement is "
+                "fine.\n"
+                "\nAlso review evidence.entry_quality.failed_checks -- these are deterministic, "
+                "already-computed guardrail failures (not opinions). ONE such warning is normal "
+                "noise. Several failing TOGETHER (e.g. sl_swing_anchor + tp_structure_validation "
+                "+ exhaustion_filter + fresh_high_rejection) is a cluster and should be treated "
+                "as a single high-severity red flag, not N independent minor ones -- ask yourself "
+                "'why should this trade still happen despite this many independent entry-quality "
+                "warnings?' before deciding TAKE. "
+                "\nDecide REJECT if 2 or more pillars are FAIL, or if any single pillar failure "
+                "is severe enough alone (e.g. STRUCTURE contradicts the signal outright, or "
+                "REGIME_HTF shows htf_conflict=true with no offsetting structure). Decide TAKE "
+                "only if pillars are mostly PASS and any WARNs are minor and outweighed. Decide "
+                "UNCERTAIN if evidence is too sparse/degraded for a confident call either way. "
                 "CONSISTENCY REQUIREMENT (hard rule, checked programmatically downstream): "
                 "your `expected_edge` field must agree with your `decision`. Never return "
                 "decision=TAKE together with expected_edge=negative, and never return "
@@ -580,6 +667,13 @@ class DevilsAdvocateGate:
                     "counter_evidence_strength": 0.0,
                     "expected_edge": "positive|neutral|negative|unknown",
                     "risk_level": "low|medium|high",
+                    "pillars": {
+                        "structure": {"verdict": "PASS|WARN|FAIL", "reason": ""},
+                        "location": {"verdict": "PASS|WARN|FAIL", "reason": ""},
+                        "risk_structure": {"verdict": "PASS|WARN|FAIL", "reason": ""},
+                        "momentum": {"verdict": "PASS|WARN|FAIL", "reason": ""},
+                        "regime_htf": {"verdict": "PASS|WARN|FAIL", "reason": ""},
+                    },
                     "supporting_evidence": [],
                     "contradicting_evidence": [],
                     "reasons_for_rejection": [],
@@ -746,6 +840,28 @@ class DevilsAdvocateGate:
         thesis_quality = float(parsed.get("thesis_quality", 0.0) or 0.0)
         counter_evidence_strength = float(parsed.get("counter_evidence_strength", 0.0) or 0.0)
 
+        # Pillar verdicts (2026-08-25 redesign — see module docstring update
+        # and the 5-pillar checklist in _build_payload's instruction text).
+        # Defaults to "unknown" per pillar so older/legacy model responses
+        # (or a stub in a test) that don't include `pillars` at all still
+        # parse cleanly instead of raising -- this field is additive.
+        _pillar_names = ("structure", "location", "risk_structure", "momentum", "regime_htf")
+        raw_pillars = parsed.get("pillars") if isinstance(parsed.get("pillars"), dict) else {}
+        pillars: Dict[str, Any] = {}
+        fail_pillar_count = 0
+        for name in _pillar_names:
+            p = raw_pillars.get(name) if isinstance(raw_pillars, dict) else None
+            verdict = "unknown"
+            reason = ""
+            if isinstance(p, dict):
+                verdict = str(p.get("verdict", "unknown")).upper()
+                if verdict not in ("PASS", "WARN", "FAIL"):
+                    verdict = "unknown"
+                reason = p.get("reason", "") or ""
+            pillars[name] = {"verdict": verdict, "reason": reason}
+            if verdict == "FAIL":
+                fail_pillar_count += 1
+
         # P0 fix (2026-08-14 forensic audit, EURUSD eval_1786641545_EURUSD_fe0d708e):
         # that trade's raw model output was decision=TAKE, expected_edge=negative,
         # reasons_for_rejection=[] -- a self-contradictory verdict that executed
@@ -765,6 +881,18 @@ class DevilsAdvocateGate:
                 contradiction_reason = (
                     f"counter_evidence_strength={counter_evidence_strength} >= "
                     f"thesis_quality={thesis_quality} on a TAKE decision"
+                )
+            elif fail_pillar_count >= 2:
+                # Same self-contradiction principle as the expected_edge check
+                # above, applied to the model's own pillar scoring: the prompt
+                # explicitly instructs "REJECT if 2+ pillars are FAIL". A model
+                # that scores 2+ pillars FAIL and still says TAKE is
+                # contradicting its own structured output, not expressing a
+                # considered "warnings don't matter here" judgment -- treat it
+                # the same as any other internal inconsistency.
+                failed_names = [n for n, v in pillars.items() if v["verdict"] == "FAIL"]
+                contradiction_reason = (
+                    f"{fail_pillar_count} pillars FAIL ({', '.join(failed_names)}) on a TAKE decision"
                 )
         if contradiction_reason:
             log.warning(f"[DevilsAdvocate] TAKE overridden -- internal contradiction: {contradiction_reason}")

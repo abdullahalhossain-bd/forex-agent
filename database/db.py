@@ -179,6 +179,29 @@ class TraderDB:
                     context_json    TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS mistakes (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trade_id        INTEGER NOT NULL,
+                    pair            TEXT,
+                    error_type      TEXT,
+                    what_happened   TEXT,
+                    lesson          TEXT,
+                    confidence_adjustment REAL,
+                    signal          TEXT,
+                    entry           REAL,
+                    sl              REAL,
+                    tp              REAL,
+                    spread          REAL,
+                    rr_ratio        REAL,
+                    confidence      INTEGER,
+                    pnl             REAL,
+                    trend           TEXT,
+                    regime          TEXT,
+                    rsi             REAL,
+                    pattern         TEXT,
+                    created_at      TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS economic_history (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
                     event           TEXT NOT NULL,
@@ -452,6 +475,183 @@ class TraderDB:
                 trade_id,
             ))
         log.info(f"Trade CLOSE saved: #{trade_id} {close_data['result']} | PnL: ${close_data['pnl']}")
+
+    def get_trade_by_id(self, trade_id: int) -> dict | None:
+        """Fetch a single trade row as a dict, shaped for
+        learning/mistake_analyzer.py's AdvancedMistakeAnalyzer.
+
+        BUGFIX (2026-08-25 audit): this method was called by
+        `AdvancedMistakeAnalyzer.analyze_closed_trade()` on every single
+        closed trade but never existed on TraderDB — it raised
+        AttributeError immediately, which core/trader.py's caller silently
+        swallowed as a generic "[Learning] Close sync failed" warning. As
+        a result the entire loss-analysis feature never ran, for a single
+        trade, ever. Adding it here is what actually turns the feature on.
+
+        The `trades` table doesn't literally have `signal`, `rr_ratio`, or
+        `chart_snapshot` columns — this method reshapes what IS stored
+        (type/pattern/regime/trend/rsi columns + the context_json blob
+        saved at open time) into the shape the analyzer expects.
+        """
+        with self._connect() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
+        if row is None:
+            return None
+        trade = dict(row)
+
+        # context_json was saved at open time (see save_trade/save_trade_open)
+        # and holds whatever extra decision context + chart_snapshot fields
+        # were available then (spread, confidence_at_entry, rr_ratio, etc.)
+        try:
+            context = json.loads(trade.get("context_json") or "{}")
+            if not isinstance(context, dict):
+                context = {}
+        except Exception:
+            context = {}
+
+        trade["signal"] = trade.get("type")
+
+        # rr_ratio: prefer whatever was recorded at decision time; else
+        # derive it from entry/sl/tp so the analyzer always has a number.
+        rr_ratio = context.get("rr_ratio")
+        if rr_ratio is None:
+            try:
+                entry, sl, tp = float(trade["entry"]), float(trade["sl"]), float(trade["tp"])
+                risk = abs(entry - sl)
+                reward = abs(tp - entry)
+                rr_ratio = round(reward / risk, 2) if risk > 0 else None
+            except (TypeError, ValueError, KeyError):
+                rr_ratio = None
+        trade["rr_ratio"] = rr_ratio
+
+        # spread: prefer the actual recorded cost column, fall back to
+        # whatever spread figure was captured in the open-time context.
+        trade["spread"] = trade.get("spread_cost") or context.get("entry_spread_pips") or context.get("spread")
+
+        # chart_snapshot: the analyzer expects trend/regime/rsi/pattern —
+        # these live as real columns on `trades`; merge in any extra
+        # market-context keys from context_json without overwriting them.
+        trade["chart_snapshot"] = {
+            **{k: v for k, v in context.items() if k not in ("rr_ratio",)},
+            "trend": trade.get("trend"),
+            "regime": trade.get("regime"),
+            "rsi": trade.get("rsi"),
+            "pattern": trade.get("pattern"),
+        }
+
+        return trade
+
+    def save_mistake(self, mistake_data: dict) -> int:
+        """Persist a closed LOSS trade's root-cause analysis.
+
+        BUGFIX (2026-08-25 audit): called by every closed-loss trade in
+        learning/mistake_analyzer.py, but didn't exist — same silent-
+        AttributeError failure mode as get_trade_by_id above, so no
+        mistake was ever actually recorded anywhere (not in SQLite, and
+        there was no JSON export at all).
+
+        Writes to BOTH:
+          1. the `mistakes` SQLite table (queryable, joinable with `trades`)
+          2. memory/mistakes.json — a flat, human-readable JSON array of
+             every loss + its reason, appended atomically (tempfile +
+             os.replace, same pattern as memory/trade_memory.py) so it
+             survives a crash mid-write and can be read without a DB client.
+        """
+        created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        with self._connect() as conn:
+            cur = conn.execute("""
+                INSERT INTO mistakes
+                (trade_id, pair, error_type, what_happened, lesson,
+                 confidence_adjustment, signal, entry, sl, tp, spread,
+                 rr_ratio, confidence, pnl, trend, regime, rsi, pattern,
+                 created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                mistake_data.get("trade_id"),
+                mistake_data.get("pair"),
+                mistake_data.get("error_type"),
+                mistake_data.get("what_happened"),
+                mistake_data.get("lesson"),
+                mistake_data.get("confidence_adjustment"),
+                mistake_data.get("signal"),
+                mistake_data.get("entry"),
+                mistake_data.get("sl"),
+                mistake_data.get("tp"),
+                mistake_data.get("spread"),
+                mistake_data.get("rr_ratio"),
+                mistake_data.get("confidence"),
+                mistake_data.get("pnl"),
+                mistake_data.get("trend"),
+                mistake_data.get("regime"),
+                mistake_data.get("rsi"),
+                mistake_data.get("pattern"),
+                created_at,
+            ))
+            mistake_id = cur.lastrowid
+
+        try:
+            self._append_mistake_json({**mistake_data, "id": mistake_id, "created_at": created_at})
+        except Exception as e:
+            log.warning(f"[DB] save_mistake: JSON export failed (SQLite row still saved): {e}")
+
+        log.info(
+            f"Mistake saved: #{mistake_id} trade #{mistake_data.get('trade_id')} "
+            f"{mistake_data.get('pair')} — {mistake_data.get('error_type')}"
+        )
+        return mistake_id
+
+    @staticmethod
+    def _append_mistake_json(record: dict) -> None:
+        """Atomically append one mistake record to memory/mistakes.json."""
+        import tempfile
+        from core.constants import MISTAKES_JSON_PATH
+
+        path = MISTAKES_JSON_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        records = []
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, list):
+                    records = loaded
+                else:
+                    log.warning(f"[DB] {path} was not a list — starting fresh")
+            except Exception as e:
+                log.warning(f"[DB] Failed to read {path}, starting fresh: {e}")
+
+        records.append(record)
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=str(path.parent), suffix=".tmp",
+                prefix="mistakes_", delete=False, encoding="utf-8"
+            ) as tmp_f:
+                json.dump(records, tmp_f, indent=2, default=str, ensure_ascii=False)
+                tmp_path = tmp_f.name
+            os.replace(tmp_path, path)
+        except Exception:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+            raise
+
+    def get_mistakes(self, pair: str = None, limit: int = 100) -> pd.DataFrame:
+        """Recent loss root-cause records — SQLite side of save_mistake()."""
+        query = "SELECT * FROM mistakes"
+        params = []
+        if pair:
+            query += " WHERE pair = ?"
+            params.append(pair)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        with self._connect() as conn:
+            return pd.read_sql(query, conn, params=params)
 
     def get_open_trades(self, pair: str = None) -> pd.DataFrame:
         """বর্তমান open trades দেখো (price update loop-এর জন্য)"""
