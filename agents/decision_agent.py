@@ -841,6 +841,17 @@ class DecisionAgent:
                 # layer alone instead of blocking. Only if no layer clears
                 # that bar do we still return the hard NO TRADE.
                 if _fs_signal not in ("BUY", "SELL"):
+                    # FIX (2026-08-25, user-requested — extends the MTF
+                    # conflict guard to this override path too): computed
+                    # once here and reused by both the single-layer
+                    # confidence-override branch below AND the
+                    # analysis-final_signal-preserve branch further down,
+                    # since both bypass SignalFusion's own gate the same
+                    # way and both need the same protection.
+                    _mtf_ctx = (analysis_out or {}).get("mtf_structure_ctx", {}) or {}
+                    _mtf_conflict = bool(_mtf_ctx.get("mtf_conflict", False))
+                    _mtf_permission = str(_mtf_ctx.get("mtf_trade_permission", "") or "").upper()
+                    _mtf_blocks = _mtf_conflict or _mtf_permission in ("WAIT_CONFIRM", "NO_TRADE")
                     # BUGFIX: this used to build candidates from the RAW
                     # `master_sig`/`master_conf` — but when MasterAnalyst
                     # was parse-failed/unavailable, decide() deliberately
@@ -877,7 +888,7 @@ class DecisionAgent:
                         self.CONFIDENCE_FLOOR if _agreement_count > 0
                         else self.ZERO_CONSENSUS_OVERRIDE_FLOOR
                     )
-                    if _best is not None and _best[1] >= _required_floor:
+                    if _best is not None and _best[1] >= _required_floor and not _mtf_blocks:
                         _ov_signal, _ov_conf, _ov_layer = _best
                         log.info(
                             f"[DecisionAgent] SignalFusion gate abstained "
@@ -932,6 +943,16 @@ class DecisionAgent:
                             pattern=pattern, pair=pair, timeframe=timeframe,
                             regime=regime_label, analysis_out=analysis_out,
                             excluded_layers=_excluded_layers)
+                    elif _best is not None and _best[1] >= _required_floor and _mtf_blocks:
+                        log.warning(
+                            f"[DecisionAgent] Single-layer override ({_best[2]} "
+                            f"{_best[0]} {_best[1]:.0f}%) NOT applied — MTF "
+                            f"Structure conflict (conflict={_mtf_conflict}, "
+                            f"permission={_mtf_permission or 'UNKNOWN'}: "
+                            f"{_mtf_ctx.get('mtf_external_bias', 'UNKNOWN')} vs "
+                            f"{_mtf_ctx.get('mtf_internal_bias', 'UNKNOWN')}) "
+                            f"blocks the confidence-floor override"
+                        )
                     # 2026-08-13 (0-trades audit): analysis_agent may have
                     # already filled final_signal via Adaptive Decision or
                     # Unified consensus FALLBACK after MasterDecision WAIT.
@@ -942,6 +963,46 @@ class DecisionAgent:
                     _analysis_final = str(
                         (analysis_out or {}).get("final_signal", "") or ""
                     ).upper().replace(" ", "_")
+
+                    # FIX (2026-08-25, user-requested): this override used to
+                    # preserve analysis' BUY/SELL unconditionally whenever
+                    # SignalFusion abstained (WAIT/0/0), even when the MTF
+                    # Structure Engine had independently flagged a genuine
+                    # HTF-vs-LTF conflict (e.g. H4=BEARISH vs M15=BULLISH,
+                    # trade_permission=WAIT_CONFIRM). Production logs showed
+                    # exactly that: mtf_structure_engine logged "Conflict:
+                    # H4=BEARISH vs M15=BULLISH — avoid trades" and this
+                    # override still returned BUY at 68% confidence anyway.
+                    # It only got caught downstream by chance (Devil's
+                    # Advocate rejected it). Now: an active MTF conflict
+                    # blocks this override the same way SignalFusion's own
+                    # gate would have — the analysis confidence is preserved
+                    # for audit, but the decision is not allowed through.
+                    # (_mtf_ctx/_mtf_conflict/_mtf_permission/_mtf_blocks were
+                    # already computed once above, right after the
+                    # `if _fs_signal not in ("BUY", "SELL")` guard, and are
+                    # reused here as-is.)
+
+                    if _analysis_final in ("BUY", "SELL") and _mtf_blocks:
+                        log.warning(
+                            f"[DecisionAgent] Analysis final_signal={_analysis_final} "
+                            f"NOT preserved — MTF Structure conflict "
+                            f"(conflict={_mtf_conflict}, permission={_mtf_permission or 'UNKNOWN'}: "
+                            f"{_mtf_ctx.get('mtf_external_bias', 'UNKNOWN')} vs "
+                            f"{_mtf_ctx.get('mtf_internal_bias', 'UNKNOWN')}) overrides the "
+                            f"unified/adaptive fill priority"
+                        )
+                        return self._result(
+                            "NO TRADE", max(_preserved_conf, _fs_conf), risk_out, [
+                                f"Analysis final_signal={_analysis_final} was available but "
+                                f"blocked: MTF Structure conflict (external="
+                                f"{_mtf_ctx.get('mtf_external_bias', 'UNKNOWN')}, internal="
+                                f"{_mtf_ctx.get('mtf_internal_bias', 'UNKNOWN')}, "
+                                f"permission={_mtf_permission or 'UNKNOWN'}) "
+                                f"(analysis confidence preserved)",
+                            ], pattern=pattern, pair=pair, timeframe=timeframe,
+                            regime=regime_label, analysis_out=analysis_out)
+
                     if _analysis_final in ("BUY", "SELL"):
                         _af_ind = market_out.get("ind_ctx", {}) or {}
                         _af_entry = (
@@ -1648,17 +1709,41 @@ class DecisionAgent:
         icon  = icons.get(result["decision"], "⚪")
         bar   = "=" * 44
         log.info(bar)
-        log.info(f"  {icon}  FINAL DECISION  (Day 42 + Day 53)")
+        log.info(f"  {icon}  DIRECTIONAL DECISION  (Day 42 + Day 53) — pre-risk-sizing")
         log.info(bar)
         log.info(f"  Decision    : {result['decision']}")
         log.info(f"  Confidence  : {result['confidence']}%")
         log.info(f"  Pattern     : {result.get('pattern')}  ({result.get('pair')} {result.get('timeframe')} {result.get('regime')})")
         if result["decision"] in ("BUY", "SELL"):
+            # FIX (2026-08-25 audit — misleading "0 pips" log): DecisionAgent
+            # (stage 4/9) runs and prints BEFORE RiskEngine (stage 5/9), so
+            # sl_pips/tp_pips/lot here still reflect whatever placeholder
+            # risk_out was passed in, not the real sized values RiskEngine
+            # computes moments later. Production logs showed this printing
+            # "SL: ... (0 pips) | TP: ... (0 pips) | Lot: 0 | R:R: 1:0"
+            # right above a correct "SL: 10 pips | TP: 20 pips | Lot: 0.26"
+            # block from RiskEngine — functionally harmless (RiskEngine's
+            # numbers are what actually get used/executed) but confusing to
+            # read, since it looks like two disagreeing "final" decisions.
+            # Label pip/lot fields explicitly as pending real sizing when
+            # they're still the zeroed placeholder, instead of implying
+            # they're final.
+            _sizing_pending = (
+                result.get("sl_pips", 0) in (0, None)
+                and result.get("tp_pips", 0) in (0, None)
+                and result.get("lot", 0) in (0, None)
+            )
             log.info(f"  Entry       : {result['entry']}")
-            log.info(f"  SL          : {result['sl']}  ({result['sl_pips']} pips)")
-            log.info(f"  TP          : {result['tp']}  ({result['tp_pips']} pips)")
-            log.info(f"  Lot         : {result['lot']}")
-            log.info(f"  R:R         : 1:{result['rr']}")
+            if _sizing_pending:
+                log.info(f"  SL          : {result['sl']}  (pips pending RiskEngine sizing)")
+                log.info(f"  TP          : {result['tp']}  (pips pending RiskEngine sizing)")
+                log.info(f"  Lot         : pending RiskEngine sizing")
+                log.info(f"  R:R         : pending RiskEngine sizing")
+            else:
+                log.info(f"  SL          : {result['sl']}  ({result['sl_pips']} pips)")
+                log.info(f"  TP          : {result['tp']}  ({result['tp_pips']} pips)")
+                log.info(f"  Lot         : {result['lot']}")
+                log.info(f"  R:R         : 1:{result['rr']}")
         log.info("  -- Reasoning --")
         for r in result["reasons"]:
             log.info(f"    * {r}")

@@ -20,6 +20,7 @@
 # ============================================================
 
 from typing import Dict, Any, List, Optional
+from datetime import datetime as _dt, timezone as _tz
 
 from analysis.patterns import PatternDetector
 from analysis.support_resistance import SupportResistance
@@ -1584,6 +1585,22 @@ class AnalysisAgent:
                 "momentum_ctx":          momentum_ctx,
                 "strategy":           strategy_choice,
                 "final_signal":      final_signal,
+                # FIX (2026-08-25 audit): Signal TTL / staleness check in
+                # core/fusion_engine_v3.py (Master List Issue #5b) reads
+                # analysis_out.get("signal_timestamp") / .get("generated_at")
+                # to detect signals that went stale during a slow decision
+                # cycle (e.g. Groq rate-limit retries + Gemini fallback +
+                # multiple sentiment-model calls stretching one cycle to
+                # ~100s). Neither key was ever actually set anywhere in this
+                # method, so that lookup always returned None, which
+                # _compute_signal_age() treats as "assume fresh" (0.0s) —
+                # the TTL check was silently a no-op for every single cycle,
+                # regardless of true elapsed time. Production logs confirm
+                # this: "[FusionV3] OK BUY | age=0.0s" on a cycle that had
+                # already run ~100s of LLM calls since the price was
+                # fetched. Stamping the real generation time here lets that
+                # downstream check actually function.
+                "generated_at":      _dt.now(_tz.utc).isoformat(timespec="seconds"),
                 "execution_filters": {},  # TEST_MODE bypass — no execution gates applied
                 "test_mode_bypass":  True,  # Flag for downstream debugging
             }
@@ -2877,6 +2894,15 @@ class AnalysisAgent:
             "momentum_ctx":          momentum_ctx,
             "strategy":           strategy_choice,
             "final_signal":      final_signal,
+            # FIX (2026-08-25 audit): see matching comment in the TEST_MODE
+            # branch above — this real-cycle return dict had the exact same
+            # gap. core/fusion_engine_v3.py's Signal TTL check
+            # (Master List Issue #5b) looks for "signal_timestamp" or
+            # "generated_at" here and, finding neither, always computed
+            # age=0.0s (silently disabling the staleness check for every
+            # live cycle, including ones stretched to ~100s by LLM
+            # rate-limit retries). Stamp it for real.
+            "generated_at":      _dt.now(_tz.utc).isoformat(timespec="seconds"),
             # ARCHITECTURAL FIX: new field — records execution-gate verdicts
             # WITHOUT touching the analysis-layer `final_signal`. Consumed
             # by TradePermission, learning agent, and the audit trail.

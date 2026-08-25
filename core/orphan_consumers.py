@@ -1135,11 +1135,38 @@ def final_decision_gate(
         nm = _resolve(registry, "network_monitor")
         if nm is not None:
             try:
+                # Bug fix: this used to ONLY check raw latency (>1000ms),
+                # completely ignoring NetworkMonitor's own aggregate
+                # GOOD/OK/BAD status (which combines ping + mt5 ping + exec
+                # latency, and is what get_status()/trading_allowed()
+                # already compute). Observed in production: status=BAD with
+                # Trading allowed=❌ logged explicitly, yet no individual
+                # metric exceeded 1000ms (ping=94ms, mt5=4.6ms, exec=575ms),
+                # so this gate passed the trade straight through — the BAD
+                # verdict was silently discarded. Now we defer to the
+                # monitor's own trading_allowed()/status when available,
+                # falling back to the raw-latency check only if neither is
+                # exposed.
+                allowed_fn = getattr(nm, "trading_allowed", None)
+                status_fn = getattr(nm, "get_status", None)
+                blocked = False
+                block_detail = None
+                if callable(allowed_fn):
+                    if not allowed_fn():
+                        blocked = True
+                        block_detail = "network_monitor status=BAD (trading_allowed=False)"
+                elif callable(status_fn):
+                    st = status_fn()
+                    if isinstance(st, dict) and st.get("trading_allowed") is False:
+                        blocked = True
+                        block_detail = f"network_monitor status={st.get('status', 'BAD')}"
+
                 lat_fn = (
                     getattr(nm, "current_latency_ms", None)
                     or getattr(nm, "get_latency", None)
                     or getattr(nm, "latency_ms", None)
                 )
+                lat_ms = None
                 if callable(lat_fn):
                     lat = lat_fn()
                     if isinstance(lat, dict):
@@ -1147,21 +1174,27 @@ def final_decision_gate(
                     else:
                         lat_ms = float(lat or 0)
                     # Block if latency > 1000ms (1s) — order fill quality
-                    # would be unreliable.
+                    # would be unreliable. Kept as an independent check in
+                    # case the monitor object doesn't expose an aggregate
+                    # status at all.
                     if lat_ms > 1000:
-                        perm_out["allowed"] = False
-                        perm_out["execution_allowed"] = False
-                        perm_out["final_action"] = "NO TRADE"
-                        perm_out["execution_action"] = "NO TRADE"
-                        perm_out["blocked_reason"] = f"Network latency {lat_ms:.0f}ms > 1000ms"
-                        perm_out.setdefault("checks", []).append({
-                            "check": "network_monitor",
-                            "passed": False,
-                            "detail": f"latency {lat_ms:.0f}ms",
-                        })
-                        perm_out["total"] = perm_out.get("total", 0) + 1
-                        log.warning(f"[OC] network_monitor BLOCKED {symbol} {direction}: {lat_ms:.0f}ms")
-                        return perm_out
+                        blocked = True
+                        block_detail = f"latency {lat_ms:.0f}ms > 1000ms"
+
+                if blocked:
+                    perm_out["allowed"] = False
+                    perm_out["execution_allowed"] = False
+                    perm_out["final_action"] = "NO TRADE"
+                    perm_out["execution_action"] = "NO TRADE"
+                    perm_out["blocked_reason"] = f"Network monitor: {block_detail}"
+                    perm_out.setdefault("checks", []).append({
+                        "check": "network_monitor",
+                        "passed": False,
+                        "detail": block_detail,
+                    })
+                    perm_out["total"] = perm_out.get("total", 0) + 1
+                    log.warning(f"[OC] network_monitor BLOCKED {symbol} {direction}: {block_detail}")
+                    return perm_out
             except Exception as e:
                 log.debug(f"[OC] network_monitor failed (non-fatal): {e}")
 

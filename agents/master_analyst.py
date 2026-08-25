@@ -124,15 +124,30 @@ GROQ_REASONING_EFFORT = os.getenv("GROQ_REASONING_EFFORT", "low")
 # the most decision-relevant summary lines) instead of sending a request
 # that Groq is guaranteed to reject.
 GROQ_TPM_BUDGET = int(os.getenv("GROQ_TPM_BUDGET", "8000"))
-GROQ_TPM_SAFETY_MARGIN = int(os.getenv("GROQ_TPM_SAFETY_MARGIN", "150"))
+# Bumped 150 -> 250: paired with the tighter _estimate_tokens ratio above,
+# this gives extra cushion against remaining heuristic error instead of
+# leaving the trim threshold flush against the real wall.
+GROQ_TPM_SAFETY_MARGIN = int(os.getenv("GROQ_TPM_SAFETY_MARGIN", "250"))
 
 
 def _estimate_tokens(text: str) -> int:
-    """Rough token-count heuristic (~4 chars/token for English/JSON-ish
-    text). Not exact, but good enough to stay clear of a hard TPM wall
-    with a safety margin — precise tokenization isn't worth a new
-    dependency just to avoid a 413."""
-    return (len(text) // 4) + 1
+    """Rough token-count heuristic. Not exact, but good enough to stay
+    clear of a hard TPM wall with a safety margin — precise tokenization
+    isn't worth a new dependency just to avoid a 413.
+
+    FIX (2026-08-25 audit — Groq 413 despite trim guard): the previous
+    4-chars/token ratio was tuned for plain English prose. This prompt
+    is mostly JSON-ish market-intelligence context (numbers, brackets,
+    snake_case/camelCase keys, punctuation-heavy), which tokenizes less
+    efficiently — real-world logs showed a 8000-token-limit call still
+    landing at 8111 requested tokens even though this heuristic estimated
+    it comfortably under budget (~7788 incl. reserved output). Root
+    cause: at 4 chars/token a 14.5k-char prompt was estimated at ~3638
+    tokens, but the real tokenizer produced closer to ~4150 (≈3.5
+    chars/token). Tightening the ratio here means the trim path in
+    `_fit_context_to_budget` actually engages before the wall, instead
+    of after Groq rejects the request and burns a retry + cooldown."""
+    return (len(text) // 3) + 1
 
 
 def _fit_context_to_budget(context: str, available_tokens: int) -> str:
