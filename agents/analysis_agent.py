@@ -1232,6 +1232,35 @@ class AnalysisAgent:
             forecast_ctx = forecast_engine.get_ai_context(forecast_result)
         # removed except block
 
+        # ── 8.98 Momentum Strategy (ROC + volume + ADX) ────────────────
+        # AUDIT FIX (2026-08-25): strategy/momentum.py's MomentumStrategy
+        # was fully built and imported by core/_orphan_integration.py
+        # (registered into ServiceRegistry as "strategy_momentum" so it's
+        # *discoverable*) but nothing anywhere ever called
+        # registry.get("strategy_momentum") — its .generate(df) signal
+        # never reached DecisionAgent. Wired here the same way as the
+        # other low-weight tie-breaker sources (forecast/institutional/
+        # surprise, see decision_agent.py aggregate-confidence block):
+        # compute it every cycle, hand the raw signal to decision_agent
+        # at a small weight (0.5) so a lone momentum reading can't
+        # override the primary rule/LLM/master votes, but it does add
+        # real independent evidence (ROC + volume-ratio + ADX + RSI band
+        # + candle-body confirmation) when it fires.
+        momentum_ctx: Dict[str, Any] = {}
+        try:
+            from strategy.momentum import MomentumStrategy
+            _momentum = MomentumStrategy()
+            _momentum_result = _momentum.generate(df)
+            momentum_ctx = {
+                "momentum_signal":     _momentum_result.get("signal", "HOLD"),
+                "momentum_confidence": float(_momentum_result.get("confidence", 0) or 0),
+                "momentum_reason":     _momentum_result.get("reason", ""),
+                "momentum_roc":        _momentum_result.get("roc"),
+            }
+        except Exception as e:
+            log.debug(f"[AnalysisAgent] MomentumStrategy failed (non-fatal): {e}")
+            momentum_ctx = {"error": str(e)}
+
         # ── 8.97 Strategy Selector (Day 90) ──────────────────
         # Now that we have regime + mtf_bias + structure_ctx, ask the
         # selector to pick an active strategy family. The choice is
@@ -1552,6 +1581,7 @@ class AnalysisAgent:
                 "microstructure_ctx":    microstructure_ctx,
                 "network_ctx":           network_ctx,
                 "forecast_ctx":          forecast_ctx,
+                "momentum_ctx":          momentum_ctx,
                 "strategy":           strategy_choice,
                 "final_signal":      final_signal,
                 "execution_filters": {},  # TEST_MODE bypass — no execution gates applied
@@ -2246,7 +2276,21 @@ class AnalysisAgent:
         # get_rl_agent() falls back to the heuristic path automatically
         # (agrees with ensemble direction, never actively vetoes) — so
         # re-enabling this block is safe either way.
-        try:
+        # DISABLED (2026-08-25): live production log showed the PPO
+        # checkpoint quality-gated in on only 10 eval episodes with
+        # win_rate=23.1% and avg_reward=-7.33 (negative) — NOT the
+        # win_rate=37.3%/positive-reward numbers cited in the comment
+        # above, which were from a different (in-sample/earlier)
+        # validation run. A policy trading at 23% win rate with
+        # negative expected reward is actively harmful as a voting
+        # source (decision_agent.py line ~297, weight=1.5) and as a
+        # veto (HOLD can apply a confidence penalty or, at the old
+        # bug, silently overrode a well-supported opposite-direction
+        # decision — see the override-bug fix in decision_agent.py).
+        # Re-enable only after retraining + a genuine held-out
+        # validation (50+ episodes) shows win_rate and avg_reward both
+        # clearing the quality gate on THIS checkpoint, not a stale one.
+        if False:  # DISABLED — was: try:
             from ml.rl_agent import get_rl_agent
             import numpy as np
 
@@ -2317,10 +2361,8 @@ class AnalysisAgent:
                     f"[AnalysisAgent] Day 71 RL CLOSE: RL agent suggests closing position"
                 )
                 # Note: actual close happens in AITrader, not here — this is just a signal
-        except Exception as e:
-            log.warning(f"[AnalysisAgent] Day 71 RL Agent failed: {e}")
-            rl_ctx = {}
-        # end RL re-enabled (2026-08-17)
+        # removed except block (was: except Exception as e: log.warning Day 71 RL Agent failed; rl_ctx = {})
+        # end RL disabled (2026-08-25) — rl_ctx stays {} (set at top of block)
 
         # ── Day 73: Master Decision Engine (Central Brain) ────────────
         # The culmination of Days 60-72. Collects ALL intelligence layer
@@ -2832,6 +2874,7 @@ class AnalysisAgent:
             "microstructure_ctx":    microstructure_ctx,
             "network_ctx":           network_ctx,
             "forecast_ctx":          forecast_ctx,
+            "momentum_ctx":          momentum_ctx,
             "strategy":           strategy_choice,
             "final_signal":      final_signal,
             # ARCHITECTURAL FIX: new field — records execution-gate verdicts

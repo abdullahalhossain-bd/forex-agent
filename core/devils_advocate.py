@@ -464,10 +464,26 @@ class DevilsAdvocateGate:
                     or structure_ctx.get("liquidity_sweep")
                     or "unknown"
                 ),
+                # BUG FIX (2026-08-25): structure_ctx["displacement"] is a
+                # BOOLEAN (True/False — see analysis/structure.py:632,
+                # disp.get("detected")), while structure_ctx["displacement_dir"]
+                # holds the actual direction string ("BULLISH"/"BEARISH"/
+                # "NONE" — structure.py:633). The old `X or Y or Z` chain
+                # let the boolean win via Python truthiness whenever
+                # displacement WAS detected (True is truthy), so the LLM
+                # was shown a bare `True` instead of the direction —
+                # discarding the one piece of information (which way did
+                # it displace) needed to judge whether it agrees or
+                # conflicts with the signal. smc_ctx never actually
+                # carries a "displacement" key (get_ai_context doesn't
+                # set one), so it was dead weight in the chain anyway.
+                # Direction string (incl. "NONE" when not detected) now
+                # takes priority; the raw boolean is only a last-resort
+                # fallback if displacement_dir itself is missing.
                 "displacement": (
-                    smc_ctx.get("displacement")
+                    structure_ctx.get("displacement_dir")
+                    or smc_ctx.get("displacement")
                     or structure_ctx.get("displacement")
-                    or structure_ctx.get("displacement_dir")
                     or "unknown"
                 ),
             },

@@ -77,7 +77,7 @@ class RiskEngine:
         self._last_sync_at: float = 0.0
 
     def evaluate(self, signal: str, entry: float, atr: float, regime: dict | None = None,
-                 correlation_ctx: dict | None = None) -> dict:
+                 correlation_ctx: dict | None = None, df=None) -> dict:
         # Day 81+ hotfix: WAIT signal should also be rejected (not just NO TRADE).
         # Previously WAIT fell through to the `else` branch (SELL) and got
         # approved with SL/TP — but WAIT means "no trade", so it must reject.
@@ -192,12 +192,64 @@ class RiskEngine:
 
         if signal == "BUY":
             sl_price = round(entry - sl_distance, 5)
-            tp_price = round(entry + sl_distance * _min_rr, 5)
+            floor_tp = round(entry + sl_distance * _min_rr, 5)
         else:
             sl_price = round(entry + sl_distance, 5)
-            tp_price = round(entry - sl_distance * _min_rr, 5)
+            floor_tp = round(entry - sl_distance * _min_rr, 5)
 
-        tp_pips  = round(sl_pips * _min_rr)
+        # BUG FIX (2026-08-25): TP used to be computed ONLY as
+        # entry ± sl_distance * _min_rr — i.e. EVERY trade landed at
+        # exactly the minimum RR (2.0 by default), regardless of where
+        # real support/resistance actually sits. That's backwards: a
+        # fixed RR multiple is a risk *floor*, not a price target — the
+        # market doesn't know or care about our RR math. Two failure
+        # modes followed from this:
+        #   1. When real resistance/support was CLOSER than the fixed
+        #      multiple, TP sat in "unconfirmed territory" past the
+        #      last place price had actually reacted (exactly what
+        #      risk/entry_quality_guardrails.py::check_tp_structure_
+        #      validation flags downstream as a WARNING — but that
+        #      check only *complains*, it never fixes the price).
+        #   2. When real resistance/support was FARTHER than the fixed
+        #      multiple, we left pips on the table by capping every
+        #      winning trade at 1:2 instead of riding it to the level
+        #      the market was actually respecting.
+        #
+        # Fix: when OHLC history is available, use the nearest prior
+        # swing high (BUY) / swing low (SELL) beyond entry as TP,
+        # SUBJECT TO the RR floor (_min_rr) — i.e. only a structural
+        # level that already clears the minimum acceptable RR is used.
+        # This can land the trade at BETTER than 1:2 (structure is
+        # farther than the floor) but never worse (a level that doesn't
+        # clear the floor is skipped). When no qualifying structural
+        # level exists in the lookback window (or no df is passed —
+        # e.g. the lightweight webhook path in server/signal_pipeline.py
+        # has no candle history), TP falls back to the flat floor exactly
+        # as before, so behavior is unchanged wherever structure data
+        # isn't available.
+        tp_price = floor_tp
+        tp_source = "atr_rr_floor"
+        if df is not None:
+            try:
+                from risk.entry_quality_guardrails import _find_swing_highs, _find_swing_lows
+
+                if signal == "BUY":
+                    swings = _find_swing_highs(df, lookback=100)
+                    qualifying = [s for s in swings if s >= floor_tp]
+                    if qualifying:
+                        tp_price = round(min(qualifying), 5)  # nearest level that still clears the RR floor
+                        tp_source = "structure"
+                else:
+                    swings = _find_swing_lows(df, lookback=100)
+                    qualifying = [s for s in swings if s <= floor_tp]
+                    if qualifying:
+                        tp_price = round(max(qualifying), 5)  # nearest level that still clears the RR floor
+                        tp_source = "structure"
+            except Exception as _e_tp:
+                log.debug(f"[RiskEngine] structure-based TP lookup failed, using flat RR floor: {_e_tp}")
+
+        tp_distance = abs(tp_price - entry)
+        tp_pips  = round(tp_distance / self.pip) if self.pip > 0 else round(sl_pips * _min_rr)
         rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
 
         risk_usd = round(self.balance * self.MAX_RISK_PC / 100, 2)
@@ -388,6 +440,7 @@ class RiskEngine:
             "lot_intended":               round(lot_raw, 2),
             "MAX_LOT":                    self.MAX_LOT,
             "rr_ratio":      rr_ratio,
+            "tp_source":     tp_source,  # "structure" (real S/R level) or "atr_rr_floor" (flat min-RR fallback)
             "daily_loss_pc": round(daily_loss_pc, 2),
             "open_trades":   open_trades,
             "reject_reason": None,

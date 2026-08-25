@@ -1176,6 +1176,11 @@ class AITrader:
             # lot-sizing multiplier. Falls back gracefully to None when
             # the ctx is missing (e.g. analysis pipeline errored).
             correlation_ctx=analysis_out.get("correlation_ctx") if isinstance(analysis_out, dict) else None,
+            # 2026-08-25 fix: pass OHLC history so RiskEngine can place TP
+            # at a real structural level (nearest swing high/low that still
+            # clears the min-RR floor) instead of always a flat ATR*RR
+            # multiple — see risk/risk_engine.py comment at the TP block.
+            df=market_out.get("df"),
         )
 
         # Audit fix: fail CLOSED on new entries when we can't trust our

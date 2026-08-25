@@ -361,6 +361,16 @@ class DecisionAgent:
             s_action = "BUY" if "BULL" in s_direction else ("SELL" if "BEAR" in s_direction else "WAIT")
             sources.append(("surprise", s_conf, 0.5, s_action in ("BUY", "SELL")))
 
+        # 11. Momentum Strategy (2026-08-25 audit fix — see analysis_agent.py
+        # comment: MomentumStrategy was built + registered but never
+        # actually invoked or consumed anywhere; wired in as a low-weight
+        # tie-breaker like forecast/institutional/surprise above.)
+        momentum_ctx = analysis_out.get("momentum_ctx") if isinstance(analysis_out, dict) else None
+        if isinstance(momentum_ctx, dict) and momentum_ctx and not momentum_ctx.get("error"):
+            m_action = (momentum_ctx.get("momentum_signal") or "HOLD").upper()
+            m_conf = float(momentum_ctx.get("momentum_confidence", 0) or 0)
+            sources.append(("momentum", m_conf, 0.5, m_action in ("BUY", "SELL")))
+
         participating = [(l, c, w) for l, c, w, p in sources if p]
         total_weight = sum(w for _, _, w, _ in sources)
         part_weight = sum(w for _, _, w in participating)
@@ -774,7 +784,21 @@ class DecisionAgent:
                         reasoning="classic LLM analyst",
                     ),
                     LayerSignal(
-                        layer="llm_analyst",  # reuse llm_analyst slot for master
+                        layer="master_analyst",  # 2026-08-25 fix: was
+                        # "llm_analyst" — reused the exact same layer
+                        # name as the classic-LLM entry above. fuse()'s
+                        # vote counting (BUY/SELL list membership) never
+                        # cared, but result.weighted_contributions is
+                        # keyed by `layer` (core/signal_fusion.py ~line
+                        # 237), so the second entry silently overwrote
+                        # the first in that audit-trail dict — the
+                        # classic-LLM contribution vanished from
+                        # weighted_contributions even though it was
+                        # correctly counted in the actual vote. Also
+                        # caused "llm_analyst" to appear twice in
+                        # excluded_layers when both abstained. Purely
+                        # cosmetic/audit impact — did not change any
+                        # trading decision — but worth a real name.
                         signal=("BUY" if "BUY" in str(master_signal_for_vote)
                                 else "SELL" if "SELL" in str(master_signal_for_vote)
                                 else "WAIT"),
