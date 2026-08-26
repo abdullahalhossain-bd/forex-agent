@@ -27,12 +27,14 @@ def _synthetic_df(n=500, seed=0, with_label=True):
     return df
 
 
-def test_old_path_unchanged():
-    """Default params must reproduce the exact original DatasetBuilder
-    behavior — no breaking change for any existing caller."""
+def test_naive_path_remains_available_explicitly():
+    """The legacy naive split remains available for controlled comparisons."""
     df = _synthetic_df(seed=1)
     builder = DatasetBuilder(train_pct=0.70, val_pct=0.15)
-    ds = builder.build_from_dataframe(df, pair="EURUSD", timeframe="15m", min_samples=50)
+    ds = builder.build_from_dataframe(
+        df, pair="EURUSD", timeframe="15m", min_samples=50,
+        use_purged_split=False,
+    )
 
     assert ds is not None
     assert ds.labeling_method == "fixed_horizon"
@@ -46,11 +48,24 @@ def test_old_path_unchanged():
     assert ds.train_size == int(n_valid * 0.70)
 
 
+def test_default_path_is_purged():
+    df = _synthetic_df(seed=5)
+    builder = DatasetBuilder(train_pct=0.70, val_pct=0.15)
+    ds = builder.build_from_dataframe(df, pair="EURUSD", timeframe="15m", min_samples=50)
+
+    assert ds is not None
+    assert ds.cv_method == "purged_embargoed"
+    assert ds.purge_stats["label_horizon"] == 4
+
+
 def test_purged_split_removes_boundary_rows():
     df = _synthetic_df(seed=2)
     builder = DatasetBuilder(train_pct=0.70, val_pct=0.15)
 
-    ds_old = builder.build_from_dataframe(df.copy(), pair="EURUSD", timeframe="15m", min_samples=50)
+    ds_old = builder.build_from_dataframe(
+        df.copy(), pair="EURUSD", timeframe="15m", min_samples=50,
+        use_purged_split=False,
+    )
     ds_purged = builder.build_from_dataframe(
         df.copy(), pair="EURUSD", timeframe="15m", min_samples=50,
         use_purged_split=True, label_horizon=20,

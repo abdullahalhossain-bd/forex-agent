@@ -476,6 +476,16 @@ class TraderDB:
             ))
         log.info(f"Trade CLOSE saved: #{trade_id} {close_data['result']} | PnL: ${close_data['pnl']}")
 
+    def get_trade_id_by_mt5_ticket(self, ticket: int) -> int | None:
+        """Return the most recent SQLite trade id associated with an MT5 ticket."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT id FROM trades WHERE mt5_ticket = ? "
+                "ORDER BY open_time DESC LIMIT 1",
+                (int(ticket),),
+            ).fetchone()
+        return int(row[0]) if row else None
+
     def get_trade_by_id(self, trade_id: int) -> dict | None:
         """Fetch a single trade row as a dict, shaped for
         learning/mistake_analyzer.py's AdvancedMistakeAnalyzer.

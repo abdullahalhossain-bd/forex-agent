@@ -753,19 +753,19 @@ def apply_advanced_risk_gates(
         except Exception as e:
             log.warning(f"[OC] institutional_entry_framework failed (non-fatal): {e}")
 
-    # ── 3. Structure stop — replace SL if structure-based is tighter ───
+    # ── 3. Structure stop — verify the RiskEngine's final bracket ───────
     if _is_enabled("structure_stop") and df is not None and entry > 0:
         try:
             from risk.structure_stop import compute_structure_stop
             atr = float(ind.get("atr", 0) or 0)
             struct_sl = compute_structure_stop(
                 df, direction, method="swing_atr",
-                lookback=20, atr_buffer_mult=1.0, atr=atr,
+                lookback=20, atr_buffer_mult=0.20, atr=atr,
             )
             if struct_sl and struct_sl > 0:
                 # For BUY, struct_sl < entry; for SELL, struct_sl > entry.
-                # Compute pip distance and use it if TIGHTER than current
-                # (tighter = less risk per trade = safer).
+                # The RiskEngine owns the executable bracket. This hook only
+                # records a consistency check and never changes SL/TP.
                 # pip_size resolution
                 from utils.pip_utils import pip_size as _pip_size
                 _pip = _pip_size(symbol)
@@ -773,19 +773,18 @@ def apply_advanced_risk_gates(
                     struct_pips = (entry - struct_sl) / _pip if struct_sl < entry else 0
                 else:
                     struct_pips = (struct_sl - entry) / _pip if struct_sl > entry else 0
-                if 0 < struct_pips < sl_pips:
-                    # Structure is tighter — use it.
+                if 0 < struct_pips:
                     risk_out["sl_price_struct"] = struct_sl
                     risk_out["sl_pips_struct"] = round(struct_pips, 1)
-                    # Note: we DON'T overwrite sl_pips / sl_price here because
-                    # the existing RiskEngine values are used by the execution
-                    # router. We expose the structure stop as an advisory
-                    # alternative + record it for the journal.
-                    risk_out.setdefault("advisory_adjustments", []).append(
-                        f"structure_stop: tighter SL available "
-                        f"({struct_pips:.1f}p vs current {sl_pips:.1f}p)"
-                    )
-                    log.debug(f"[OC] structure_stop: tighter SL available ({struct_pips:.1f}p < {sl_pips:.1f}p)")
+                    if abs(struct_sl - sl_price) > (_pip * 0.2):
+                        risk_out.setdefault("risk_warnings", []).append(
+                            f"structure stop mismatch: calculated={struct_sl:.5f} "
+                            f"final={sl_price:.5f}"
+                        )
+                        log.warning(
+                            f"[OC] structure stop mismatch for {symbol} {direction}: "
+                            f"calculated={struct_sl:.5f} final={sl_price:.5f}"
+                        )
         except Exception as e:
             log.debug(f"[OC] structure_stop failed (non-fatal): {e}")
 

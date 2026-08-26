@@ -74,8 +74,8 @@ class ModelTrainer:
         timeframe: str = "15m",
         min_samples: int = 100,
         labeling_method: str = "fixed_horizon",
-        use_purged_split: bool = False,
-        label_horizon: int = 0,
+        use_purged_split: bool = True,
+        label_horizon: int = 4,
         include_bootstrap: bool = False,
     ) -> TrainingResult:
         """Train all available models for a pair. Returns TrainingResult.
@@ -84,8 +84,8 @@ class ModelTrainer:
         to exact current behavior:
           labeling_method: "fixed_horizon" (default) | "triple_barrier"
           use_purged_split: purge boundary-overlap leakage at the
-            train/val/test cut points. Default False = unchanged.
-          label_horizon: forward-looking window size used by both the
+              train/val/test cut points. Default True prevents leakage.
+                    label_horizon: forward-looking window size used by both the
             labeler (if triple_barrier) and the purger. Ignored when both
             labeling_method="fixed_horizon" and use_purged_split=False.
           include_bootstrap: include synthetic placeholder rows in the
@@ -171,7 +171,8 @@ class ModelTrainer:
         # 4. Determine best model
         if result.metrics:
             best_name = max(result.metrics.items(),
-                          key=lambda x: x[1].get("auc_roc", 0) if isinstance(x[1], dict) else 0)
+                          key=lambda x: x[1].get("validation_auc_roc", 0)
+                          if isinstance(x[1], dict) else 0)
             result.best_model = best_name[0] if isinstance(best_name, tuple) else str(best_name)
 
         result.training_time_sec = round(time.time() - t0, 1)
@@ -284,6 +285,7 @@ class ModelTrainer:
                 model, X_test, y_test, model_name="xgboost",
                 X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
+            metrics.validation_auc_roc = self._validation_auc(model, X_val, y_val)
             log.info(f"  XGBoost: {metrics.summary_line} | threshold={optimal_threshold:.2f} | scale_pos_weight={scale_pos_weight:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
@@ -339,6 +341,7 @@ class ModelTrainer:
                 model, X_test, y_test, model_name="random_forest",
                 X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
+            metrics.validation_auc_roc = self._validation_auc(model, X_val, y_val)
             log.info(f"  RandomForest: {metrics.summary_line} | threshold={optimal_threshold:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
@@ -353,6 +356,16 @@ class ModelTrainer:
             return None
 
     # ── LSTM ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _validation_auc(model, X_val, y_val) -> float:
+        """Return validation AUC used for selection, never test AUC."""
+        try:
+            from sklearn.metrics import roc_auc_score
+            probabilities = model.predict_proba(X_val)[:, 1]
+            return float(roc_auc_score(y_val, probabilities))
+        except Exception:
+            return 0.0
 
     def _train_lstm(
         self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
@@ -423,8 +436,11 @@ class ModelTrainer:
             try:
                 from sklearn.metrics import roc_auc_score
                 metrics.auc_roc = float(roc_auc_score(y_test, y_proba))
+                val_proba = model.predict(X_val_3d, verbose=0).ravel()
+                metrics.validation_auc_roc = float(roc_auc_score(y_val, val_proba))
             except Exception:
                 metrics.auc_roc = 0.5
+                metrics.validation_auc_roc = 0.0
             total = metrics.tp + metrics.fp
             metrics.win_rate = metrics.tp / total if total > 0 else 0
             log.info(f"  LSTM: {metrics.summary_line}")
@@ -514,8 +530,8 @@ def train_all(
     timeframe: str = "15m",
     min_samples: int = None,
     labeling_method: str = "fixed_horizon",
-    use_purged_split: bool = False,
-    label_horizon: int = 0,
+    use_purged_split: bool = True,
+    label_horizon: int = 4,
 ) -> Dict[str, "TrainingResult"]:
     """
     Module-level convenience wrapper.
@@ -527,10 +543,8 @@ def train_all(
     so `from ml.model_trainer import train_all; train_all()` works
     directly from a REPL or one-off script.
 
-    labeling_method/use_purged_split/label_horizon (Priority #1) default
-    to exact current behavior and are forwarded to ModelTrainer.train_all()
-    for every pair — use these to run a shadow batch (see migration plan
-    in ml/LEAKAGE_AUDIT.md) without touching the champion pipeline.
+    labeling_method/use_purged_split/label_horizon are forwarded to
+    ModelTrainer.train_all() for every pair.
 
     Returns a dict of {pair: TrainingResult}.
 

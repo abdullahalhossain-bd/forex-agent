@@ -272,6 +272,17 @@ RECOVERY_COOLDOWN_MIN = 5
 MONITORING_INTERVAL = 60  # seconds between health checks
 
 # ── AI / LLM Settings ─────────────────────────────────────────
+# Central backend switch for live LLM consumers. When enabled, the
+# provider-neutral gateway uses the configured remote Ollama API; when
+# disabled, existing provider cascades remain responsible for cloud calls.
+LLM_LOCAL = os.getenv("LLM_LOCAL", "false").strip().lower() in ("1", "true", "yes", "on")
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("OLLAMA_MODEL") or "qwen3:14b"
+LLM_REMOTE_URL = (os.getenv("LLM_REMOTE_URL") or os.getenv("OLLAMA_BASE_URL") or os.getenv("OLLAMA_HOST") or "http://localhost:11434").strip().strip('"').strip("'")
+try:
+    LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT") or os.getenv("OLLAMA_TIMEOUT_SEC") or "120")
+except (TypeError, ValueError):
+    LLM_TIMEOUT = 120.0
+
 # 2026-07-25 NEW PROVIDER CASCADE ORDER:
 #   1. Groq       (Primary)     — llama-3.1-8b-instant
 #   2. Gemini     (Fallback #1) — gemini-flash-lite-latest

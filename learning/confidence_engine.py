@@ -257,6 +257,8 @@ class ConfidenceEngine:
             "bayesian_penalty": round(bayesian_penalty, 1),
             "decay_factor":     round(decay_factor, 2),
             "sample_size":      sample_size,
+            "history_key":      key,
+            "history_entry_found": bool(entry),
             "should_skip":      should_skip,
             "skip_reason":      skip_reason,
             "reason":           reason,
@@ -792,6 +794,10 @@ class ConfidenceEngine:
             "skip_reason":        score.get("skip_reason"),
             "reason":             score["reason"],
             "components":         score["components"],
+            "history_key":        score.get("history_key"),
+            "history_entry_found": score.get("history_entry_found", False),
+            "sample_size":        score.get("sample_size", 0),
+            "bayesian_penalty":   score.get("bayesian_penalty", 0),
         }
 
     # ══════════════════════════════════════════════════════════

@@ -77,7 +77,8 @@ class RiskEngine:
         self._last_sync_at: float = 0.0
 
     def evaluate(self, signal: str, entry: float, atr: float, regime: dict | None = None,
-                 correlation_ctx: dict | None = None, df=None) -> dict:
+                 correlation_ctx: dict | None = None, df=None,
+                 strategy: str | None = None) -> dict:
         # Day 81+ hotfix: WAIT signal should also be rejected (not just NO TRADE).
         # Previously WAIT fell through to the `else` branch (SELL) and got
         # approved with SL/TP — but WAIT means "no trade", so it must reject.
@@ -185,7 +186,7 @@ class RiskEngine:
                 _tm = bool(is_test_mode())
             except Exception:
                 _tm = False
-            _min_rr = float(get_min_rr(test_mode=_tm))
+            _min_rr = float(get_min_rr(strategy=strategy, test_mode=_tm))
         except Exception:
             _min_rr = float(self.MIN_RR)
         _min_rr = max(0.5, min(float(self.MAX_RR), _min_rr))
@@ -196,6 +197,40 @@ class RiskEngine:
         else:
             sl_price = round(entry + sl_distance, 5)
             floor_tp = round(entry - sl_distance * _min_rr, 5)
+
+        structure_source = "atr"
+        structure_reasons = []
+        if df is not None:
+            try:
+                from risk.structure_stop import compute_structure_stop
+
+                structure_sl = compute_structure_stop(
+                    df,
+                    signal,
+                    method="swing_atr",
+                    lookback=20,
+                    atr_buffer_mult=0.20,
+                    atr=atr,
+                )
+                structure_sl = round(float(structure_sl), 5)
+                structure_pips = (
+                    (entry - structure_sl) / self.pip
+                    if signal == "BUY" else
+                    (structure_sl - entry) / self.pip
+                )
+                if structure_pips >= 10 and (
+                    (signal == "BUY" and structure_sl < entry) or
+                    (signal == "SELL" and structure_sl > entry)
+                ):
+                    sl_price = structure_sl
+                    sl_distance = round(abs(entry - sl_price), 5)
+                    sl_pips = round(sl_distance / self.pip)
+                    structure_source = "fractal_swing_atr"
+                    structure_reasons.append("recent fractal swing with 0.20 ATR buffer")
+                else:
+                    structure_reasons.append("structure stop invalid or below 10-pip minimum")
+            except Exception as _e_sl:
+                log.debug(f"[RiskEngine] structure-based SL lookup failed: {_e_sl}")
 
         # BUG FIX (2026-08-25): TP used to be computed ONLY as
         # entry ± sl_distance * _min_rr — i.e. EVERY trade landed at
@@ -215,18 +250,9 @@ class RiskEngine:
         #      winning trade at 1:2 instead of riding it to the level
         #      the market was actually respecting.
         #
-        # Fix: when OHLC history is available, use the nearest prior
-        # swing high (BUY) / swing low (SELL) beyond entry as TP,
-        # SUBJECT TO the RR floor (_min_rr) — i.e. only a structural
-        # level that already clears the minimum acceptable RR is used.
-        # This can land the trade at BETTER than 1:2 (structure is
-        # farther than the floor) but never worse (a level that doesn't
-        # clear the floor is skipped). When no qualifying structural
-        # level exists in the lookback window (or no df is passed —
-        # e.g. the lightweight webhook path in server/signal_pipeline.py
-        # has no candle history), TP falls back to the flat floor exactly
-        # as before, so behavior is unchanged wherever structure data
-        # isn't available.
+        # Use the nearest structural target in the trade direction. RR is
+        # evaluated after target selection, so a real 1.5R-1.99R target is
+        # allowed while a target below 1.5R is rejected.
         tp_price = floor_tp
         tp_source = "atr_rr_floor"
         if df is not None:
@@ -235,15 +261,15 @@ class RiskEngine:
 
                 if signal == "BUY":
                     swings = _find_swing_highs(df, lookback=100)
-                    qualifying = [s for s in swings if s >= floor_tp]
-                    if qualifying:
-                        tp_price = round(min(qualifying), 5)  # nearest level that still clears the RR floor
+                    candidates = [s for s in swings if s > entry]
+                    if candidates:
+                        tp_price = round(min(candidates), 5)
                         tp_source = "structure"
                 else:
                     swings = _find_swing_lows(df, lookback=100)
-                    qualifying = [s for s in swings if s <= floor_tp]
-                    if qualifying:
-                        tp_price = round(max(qualifying), 5)  # nearest level that still clears the RR floor
+                    candidates = [s for s in swings if s < entry]
+                    if candidates:
+                        tp_price = round(max(candidates), 5)
                         tp_source = "structure"
             except Exception as _e_tp:
                 log.debug(f"[RiskEngine] structure-based TP lookup failed, using flat RR floor: {_e_tp}")
@@ -251,6 +277,15 @@ class RiskEngine:
         tp_distance = abs(tp_price - entry)
         tp_pips  = round(tp_distance / self.pip) if self.pip > 0 else round(sl_pips * _min_rr)
         rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
+        try:
+            from risk.rr_policy import get_execution_min_rr
+            _execution_min_rr = get_execution_min_rr(strategy=strategy, test_mode=_tm)
+        except Exception:
+            _execution_min_rr = 1.5
+        if rr_ratio < _execution_min_rr:
+            return self._reject(
+                f"R:R {rr_ratio:.2f} below execution minimum {_execution_min_rr:.2f}"
+            )
 
         risk_usd = round(self.balance * self.MAX_RISK_PC / 100, 2)
         # BUG FIX (Cent-account 100x unit mismatch): get_pip_value_usd() is a
@@ -440,7 +475,12 @@ class RiskEngine:
             "lot_intended":               round(lot_raw, 2),
             "MAX_LOT":                    self.MAX_LOT,
             "rr_ratio":      rr_ratio,
+            "rr_preferred":  _min_rr,
+            "rr_execution_min": _execution_min_rr,
+            "strategy":      strategy,
             "tp_source":     tp_source,  # "structure" (real S/R level) or "atr_rr_floor" (flat min-RR fallback)
+            "sl_source":     structure_source,
+            "structure_reasons": structure_reasons,
             "daily_loss_pc": round(daily_loss_pc, 2),
             "open_trades":   open_trades,
             "reject_reason": None,

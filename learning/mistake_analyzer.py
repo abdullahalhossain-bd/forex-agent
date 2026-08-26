@@ -20,11 +20,14 @@ class _LLMKeyManagerAdapter:
     same multi-key rotation/failover the rest of the stack relies on.
     """
 
-    def __init__(self, timeout_sec: int = 8):
+    def __init__(self, timeout_sec: int = 20):
         self.timeout_sec = timeout_sec
 
     def generate(self, prompt: str) -> str:
         import time
+        from core.llm_gateway import local_llm_enabled, call_remote_ollama
+        if local_llm_enabled():
+            return call_remote_ollama([{"role": "user", "content": prompt}])
         from core.llm_key_manager import get_llm_key_manager, log_llm_call_failure
         manager = get_llm_key_manager()
         deadline = time.monotonic() + self.timeout_sec

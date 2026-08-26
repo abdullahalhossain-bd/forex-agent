@@ -244,6 +244,15 @@ class OllamaValidator:
 
     def _call_ollama(self, market_data: dict) -> Optional[dict]:
         """Call Ollama and parse the JSON response."""
+        from core.llm_gateway import local_llm_enabled, call_remote_ollama
+        if local_llm_enabled():
+            from utils.llm_json import parse_llm_json
+            raw_content = call_remote_ollama([
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(market_data, default=str)},
+            ])
+            parsed = parse_llm_json(raw_content)
+            return parsed if isinstance(parsed, dict) else None
         client = self._get_client()
         if client is None:
             return None

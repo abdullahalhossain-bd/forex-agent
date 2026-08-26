@@ -126,8 +126,8 @@ class DatasetBuilder:
         timeframe: str = "15m",
         min_samples: int = None,
         labeling_method: str = "fixed_horizon",
-        use_purged_split: bool = False,
-        label_horizon: int = 0,
+        use_purged_split: bool = True,
+        label_horizon: int = 4,
         include_bootstrap: bool = False,
     ) -> Optional[Dataset]:
         """Load features + labels from the FeatureStore and split.
@@ -135,10 +135,9 @@ class DatasetBuilder:
         New optional params (Priority #1, all default to current behavior):
           labeling_method: "fixed_horizon" (current, default) | "triple_barrier"
           use_purged_split: if True, purge boundary-overlapping rows using
-            `label_horizon`. Default False reproduces the exact current
-            iloc-slice output.
-          label_horizon: bars a label's window looks forward. Required
-            (non-zero) when use_purged_split=True; ignored otherwise.
+                    `label_horizon`. Default True prevents label-window leakage.
+                    label_horizon: bars a label's window looks forward. Defaults to
+                        the project's 4-bar label horizon.
           include_bootstrap: if True, include synthetic placeholder rows
             written by ml.data_bootstrap (source='bootstrap') in the
             training set. Default False = real data only. Only pass True
@@ -179,14 +178,13 @@ class DatasetBuilder:
         timeframe: str = "15m",
         min_samples: int = None,
         labeling_method: str = "fixed_horizon",
-        use_purged_split: bool = False,
-        label_horizon: int = 0,
+        use_purged_split: bool = True,
+        label_horizon: int = 4,
     ) -> Optional[Dataset]:
         """Split a feature dataframe into train/val/test.
 
-        labeling_method="fixed_horizon", use_purged_split=False (the
-        defaults) reproduce the exact current behavior — zero breaking
-        change for any existing caller. Set labeling_method="triple_barrier"
+        labeling_method="fixed_horizon", use_purged_split=True (the
+        defaults) use chronological purged splitting. Set labeling_method="triple_barrier"
         to relabel `df` via ml.triple_barrier_labels.TripleBarrierLabeler
         first (df must have high/low/close columns in that case). Set
         use_purged_split=True + label_horizon>0 to purge label-window-

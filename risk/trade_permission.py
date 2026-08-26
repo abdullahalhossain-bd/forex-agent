@@ -223,8 +223,8 @@ class TradePermission:
 
     @property
     def MIN_RR(self) -> float:
-        from risk.rr_policy import get_min_rr
-        return get_min_rr(test_mode=_test_mode())
+        from risk.rr_policy import get_execution_min_rr
+        return get_execution_min_rr(test_mode=_test_mode())
 
     def check(
         self,
@@ -264,16 +264,10 @@ class TradePermission:
             _bt_sig = decision_out.get("final_signal") or decision_out.get("decision") or (decision_out.get("signal",{}) or {}).get("signal","")
             _bt_risk_ok = bool(risk_out.get("approved", False))
             _bt_rr = float(risk_out.get("rr_ratio", 0) or 0)
-            # FIX (2026-08-19 audit Bug 6): use resolved MIN_RR instead of
-            # hardcoded 1.0. In production MIN_RR=2.0 (set in risk/rr_policy.py).
-            # Using 1.0 here admitted low-R:R trades that live trading would
-            # reject, inflating backtest frequency vs live and adding
-            # asymmetric-downside trades (capped reward, full risk).
-            # When TEST_MODE=true, get_min_rr() returns 1.0 — preserves
-            # the existing TEST_MODE behavior.
+            # Keep the backtest fast path aligned with the live execution floor.
             try:
-                from risk.rr_policy import get_min_rr
-                _bt_min_rr = get_min_rr(test_mode=_test_mode())
+                from risk.rr_policy import get_execution_min_rr
+                _bt_min_rr = get_execution_min_rr(test_mode=_test_mode())
             except Exception:
                 _bt_min_rr = 1.5  # safe default between 1.0 and 2.0
             if str(_bt_sig).upper() in ("BUY","SELL","STRONG_BUY","STRONG_SELL") and _bt_risk_ok and _bt_rr >= _bt_min_rr:
@@ -2048,6 +2042,61 @@ class TradePermission:
             "lot_capped":                   risk_out.get("lot_capped", False),
             "MAX_LOT":                      risk_out.get("MAX_LOT"),
         }
+
+        # SL/TP snapshot & sanity gate
+        try:
+            _entry_price = float(risk_out.get("entry") or decision_out.get("entry") or 0)
+            _sl_pre = float(decision_out.get("sl") or 0)
+            _sl_post = float(risk_out.get("sl_price") or 0)
+        except Exception:
+            _entry_price = 0.0
+            _sl_pre = 0.0
+            _sl_post = 0.0
+
+        # Distances in price terms (pips not required for ratio check)
+        _sl_dist_pre = abs(_entry_price - _sl_pre) if _entry_price and _sl_pre else 0.0
+        _sl_dist_post = abs(_entry_price - _sl_post) if _entry_price and _sl_post else 0.0
+
+        # Flag whether SL was adjusted by risk layer / permission
+        _sl_adjusted = bool(round(_sl_dist_pre, 8) != round(_sl_dist_post, 8))
+
+        # Attach to result for auditability
+        result["risk_sl_pre"] = _sl_pre
+        result["risk_sl_post"] = _sl_post
+        result["risk_sl_adjusted"] = _sl_adjusted
+        result["risk_sl_reduction_rejected"] = False
+
+        # Sanity reject: if final SL offers less than 60% of original distance
+        try:
+            if _sl_dist_pre > 0 and _sl_dist_post < 0.6 * _sl_dist_pre:
+                # Emit explicit rejection reason and mark as failed check so
+                # downstream systems and audits can see why this trade was refused.
+                _rej_detail = (
+                    f"Final SL distance {_sl_dist_post:.6f} < 60% of original {_sl_dist_pre:.6f}"
+                )
+                log.warning(f"[TradePermission] SL reduction rejected: {_rej_detail}")
+                result["risk_sl_reduction_rejected"] = True
+                # Update failed_checks and overall result to reflect the hard block
+                _failed_checks = list(result.get("failed_checks", []))
+                _failed_checks.append({"check": "Risk SL reduction", "detail": _rej_detail})
+                result.update({
+                    "execution_allowed": False,
+                    "blocked_reason": "risk.sl_reduction_rejected",
+                    "failed_checks": _failed_checks,
+                    "execution_action": "NO TRADE",
+                    "allowed": False,
+                    "final_action": "NO TRADE",
+                })
+                # Ensure print_summary / callers see the updated failed/passed counters
+                try:
+                    result["passed"] = int(result.get("passed", 0))
+                    result["total"] = int(result.get("total", 0))
+                except Exception:
+                    pass
+                return result
+        except Exception:
+            # Do not crash permission on unexpected numeric issues; just continue
+            log.debug("[TradePermission] SL reduction sanity check skipped due to parse error")
 
         # ── INSTITUTIONAL LOG FORMAT ────────────────────────────────
         # 2026-08-13: professional evidence-based logging. Each check's

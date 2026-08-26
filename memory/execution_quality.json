@@ -178,5 +178,29 @@
     "spread_pips": 0.8,
     "latency_ms": 4453,
     "timestamp": "2026-08-24T19:48:24+00:00"
+  },
+  {
+    "ticket": 4599945894,
+    "pair": "USDCADm",
+    "direction": "SELL",
+    "requested": 1.38305,
+    "executed": 1.3830500000000001,
+    "slippage": -0.0,
+    "slippage_pips": -0.0,
+    "spread_pips": 1.4,
+    "latency_ms": 313,
+    "timestamp": "2026-08-25T18:56:37+00:00"
+  },
+  {
+    "ticket": 4602536521,
+    "pair": "GBPCADm",
+    "direction": "BUY",
+    "requested": 1.89004,
+    "executed": 1.8900400000000002,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.8,
+    "latency_ms": 87,
+    "timestamp": "2026-08-26T06:00:52+00:00"
   }
 ]

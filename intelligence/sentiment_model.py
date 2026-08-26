@@ -277,6 +277,14 @@ class SentimentModel:
         prompt = _SENTIMENT_PROMPT + f'"""\n{text[:1500]}\n"""'
         raw = None
 
+        from core.llm_gateway import local_llm_enabled, call_remote_ollama
+        if local_llm_enabled():
+            try:
+                raw = call_remote_ollama([{"role": "user", "content": prompt}])
+            except Exception as exc:
+                log.debug(f"[SentimentModel] Remote Ollama failed: {exc}")
+                return None
+
         # Groq
         groq_client = _key_manager.get_groq_client() if _key_manager is not None else _groq_client
         if groq_client is not None:

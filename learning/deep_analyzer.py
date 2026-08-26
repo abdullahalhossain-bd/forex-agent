@@ -304,6 +304,15 @@ JSON schema:
         )
 
         try:
+            from core.llm_gateway import local_llm_enabled, call_remote_ollama
+            if local_llm_enabled():
+                raw = call_remote_ollama([
+                    {"role": "system", "content": self._SYSTEM},
+                    {"role": "user", "content": prompt},
+                ])
+                result = json.loads(raw)
+                result["llm_analyzed"] = True
+                return result
             # Primary: Groq
             if _groq_client is not None:
                 resp = _groq_client.chat.completions.create(

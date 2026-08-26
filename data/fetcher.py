@@ -934,6 +934,9 @@ class DataFetcher:
                 df = pd.DataFrame(candles)
 
                 if 'time' in df.columns:
+                    symbol_info = mt5.symbol_info(mt5_symbol)
+                    if symbol_info is not None:
+                        df.attrs['mt5_digits'] = int(symbol_info.digits)
                     break  # good data — proceed normally below
 
                 # Malformed/incomplete data — almost always the MT5
@@ -1030,11 +1033,17 @@ class DataFetcher:
             # is documented here and in _fetch_yfinance/others so anyone
             # weighting signal confidence by "volume" knows it's a tick
             # activity proxy, not real traded volume.
-            df = df[['open', 'high', 'low', 'close', 'tick_volume']].copy()
+            _ohlcv_columns = ['open', 'high', 'low', 'close', 'tick_volume']
+            if 'spread' in df.columns:
+                _ohlcv_columns.append('spread')
+            df = df[_ohlcv_columns].copy()
             df.rename(columns={'tick_volume': 'volume'}, inplace=True)
 
             # Ensure correct column order
-            df = df[['open', 'high', 'low', 'close', 'volume']]
+            _ordered_columns = ['open', 'high', 'low', 'close', 'volume']
+            if 'spread' in df.columns:
+                _ordered_columns.append('spread')
+            df = df[_ordered_columns]
 
             # ── Forming-candle guard (audit fix) ───────────────────────
             # copy_rates_from_pos(symbol, tf, 0, limit) starts at position 0,

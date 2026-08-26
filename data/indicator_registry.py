@@ -199,11 +199,14 @@ def get_indicator(name: str, df: pd.DataFrame, row: int = -1) -> Optional[float 
         return None
 
 
-def get_ai_context(df: pd.DataFrame) -> dict:
+def get_ai_context(df: pd.DataFrame, *, spread_in_points: bool = False) -> dict:
     """Build the AI context dict from canonical indicator values.
 
     Equivalent to Indicators.get_ai_context() + ExtendedIndicators.get_ai_context()
     combined, using the canonical source for each field.
+
+    MT5 candle spreads are reported in points. Set spread_in_points when
+    building context from an MT5-origin DataFrame.
     """
     if df is None or len(df) == 0:
         return {}
@@ -233,6 +236,11 @@ def get_ai_context(df: pd.DataFrame) -> dict:
             _spread_series = pd.to_numeric(df["spread"], errors="coerce").fillna(0)
             _spread_pips = float(_spread_series.iloc[-1]) if len(_spread_series) > 0 else 0.0
             _spread_avg = float(_spread_series.tail(20).mean()) if len(_spread_series) >= 20 else _spread_pips
+            if spread_in_points:
+                digits = int(df.attrs.get("mt5_digits", 5))
+                points_per_pip = 10 if digits in (3, 5) else 1
+                _spread_pips /= points_per_pip
+                _spread_avg /= points_per_pip
     except Exception:
         pass
 

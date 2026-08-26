@@ -38,6 +38,7 @@ OPTIMIZER_RUN_LOG_PATH   = str(MEMORY_DIR / "optimizer_run_log.json")
 SYSTEM_CONTROL_PATH      = str(MEMORY_DIR / "system_control.json")
 # Day 65
 INTERMARKET_HISTORY_PATH = str(MEMORY_DIR / "intermarket_history.json")
+MISTAKES_JSON_PATH        = str(MEMORY_DIR / "mistakes.json")
 
 
 def load_json(path: str, default):
@@ -187,6 +188,18 @@ def get_decision_timeline() -> list:
 # ══════════════════════════════════════════════════════════════
 
 def get_recent_mistakes(limit: int = 10) -> list:
+    persisted = load_json(MISTAKES_JSON_PATH, [])
+    if persisted:
+        return [
+            {
+                "id": entry.get("id", entry.get("created_at")),
+                "reason": entry.get("error_type", "Unknown"),
+                "market": entry.get("regime", "UNKNOWN"),
+                "lesson": entry.get("lesson", ""),
+            }
+            for entry in persisted[-limit:][::-1]
+        ]
+
     log_entries = load_json(DEEP_ANALYSIS_LOG_PATH, [])
     if not log_entries:
         lessons = load_json(LESSON_MEMORY_PATH, [])

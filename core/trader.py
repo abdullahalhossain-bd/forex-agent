@@ -301,6 +301,11 @@ class AITrader:
         else:
             self._mistake_analyzer = AdvancedMistakeAnalyzer() if AdvancedMistakeAnalyzer else None
 
+        # The analyzer owns its own TradeMemory instance, so it must use the
+        # same database as this trader, including shared and backtest setups.
+        if self._mistake_analyzer is not None:
+            self._mistake_analyzer.memory.db = self._db
+
         # Day 37 wiring — execution router shares THIS instance's PaperTrader
         # so paper-mode balance never drifts between router and trader.
         # Prefer the registry's shared router if available.
@@ -447,7 +452,7 @@ class AITrader:
         to short-circuit the pipeline with a NO TRADE outcome.
         """
         log.info(f"[Trader] REJECTED by {gate}: {reason}")
-        return {
+        res = {
             "trade_allowed": False,
             "reject_reason": f"{gate}: {reason}" if reason else gate,
             "final_action": "NO TRADE",
@@ -1181,6 +1186,7 @@ class AITrader:
             # clears the min-RR floor) instead of always a flat ATR*RR
             # multiple — see risk/risk_engine.py comment at the TP block.
             df=market_out.get("df"),
+            strategy=dec_out.get("strategy"),
         )
 
         # Audit fix: fail CLOSED on new entries when we can't trust our
@@ -3580,11 +3586,32 @@ class AITrader:
                 except Exception as e:
                     log.debug(f"[Learning] LearningAgent outcome backfill failed: {e}")
             else:
-                # Fallback: try to find an orphaned OPEN trade by pair
+                # MT5 close events carry the broker ticket even when the
+                # JSON memory id was lost. Resolve the canonical SQLite row
+                # before falling back to the less precise pair lookup.
                 try:
-                    orphan_id = self._memory.db.close_orphaned_open_trade(
-                        trade["pair"], trade["result"], trade["pnl"]
+                    mt5_ticket = context.get("mt5_ticket")
+                    orphan_id = (
+                        self._db.get_trade_id_by_mt5_ticket(mt5_ticket)
+                        if mt5_ticket is not None
+                        else None
                     )
+                    if orphan_id is not None:
+                        row = self._db.get_trade_by_id(orphan_id)
+                        if row and row.get("status") == "OPEN":
+                            self._db.save_trade_close(orphan_id, {
+                                "close_time": trade.get("close_time"),
+                                "exit_price": trade.get("exit_price"),
+                                "result": trade["result"],
+                                "pnl": trade["pnl"],
+                                "pnl_pips": trade.get("pnl_pips", 0.0),
+                            })
+                    else:
+                        orphan_id = self._memory.db.close_orphaned_open_trade(
+                            trade["pair"], trade["result"], trade["pnl"],
+                            exit_price=trade.get("exit_price"),
+                            close_time=trade.get("close_time"),
+                        )
                     if orphan_id is not None:
                         log.warning(
                             f"[Learning] Synced orphaned trade #{orphan_id} "
@@ -3883,7 +3910,25 @@ class AITrader:
             "reasons": dec_out.get("reasons", []),
             # Pattern (from decision_agent extraction)
             "pattern": dec_out.get("pattern"),
+            # Confidence breakdown: recompute to reflect permission-layer
+            # penalties so the headline (`confidence`) reconciles with
+            # the per-line scorecard shown to the operator.
+            "confidence_breakdown": dec_out.get("confidence_breakdown"),
+            "confidence_breakdown_lines": dec_out.get("confidence_breakdown_lines", []),
         }
+
+        # Reconcile breakdown with permission-layer penalties so the
+        # headline `confidence` (post-penalty) matches the per-line
+        # telegram scorecard. Uses core.confidence_breakdown.reconcile_confidence_breakdown.
+        try:
+            from core.confidence_breakdown import reconcile_confidence_breakdown
+            cb = reconcile_confidence_breakdown(dec_out.get("confidence_breakdown"), perm_out)
+            res["confidence_breakdown"] = cb.to_dict()
+            res["confidence_breakdown_lines"] = cb.to_telegram_lines()
+        except Exception as _cb_e:
+            log.debug(f"[Trader] confidence breakdown reconciliation failed: {_cb_e}")
+
+        return res
 
     def _print_final(self, r: dict) -> None:
         # 2026-08-13: professional concise log — one-line summary + details only when needed
@@ -4084,7 +4129,7 @@ class AITrader:
                 payload,
                 result.get("confidence", 0),
                 dec_out.get("reasons", []),
-                confidence_breakdown_lines=dec_out.get("confidence_breakdown_lines", []),
+                confidence_breakdown_lines=result.get("confidence_breakdown_lines", []),
             )
         )
 

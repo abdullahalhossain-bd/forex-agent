@@ -109,7 +109,8 @@ def run_pair(symbol, path, max_hold=300):
         trades.append({
             "symbol": symbol, "entry_time": row['datetime_utc'], "exit_time": df['datetime_utc'].iloc[exit_idx],
             "signal": direction,
-            "score": score, "outcome": outcome, "r_multiple": TP_R_MULT if outcome == "WIN" else -1.0,
+            "score": score, "outcome": outcome, "r_multiple": raw_r,
+            "r_multiple_net": r_multiple_net,
         })
         i = exit_idx + 1
 
@@ -122,13 +123,13 @@ def report(trades, label):
     wins = sum(1 for t in trades if t['outcome'] == 'WIN')
     n = len(trades)
     wr = 100 * wins / n
-    total_r = sum(t['r_multiple'] for t in trades)
+    total_r = sum(t['r_multiple_net'] for t in trades)
     exp_r = total_r / n
     # $ simulation: fixed-fractional 1% risk per trade, compounding
     balance = ACCOUNT_SIZE
     for t in sorted(trades, key=lambda x: x['entry_time']):
         risk_amt = balance * (RISK_PER_TRADE_PCT / 100)
-        balance += risk_amt * t['r_multiple']
+        balance += risk_amt * t['r_multiple_net']
     profit_pct = 100 * (balance - ACCOUNT_SIZE) / ACCOUNT_SIZE
     print(f"{label}: n={n} | winrate={wr:.1f}% | expectancy={exp_r:+.3f}R | "
           f"sim. account ${ACCOUNT_SIZE:,} -> ${balance:,.0f} ({profit_pct:+.1f}%) @ {RISK_PER_TRADE_PCT}% risk/trade")

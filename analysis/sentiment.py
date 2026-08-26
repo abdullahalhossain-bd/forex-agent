@@ -614,14 +614,15 @@ class SentimentEngine:
     def get_ai_context(self, sentiment_result: dict) -> dict:
         """Decision Agent-এ পাঠানোর জন্য clean context dict।"""
         return {
-            "sentiment_score":  sentiment_result.get("sentiment_score", 0),
-            "sentiment_bias":   sentiment_result.get("bias", "NEUTRAL"),
-            "sentiment_conf":   sentiment_result.get("confidence", 0),
-            "retail_long_pct":  sentiment_result.get("retail", {}).get("retail_long_pct"),
-            "fg_label":         sentiment_result.get("fear_greed", {}).get("label"),
-            "currency_bias":    sentiment_result.get("currency_strength", {}).get("pair_bias"),
-            "dxy_trend":        sentiment_result.get("dxy", {}).get("dxy_trend"),
-            "sentiment_reasons": sentiment_result.get("reasons", []),
+            "sentiment_score":       sentiment_result.get("sentiment_score", 0),
+            "sentiment_bias":        sentiment_result.get("bias", "NEUTRAL"),
+            "sentiment_conf":        sentiment_result.get("confidence", 0),
+            "sentiment_data_quality": sentiment_result.get("data_quality", "unknown"),
+            "retail_long_pct":       sentiment_result.get("retail", {}).get("retail_long_pct"),
+            "fg_label":              sentiment_result.get("fear_greed", {}).get("label"),
+            "currency_bias":         sentiment_result.get("currency_strength", {}).get("pair_bias"),
+            "dxy_trend":             sentiment_result.get("dxy", {}).get("dxy_trend"),
+            "sentiment_reasons":     sentiment_result.get("reasons", []),
         }
 
     # ═══════════════════════════════════════════════════════════

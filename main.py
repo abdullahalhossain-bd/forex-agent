@@ -651,6 +651,8 @@ Examples:
 
     setup_logging()
     logger = logging.getLogger("main")
+    from core.llm_gateway import backend_info
+    logger.info("LLM backend selected: %s", backend_info())
 
     # Special modes that don't require a full boot
     if args.mode == "obsolete":

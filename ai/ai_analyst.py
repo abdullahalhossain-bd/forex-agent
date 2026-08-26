@@ -100,6 +100,10 @@ class AIAnalyst:
         from core.constants import is_backtest_mode
         if is_backtest_mode():
             self._key_manager = None
+        elif __import__("core.llm_gateway", fromlist=["local_llm_enabled"]).local_llm_enabled():
+            from core.llm_gateway import backend_info
+            self._key_manager = None
+            log.info("[AIAnalyst] %s", backend_info())
         else:
             self._init_clients()
 
@@ -324,6 +328,18 @@ class AIAnalyst:
         if is_backtest_mode():
             return self._fallback_result("Backtest mode — LLM bypassed, using rule-based signal", rule_signal=signal)
 
+        from core.llm_gateway import LLMGatewayError, call_remote_ollama, local_llm_enabled
+        if local_llm_enabled():
+            try:
+                raw = call_remote_ollama([{"role": "user", "content": prompt}])
+                result = self._parse_response(raw, rule_signal=signal)
+                if result.get("_llm_parse_failed"):
+                    return self._fallback_result("Remote Ollama returned invalid analyst JSON")
+                return result
+            except (LLMGatewayError, Exception) as exc:
+                log.warning(f"[AIAnalyst] Remote Ollama unavailable: {exc}")
+                return self._fallback_result("Remote Ollama unavailable; failing safe to NO_TRADE")
+
         # ── Day 90 — LLM cache lookup ──────────────────────────
         # Same prompt within 5 min → return cached response.
         # This is the BIGGEST token saver because AIAnalyst gets
@@ -341,7 +357,7 @@ class AIAnalyst:
             # which silently broke model-versioning: if GROQ_MODEL was ever
             # changed, stale non-Groq answers cached under the old key
             # would still be returned as if freshly generated.
-            _cache_key = _cache.make_key("ai_analyst", "any", prompt)
+            _cache_key = _cache.make_key("ai_analyst", "legacy", prompt)
             _cached = _cache.get(_cache_key)
             if _cached is not None:
                 log.debug(f"[AIAnalyst] LLM cache HIT — skipping API call")
@@ -602,8 +618,11 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         return None
 
     def _call_ollama(self, prompt: str, deadline: float | None = None) -> str | None:
-        """Deprecated stub — always returns None. Ollama no longer in cascade."""
-        return None
+        """Call the configured remote Ollama backend."""
+        from core.llm_gateway import call_remote_ollama
+
+        timeout = None if deadline is None else max(0.5, deadline - time.monotonic())
+        return call_remote_ollama([{"role": "user", "content": prompt}], timeout=timeout)
 
     @staticmethod
     def _strip_ollama_thinking(text: str) -> str:
@@ -1101,6 +1120,8 @@ OUTPUT FORMAT — Return ONLY valid JSON, no extra text:
         instead, clearly flagged as LLM-unavailable.
         """
         rule_signal = rule_signal or {}
+        if "Remote Ollama" in reason:
+            rule_signal = {}
         log.warning(
             f"[AIAnalyst] FALLBACK TO RULE ENGINE | reason={reason} | "
             f"rule_signal={rule_signal.get('signal', 'WAIT')} "

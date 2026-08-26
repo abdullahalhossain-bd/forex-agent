@@ -81,3 +81,48 @@ def test_fear_greed_neutral_band():
 
     assert result["label"] == "NEUTRAL"
     assert result["score"] == 0
+
+
+@pytest.mark.unit
+def test_sentiment_context_exposes_data_quality_when_fallback_used():
+    """Sentiment AI context should explicitly carry the data-quality label."""
+    from analysis.sentiment import SentimentEngine
+
+    se = SentimentEngine()
+    ctx = se.get_ai_context({
+        "sentiment_score": 0,
+        "bias": "NEUTRAL",
+        "confidence": 40,
+        "data_quality": "degraded",
+        "retail": {"retail_long_pct": 50},
+        "fear_greed": {"label": "NEUTRAL"},
+        "currency_strength": {"pair_bias": "NEUTRAL"},
+        "dxy": {"dxy_trend": "NEUTRAL"},
+        "reasons": [],
+    })
+
+    assert "sentiment_data_quality" in ctx
+    assert ctx["sentiment_data_quality"] == "degraded"
+
+
+@pytest.mark.unit
+def test_confidence_breakdown_exposes_neutral_fallback_reason():
+    """A zero-point sentiment line should explicitly explain fallback/neutral status."""
+    from core.confidence_breakdown import build_confidence_breakdown
+
+    breakdown = build_confidence_breakdown(
+        direction="BUY",
+        rule_confidence=23,
+        llm_signal="BUY",
+        llm_confidence=18,
+        sentiment_boost=0,
+        sentiment_quality="no_data_fallback",
+        ind_ctx={"trend": "NEUTRAL", "rsi_signal": "NEUTRAL", "macd_cross": "NEUTRAL"},
+        sr_ctx={},
+        liquidity_ctx={},
+    )
+
+    sentiment_component = next(c for c in breakdown.components if c.label == "Sentiment")
+    detail = sentiment_component.detail.lower()
+    assert "neutral" in detail or "fallback" in detail
+    assert "no_data_fallback" in detail

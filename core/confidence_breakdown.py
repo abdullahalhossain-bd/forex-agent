@@ -146,9 +146,11 @@ def build_confidence_breakdown(
     llm_signal: str = "WAIT",
     llm_confidence: float = 0.0,
     sentiment_boost: float = 0.0,
+    sentiment_quality: Optional[str] = None,
     ind_ctx: Optional[Dict[str, Any]] = None,
     sr_ctx: Optional[Dict[str, Any]] = None,
     liquidity_ctx: Optional[Dict[str, Any]] = None,
+    perm_out: Optional[Dict[str, Any]] = None,
 ) -> ConfidenceBreakdown:
     """
     Build the full 7-line scorecard: Rule, Trend, Momentum, Sentiment,
@@ -176,7 +178,10 @@ def build_confidence_breakdown(
     components.append(_momentum_points(direction, ind_ctx.get("rsi_signal"), ind_ctx.get("macd_cross")))
 
     # 4. Sentiment (already computed upstream as a signed +/- adjustment)
-    components.append(ConfidenceComponent("Sentiment", round(sentiment_boost), ""))
+    sentiment_detail = "neutral" if abs(sentiment_boost) < 0.5 else f"adjustment={sentiment_boost:+.0f}%"
+    if sentiment_quality:
+        sentiment_detail = f"{sentiment_detail} | data_quality={sentiment_quality}"
+    components.append(ConfidenceComponent("Sentiment", round(sentiment_boost), sentiment_detail))
 
     # 5. LLM
     llm_norm = "BUY" if "BUY" in str(llm_signal).upper() else ("SELL" if "SELL" in str(llm_signal).upper() else "WAIT")
@@ -205,4 +210,141 @@ def build_confidence_breakdown(
     raw_total = sum(c.points for c in components)
     total = EntrySafetyFilters.calibrate_confidence(raw_total)
 
-    return ConfidenceBreakdown(direction=direction, components=components, raw_total=raw_total, total=total)
+    # If permission layer provided post-penalty confidence, attach an
+    # explicit penalty line(s) rather than silently rescaling components.
+    if perm_out:
+        try:
+            pre = float(perm_out.get("confidence_pre_penalty") or raw_total)
+        except Exception:
+            pre = raw_total
+        try:
+            post = float(perm_out.get("confidence_post_penalty") or total)
+        except Exception:
+            post = total
+
+        penalty = round(pre - post, 2)
+        if penalty > 0.01:
+            # Try to extract fine-grained penalty breakdown when available
+            # (entry_quality_detail.penalty_by_rule or min_confidence_diagnostic.penalty_by_rule)
+            added = False
+            _eq = perm_out.get("entry_quality_detail") or {}
+            _diag = perm_out.get("min_confidence_diagnostic") or {}
+            _pbr = {}
+            if isinstance(_eq, dict):
+                _pbr = _eq.get("penalty_by_rule") or {}
+            if not _pbr and isinstance(_diag, dict):
+                _pbr = _diag.get("penalty_by_rule") or {}
+
+            if isinstance(_pbr, dict) and len(_pbr) > 0:
+                for k, v in _pbr.items():
+                    try:
+                        # penalty values may be positive or negative depending
+                        # on upstream representation — treat as absolute
+                        val = float(v or 0)
+                        if val == 0:
+                            continue
+                        components.append(ConfidenceComponent(f"Penalty: {k}", -abs(val), "permission detail"))
+                        added = True
+                    except Exception:
+                        continue
+
+            if not added:
+                components.append(ConfidenceComponent("Penalties", -abs(penalty), f"post_penalty {pre:.0f}% -> {post:.0f}%"))
+
+            # Recompute totals so the scorecard reflects penalty lines
+            raw_total = sum(c.points for c in components)
+            # Prefer the authoritative post-penalty value if present
+            total = post
+
+    cb = ConfidenceBreakdown(direction=direction, components=components, raw_total=raw_total, total=total)
+
+    # Sanity check: ensure the breakdown total matches the authoritative
+    # reported confidence (if available) within tolerance.
+    try:
+        authority = None
+        if perm_out and perm_out.get("confidence_post_penalty") is not None:
+            authority = float(perm_out.get("confidence_post_penalty"))
+        if authority is not None and abs(cb.total - authority) > 0.5:
+            log.warning(
+                f"[ConfidenceBreakdown] Reconciled breakdown total ({cb.total}) differs from perm_out confidence ({authority}) by >0.5%"
+            )
+    except Exception:
+        pass
+
+    return cb
+
+
+def reconcile_confidence_breakdown(breakdown_dict: Optional[Dict[str, Any]], perm_out: Optional[Dict[str, Any]] = None) -> ConfidenceBreakdown:
+    """
+    Reconstruct a ConfidenceBreakdown from the serialized dict (as
+    produced by DecisionAgent) and append explicit penalty lines from
+    `perm_out` so the final scorecard reconciles with the
+    permission-layer post-penalty confidence.
+    """
+    components: List[ConfidenceComponent] = []
+    if breakdown_dict and isinstance(breakdown_dict, dict):
+        for c in breakdown_dict.get("components", []):
+            try:
+                label = c.get("label", "?")
+                pts = float(c.get("points", 0) or 0)
+                detail = c.get("detail", "") or ""
+                components.append(ConfidenceComponent(label, pts, detail))
+            except Exception:
+                continue
+
+    raw_total = sum(c.points for c in components)
+    total = breakdown_dict.get("total") if breakdown_dict and breakdown_dict.get("total") is not None else raw_total
+
+    # Append penalty lines similar to build_confidence_breakdown
+    if perm_out:
+        try:
+            pre = float(perm_out.get("confidence_pre_penalty") or raw_total)
+        except Exception:
+            pre = raw_total
+        try:
+            post = float(perm_out.get("confidence_post_penalty") or total)
+        except Exception:
+            post = total
+
+        penalty = round(pre - post, 2)
+        if penalty > 0.01:
+            added = False
+            _eq = perm_out.get("entry_quality_detail") or {}
+            _diag = perm_out.get("min_confidence_diagnostic") or {}
+            _pbr = {}
+            if isinstance(_eq, dict):
+                _pbr = _eq.get("penalty_by_rule") or {}
+            if not _pbr and isinstance(_diag, dict):
+                _pbr = _diag.get("penalty_by_rule") or {}
+
+            if isinstance(_pbr, dict) and len(_pbr) > 0:
+                for k, v in _pbr.items():
+                    try:
+                        val = float(v or 0)
+                        if val == 0:
+                            continue
+                        components.append(ConfidenceComponent(f"Penalty: {k}", -abs(val), "permission detail"))
+                        added = True
+                    except Exception:
+                        continue
+
+            if not added:
+                components.append(ConfidenceComponent("Penalties", -abs(penalty), f"post_penalty {pre:.0f}% -> {post:.0f}%"))
+
+            raw_total = sum(c.points for c in components)
+            total = post
+
+    cb = ConfidenceBreakdown(direction=(breakdown_dict.get("direction") if breakdown_dict else "BUY"), components=components, raw_total=raw_total, total=total)
+
+    try:
+        authority = None
+        if perm_out and perm_out.get("confidence_post_penalty") is not None:
+            authority = float(perm_out.get("confidence_post_penalty"))
+        if authority is not None and abs(cb.total - authority) > 0.5:
+            log.warning(
+                f"[ConfidenceBreakdown] Reconciled breakdown total ({cb.total}) differs from perm_out confidence ({authority}) by >0.5%"
+            )
+    except Exception:
+        pass
+
+    return cb

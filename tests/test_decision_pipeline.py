@@ -277,6 +277,43 @@ class TestHighConfidenceSoftOverride(unittest.TestCase):
         self.assertTrue(any("SignalFusion gate" in r for r in result["reasons"]))
 
 
+class TestDecisionConfidenceAggregation(unittest.TestCase):
+    def test_abstaining_layers_are_explicitly_reported_in_damping(self):
+        from agents.decision_agent import DecisionAgent
+
+        agent = DecisionAgent()
+        analysis_out = {
+            "ensemble": {"decision": "WAIT", "confidence": 0, "ml_available": True},
+            "rl_agent": {"action_name": "HOLD", "confidence": 0},
+            "unified_signal": {
+                "consensus": {"action": "NO_TRADE", "confidence": "Low"},
+                "adaptive_decision": {"action": "NO_TRADE", "confidence": "Low"},
+            },
+            "momentum_ctx": {"momentum_signal": "HOLD", "momentum_confidence": 0},
+        }
+
+        confidence, breakdown = agent._aggregate_confidence(
+            analysis_out,
+            "BUY", 70,
+            "WAIT", 0,
+            "WAIT", 0,
+        )
+
+        self.assertAlmostEqual(confidence, 54.3, places=1)
+        self.assertIn("abstained:", " ".join(breakdown))
+        self.assertIn("participation=1.0/9.5", breakdown)
+
+    def test_directional_zero_confidence_is_not_a_vote(self):
+        from agents.decision_agent import DecisionAgent
+
+        confidence, breakdown = DecisionAgent()._aggregate_confidence(
+            {}, "BUY", 0, "WAIT", 0, "WAIT", 0
+        )
+
+        self.assertEqual(confidence, 0.0)
+        self.assertIn("rule=0%(abstained)", breakdown)
+
+
 class TestAdaptiveTradeGate(unittest.TestCase):
     """Poor recent performance should raise the execution floor; strong recent performance should allow a lighter floor."""
 

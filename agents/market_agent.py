@@ -252,7 +252,7 @@ class MarketAgent:
         try:
             from data.indicator_registry import add_canonical_indicators, get_ai_context as _get_ctx
             df = add_canonical_indicators(df, include_patterns=True)
-            ind_ctx = _get_ctx(df)
+            ind_ctx = _get_ctx(df, spread_in_points=data_source == "mt5")
             # P6 fix: `n_cols` was never defined here → NameError on every
             # cycle → caught by `except Exception` → silent fallback to
             # ExtendedIndicators. The canonical registry was therefore NEVER

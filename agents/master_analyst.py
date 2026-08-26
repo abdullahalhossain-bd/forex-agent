@@ -182,21 +182,44 @@ def _is_reasoning_model(model_name: str) -> bool:
     return "gpt-oss" in (model_name or "").lower()
 
 try:
-    from core.llm_key_manager import get_llm_key_manager
-    _key_manager = get_llm_key_manager()
-    _groq_client = _key_manager.get_groq_client()
-    if _groq_client is not None:
-        MODEL = GROQ_MODEL
+    from core.llm_gateway import local_llm_enabled
+    if local_llm_enabled():
+        from config import LLM_MODEL
+        MODEL = LLM_MODEL
         LLM_AVAILABLE = True
-        _provider = "groq"
-        log.info(f"[MasterAnalyst] Groq client initialized | model={MODEL}")
-    if not LLM_AVAILABLE:
-        _gemini_client = _key_manager.get_gemini_client()
-        if _gemini_client is not None:
-            MODEL = GEMINI_MODEL
+        _provider = "remote_ollama"
+        log.info("[MasterAnalyst] backend=remote_ollama | model=%s; legacy providers disabled", MODEL)
+    else:
+        from core.llm_key_manager import get_llm_key_manager
+        _key_manager = get_llm_key_manager()
+        _groq_client = _key_manager.get_groq_client()
+        if _groq_client is not None:
+            MODEL = GROQ_MODEL
             LLM_AVAILABLE = True
-            _provider = "gemini"
-            log.info(f"[MasterAnalyst] Gemini client initialized (fallback) | model={MODEL}")
+            _provider = "groq"
+            log.info(f"[MasterAnalyst] Groq client initialized | model={MODEL}")
+        if not LLM_AVAILABLE:
+            _gemini_client = _key_manager.get_gemini_client()
+            if _gemini_client is not None:
+                MODEL = GEMINI_MODEL
+                LLM_AVAILABLE = True
+                _provider = "gemini"
+                log.info(f"[MasterAnalyst] Gemini client initialized (fallback) | model={MODEL}")
+        # Remaining legacy-provider availability checks are intentionally
+        # skipped in local mode; this branch preserves the old cascade.
+        if not LLM_AVAILABLE and _key_manager is not None:
+            if _key_manager.has_any_cerebras:
+                MODEL = os.getenv("CEREBRAS_MODEL", "llama3.1-8b-instruct")
+                LLM_AVAILABLE = True
+                _provider = "cerebras"
+            elif _key_manager.has_any_sambanova:
+                MODEL = os.getenv("SAMBANOVA_MODEL", "DeepSeek-V3")
+                LLM_AVAILABLE = True
+                _provider = "sambanova"
+            elif _key_manager.has_any_openrouter:
+                MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
+                LLM_AVAILABLE = True
+                _provider = "openrouter"
         # Day 81+ hotfix, UPDATED: the "must start with AIza" check below
         # was based on the classic AI-Studio key format only. In practice
         # Gemini API keys issued through some paths (e.g. Cloud/Vertex-
@@ -267,7 +290,7 @@ except Exception as e:
             except Exception as e2:
                 log.warning(f"[MasterAnalyst] Gemini init failed: {e2}")
 
-if not LLM_AVAILABLE:
+if not LLM_AVAILABLE and not local_llm_enabled():
     log.warning(
         "[MasterAnalyst] No LLM available (Groq/Gemini/Cerebras/SambaNova/"
         "OpenRouter keys missing). MasterAnalyst will fall back to "
@@ -463,7 +486,8 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
             retail_sentiment_ctx or {},
         )
 
-        if not LLM_AVAILABLE:
+        from core.llm_gateway import local_llm_enabled
+        if not LLM_AVAILABLE and not local_llm_enabled():
             return self._fallback_result(signal, "LLM not available")
 
         # ── BACKTEST MODE OPTIMIZATION ─────────────────
@@ -482,6 +506,8 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         except Exception as e:
             from core.llm_key_manager import log_llm_call_failure
             log_llm_call_failure(log, "MasterAnalyst", MODEL, 0, 1, e)
+            if local_llm_enabled():
+                signal = {"signal": "WAIT", "confidence": 0}
             return self._fallback_result(signal, str(e))
 
         # 2026-07-30 — resolve the final signal's direction so the ADX
@@ -960,14 +986,13 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         return json.dumps(ctx, indent=2, default=str)
 
     def _call_ollama(self, user_prompt: str) -> "str | None":
-        """Deprecated stub — always returns None.
+        """Call the configured remote Ollama backend."""
+        from core.llm_gateway import call_remote_ollama
 
-        2026-07-25: Ollama has been COMPLETELY REMOVED from this layer's
-        provider cascade. The new order is Groq → Gemini → OpenRouter.
-        This method is kept as a no-op stub for backward-compat with any
-        external caller that pokes it directly (dashboards, tests).
-        """
-        return None
+        return call_remote_ollama([
+            {"role": "system", "content": self._SYSTEM},
+            {"role": "user", "content": user_prompt},
+        ])
 
     def _call_llm(self, context: str) -> str:
         """Call LLM with the NEW provider cascade (2026-07-25):
@@ -998,6 +1023,16 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         answer into a clean RuntimeError instead of a downstream
         JSONDecodeError with a noisy traceback.
         """
+        from core.llm_gateway import local_llm_enabled
+        if local_llm_enabled():
+            user_prompt = (
+                "Here is the complete market intelligence package (session-aware AND "
+                "macro/intermarket-aware) for analysis:\n\n"
+                f"{context}\n\n"
+                "Provide your professional trade decision as JSON."
+            )
+            return self._call_ollama(user_prompt)
+
         # ── Day 90 — cache lookup ──────────────────────────────
         # Day 101 hotfix: the cache key used to be hardcoded to
         # ("groq", GROQ_MODEL, context) — a misleading label. In reality

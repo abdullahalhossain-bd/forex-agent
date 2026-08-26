@@ -70,11 +70,15 @@ def _add_horizon_labels(df: pd.DataFrame, horizon: int, symbol: str) -> pd.DataF
     df[f"fut_pips_{horizon}"] = (future_close - close) * pip_mult
     
     # Max drawdown (max adverse excursion within horizon)
-    future_low = low.shift(-1).rolling(horizon).min()
+    future_low = low.shift(-1)[::-1].rolling(
+        horizon, min_periods=horizon
+    ).min()[::-1]
     df[f"max_dd_{horizon}"] = (close - future_low) * pip_mult
     
     # Max profit (max favorable excursion within horizon)
-    future_high = high.shift(-1).rolling(horizon).max()
+    future_high = high.shift(-1)[::-1].rolling(
+        horizon, min_periods=horizon
+    ).max()[::-1]
     df[f"max_prof_{horizon}"] = (future_high - close) * pip_mult
     
     # RR ratio

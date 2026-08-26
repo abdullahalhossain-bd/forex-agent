@@ -31,6 +31,8 @@ STRATEGY_OVERRIDES: dict[str, float] = {
     "stop_hunt": 1.2,   # 2026-08-12: lowered 1.4→1.2 for TP 1:1.5 strategy
 }
 
+MIN_EXECUTION_RR = 1.5
+
 
 def get_min_rr(*, strategy: str | None = None, test_mode: bool = False) -> float:
     """
@@ -47,6 +49,11 @@ def get_min_rr(*, strategy: str | None = None, test_mode: bool = False) -> float
     return MIN_RR_PROD
 
 
+def get_execution_min_rr(*, strategy: str | None = None, test_mode: bool = False) -> float:
+    """Return the hard execution rejection floor for a calculated bracket."""
+    return max(MIN_EXECUTION_RR, get_min_rr(strategy=strategy, test_mode=test_mode))
+
+
 # ── Smoke test ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import os
@@ -55,5 +62,6 @@ if __name__ == "__main__":
 
     assert get_min_rr() == 2.0
     assert get_min_rr(test_mode=True) == 1.0
-    assert get_min_rr(strategy="stop_hunt") == 1.2  # matches STRATEGY_OVERRIDES
+    assert get_min_rr(strategy="stop_hunt") == 1.2  # legacy preferred-target override
+    assert get_execution_min_rr(strategy="stop_hunt") == 1.5
     print("rr_policy smoke test passed — resolves from core/constants.py.")

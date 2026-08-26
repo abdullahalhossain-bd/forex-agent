@@ -862,6 +862,18 @@ class LLMKeyManager:
                 return key
         return self._consume_selected_key(provider)
 
+    def _local_backend_active(self) -> bool:
+        """Return True when the project is intentionally using the remote Ollama backend.
+
+        All legacy provider clients are intentionally disabled in this mode; they must
+        not be created even if keys are present in the environment.
+        """
+        try:
+            import config as _cfg
+            return bool(getattr(_cfg, "LLM_LOCAL", False))
+        except Exception:
+            return False
+
     def _load_keys(self) -> None:
         _N = self.MAX_KEYS_PER_PROVIDER + 1  
 
@@ -997,8 +1009,11 @@ class LLMKeyManager:
 
     # ── Groq ──────────────────────────────────────────────────────
 
-    def get_groq_client(self) -> Optional[Any]:
+    def get_groq_client(self, allow_local: bool = False) -> Optional[Any]:
         """Get a working Groq client. Rotates through available keys with anti-storm cooling."""
+        if self._local_backend_active() and not allow_local:
+            log.debug("[LLM Keys] local backend active; Groq client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._groq_keys if k.is_available]
             if not available:
@@ -1089,7 +1104,10 @@ class LLMKeyManager:
 
     # ── Gemini ────────────────────────────────────────────────────
 
-    def get_gemini_client(self) -> Optional[Any]:
+    def get_gemini_client(self, allow_local: bool = False) -> Optional[Any]:
+        if self._local_backend_active() and not allow_local:
+            log.debug("[LLM Keys] local backend active; Gemini client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._gemini_keys if k.is_available]
             if not available:
@@ -1171,7 +1189,10 @@ class LLMKeyManager:
     # WRONG key under concurrent access or when key availability changed
     # between get and mark calls.
 
-    def get_cerebras_client(self) -> Optional[Any]:
+    def get_cerebras_client(self, allow_local: bool = False) -> Optional[Any]:
+        if self._local_backend_active() and not allow_local:
+            log.debug("[LLM Keys] local backend active; Cerebras client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._cerebras_keys if k.is_available]
             if not available:
@@ -1212,7 +1233,10 @@ class LLMKeyManager:
             else:
                 log.debug(f"[LLM Keys] Cerebras failure reported but no key could be matched to consume (client={client is not None})")
 
-    def get_sambanova_client(self) -> Optional[Any]:
+    def get_sambanova_client(self, allow_local: bool = False) -> Optional[Any]:
+        if self._local_backend_active() and not allow_local:
+            log.debug("[LLM Keys] local backend active; SambaNova client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._sambanova_keys if k.is_available]
             if not available:
@@ -1253,7 +1277,10 @@ class LLMKeyManager:
             else:
                 log.debug(f"[LLM Keys] SambaNova failure reported but no key could be matched to consume (client={client is not None})")
 
-    def get_openrouter_client(self) -> Optional[Any]:
+    def get_openrouter_client(self, allow_local: bool = False) -> Optional[Any]:
+        if self._local_backend_active() and not allow_local:
+            log.debug("[LLM Keys] local backend active; OpenRouter client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._openrouter_keys if k.is_available]
             if not available:
@@ -1295,6 +1322,9 @@ class LLMKeyManager:
                 log.debug(f"[LLM Keys] OpenRouter failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_github_client(self) -> Optional[Any]:
+        if self._local_backend_active():
+            log.debug("[LLM Keys] local backend active; GitHub Models client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._github_keys if k.is_available]
             if not available:
@@ -1336,6 +1366,9 @@ class LLMKeyManager:
                 log.debug(f"[LLM Keys] GitHub Models failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_huggingface_client(self) -> Optional[Any]:
+        if self._local_backend_active():
+            log.debug("[LLM Keys] local backend active; Hugging Face client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._huggingface_keys if k.is_available]
             if not available:
@@ -1377,6 +1410,9 @@ class LLMKeyManager:
                 log.debug(f"[LLM Keys] Hugging Face failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_claude_client(self) -> Optional[Any]:
+        if self._local_backend_active():
+            log.debug("[LLM Keys] local backend active; Claude client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._claude_keys if k.is_available]
             if not available:
@@ -1418,6 +1454,9 @@ class LLMKeyManager:
                 log.debug(f"[LLM Keys] Claude failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_glm_client(self) -> Optional[Any]:
+        if self._local_backend_active():
+            log.debug("[LLM Keys] local backend active; GLM client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._glm_keys if k.is_available]
             if not available:
@@ -1459,6 +1498,9 @@ class LLMKeyManager:
                 log.debug(f"[LLM Keys] GLM failure reported but no key could be matched to consume (client={client is not None})")
 
     def get_deepseek_client(self) -> Optional[Any]:
+        if self._local_backend_active():
+            log.debug("[LLM Keys] local backend active; DeepSeek client creation blocked")
+            return None
         with self._lock:
             available = [k for k in self._deepseek_keys if k.is_available]
             if not available:

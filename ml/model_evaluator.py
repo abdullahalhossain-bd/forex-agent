@@ -51,6 +51,7 @@ class ModelMetrics:
     recall: float = 0.0
     f1: float = 0.0
     auc_roc: float = 0.0
+    validation_auc_roc: float = 0.0
     # Trading metrics
     win_rate: float = 0.0
     profit_factor: float = 0.0

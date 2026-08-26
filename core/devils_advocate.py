@@ -151,6 +151,13 @@ class DevilsAdvocateGate:
         # margin, while still bounded well under one trading cycle.
         self.timeout_sec = int(os.getenv("DEVILS_ADVOCATE_TIMEOUT_SEC", "25"))
         self.model_name = os.getenv("DEVILS_ADVOCATE_MODEL", "gpt-4.1-mini")
+        # Bugfix: introduce a minimum Devil's-Advocate confidence gate so
+        # a low-confidence TAKE from the model cannot silently pass.
+        # Configurable via env `MIN_DA_CONFIDENCE` (percent). Default=60.
+        try:
+            self.min_confidence = float(os.getenv("MIN_DA_CONFIDENCE", "60"))
+        except Exception:
+            self.min_confidence = 60.0
         self._last_error: Optional[str] = None
         self._audit = _DevilsAdvocateAuditLog()
 
@@ -191,7 +198,9 @@ class DevilsAdvocateGate:
             payload = self._build_payload(thesis, evidence, signal)
             response = self._call_provider(payload)
             parsed = self._normalize_response(response)
-            result = self._finalize(parsed, data_quality="good")
+            # Pass the deterministic evidence through so _finalize can run
+            # non-LLM checks (e.g. tp_obstacle) deterministically.
+            result = self._finalize(parsed, data_quality="good", evidence=evidence)
         except Exception as exc:
             self._last_error = str(exc)
             log.warning(f"[DevilsAdvocate] reviewer unavailable: {exc}")
@@ -447,6 +456,27 @@ class DevilsAdvocateGate:
                 or "unknown"
             )
 
+        def _distance_pips(level: Any) -> Any:
+            try:
+                if entry is None or level in (None, "", "unknown"):
+                    return "unknown"
+                return round(abs(float(entry) - float(level)) / pip_size, 1)
+            except (TypeError, ValueError, ZeroDivisionError):
+                return "unknown"
+
+        def _source_level(*keys: str) -> Any:
+            for key in keys:
+                value = self._first_present(sr_ctx, key, default=None)
+                if value is None and isinstance(market_context, dict):
+                    value = market_context.get(key)
+                if value is not None:
+                    return value
+            return None
+
+        nearest_resistance = _source_level("nearest_resistance")
+        nearest_support = _source_level("nearest_support")
+        tp_obstacle = _source_level("nearest_tp_obstacle", "tp_obstacle")
+
         evidence: Dict[str, Any] = {
             "htf": {
                 # B4d + 2026-08-13: accept "4h"/"1h"/"15m" and H4/h4_trend aliases
@@ -496,6 +526,15 @@ class DevilsAdvocateGate:
                 "session_low": sr_ctx.get("session_low", "unknown"),
                 "support_resistance_zone": _nearest_zone,
                 "supply_demand_zone": smc_ctx.get("supply_demand_zone", "unknown"),
+                "distance_to_nearest_resistance_pips": _distance_pips(nearest_resistance),
+                "distance_to_nearest_support_pips": _distance_pips(nearest_support),
+                "distance_to_pdh_pips": _distance_pips(_source_level("pdh")),
+                "distance_to_pdl_pips": _distance_pips(_source_level("pdl")),
+                "distance_to_prev_week_high_pips": _distance_pips(_source_level("prev_week_high")),
+                "distance_to_prev_week_low_pips": _distance_pips(_source_level("prev_week_low")),
+                "distance_to_session_high_pips": _distance_pips(_source_level("session_high")),
+                "distance_to_session_low_pips": _distance_pips(_source_level("session_low")),
+                "distance_to_tp_obstacle_pips": _distance_pips(tp_obstacle),
             },
             "momentum": {
                 "atr": atr if atr is not None else "unknown",
@@ -559,14 +598,36 @@ class DevilsAdvocateGate:
             for r in (entry_quality_detail.get("results") or [])
             if isinstance(r, dict) and not r.get("passed", True)
         ]
+        failed_check_details = [
+            {
+                "flag_name": r.get("flag_name", "unknown"),
+                "reason": r.get("reason", ""),
+                "details": r.get("details", {}),
+            }
+            for r in (entry_quality_detail.get("results") or [])
+            if isinstance(r, dict) and not r.get("passed", True)
+        ]
+        rejection_details = next(
+            (
+                r.get("details", {})
+                for r in (entry_quality_detail.get("results") or [])
+                if isinstance(r, dict) and r.get("flag_name") == "rejection_psychology"
+            ),
+            {},
+        )
         evidence["entry_quality"] = {
             "passed_count": entry_quality_detail.get("passed_count", "unknown"),
             "total_count": entry_quality_detail.get("total_count", "unknown"),
             "quality_score": entry_quality_detail.get("quality_score", "unknown"),
             "failed_checks": failed_checks if failed_checks else "none",
             "failed_check_count": len(failed_checks),
+            "failed_check_details": failed_check_details,
             "warnings": entry_quality_detail.get("warnings", []),
             "block_reason": entry_quality_detail.get("block_reason"),
+            "rejection_wick_present": rejection_details.get("has_rejection_wick", "unknown"),
+            "rejection_wick_ratio": rejection_details.get("wick_body_ratio", "unknown"),
+            "rejection_zone_present": rejection_details.get("near_zone", "unknown"),
+            "rejection_zone_price": rejection_details.get("nearest_zone_price", "unknown"),
         }
 
         # ── Deterministic HTF-conflict flag ────────────────────────────
@@ -617,10 +678,12 @@ class DevilsAdvocateGate:
                 "confirm. "
                 "\n\nScore each of these 5 pillars independently as PASS / WARN / FAIL with a "
                 "one-line reason, using ONLY the evidence fields given (never invent data):\n"
-                "  1. STRUCTURE -- do evidence.structure.bos AND evidence.structure.choch AND "
-                "evidence.htf.m15_structure AND evidence.htf.h1_trend actually agree with each "
-                "other AND with the signal direction? One bullish BOS alone is NOT enough -- "
-                "check for mutual consistency across all of these, not just one field.\n"
+                "  1. STRUCTURE -- evaluate BOS, CHoCH, M15, and H1 independently, then compare "
+                "the explicit directional values with the signal. NONE, UNKNOWN, SIDEWAYS, "
+                "NEUTRAL, and missing values are neutral or insufficient data, not opposing "
+                "evidence and must not be treated as a contradiction. Only an explicitly "
+                "opposite BOS/CHoCH/trend is negative. One bullish BOS alone is not enough "
+                "for strong confirmation, but neutral fields do not make it contradictory.\n"
                 "  2. LOCATION -- is entry away from an immediate opposing barrier (session/PDH/"
                 "PDL/prior swing/liquidity pool) in evidence.location? For BUY, is there room "
                 "before the next resistance/session high? For SELL, room before the next "
@@ -645,7 +708,11 @@ class DevilsAdvocateGate:
                 "'supporting'. Also weigh evidence.momentum.volatility_regime: a RANGING regime "
                 "is fine on its own as long as structure genuinely aligns -- don't add extra "
                 "scrutiny just because displacement happens to be absent (see pillar 4).\n"
-                "\nAlso review evidence.entry_quality.failed_checks -- these are deterministic, "
+                "\nTreat NONE, UNKNOWN, SIDEWAYS, NEUTRAL, and absent fields as neutral or "
+                "missing throughout all pillars. Neutral plus positive evidence is not a "
+                "contradiction; only explicit opposing evidence can create a contradiction.\n"
+                "Also review evidence.entry_quality.failed_checks and failed_check_details -- "
+                "these are deterministic, "
                 "already-computed guardrail failures (not opinions). ONE such warning is normal "
                 "noise. Several failing TOGETHER (e.g. sl_swing_anchor + tp_structure_validation "
                 "+ exhaustion_filter + fresh_high_rejection) is a cluster and should be treated "
@@ -725,7 +792,7 @@ class DevilsAdvocateGate:
 
         last_error: Optional[Exception] = None
 
-        for provider in ("groq", "gemini"):
+        for provider in ("groq", "gemini", "cerebras", "sambanova", "openrouter"):
             if time.monotonic() >= deadline:
                 break
             try:
@@ -749,7 +816,7 @@ class DevilsAdvocateGate:
     ) -> Optional[str]:
         """Make a single request to the named provider. Returns raw text or None."""
         if provider == "groq":
-            client = manager.get_groq_client()
+            client = manager.get_groq_client(allow_local=True)
             if client is None:
                 return None
             # B4h fix: silently swapping any "gpt*"-named model for
@@ -800,7 +867,7 @@ class DevilsAdvocateGate:
             if (deadline - time.monotonic()) < 10.0:
                 # Gemini API rejects deadlines under 10s.
                 return None
-            client = manager.get_gemini_client()
+            client = manager.get_gemini_client(allow_local=True)
             if client is None:
                 return None
             generate_kwargs = dict(model="gemini-flash-lite-latest", contents=prompt)
@@ -814,6 +881,38 @@ class DevilsAdvocateGate:
             except Exception:
                 pass
             return resp.text
+
+        compat_getters = {
+            "cerebras": manager.get_cerebras_client,
+            "sambanova": manager.get_sambanova_client,
+            "openrouter": manager.get_openrouter_client,
+        }
+        if provider in compat_getters:
+            client = compat_getters[provider](allow_local=True)
+            if client is None:
+                return None
+            model = os.getenv(f"{provider.upper()}_MODEL", self.model_name)
+            create_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.1,
+                "max_tokens": 700,
+                "response_format": {"type": "json_object"},
+                "timeout": max(0.5, deadline - time.monotonic()),
+            }
+            try:
+                resp = client.chat.completions.create(**create_kwargs)
+            except TypeError:
+                create_kwargs.pop("timeout", None)
+                create_kwargs.pop("response_format", None)
+                resp = client.chat.completions.create(**create_kwargs)
+            marker = getattr(manager, f"mark_{provider}_success", None)
+            if marker is not None:
+                try:
+                    marker(client=client)
+                except Exception:
+                    pass
+            return resp.choices[0].message.content
 
         return None
 
@@ -844,13 +943,16 @@ class DevilsAdvocateGate:
             return response
         return {}
 
-    def _finalize(self, parsed: Dict[str, Any], data_quality: str) -> Dict[str, Any]:
+    def _finalize(self, parsed: Dict[str, Any], data_quality: str, evidence: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         raw_decision = str(parsed.get("decision", DECISION_UNCERTAIN)).upper()
         if raw_decision not in _VALID_RAW_DECISIONS:
             raw_decision = DECISION_UNCERTAIN
 
         resolved = raw_decision
-        critical_failure = parsed.get("critical_failure")
+        # `critical_failure` is reserved for operational/data-integrity
+        # failures detected by this module. Market rejection belongs in the
+        # structured reasoning fields, even if the model misuses this key.
+        critical_failure = None
         if raw_decision == DECISION_UNCERTAIN:
             resolved = self._resolve_uncertain()
 
@@ -880,6 +982,59 @@ class DevilsAdvocateGate:
             pillars[name] = {"verdict": verdict, "reason": reason}
             if verdict == "FAIL":
                 fail_pillar_count += 1
+
+        # ------------------------------------------------------------------
+        # Deterministic TP-obstacle check (non-LLM guard)
+        # Bugfix: ensure a TP that clearly lies BEYOND a mapped obstacle is
+        # flagged deterministically so the DA cannot be coaxed into
+        # approving an unreachable target. If evidence was provided by
+        # review(), compare the entry->TP distance to the entry->obstacle
+        # distance (both in pips) and mark the location pillar FAIL when
+        # the obstacle sits between entry and TP.
+        try:
+            if evidence and isinstance(evidence, dict):
+                loc = evidence.get("location", {}) or {}
+                exec_e = evidence.get("execution", {}) or {}
+                obst_pips = loc.get("distance_to_tp_obstacle_pips")
+                entry_price = exec_e.get("entry")
+                tp_price = exec_e.get("tp")
+                if (
+                    obst_pips not in (None, "unknown")
+                    and entry_price not in (None, "unknown")
+                    and tp_price not in (None, "unknown")
+                ):
+                    # compute entry->tp in pips using a pip size heuristic
+                    sym = evidence.get("symbol", "") or ""
+                    pip_size = 0.01 if "JPY" in str(sym).upper() else 0.0001
+                    entry_tp_pips = round(abs(float(tp_price) - float(entry_price)) / pip_size, 1)
+                    try:
+                        obst_val = float(obst_pips)
+                    except Exception:
+                        obst_val = None
+                    if obst_val is not None and obst_val < entry_tp_pips:
+                        # obstacle lies between entry and TP → location FAIL
+                        prev = pillars.get("location", {})
+                        if prev.get("verdict") != "FAIL":
+                            pillars["location"] = {"verdict": "FAIL", "reason": "TP lies beyond nearest mapped obstacle (deterministic guard)"}
+                            fail_pillar_count += 1
+                            log.warning("[DevilsAdvocate] Deterministic TP-obstacle guard: TP lies beyond nearest obstacle — forcing location pillar FAIL")
+        except Exception:
+            pass
+
+        # ------------------------------------------------------------------
+        # Minimum DA confidence gate
+        # Bugfix: require the DA's own reported confidence to meet a minimum
+        # operational bar for a TAKE decision. Low-confidence TAKES are
+        # rejected deterministically to avoid weak model approvals.
+        try:
+            parsed_conf = float(parsed.get("confidence", 0.0) or 0.0)
+            if parsed_conf < float(getattr(self, "min_confidence", 60.0)) and resolved == DECISION_TAKE:
+                log.warning(f"[DevilsAdvocate] TAKE overridden: DA confidence {parsed_conf}% < MIN_DA_CONFIDENCE {self.min_confidence}%")
+                resolved = self._resolve_contradiction()
+                if not critical_failure:
+                    critical_failure = f"min_confidence_not_met: {parsed_conf}<{self.min_confidence}"
+        except Exception:
+            pass
 
         # P0 fix (2026-08-14 forensic audit, EURUSD eval_1786641545_EURUSD_fe0d708e):
         # that trade's raw model output was decision=TAKE, expected_edge=negative,
@@ -933,6 +1088,8 @@ class DevilsAdvocateGate:
             "counter_evidence_strength": counter_evidence_strength,
             "expected_edge": expected_edge_raw,
             "risk_level": parsed.get("risk_level") or "unknown",
+            "pillars": pillars,
+            "fail_pillar_count": fail_pillar_count,
             "supporting_evidence": supporting,
             "contradicting_evidence": contradicting,
             "reasons_for_rejection": reasons_for_rejection,
@@ -990,7 +1147,7 @@ class DevilsAdvocateGate:
         # Research/backtest MUST NEVER auto-TAKE on reviewer outage —
         # that would contaminate simulated expectancy. Only allow TAKE
         # in live mode when both opt-ins are present.
-        if self.mode == "research":
+        if self.mode in {"research", "backtest"}:
             resolved = DECISION_REJECT
         elif self.fail_mode == "fail_open" and self.uncertain_policy == "take":
             resolved = DECISION_TAKE
@@ -1005,6 +1162,8 @@ class DevilsAdvocateGate:
             "counter_evidence_strength": 0.0,
             "expected_edge": "unknown",
             "risk_level": "unknown",
+            "pillars": {},
+            "fail_pillar_count": 0,
             "supporting_evidence": [],
             "contradicting_evidence": [],
             "reasons_for_rejection": [],
@@ -1034,6 +1193,8 @@ class DevilsAdvocateGate:
             "counter_evidence_strength": 0.0,
             "expected_edge": "unknown",
             "risk_level": "unknown",
+            "pillars": {},
+            "fail_pillar_count": 0,
             "supporting_evidence": [],
             "contradicting_evidence": [],
             "reasons_for_rejection": [],
@@ -1108,6 +1269,9 @@ class _DevilsAdvocateAuditLog:
                 "contradicting_evidence": result.get("contradicting_evidence"),
                 "reasons_for_rejection": result.get("reasons_for_rejection"),
                 "critical_failure": result.get("critical_failure"),
+                "pillars": result.get("pillars", {}),
+                "fail_pillar_count": result.get("fail_pillar_count", 0),
+                "evidence": evidence or {},
                 "thesis_claims": (thesis or {}).get("claims"),
                 # Filled in later by an offline join against realized trades.
                 "future_outcome": None,

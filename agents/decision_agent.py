@@ -252,11 +252,10 @@ class DecisionAgent:
         Signal Engine NO_TRADE (0.0/0.0), Adaptive Decision Low/0.00, yet
         the OLD code showed 80% because that was just the raw LLM number).
 
-        Layers that abstain (WAIT/HOLD/NO_TRADE/error) contribute NO
-        confidence number, but their abstention still lowers the
-        `participation_ratio` — so one confident layer surrounded by
-        several abstaining layers reads as "weak overall support", not
-        as a clean 80%.
+        Layers that abstain (WAIT/HOLD/NO_TRADE/error) contribute no
+        confidence number, but their abstention lowers the reported
+        participation ratio. This makes incomplete coverage visible while
+        genuine disagreement still participates.
 
         Returns (aggregate_confidence_0_100: float, breakdown: list[str]).
         """
@@ -264,13 +263,16 @@ class DecisionAgent:
         sources = []  # (label, confidence_0_100, weight, participated)
 
         # 1. Rule engine (Confluence/technical rules)
-        sources.append(("rule", float(rule_conf or 0), 1.0, rule_signal in BUYSELL))
+        sources.append(("rule", float(rule_conf or 0), 1.0,
+                rule_signal in BUYSELL and float(rule_conf or 0) > 0))
 
         # 2. LLM analyst
-        sources.append(("llm", float(llm_conf_for_vote or 0), 1.0, llm_signal in BUYSELL))
+        sources.append(("llm", float(llm_conf_for_vote or 0), 1.0,
+                llm_signal in BUYSELL and float(llm_conf_for_vote or 0) > 0))
 
         # 3. MasterAnalyst (LLM-synthesized, higher weight)
-        sources.append(("master", float(master_conf_for_vote or 0), 1.5, master_signal_for_vote in BUYSELL))
+        sources.append(("master", float(master_conf_for_vote or 0), 1.5,
+                master_signal_for_vote in BUYSELL and float(master_conf_for_vote or 0) > 0))
 
         # 4. ML Ensemble (0-100 scale, highest weight — fuses ML+rules+LLM)
         # NOTE: when ml_available=False, the Ensemble is running in
@@ -288,14 +290,16 @@ class DecisionAgent:
             e_conf = float(ensemble_ctx.get("confidence", 0) or 0)
             e_ml_available = bool(ensemble_ctx.get("ml_available", True))
             e_weight = 2.0 if e_ml_available else 1.0
-            sources.append(("ensemble", e_conf, e_weight, e_decision in ("BUY", "SELL")))
+            sources.append(("ensemble", e_conf, e_weight,
+                            e_decision in ("BUY", "SELL") and e_conf > 0))
 
         # 5. RL Agent (0-1 scale -> *100)
         rl_ctx = analysis_out.get("rl_agent") if isinstance(analysis_out, dict) else None
         if isinstance(rl_ctx, dict) and rl_ctx and not rl_ctx.get("error"):
             rl_action = rl_ctx.get("action_name", "HOLD")
             rl_conf = float(rl_ctx.get("confidence", 0) or 0) * 100
-            sources.append(("rl_agent", rl_conf, 1.5, rl_action in ("BUY", "SELL")))
+            sources.append(("rl_agent", rl_conf, 1.5,
+                            rl_action in ("BUY", "SELL") and rl_conf > 0))
 
         # 6/7. Unified Signal Engine consensus + Adaptive Decision
         # (confidence is a Low/Medium/High label here, not a number)
@@ -309,7 +313,8 @@ class DecisionAgent:
             consensus = unified_ctx.get("consensus", {}) or {}
             u_action = consensus.get("action", "NO_TRADE")
             u_conf = _label_conf.get(consensus.get("confidence", "Low"), 45.0)
-            sources.append(("unified_signal", u_conf, 1.0, u_action in ("BUY", "SELL")))
+            sources.append(("unified_signal", u_conf, 1.0,
+                            u_action in ("BUY", "SELL") and u_conf > 0))
 
             adaptive = unified_ctx.get("adaptive_decision", {}) or {}
             if not adaptive.get("error"):
@@ -322,7 +327,8 @@ class DecisionAgent:
                 # confidence even when the engine's own label was "Low". Reuse
                 # the Low/Medium/High label mapping instead of rescaling score.
                 a_score = _label_conf.get(adaptive.get("confidence", "Low"), 45.0)
-                sources.append(("adaptive_decision", a_score, 1.0, a_action in ("BUY", "SELL")))
+                sources.append(("adaptive_decision", a_score, 1.0,
+                                a_action in ("BUY", "SELL") and a_score > 0))
 
         # ── EXECUTION-PROOF AUDIT FIX: wire previously-dead outputs ──
         # The CONSUMPTION-MAP audit proved these 4 ctx fields were
@@ -343,7 +349,8 @@ class DecisionAgent:
             f_conf = float(forecast_ctx.get("forecast_confidence", 0) or 0)
             # Map BULLISH/BEARISH to BUY/SELL for participation check
             f_action = "BUY" if "BULL" in f_direction else ("SELL" if "BEAR" in f_direction else "WAIT")
-            sources.append(("forecast", f_conf, 0.5, f_action in ("BUY", "SELL")))
+            sources.append(("forecast", f_conf, 0.5,
+                            f_action in ("BUY", "SELL") and f_conf > 0))
 
         # 9. Institutional Flow (Day 96 — COT + retail displacement)
         # When institutions diverge from retail, that's a known signal.
@@ -352,7 +359,8 @@ class DecisionAgent:
             i_bias = (institutional_ctx.get("inst_bias") or "NEUTRAL").upper()
             i_conf = float(institutional_ctx.get("inst_confidence", 0) or 0)
             i_action = "BUY" if "BULL" in i_bias else ("SELL" if "BEAR" in i_bias else "WAIT")
-            sources.append(("institutional", i_conf, 0.5, i_action in ("BUY", "SELL")))
+            sources.append(("institutional", i_conf, 0.5,
+                            i_action in ("BUY", "SELL") and i_conf > 0))
 
         # 10. Economic Surprise (Day 96 — Actual vs Forecast surprise)
         surprise_ctx = analysis_out.get("surprise_ctx") if isinstance(analysis_out, dict) else None
@@ -360,7 +368,8 @@ class DecisionAgent:
             s_direction = (surprise_ctx.get("surprise_direction") or "NEUTRAL").upper()
             s_conf = float(surprise_ctx.get("surprise_confidence", 0) or 0)
             s_action = "BUY" if "BULL" in s_direction else ("SELL" if "BEAR" in s_direction else "WAIT")
-            sources.append(("surprise", s_conf, 0.5, s_action in ("BUY", "SELL")))
+            sources.append(("surprise", s_conf, 0.5,
+                            s_action in ("BUY", "SELL") and s_conf > 0))
 
         # 11. Momentum Strategy (2026-08-25 audit fix — see analysis_agent.py
         # comment: MomentumStrategy was built + registered but never
@@ -370,7 +379,8 @@ class DecisionAgent:
         if isinstance(momentum_ctx, dict) and momentum_ctx and not momentum_ctx.get("error"):
             m_action = (momentum_ctx.get("momentum_signal") or "HOLD").upper()
             m_conf = float(momentum_ctx.get("momentum_confidence", 0) or 0)
-            sources.append(("momentum", m_conf, 0.5, m_action in ("BUY", "SELL")))
+            sources.append(("momentum", m_conf, 0.5,
+                            m_action in ("BUY", "SELL") and m_conf > 0))
 
         participating = [(l, c, w) for l, c, w, p in sources if p]
         total_weight = sum(w for _, _, w, _ in sources)
@@ -387,10 +397,8 @@ class DecisionAgent:
         weighted_avg = sum(c * w for _, c, w in participating) / part_weight
         participation_ratio = (part_weight / total_weight) if total_weight > 0 else 0.0
 
-        # Damp by how much of the whole system actually agreed to vote.
-        # Floor the damping at AGG_DAMPING_FLOOR so one genuinely strong,
-        # isolated signal still reads as "some support" rather than being
-        # crushed disproportionately just because optional layers abstained.
+        # Keep the existing safety damping: low participation is a signal
+        # quality warning, not proof that an abstaining layer was bearish.
         damping = self.AGG_DAMPING_FLOOR + (1.0 - self.AGG_DAMPING_FLOOR) * participation_ratio
         agg_conf = weighted_avg * damping
 
@@ -1201,6 +1209,7 @@ class DecisionAgent:
                 llm_signal=llm_signal,
                 llm_confidence=llm_conf,
                 sentiment_boost=sentiment_boost,
+                sentiment_quality=(sent_ctx.get("sentiment_data_quality") or sent_ctx.get("data_quality") or "unknown"),
                 ind_ctx=analysis_out.get("ind_ctx", {}),
                 sr_ctx=analysis_out.get("sr_ctx", {}),
                 liquidity_ctx=analysis_out.get("liquidity_ctx", {}),
@@ -1378,6 +1387,8 @@ class DecisionAgent:
                     details={
                         "bayesian_penalty": confidence_engine_result.get("bayesian_penalty"),
                         "sample_size": confidence_engine_result.get("sample_size"),
+                        "history_key": confidence_engine_result.get("history_key"),
+                        "history_entry_found": confidence_engine_result.get("history_entry_found"),
                     },
                 )
 
