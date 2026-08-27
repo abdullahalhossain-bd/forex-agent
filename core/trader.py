@@ -2654,7 +2654,22 @@ class AITrader:
                             "pair": self.symbol,
                             "market_context": {
                                 "timeframe": self.timeframe,
-                                "session": session_ctx.get("current_session") if session_ctx else None,
+                                # 2026-08-27 fix: SessionAnalyzer has NO
+                                # "current_session" key — this was always
+                                # None, so the DA session filter was blind.
+                                # Pass the real fields it does return, and
+                                # authorize the DA safety net to use the
+                                # live wall clock for session detection
+                                # (live pipeline only; backtests replay
+                                # bar time instead).
+                                "sessions_active": (
+                                    (session_ctx or {}).get("active_sessions") or []
+                                ),
+                                "session_quality": (session_ctx or {}).get("trade_quality"),
+                                "utc_time": (session_ctx or {}).get("utc_time"),
+                                "da_allow_wallclock_session": True,
+                                # legacy key kept for other consumers
+                                "session": (session_ctx or {}).get("trade_quality"),
                                 "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
                                 "rr_ratio": result.get("rr"),
                                 # 2026-08-13 fix: include canonical market data

@@ -57,6 +57,7 @@ import uuid
 from typing import Any, Dict, List, Optional
 
 from utils.logger import get_logger
+from core.da_safety_net import DASafetyNet
 
 log = get_logger("devils_advocate")
 
@@ -160,6 +161,10 @@ class DevilsAdvocateGate:
             self.min_confidence = 60.0
         self._last_error: Optional[str] = None
         self._audit = _DevilsAdvocateAuditLog()
+        # 2026-08-27 six-point deterministic safety net (session / H4 trend /
+        # spread / ATR regime / structure SL / lot sizing). Runs BEFORE the
+        # provider call so systemic WR-killers never cost an LLM round-trip.
+        self._safety_net = DASafetyNet()
 
     @staticmethod
     def _env_flag(name: str, default: bool) -> bool:
@@ -190,6 +195,46 @@ class DevilsAdvocateGate:
             result = self._default_result(DECISION_TAKE, 0.0, risk_summary="Not a reviewable trade")
             self._audit.record(trade_id, trade_context, signal, risk_out, decision_out, result)
             return result
+
+        # ------------------------------------------------------------------
+        # Six-point deterministic safety net (pre-LLM). VETO short-circuits
+        # here: cheaper than an LLM call and immune to hallucination. The
+        # trader.py caller already treats REJECT as a hard veto upstream,
+        # so no executor changes are required for these blocks to hold.
+        # ------------------------------------------------------------------
+        safety_net_result: Optional[Dict[str, Any]] = None
+        if self._safety_net.enabled:
+            try:
+                safety_net_result = self._safety_net.run(
+                    trade_context=trade_context, signal=signal,
+                    risk_out=risk_out, decision_out=decision_out,
+                )
+            except Exception as exc:  # fail open to the LLM path on internal error
+                log.warning(f"[DevilsAdvocate] safety net crashed (continuing to LLM): {exc}")
+                safety_net_result = None
+        self._last_safety_net = safety_net_result
+        if safety_net_result and safety_net_result.get("vetoes"):
+                veto_reasons = [
+                    f"{v.get('check')}: {v.get('reason')}"
+                    for v in safety_net_result["vetoes"]
+                ]
+                summary = " | ".join(veto_reasons)
+                result = self._default_result(
+                    DECISION_REJECT, 100.0,
+                    risk_summary=f"Deterministic safety net veto — {summary}",
+                )
+                result["critical_failure"] = (
+                    f"safety_net_veto: {[v.get('check') for v in safety_net_result['vetoes']]}"
+                )
+                result["risk_level"] = "critical"
+                result["data_quality"] = "good"
+                result["contradicting_evidence"] = veto_reasons
+                result["evidence"] = veto_reasons
+                result["safety_net"] = safety_net_result
+                self._last_error = None
+                log.warning(f"[DevilsAdvocate] {trade_context.get('symbol', '?')} blocked by safety net: {summary}")
+                self._audit.record(trade_id, trade_context, signal, risk_out, decision_out, result)
+                return result
 
         thesis = self._build_thesis(trade_context, signal, risk_out, decision_out)
         evidence = self._build_evidence(trade_context, signal, risk_out, decision_out)
@@ -616,6 +661,17 @@ class DevilsAdvocateGate:
                     evidence[k].update(v)
                 else:
                     evidence[k] = v
+
+        # Surface the (non-veto) safety-net findings to the LLM reviewer and
+        # preserve them in the audit trail even when they did not block.
+        sn_snapshot = getattr(self, "_last_safety_net", None)
+        if sn_snapshot is not None:
+            evidence["safety_net"] = {
+                "warnings": sn_snapshot.get("warnings", []),
+                "checks": sn_snapshot.get("checks", []),
+                "pass_count": sn_snapshot.get("pass_count", 0),
+                "skip_count": sn_snapshot.get("skip_count", 0),
+            }
 
         # ── Entry-quality guardrails (deterministic, non-LLM checks) ──────
         # risk/entry_quality_guardrails.py already computes exactly the
