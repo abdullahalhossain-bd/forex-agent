@@ -225,6 +225,17 @@ class LearningAgent:
 
         if updated:
             log.info(f"[LearningAgent] Decision #{decision_id} updated: {validated_result} | {pnl_pips} pips")
+            # Audit fix (2026-08-26): intelligence/confidence_calibrator and
+            # learning/confidence_engine had ZERO live callers of their
+            # record_outcome()s — calibration never learned from any real
+            # closed trade (memory/confidence_calibration.json was never even
+            # created; all confidence_history entries had confidence_used=null).
+            # Feed both dead learners here, at the single chokepoint every
+            # close path already flows through.
+            try:
+                self._notify_confidence_learners(entry, validated_result)
+            except Exception as e:  # never break the close chain
+                log.debug(f"[LearningAgent] confidence learner notify failed: {e}")
         else:
             log.warning(f"[LearningAgent] Decision #{decision_id} not found — outcome not saved")
         return updated
@@ -269,7 +280,84 @@ class LearningAgent:
             f"[LearningAgent] Decision #{decision_id} ({symbol}) updated via fallback: "
             f"{validated_result} | {pnl_pips} pips"
         )
+        # Same audit fix as update_outcome(): feed the previously-dead
+        # confidence learners on the symbol-fallback close path too.
+        try:
+            self._notify_confidence_learners(entry, validated_result)
+        except Exception as e:  # never break the close chain
+            log.debug(f"[LearningAgent] confidence learner notify failed: {e}")
         return decision_id
+
+    def _notify_confidence_learners(self, entry: dict, result: str) -> None:
+        """Forward one closed decision to the confidence-learning layers.
+
+        Caller MUST hold no expectation of success — this is best-effort.
+        Reads the freshly-closed entry itself so predicted confidence,
+        pattern, timeframe and regime come from exactly what was recorded
+        at signal time (no guesswork in the close handler).
+
+        1. intelligence/confidence_calibrator — canonical stated-vs-actual
+           bucket calibration (was permanently 'insufficient samples').
+        2. learning/confidence_engine (Day-53) — per pattern|pair|tf|regime
+           win-rate stats whose LIVE record_outcome also had zero callers;
+           bootstrap-only MT5 imports fed it a generic dummy pattern with
+           confidence_used=null instead.
+        """
+        conf = entry.get("confidence")
+        if conf is None:
+            return
+        try:
+            conf_f = float(conf)
+        except (TypeError, ValueError):
+            return
+
+        won = result == TradeResult.WIN.value
+        try:
+            from intelligence.confidence_calibrator import get_calibrator
+            get_calibrator().record_outcome(predicted_confidence=conf_f, won=won)
+        except Exception as e:
+            log.debug(f"[LearningAgent] calibrator record skipped: {e}")
+
+        # Day-53 engine: patterns is a list from pat_ctx.recent_patterns;
+        # fall back to the system-wide bucket when the analysis stage had
+        # no recognizable pattern, mirroring decision_agent._extract_pattern().
+        patterns = entry.get("patterns") or []
+        pattern = None
+        if isinstance(patterns, (list, tuple)):
+            for p in patterns:
+                if isinstance(p, str) and p.strip() and p.strip().lower() not in {"unknown", "none", "—", "-"}:
+                    pattern = p.strip()
+                    break
+        elif isinstance(patterns, str) and patterns.strip() \
+                and patterns.strip().lower() not in {"unknown", "none", "—", "-"}:
+            pattern = patterns.strip()
+        if not pattern:
+            pattern = "mt5_real_trade"
+
+        regime = str(entry.get("regime") or "").strip()
+        if not regime or regime in {"—", "-", "unknown", "Unknown", "UNKNOWN", "none", "None"}:
+            regime = "UNKNOWN"
+        timeframe = str(entry.get("timeframe") or "").strip() or "UNKNOWN"
+        symbol = str(entry.get("symbol") or "").strip()
+        pnl_pips = entry.get("pnl_pips")
+        try:
+            pnl_val = float(pnl_pips) if pnl_pips is not None else 0.0
+        except (TypeError, ValueError):
+            pnl_val = 0.0
+
+        try:
+            from learning.confidence_engine import ConfidenceEngine
+            ConfidenceEngine().record_outcome(
+                pattern=pattern,
+                pair=symbol,
+                timeframe=timeframe,
+                regime=regime,
+                outcome=result,
+                confidence_used=int(round(conf_f)),
+                pnl=pnl_val,
+            )
+        except Exception as e:
+            log.debug(f"[LearningAgent] ConfidenceEngine record skipped: {e}")
 
     @staticmethod
     def _validate_result(result: str) -> str:

@@ -32,14 +32,19 @@ def test_label_uniqueness_isolated_sample():
 
 
 def test_label_uniqueness_fully_overlapping():
-    """N samples with identical/heavily-overlapping windows should each get
-    a low weight roughly proportional to 1/concurrency."""
+    """N samples with identical/heavily-overlapping windows must keep their
+    RELATIVE 1/concurrency down-weighting while the labeled mean is
+    normalized to 1.0 (2026-08-27 normalization fix — raw weights of ~1/33
+    were silently shrinking total gradient mass in weighted fits)."""
     n = 50
     labels = pd.Series(np.ones(n))  # every row is a valid label -> max overlap
     weights = compute_label_uniqueness(labels, holding_period=10)
-    # Every weight should be small and roughly uniform (heavy overlap)
-    assert (weights <= 1.0).all()
-    assert weights.std() < 0.3  # roughly uniform under constant density
+    # Labeled weights normalized to mean 1.0 (total loss mass preserved)
+    assert abs(weights.mean() - 1.0) < 0.05
+    # Boundary rows have fewer in-window neighbours → relatively heavier than interior
+    assert weights.iloc[0] > weights.iloc[n // 2]
+    # Still roughly uniform under constant density (std < 0.3 held pre-fix)
+    assert weights.std() < 0.3
 
 
 def test_triple_barrier_stops_at_sl():

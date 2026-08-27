@@ -39,7 +39,9 @@ log = get_logger("dual_binary_model")
 
 try:
     import xgboost as xgb
-    from sklearn.model_selection import train_test_split
+    # AUDIT FIX (2026-08-26): train_test_split import removed — the split
+    # is now chronological in-place (see train_dual_model); random
+    # shuffling on time-series was a look-ahead leakage bug.
     from sklearn.metrics import accuracy_score, precision_score
     import joblib
     _HAS_ML = True
@@ -160,11 +162,27 @@ def train_dual_model(
     # features and labels that don't correspond. Every SELL prediction
     # was garbage. Fix: split once with both targets together so the
     # same row indices are used for both models.
-    X_train, X_test, y_buy_train, y_buy_test, y_sell_train, y_sell_test = train_test_split(
-        X, y_buy, y_sell,
-        test_size=test_size,
-        random_state=random_state,
-        stratify=y_buy,  # stratify on the buy target (more balanced typically)
+    #
+    # AUDIT FIX (2026-08-26 overfitting review): train_test_split()
+    # shuffles by default — on time-series rows that leaks FUTURE market
+    # state into training (optimistic, overfit validation). Split
+    # chronologically instead (earliest 80% → train, latest 20% → test),
+    # same convention as ml/data_preprocessor.chronological_split().
+    # NOTE: stratification is impossible with a chronological split and
+    # random_state no longer affects the split; both are intentionally
+    # sacrificed for leakage-safety.
+    split_idx = int(len(X) * (1.0 - test_size))
+    if split_idx <= 0 or split_idx >= len(X):
+        raise ValueError(
+            f"test_size={test_size} leaves an empty train or test split "
+            f"(n={len(X)}) — refusing to train"
+        )
+    X_train, X_test = X[:split_idx], X[split_idx:]
+    y_buy_train, y_buy_test = y_buy[:split_idx], y_buy[split_idx:]
+    y_sell_train, y_sell_test = y_sell[:split_idx], y_sell[split_idx:]
+    log.info(
+        f"Chronological split (no shuffle): train={len(X_train)}, "
+        f"test={len(X_test)} — prevents look-ahead leakage"
     )
 
     # Train BUY model

@@ -251,14 +251,27 @@ class WalkForwardValidator:
         y: pd.Series,
         train_fn,
         predict_fn,
+        purge_window: int = None,
     ) -> List[Dict[str, Any]]:
         """Run walk-forward validation.
 
         train_fn(X_train, y_train) -> model
         predict_fn(model, X_test) -> (y_pred, y_proba)
 
+        AUDIT FIX (2026-08-26): this was a second, independent naive
+        walk-forward loop with NO purge support — each fold's training set
+        included labels computed inside that same fold's test window
+        (optimistic bias). purge_window now defaults to
+        ml.walk_forward.DEFAULT_PURGE_WINDOW (16 = triple-barrier holding
+        period) and trims the trailing rows off every training fold.
+        Pass 0 for legacy unpurged behavior.
+
         Returns a list of per-fold results.
         """
+        if purge_window is None:
+            from ml.walk_forward import DEFAULT_PURGE_WINDOW as _dpw
+            purge_window = _dpw
+
         results: List[Dict[str, Any]] = []
         n = len(X)
         if n < self.min_train_size + self.step_size:
@@ -268,8 +281,18 @@ class WalkForwardValidator:
         fold = 0
         start = self.min_train_size
         while start + self.step_size <= n:
-            X_train = X.iloc[:start]
-            y_train = y.iloc[:start]
+            # Purge: trim the last `purge_window` rows of the training
+            # split so no training label window overlaps the test window.
+            train_end = max(start - int(purge_window), 1) if purge_window > 0 else start
+            if train_end < min(self.min_train_size // 2, 100):
+                log.warning(
+                    f"[WalkForward] fold {fold}: purge left degenerate train "
+                    f"size {train_end} — skipping"
+                )
+                start += self.step_size
+                continue
+            X_train = X.iloc[:train_end]
+            y_train = y.iloc[:train_end]
             X_test = X.iloc[start:start + self.step_size]
             y_test = y.iloc[start:start + self.step_size]
 

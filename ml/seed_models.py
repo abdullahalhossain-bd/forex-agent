@@ -32,7 +32,17 @@ except ImportError:
 
 
 def seed_xgboost_models() -> dict:
-    """Generate and save a seeded XGBoost model for each symbol."""
+    """Generate and save a SEEDED XGBoost model for each symbol.
+
+    AUDIT FIX (2026-08-26): these models are fit on PURE RANDOM NOISE and
+    previously saved under model_type="xgboost" — the exact same slot
+    ml/model_predictor.load_all_models() pulls champions from. Any seeded
+    placeholder therefore silently voted ~coin-flip probabilities into
+    fusion confidence at inference time, poisoning every decision.
+    Seeds now register under "xgboost_seed" so they can NEVER shadow or
+    be loaded as a real champion. If a pipeline smoke-test explicitly
+    wants them, load that distinct type name instead.
+    """
     if not XGB_AVAILABLE:
         print("[seed_models] xgboost not installed — skipping (pip install xgboost)")
         return {"error": "xgboost not installed"}
@@ -69,7 +79,9 @@ def seed_xgboost_models() -> dict:
             model=model,
             pair=symbol,
             timeframe=DEFAULT_TIMEFRAME,
-            model_type="xgboost",
+            # AUDIT FIX: distinct slot — see docstring. Never "xgboost",
+            # otherwise random-noise placeholders get pulled as champions.
+            model_type="xgboost_seed",
             metrics={
                 "accuracy": round(train_acc, 4),
                 "n_samples": n_samples,

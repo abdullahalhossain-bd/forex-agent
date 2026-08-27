@@ -31,6 +31,15 @@ from utils.logger import get_logger
 
 log = get_logger("walk_forward")
 
+# AUDIT FIX (2026-08-26 overfitting review): the triple-barrier labeler
+# looks up to `holding_period=16` bars ahead (and the legacy fixed-horizon
+# labeler 4). With the old default purge_window=0, every caller that did
+# not explicitly opt in got naive folds whose trailing training labels
+# peek into their own test window — an optimistic-bias leak.
+# Default ALL walk-forward validation to purged folds instead; callers
+# can still pass purge_window=0 explicitly to reproduce the old numbers.
+DEFAULT_PURGE_WINDOW = 16
+
 
 @dataclass
 class WalkForwardFold:
@@ -95,7 +104,7 @@ class WalkForwardValidator:
         y: pd.Series,
         train_fn,
         predict_fn,
-        purge_window: int = 0,
+        purge_window: int = DEFAULT_PURGE_WINDOW,
         embargo_pct: float = 0.0,
     ) -> WalkForwardResult:
         """Run walk-forward validation.
@@ -109,9 +118,10 @@ class WalkForwardValidator:
                 forward. When >0, the trailing `purge_window` rows are
                 trimmed off each fold's training set so no training label
                 was computed from data inside that fold's test window.
-                Default 0 reproduces the exact current (unpurged) fold
-                boundaries — every existing caller of validate() is
-                unaffected until it explicitly opts in.
+                AUDIT FIX (2026-08-26): now defaults to DEFAULT_PURGE_WINDOW=16
+                (the triple-barrier holding period) so folds are purged out
+                of the box — previously defaulted to 0 (naive CV, optimistic
+                bias). Pass 0 explicitly for legacy unpurged behavior.
             embargo_pct: NEW (Priority #1). Fraction of `n` to skip at the
                 START of each fold's test window, guarding against serial
                 correlation (e.g. long-lookback indicators) leaking across

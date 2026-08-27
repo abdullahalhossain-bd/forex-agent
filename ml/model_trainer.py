@@ -77,6 +77,7 @@ class ModelTrainer:
         use_purged_split: bool = True,
         label_horizon: int = 4,
         include_bootstrap: bool = False,
+        dataset_df: Optional[pd.DataFrame] = None,
     ) -> TrainingResult:
         """Train all available models for a pair. Returns TrainingResult.
 
@@ -107,12 +108,24 @@ class ModelTrainer:
         # 1. Build dataset
         log.info(f"[Trainer] Building dataset for {pair} {timeframe} "
                   f"(labeling_method={labeling_method}, use_purged_split={use_purged_split}, "
-                  f"include_bootstrap={include_bootstrap})...")
-        dataset = self.builder.build_from_store(
-            pair=pair, timeframe=timeframe, min_samples=min_samples,
-            labeling_method=labeling_method, use_purged_split=use_purged_split,
-            label_horizon=label_horizon, include_bootstrap=include_bootstrap,
-        )
+                  f"include_bootstrap={include_bootstrap}, source={'dataframe_override' if dataset_df is not None else 'feature_store'})...")
+        if dataset_df is not None:
+            # Off-line / terminal training path: caller supplies a fully-built
+            # feature dataframe (e.g. backfilled from data/*.csv by
+            # scripts/train_champions.py). Must already contain every feature
+            # column; for triple_barrier it must also carry raw
+            # open/high/low/close so the labeler can compute barriers.
+            dataset = self.builder.build_from_dataframe(
+                dataset_df, pair=pair, timeframe=timeframe, min_samples=min_samples,
+                labeling_method=labeling_method, use_purged_split=use_purged_split,
+                label_horizon=label_horizon,
+            )
+        else:
+            dataset = self.builder.build_from_store(
+                pair=pair, timeframe=timeframe, min_samples=min_samples,
+                labeling_method=labeling_method, use_purged_split=use_purged_split,
+                label_horizon=label_horizon, include_bootstrap=include_bootstrap,
+            )
         if dataset is None:
             result.errors.append(f"Insufficient data for {pair} {timeframe} (need ≥{min_samples} samples)")
             return result
@@ -286,6 +299,15 @@ class ModelTrainer:
                 X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
             metrics.validation_auc_roc = self._validation_auc(model, X_val, y_val)
+
+            # COLLAPSE GUARD: never persist a champion that cannot predict
+            # one of the classes (see _degenerate_model_reason docstring).
+            # Raising here is caught by the outer handler → returns None,
+            # so 'models_trained' and best-model selection stay clean.
+            _xgb_pred = (model.predict_proba(X_test)[:, 1] >= optimal_threshold).astype(int)
+            _deg = self._degenerate_model_reason(y_test, _xgb_pred)
+            if _deg:
+                raise RuntimeError(f"DEGENERATE MODEL NOT SAVED ({pair} {tf} xgboost): {_deg}")
             log.info(f"  XGBoost: {metrics.summary_line} | threshold={optimal_threshold:.2f} | scale_pos_weight={scale_pos_weight:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
@@ -342,6 +364,12 @@ class ModelTrainer:
                 X_train=X_train, y_train=y_train, threshold=optimal_threshold,
             )
             metrics.validation_auc_roc = self._validation_auc(model, X_val, y_val)
+
+            # COLLAPSE GUARD (same rationale as XGBoost block above).
+            _rf_pred = (model.predict_proba(X_test)[:, 1] >= optimal_threshold).astype(int)
+            _deg_rf = self._degenerate_model_reason(y_test, _rf_pred)
+            if _deg_rf:
+                raise RuntimeError(f"DEGENERATE MODEL NOT SAVED ({pair} {tf} random_forest): {_deg_rf}")
             log.info(f"  RandomForest: {metrics.summary_line} | threshold={optimal_threshold:.2f}")
             saved_metrics = metrics.to_dict()
             if cv_tags:
@@ -366,6 +394,43 @@ class ModelTrainer:
             return float(roc_auc_score(y_val, probabilities))
         except Exception:
             return 0.0
+
+    @staticmethod
+    def _degenerate_model_reason(y_test, y_pred, min_recall: float = 0.05) -> Optional[str]:
+        """OVERFITTING/COLLAPSE GUARD: detect models whose test-set
+        predictions collapsed to (almost) a single class.
+
+        Repo evidence (2026-08-26 audit): saved champions such as
+        data/trained_models/AUDNZD/xgboost had recall=[1.0, 0.0] — the
+        model NEVER predicted class 1, while accuracy still showed a
+        plausible-looking 0.67 from the majority class alone. Such models
+        poison ensemble voting / fusion confidence downstream and must not
+        be persisted into the model registry.
+
+        Returns None when healthy, otherwise a human-readable reason.
+        """
+        try:
+            y_true = np.asarray(y_test).astype(int)
+            y_hat = np.asarray(y_pred).astype(int)
+            if len(y_true) == 0 or len(set(y_hat.tolist())) < 2:
+                return (
+                    "predictions collapsed to a single class "
+                    f"{sorted(set(y_hat.tolist()))} on {len(y_true)} test rows"
+                )
+            for cls in (0, 1):
+                mask = y_true == cls
+                n_cls = int(mask.sum())
+                if n_cls == 0:
+                    continue
+                recall_c = float((y_hat[mask] == cls).mean())
+                if recall_c < min_recall:
+                    return (
+                        f"class {cls} recall={recall_c:.3f} < {min_recall:.2f} "
+                        f"(n={n_cls}) — majority-class collapse"
+                    )
+        except Exception as e:
+            return f"degenerate-guard check error: {e}"
+        return None
 
     def _train_lstm(
         self, X_train, y_train, X_val, y_val, X_test, y_test, pair, tf, feature_names,
@@ -404,6 +469,16 @@ class ModelTrainer:
                 metrics=["accuracy"],
             )
 
+            # IMBALANCE FIX (2026-08-26 audit): the LSTM had NO class
+            # weighting (unlike XGBoost scale_pos_weight / RF
+            # balanced_subsample), so on ~56/44 forex labels it drifted to
+            # majority-only predictions — the exact collapse the guard
+            # below now blocks at save time. Weight the minority class the
+            # same way XGBoost does (neg/pos ratio).
+            _ytr = np.asarray(y_train).astype(int)
+            _n_pos = int(np.sum(_ytr == 1))
+            _n_neg = int(len(_ytr) - _n_pos)
+            _spw = (_n_neg / _n_pos) if _n_pos > 0 else 1.0
             early_stop = EarlyStopping(
                 monitor="val_loss", patience=10, restore_best_weights=True,
             )
@@ -413,6 +488,7 @@ class ModelTrainer:
                 epochs=50,
                 batch_size=32,
                 callbacks=[early_stop],
+                class_weight={0: 1.0, 1: float(_spw)},
                 verbose=0,
             )
 
@@ -443,6 +519,11 @@ class ModelTrainer:
                 metrics.validation_auc_roc = 0.0
             total = metrics.tp + metrics.fp
             metrics.win_rate = metrics.tp / total if total > 0 else 0
+
+            # COLLAPSE GUARD (same rationale as XGBoost block above).
+            _deg_lstm = self._degenerate_model_reason(y_test_arr, y_pred)
+            if _deg_lstm:
+                raise RuntimeError(f"DEGENERATE MODEL NOT SAVED ({pair} {tf} lstm): {_deg_lstm}")
             log.info(f"  LSTM: {metrics.summary_line}")
 
             saved_metrics = metrics.to_dict()

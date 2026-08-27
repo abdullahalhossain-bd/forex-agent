@@ -366,10 +366,17 @@ def apply_signal_scoring(
             )
             # ModelPredictor returns `probability` (0-1, BUY-side); legacy
             # path returned `confidence` (0-100). Detect scale and normalize.
+            # SELL-PARITY FIX (2026-08-27): a confident SELL vote arrives as
+            # probability≈0.20 — feeding that raw into ml_conf scored strong
+            # SELL agreement with ~5 pts instead of ~20. Invert for SELL so
+            # the layer weights direction-correct confidence both ways.
             _ml_prob = ml_ctx.get("probability")
             _ml_conf = ml_ctx.get("confidence")
             if _ml_prob is not None:
-                ml_conf = float(_ml_prob) * 100.0
+                _p = float(_ml_prob)
+                ml_conf = _p * 100.0
+                if str(ml_signal or "").upper() == "SELL":
+                    ml_conf = (1.0 - _p) * 100.0
             elif _ml_conf is not None:
                 ml_conf = float(_ml_conf)
             else:

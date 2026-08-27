@@ -170,8 +170,15 @@ class ConfidenceManager:
             return self._weights.copy()
 
     def get_layer_stats(self) -> Dict[str, Any]:
-        """Return accuracy stats per layer."""
-        with self._lock, sqlite3.connect(str(DB_PATH)) as c:
+        """Return accuracy stats per layer.
+
+        FIX (2026-08-26): this used the legacy module-level DB_PATH constant
+        instead of _db_path(), so in backtest mode it read the LIVE db while
+        record_outcome()/​_recalculate_weights() correctly wrote to the
+        isolated memory/_backtest copy — stats could silently diverge from
+        what was actually recorded in the same process.
+        """
+        with self._lock, sqlite3.connect(_db_path()) as c:
             rows = c.execute(
                 "SELECT layer, total_predictions, correct_predictions, win_rate FROM layer_accuracy"
             ).fetchall()

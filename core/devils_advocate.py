@@ -340,7 +340,26 @@ class DevilsAdvocateGate:
         if not claims:
             claims.append(f"Strategy modules produced a {signal} signal that passed all mandatory gates")
 
-        return {"symbol": symbol, "signal": signal, "claims": claims}
+        # ------------------------------------------------------------------
+        # 2026-08-27 update (Task 11-e backtest finding): optional STRATEGY
+        # CHARTER publishing. A charter declares which entry traits are
+        # INTENTIONAL for this account's strategy (e.g. barrier-target ML
+        # entries that intentionally enter stretched moves / obstacle paths).
+        # Without it the reviewer graded every trade against a generic
+        # textbook playbook and burned its veto budget on style-inherent
+        # traits -- measured on 1467 OOS trades: vetoed cohort WR 51.4% vs
+        # taken cohort 51.1% => zero discrimination, pure profit loss.
+        # The charter travels BOTH in the thesis (so the model reads it)
+        # and in evidence (machine-checkable); _build_payload appends a
+        # matching instruction block when present.
+        payload_out = {"symbol": symbol, "signal": signal, "claims": claims}
+        charter_tc = trade_context.get("strategy_charter")
+        if isinstance(charter_tc, dict) and charter_tc.get("style"):
+            payload_out["strategy_charter"] = {
+                "style": str(charter_tc.get("style")),
+                "intentional_entry_traits": [str(t) for t in (charter_tc.get("intentional_entry_traits") or [])],
+            }
+        return payload_out
 
     def _build_evidence(self, trade_context: Dict[str, Any], signal: str, risk_out: Dict[str, Any], decision_out: Dict[str, Any]) -> Dict[str, Any]:
         """Assemble structured, falsifiable evidence for the model.
@@ -392,6 +411,15 @@ class DevilsAdvocateGate:
         # true zero spread does not occur in live FX feeds.
         symbol_for_pip = trade_context.get("symbol") or trade_context.get("pair") or ""
         pip_size = 0.01 if "JPY" in str(symbol_for_pip).upper() else 0.0001
+        # 2026-08-26 fix: publish the symbol on the evidence dict itself.
+        # The deterministic TP-obstacle guard in _finalize previously tried
+        # evidence.get("symbol") -- a key this dict NEVER carried -- so its
+        # own pip-size heuristic silently defaulted every pair to FX-major
+        # 0.0001. For JPY crosses that inflated the entry->TP distance x100
+        # (e.g. 50 real pips computed as 5000), making the guard fire on
+        # obstacles that lie far BEYOND the TP and forcing a spurious
+        # location-pillar FAIL on otherwise valid JPY setups.
+        self._last_symbol = str(symbol_for_pip)
 
         spread_atr_ratio = "unknown"
         try:
@@ -478,6 +506,17 @@ class DevilsAdvocateGate:
         tp_obstacle = _source_level("nearest_tp_obstacle", "tp_obstacle")
 
         evidence: Dict[str, Any] = {
+            # 2026-08-26 fix: see comment above symbol_for_pip
+            "symbol": symbol_for_pip,
+            # 2026-08-27 update (Task 11-e): machine-readable strategy-charter
+            # echo ({} when absent). Paired with the CHARTER OVERRIDE RULE
+            # injected by _build_payload so declared-intentional entry traits
+            # cap at WARN instead of powering standalone vetoes.
+            "strategy_charter": (
+                trade_context.get("strategy_charter")
+                if isinstance(trade_context.get("strategy_charter"), dict)
+                else {}
+            ),
             "htf": {
                 # B4d + 2026-08-13: accept "4h"/"1h"/"15m" and H4/h4_trend aliases
                 # so empty mtf_trends no longer forces every review to REJECT.
@@ -666,6 +705,29 @@ class DevilsAdvocateGate:
     # Provider call
     # ------------------------------------------------------------------
     def _build_payload(self, thesis: Dict[str, Any], evidence: Dict[str, Any], signal: str) -> Dict[str, Any]:
+        # 2026-08-27 update (Task 11-e): conditional CHARTER OVERRIDE RULE.
+        # Empty string unless evidence carries a strategy_charter with a
+        # style, in which case the block caps style-inherent complaints at
+        # WARN and demands independent opposing proof for any FAIL/REJECT
+        # rooted in those traits. Deterministic guards are unaffected (they
+        # fire downstream regardless of what the model says).
+        _ch = evidence.get("strategy_charter") if isinstance(evidence, dict) else None
+        charter_block = ""
+        if isinstance(_ch, dict) and _ch.get("style"):
+            _traits = "; ".join(str(t) for t in (_ch.get("intentional_entry_traits") or []))
+            charter_block = (
+                "\n\nSTRATEGY CHARTER RULE (style-fit, hard requirement): this "
+                "account runs strategy [" + str(_ch.get("style")) + "]. These "
+                "entry traits are DECLARED INTENTIONAL for it: " + (_traits or "(none listed)") +
+                ". Each such trait may be noted as a WARN with a one-line "
+                "reason, but must NEVER alone produce a pillar FAIL, a "
+                "reasons_for_rejection entry, or drive REJECT/UNCERTAIN by "
+                "itself -- unless accompanied by INDEPENDENT opposing proof "
+                "you can cite from the evidence fields (an explicitly opposite "
+                "BOS/CHoCH, htf_conflict=true, or a deterministic guard that "
+                "already failed). Complaints that merely restate a declared "
+                "trait do NOT count toward any reject threshold."
+            )
         return {
             "role": "devils_advocate",
             "instruction": (
@@ -730,6 +792,7 @@ class DevilsAdvocateGate:
                 "decision=REJECT together with expected_edge=positive. If your honest edge "
                 "assessment is negative or unclear, your decision must be REJECT or UNCERTAIN, "
                 "not TAKE."
+                + charter_block
             ),
             "trade_thesis": thesis,
             "evidence": evidence,
@@ -960,6 +1023,11 @@ class DevilsAdvocateGate:
         expected_edge_l = str(expected_edge_raw).lower()
         thesis_quality = float(parsed.get("thesis_quality", 0.0) or 0.0)
         counter_evidence_strength = float(parsed.get("counter_evidence_strength", 0.0) or 0.0)
+        # Confidence arrives in MIXED scales across model responses (see
+        # _normalize_confidence docstring) -- normalize ONCE here so the
+        # min-confidence gate, the returned result dict, and the audit
+        # journal all speak the same 0-100 language.
+        normalized_confidence = self._normalize_confidence(parsed.get("confidence"))
 
         # Pillar verdicts (2026-08-25 redesign — see module docstring update
         # and the 5-pillar checklist in _build_payload's instruction text).
@@ -1004,7 +1072,9 @@ class DevilsAdvocateGate:
                     and tp_price not in (None, "unknown")
                 ):
                     # compute entry->tp in pips using a pip size heuristic
-                    sym = evidence.get("symbol", "") or ""
+                    # (2026-08-26 fix: evidence dict carries "symbol" now, see
+                    # _build_evidence; fall back to instance-captured symbol)
+                    sym = evidence.get("symbol", "") or getattr(self, "_last_symbol", "") or ""
                     pip_size = 0.01 if "JPY" in str(sym).upper() else 0.0001
                     entry_tp_pips = round(abs(float(tp_price) - float(entry_price)) / pip_size, 1)
                     try:
@@ -1027,7 +1097,7 @@ class DevilsAdvocateGate:
         # operational bar for a TAKE decision. Low-confidence TAKES are
         # rejected deterministically to avoid weak model approvals.
         try:
-            parsed_conf = float(parsed.get("confidence", 0.0) or 0.0)
+            parsed_conf = normalized_confidence
             if parsed_conf < float(getattr(self, "min_confidence", 60.0)) and resolved == DECISION_TAKE:
                 log.warning(f"[DevilsAdvocate] TAKE overridden: DA confidence {parsed_conf}% < MIN_DA_CONFIDENCE {self.min_confidence}%")
                 resolved = self._resolve_contradiction()
@@ -1083,7 +1153,7 @@ class DevilsAdvocateGate:
         return {
             "decision": resolved,
             "raw_decision": raw_decision,
-            "confidence": float(parsed.get("confidence", 0.0) or 0.0),
+            "confidence": normalized_confidence,
             "thesis_quality": thesis_quality,
             "counter_evidence_strength": counter_evidence_strength,
             "expected_edge": expected_edge_raw,
@@ -1133,25 +1203,79 @@ class DevilsAdvocateGate:
         """
         return DECISION_REJECT
 
+    @staticmethod
+    def _normalize_confidence(value: Any) -> float:
+        """Normalize an LLM-reported confidence to the 0-100 scale.
+
+        BUG FIX (2026-08-26 live audit of memory/devils_advocate_audit.jsonl):
+        openai/gpt-oss-20b intermittently follows the output_schema example
+        ("confidence": 0.0) and answers on a 0-1 FRACTION scale -- live rows:
+        USDCAD 2026-08-24 conf=0.65, GBPCAD 2026-08-26 06:00 conf=0.78 -- while
+        other responses use plain percentages (40, 74, 88). A fraction like
+        0.65 (meaning 65%) fed raw into the MIN_DA_CONFIDENCE comparison looks
+        like "0.65% < 60%" and either wrongly flips a strong approval to REJECT
+        (over-strict) or corrupts downstream calibration statistics.
+
+        Policy: values > 1.0 pass through untouched (percent scale); values in
+        (0, 1] are interpreted as fractions and scaled x100 (a DA confident of
+        literally 1% would never coexist with a TAKE verdict worth honoring).
+        """
+        try:
+            f = float(value if value is not None else 0)
+        except (TypeError, ValueError):
+            return 0.0
+        if f > 1.0:
+            return f
+        if f == 1.0:
+            return 100.0
+        return round(f * 100.0, 2)
+
     def _resolve_failure(self, error_text: str) -> Dict[str, Any]:
         """Resolve a provider-call failure (timeout, no key, bad JSON, etc.).
 
         Distinct from _finalize's UNCERTAIN path in that the model was never
         actually reached, so data_quality is always "poor" and a
         critical_failure note is always attached.
+
+        SAFETY HARDENING (2026-08-26 live audit): memory/devils_advocate_audit.jsonl
+        showed 13 executions approved via this path on 2026-08-25 alone
+        ("UNCERTAIN -> TAKE, data_quality=poor") because the operator had BOTH
+        `DEVILS_ADVOCATE_FAIL_MODE=fail_open` AND
+        `DEVILS_ADVOCATE_UNCERTAIN_POLICY=take` set while trading LIVE in
+        AUTONOMOUS mode. During an LLM-provider outage that combination turns
+        this gate into a rubber stamp for every fully-approved signal -- the
+        exact failure mode this reviewer exists to prevent. The combo remains
+        available but now requires ONE additional explicit acknowledgement:
+            DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE=true
+        Without it, failures resolve fail-closed (REJECT) regardless of the
+        other two flags, and an ERROR-level hint explains the missing switch.
+        Research/backtest mode is unaffected (always REJECT).
         """
-        # Conservative default: provider failures resolve to REJECT in
-        # all modes unless the operator explicitly opts into the unsafe
-        # combination: `fail_mode='fail_open'` AND
-        # `uncertain_policy='take'`.
-        # Research/backtest MUST NEVER auto-TAKE on reviewer outage —
-        # that would contaminate simulated expectancy. Only allow TAKE
-        # in live mode when both opt-ins are present.
         if self.mode in {"research", "backtest"}:
             resolved = DECISION_REJECT
-        elif self.fail_mode == "fail_open" and self.uncertain_policy == "take":
+        elif (
+            self.fail_mode == "fail_open"
+            and self.uncertain_policy == "take"
+            and os.getenv("DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE", "false").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ):
             resolved = DECISION_TAKE
+            log.error(
+                "[DevilsAdvocate] OUTAGE AUTO-APPROVE active (fail_open+take+ack): "
+                "an unreachable reviewer approved this trade WITHOUT any adversarial "
+                "review. Disable DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE to restore "
+                "fail-closed protection."
+            )
         else:
+            if (
+                self.fail_mode == "fail_open"
+                and self.uncertain_policy == "take"
+            ):
+                log.error(
+                    "[DevilsAdvocate] fail_open+take requested but "
+                    "DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE=true is not set; "
+                    "resolving failure REJECT (fail-closed)."
+                )
             resolved = DECISION_REJECT
 
         return {

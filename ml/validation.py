@@ -172,7 +172,7 @@ class ValidationEngine:
         train_fn=None,
         predict_fn=None,
         trade_pnls: Optional[List[float]] = None,
-        purge_window: int = 0,
+        purge_window: Optional[int] = None,
         embargo_pct: float = 0.0,
     ) -> ValidationReport:
         """Run ALL validation tests on a model.
@@ -189,7 +189,10 @@ class ValidationEngine:
             trade_pnls: List of trade PnLs (for Monte Carlo). If None, uses
                         predictions to simulate 1:1 R:R trades.
             purge_window: NEW (Priority #1). Forwarded to WalkForwardValidator.
-                Default 0 reproduces exact current (unpurged) scoring.
+                AUDIT FIX (2026-08-26): None now resolves to
+                DEFAULT_PURGE_WINDOW (16) instead of the old leaky 0 —
+                walk-forward folds are purged by default. Pass 0 explicitly
+                for legacy unpurged scoring.
             embargo_pct: NEW (Priority #1). Forwarded to WalkForwardValidator.
                 Default 0.0 is a no-op.
 
@@ -203,6 +206,11 @@ class ValidationEngine:
         )
 
         log.info(f"[Validation] Starting validation for {model_name} {version}")
+
+        # AUDIT FIX (2026-08-26): purge by default — see docstring above.
+        if purge_window is None:
+            from ml.walk_forward import DEFAULT_PURGE_WINDOW as _dpw
+            purge_window = _dpw
 
         # ── 1. Walk-Forward Test ────────────────────────────────────
         cv_method = "naive_walk_forward"

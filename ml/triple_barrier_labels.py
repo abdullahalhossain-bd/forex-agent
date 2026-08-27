@@ -200,6 +200,20 @@ def compute_label_uniqueness(
 
         uniqueness.iloc[i] = 1.0 / (1.0 + overlap)
 
+    # NORMALIZATION FIX (2026-08-27): raw 1/(1+overlap) values sit far below
+    # 1 under dense labeling (holding_period=16 → typical weight ≈ 1/33),
+    # which silently shrinks the total gradient mass handed to
+    # scale_pos_weight-weighted XGBoost / class_weight RF/LSTM fits. The
+    # relative down-weighting of overlapping windows is the point of the
+    # technique (López de Prado); the absolute scale is not. Normalize the
+    # labeled rows to mean 1.0 so weights keep their relative shape while
+    # total loss mass matches an unweighted fit.
+    _labeled_mask = uniqueness > 0
+    if bool(_labeled_mask.any()):
+        _mean = float(uniqueness[_labeled_mask].mean())
+        if _mean > 0:
+            uniqueness[_labeled_mask] = uniqueness[_labeled_mask] / _mean
+
     return uniqueness
 
 

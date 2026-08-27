@@ -250,26 +250,39 @@ class RiskEngine:
         #      winning trade at 1:2 instead of riding it to the level
         #      the market was actually respecting.
         #
-        # Use the nearest structural target in the trade direction. RR is
-        # evaluated after target selection, so a real 1.5R-1.99R target is
-        # allowed while a target below 1.5R is rejected.
+        # Use the nearest structural target in the trade direction, subject
+        # to the risk-policy RR floor.
+        # BUG FIX (2026-08-27, no-trades audit): the previous selection took
+        # the NEAREST swing in the trade direction (`min(candidates)` /
+        # `max(candidates)`). With a window-3 swing detector on 100 bars that
+        # nearest level is usually a MICRO-swing only a few pips away, so
+        # tp_distance << sl_distance → rr_ratio 0.0–0.6 → "R:R below
+        # execution minimum" REJECTED 225 trades in a single morning's log.
+        # Correct behaviour: choose the nearest swing that still clears the
+        # risk-policy RR floor (sl_distance * _min_rr); if no such structural
+        # target exists, keep the ATR RR floor instead of rejecting. Risk is
+        # never weakened — TP is always >= policy minimum RR — but a tiny
+        # pullback level can no longer veto every setup.
         tp_price = floor_tp
         tp_source = "atr_rr_floor"
         if df is not None:
             try:
                 from risk.entry_quality_guardrails import _find_swing_highs, _find_swing_lows
 
+                _min_tp_distance = sl_distance * float(_min_rr)
                 if signal == "BUY":
                     swings = _find_swing_highs(df, lookback=100)
-                    candidates = [s for s in swings if s > entry]
-                    if candidates:
-                        tp_price = round(min(candidates), 5)
+                    candidates = sorted(s for s in swings if s > entry)
+                    viable = [s for s in candidates if (s - entry) >= _min_tp_distance]
+                    if viable:
+                        tp_price = round(viable[0], 5)
                         tp_source = "structure"
                 else:
                     swings = _find_swing_lows(df, lookback=100)
-                    candidates = [s for s in swings if s < entry]
-                    if candidates:
-                        tp_price = round(max(candidates), 5)
+                    candidates = sorted((s for s in swings if s < entry), reverse=True)
+                    viable = [s for s in candidates if (entry - s) >= _min_tp_distance]
+                    if viable:
+                        tp_price = round(viable[0], 5)
                         tp_source = "structure"
             except Exception as _e_tp:
                 log.debug(f"[RiskEngine] structure-based TP lookup failed, using flat RR floor: {_e_tp}")

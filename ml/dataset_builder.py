@@ -242,6 +242,21 @@ class DatasetBuilder:
             log.error("[DatasetBuilder] no 'label' column in dataframe")
             return None
 
+        # SCHEMA PARITY FIX (2026-08-27): the TripleBarrierLabeler needs raw
+        # open/high/low/close columns to compute its barriers, but those bare
+        # columns are NOT part of the live inference feature vector —
+        # FeatureEngineer emits price_close / candle_body / atr_* etc. and
+        # never a literal "close". If the helper columns are left in df they
+        # silently join X, end up in champion feature_names in the registry,
+        # and then ModelPredictor.reindex() at inference time flags them as
+        # missing (schema error → permanent NOT_READY for that pair). Drop
+        # them right after labeling — barriers are already baked into labels.
+        _helper_price_cols = [c for c in ("open", "high", "low", "close") if c in df.columns]
+        if _helper_price_cols:
+            log.info(f"[DatasetBuilder] dropping labeler helper price columns "
+                     f"from feature matrix: {_helper_price_cols}")
+            df = df.drop(columns=_helper_price_cols)
+
         # sample_weight (present only when labeling_method="triple_barrier")
         # must be captured before meta-column stripping and excluded from
         # the feature matrix — it's a per-row weight, not a predictor.

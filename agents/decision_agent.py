@@ -423,6 +423,16 @@ class DecisionAgent:
         # block entirely (e.g. an early return before line ~610) doesn't
         # display a stale confidence value from a previous symbol's cycle.
         self._last_fusion_conf = 0.0
+        # Audit fix (2026-08-27 decision-chain review): per-cycle flags read
+        # by _result(). _last_ce_skip remembers whether the Day53
+        # ConfidenceEngine issued an evidence-based SKIP this cycle so the
+        # post-consensus override can NOT resurrect the trade (see the
+        # override block near the end of decide()). _last_consensus_override
+        # tags cycles where analysis final_signal overrode local consensus,
+        # giving dashboards/audits an explicit boolean instead of forcing
+        # them to parse the reasons list.
+        self._last_ce_skip = False
+        self._last_consensus_override = False
         # 2026-08-25: reset the shared confidence trace at the top of every
         # decision cycle so it doesn't carry stale entries from a previous
         # symbol/cycle into this one's dec_out["confidence_trace"].
@@ -1324,6 +1334,14 @@ class DecisionAgent:
                 # "Analysis: BUY 65% → ConfidenceEngine SKIP (low sample size)".
                 # Setting adj_conf=0 would destroy the analysis verdict.
                 _skip_reason = confidence_engine_result.get("skip_reason", "unknown")
+                # Audit fix (2026-08-27): remember the skip on self so the
+                # post-consensus override (final_signal copy further down)
+                # cannot erase it. Without this, patterns auto-disabled on
+                # real historical losses (e.g. mt5_real_trade H1 keys for
+                # EURUSD/AUDUSD/USDJPY/GBPUSD/USDCAD at 15-29% WR) were
+                # silently resurrected every time analysis returned a
+                # directional signal.
+                self._last_ce_skip = True
                 reasons.append(
                     f"⛔ ConfidenceEngine SKIP: {_skip_reason} "
                     f"(analysis confidence {adj_conf:.0f}% preserved)"
@@ -1484,8 +1502,54 @@ class DecisionAgent:
         # but should not overwrite a deliberate analysis verdict. Tests
         # and integration flows expect the analysis pipeline's final
         # signal to be preserved for downstream permission checks.
+        #
+        # 2026-08-27 no-trades audit: this override FLIPS the consensus
+        # decision AFTER FINAL_DECISION was already logged above, so the
+        # log shows "WAIT" while risk/permission actually receive BUY/
+        # SELL (observed: 57% of scorer events had a flipped direction).
+        # Keep the override semantics (tests depend on it) but make the
+        # flip explicit in reasons AND tag the result so downstream
+        # layers and audits can tell an overridden direction from a
+        # consensus one.
         if final_signal in ("BUY", "SELL"):
-            decision = final_signal
+            if getattr(self, "_last_ce_skip", False):
+                # FIX (2026-08-27 decision-chain audit): a direction copy
+                # must NEVER overwrite an evidence-based execution skip.
+                # The previous code reached here after ConfidenceEngine had
+                # already set decision="NO TRADE" and flipped it straight
+                # back to final_signal, making the entire Day53
+                # pattern-auto-disable protection dead whenever the
+                # analysis layer was directional — exactly the class of
+                # "WAIT-resurrection" bug removed from the Confluence layer
+                # on 2026-08-26. SKIP stays; only soft WAIT outcomes are
+                # allowed to be overridden by the analysis verdict.
+                _ce_rsn = (
+                    (confidence_engine_result or {}).get("skip_reason")
+                    or "pattern disabled"
+                )
+                reasons.append(
+                    f"🛡️ ConfidenceEngine SKIP retained ({_ce_rsn}) — "
+                    f"analysis final_signal={final_signal} NOT resurrected"
+                )
+                log.warning(
+                    f"[DecisionAgent] Post-consensus override SUPPRESSED by "
+                    f"ConfidenceEngine SKIP: kept NO TRADE instead of "
+                    f"final_signal={final_signal} (reason={_ce_rsn})"
+                )
+                decision = "NO TRADE"
+            else:
+                if decision != final_signal:
+                    reasons.append(
+                        f"ℹ️ Analysis final_signal={final_signal} overrides "
+                        f"consensus ({decision}) — MasterAnalyst-override path"
+                    )
+                    log.info(
+                        f"[DecisionAgent] Post-consensus override: consensus="
+                        f"{decision} -> final_signal={final_signal} (confidence "
+                        f"{adj_conf:.0f}% retained)"
+                    )
+                    self._last_consensus_override = True
+                decision = final_signal
 
         # Day 81+ hotfix: When LLM is unavailable, master_entry/sl/tp are
         # all None, and risk_out is a placeholder (entry=None). Fallback
@@ -1772,6 +1836,10 @@ class DecisionAgent:
             "unified_confidence": _unified_conf_val,
             # Day 99+ V3 — Fusion Engine V3 validation result
             "fusion_v3": (fusion_v3_result.to_dict() if fusion_v3_result else None),
+            # Audit fix (2026-08-27): explicit machine-readable flags so
+            # downstream consumers don't have to parse the reasons list.
+            "ce_skip": bool(getattr(self, "_last_ce_skip", False)),
+            "consensus_override": bool(getattr(self, "_last_consensus_override", False)),
         }
 
     def print_summary(self, result: dict) -> None:

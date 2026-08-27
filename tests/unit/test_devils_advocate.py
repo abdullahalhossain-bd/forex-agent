@@ -48,6 +48,11 @@ class TestDevilsAdvocateGate:
         assert result["critical_failure"]
 
     def test_explicit_opt_in_to_take_on_failure(self, monkeypatch):
+        # 2026-08-26 hardening: fail_open+take alone is NO LONGER sufficient
+        # to auto-TAKE on a reviewer outage -- live audit showed 13 trades
+        # approved during one provider-outage window under that combo. The
+        # combo now additionally requires the explicit acknowledgement env
+        # DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE=true.
         gate = DevilsAdvocateGate(
             enabled=True, fail_mode="fail_open", mode="live", uncertain_policy="take"
         )
@@ -57,13 +62,23 @@ class TestDevilsAdvocateGate:
 
         monkeypatch.setattr(gate, "_call_provider", _raise)
 
+        # Without the acknowledgement env: fail-closed REJECT (new default)
         result = gate.review(
             trade_context={"symbol": "EURUSD"},
             signal="SELL",
             risk_out={"approved": True},
             decision_out={"decision": "SELL", "confidence": 68},
         )
+        assert result["decision"] == "REJECT"
 
+        # With the explicit acknowledgement env: deliberate TAKE opt-in works
+        monkeypatch.setenv("DEVILS_ADVOCATE_ACKNOWLEDGE_OUTAGE_TAKE", "true")
+        result = gate.review(
+            trade_context={"symbol": "EURUSD"},
+            signal="SELL",
+            risk_out={"approved": True},
+            decision_out={"decision": "SELL", "confidence": 68},
+        )
         assert result["decision"] == "TAKE"
 
     def test_research_mode_never_fails_open_even_with_opt_in(self, monkeypatch):

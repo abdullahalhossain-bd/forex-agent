@@ -1057,9 +1057,31 @@ class AnalysisAgent:
             )
         except Exception as e:
             log.warning(f"[AnalysisAgent] Economic Calendar error: {e}")
+            # Task 8 honesty fix: the old log claimed "Defaulting to
+            # conservative trade_block=True" but nothing was actually set —
+            # econ_calendar_ctx stayed {} and downstream readers saw
+            # econcal_source="none", econcal_trade_block=False (fail-open)
+            # while the operator believed a conservative block was active.
+            # Real posture on calendar failure: Marked DEGRADED, hard news
+            # gating stays with NewsFilter (step 9, fail-closed) + Day 66
+            # NewsIntelligence — both independent of this API.
+            econ_calendar_result = {
+                "source": "unavailable",
+                "events": [],
+                "trade_block": False,
+                "degraded": True,
+                "error": str(e),
+            }
+            econ_calendar_ctx = {
+                "econcal_source": "unavailable",
+                "econcal_degraded": True,
+                "econcal_trade_block": False,
+                "econcal_event_count": 0,
+            }
             log.warning(
-                f"[EconCalDecision] {symbol} | FAILED — calendar source "
-                f"down. Defaulting to conservative trade_block=True."
+                f"[EconCalDecision] {symbol} | FAILED — calendar context marked "
+                f"DEGRADED (source=unavailable). Hard news gating falls back to "
+                f"NewsFilter + Day66 NewsIntelligence layers."
             )
 
         # ── 8.87 FRED Macro Data (Day 94 — central bank data) ─────
@@ -1288,10 +1310,33 @@ class AnalysisAgent:
             }
 
         # ── 9. News Filter ───────────────────────────────────
-        news_filter = NewsFilter()
-        news_result = news_filter.check(symbol)
-        news_filter.print_summary(news_result)
-        news_ctx    = news_filter.get_ai_context(news_result)
+        # Task 8 live-readiness hardening: NewsFilter.check() handles its own
+        # fetch failures internally (fails CLOSED), but any unexpected raise
+        # here used to propagate out of run() → supervisor restart → missed
+        # cycles. Wrap it; on an unexpected crash mirror the module's own
+        # philosophy: unknown news state = conservative block until next
+        # cycle (two independent softer news layers still inform the AI
+        # prompt, so this is safe and temporary).
+        try:
+            news_filter = NewsFilter()
+            news_result = news_filter.check(symbol)
+            news_filter.print_summary(news_result)
+            news_ctx    = news_filter.get_ai_context(news_result)
+        except Exception as e_news_filter:
+            log.warning(
+                f"[AnalysisAgent] NewsFilter crashed unexpectedly ({e_news_filter}) — "
+                f"fail-closed: blocking trades this cycle (unknown news risk)"
+            )
+            news_result = {
+                "trade_allowed":      False,
+                "reason":             f"NewsFilter internal error: {e_news_filter}",
+                "flagged_events":     [],
+                "upcoming_events":    [],
+                "currencies_checked": [],
+                "risk_level":         "UNKNOWN",
+                "source":             "exception_failsafe",
+            }
+            news_ctx    = {"news_trade_allowed": False, "news_reason": news_result["reason"]}
 
         # ── 10. Classic LLM Analyst ──────────────────────────
         # BUGFIX: previously instantiated AIAnalyst() three separate times
@@ -1300,20 +1345,42 @@ class AnalysisAgent:
         # setup, config load, etc.) and because print_summary/get_ai_context
         # were operating on throwaway objects rather than the one that
         # actually produced llm_result.
-        ai_analyst = AIAnalyst()
-        llm_result = ai_analyst.analyze(
-            ind_ctx          = ind_ctx,
-            pat_ctx          = pat_ctx,
-            sr_ctx           = sr_ctx,
-            regime           = regime,
-            signal           = signal_result,
-            mtf_bias         = mtf_bias,
-            advanced_pat_ctx = advanced_pat_ctx,
-            fib_ctx          = fib_ctx,
-            symbol           = symbol,
-        )
-        ai_analyst.print_summary(llm_result)
-        llm_ctx = ai_analyst.get_ai_context(llm_result)
+        # Task 8 live-readiness hardening: analyze() has rich internal
+        # fail-safes (_fallback_result) but anything raised BEFORE those
+        # try blocks (e.g. _build_context choking on malformed ind_ctx)
+        # used to bubble up and kill the whole pipeline. Mirror the same
+        # pattern as the MasterAnalyst block below: rule-engine fallback,
+        # flagged _llm_unavailable so decision_agent zeroes the vote.
+        try:
+            ai_analyst = AIAnalyst()
+            llm_result = ai_analyst.analyze(
+                ind_ctx          = ind_ctx,
+                pat_ctx          = pat_ctx,
+                sr_ctx           = sr_ctx,
+                regime           = regime,
+                signal           = signal_result,
+                mtf_bias         = mtf_bias,
+                advanced_pat_ctx = advanced_pat_ctx,
+                fib_ctx          = fib_ctx,
+                symbol           = symbol,
+            )
+            ai_analyst.print_summary(llm_result)
+            llm_ctx = ai_analyst.get_ai_context(llm_result)
+        except Exception as e_llm_classic:
+            log.warning(f"[AnalysisAgent] Classic LLM analyst crashed: {e_llm_classic} — rule-engine fallback")
+            _rule_sig_llm = (signal_result or {}).get("signal", "WAIT")
+            _rule_conf_llm = (signal_result or {}).get("confidence", 0)
+            llm_result = {
+                "analysis":   f"Classic LLM crashed: {e_llm_classic}",
+                "signal":     _rule_sig_llm,
+                "confidence": _rule_conf_llm,
+                "reasoning":  "LLM unavailable — using rule engine signal",
+                "key_risk":   "N/A",
+                "invalidation": "N/A",
+                "market_condition": "UNKNOWN",
+                "_llm_unavailable": True,
+            }
+            llm_ctx = dict(llm_result)
 
         # ── 11. VISION AI (Day 47) ────────────────────────────
         vision_result = {}
@@ -1446,6 +1513,14 @@ class AnalysisAgent:
         execution_filters: Dict[str, Any] = {
             # Each gate adds: {"blocked": bool, "reason": str, "details": ...}
         }
+
+        # Task 8 live-readiness audit: when EntrySafetyFilters consensus-lock
+        # DENIES a rule override of a master-WAIT verdict below, no soft
+        # fill-in layer (Day 67 Confluence confirm, Day 100+ adaptive fill,
+        # unified-consensus fallback) may resurrect a trade direction this
+        # cycle — otherwise the lock is decorative. Flipped only in the
+        # gate-denied branch; cleared per run() invocation (local var).
+        _consensus_lock_blocked = False
 
         # Day 81+ AGGRESSIVE TEST_MODE: If TEST_MODE is true and the rule engine
         # has a tradeable signal (BUY/SELL/STRONG_BUY/STRONG_SELL with conf >= 10),
@@ -1744,6 +1819,7 @@ class AnalysisAgent:
                     # is not enough to force a trade against the 4-layer
                     # consensus.
                     final_signal = "WAIT"
+                    _consensus_lock_blocked = True
                     log.info(
                         f"[AnalysisAgent] -> WAIT (Rule signal: {rule_sig} {rule_conf}% conf, "
                         f"master WAIT — consensus-lock override BLOCKED: {gate.reason})"
@@ -2051,7 +2127,7 @@ class AnalysisAgent:
                         f"factors={decision.aligned_factors}/{decision.total_factors}) — "
                         f"keeping {final_signal}, NOT flipping direction"
                     )
-                else:
+                elif final_signal in ("BUY", "SELL") and decision.direction == final_signal:
                     # Confluence confirms — use its calibrated confidence
                     final_signal = decision.direction
                     log.info(
@@ -2065,6 +2141,27 @@ class AnalysisAgent:
                         _track_confidence(master_ctx, "confluence", decision.confidence)
                     except Exception:
                         pass
+                else:
+                    # Task 8 live-readiness fix: Confluence is a VALIDATION/
+                    # CALIBRATION layer for an existing directional signal —
+                    # it must never RESURRECT a trade from WAIT/NO TRADE.
+                    # Live proof (author production log 2026-08-26 20:55:41):
+                    # master said WAIT, the consensus-lock correctly blocked
+                    # a 57% rule override, then this branch flipped
+                    # Final=BUY off a 2/8-factor, 17%-confidence confluence
+                    # read and stomped master_confidence down to 17.
+                    # WAIT-filling remains the job of the downstream
+                    # adaptive/unified fallbacks (which keep their own
+                    # WR-screening + confidence clamps) — and NEVER fires
+                    # on a consensus-lock-blocked cycle anymore (see the
+                    # _consensus_lock_blocked guard there).
+                    log.info(
+                        f"[AnalysisAgent] Day 67 Confluence says {decision.direction} "
+                        f"(quality={decision.setup_quality}, conf={decision.confidence:.0f}%, "
+                        f"factors={decision.aligned_factors}/{decision.total_factors}) "
+                        f"but upstream verdict is {final_signal} — confluence may only "
+                        f"CONFIRM an existing signal, not create one. Keeping {final_signal}."
+                    )
         except Exception as e:
             log.warning(f"[AnalysisAgent] Day 67 ConfluenceEngine failed: {e}")
             confluence_ctx = {"error": str(e)}
@@ -2146,25 +2243,50 @@ class AnalysisAgent:
         # NOT_READY, but the empty ctx is still fed to EnsembleEngine which
         # then applies -8%/-10% confidence penalties to valid BUY/SELL signals.
         ml_prediction_ctx: Dict[str, Any] = {}
-        if False:  # DISABLED — was: try:
-            from ml.model_predictor import get_model_predictor
-            predictor = get_model_predictor()
-            ml_pred = predictor.predict(
-                features=full_feature_vector, pair=symbol, timeframe=timeframe,
-            )
-            ml_prediction_ctx = ml_pred
-
-            if ml_pred.get("prediction") != "NOT_READY" and ml_pred.get("models_used", 0) > 0:
-                ml_dir = ml_pred["prediction"]
-                ml_proba = ml_pred["probability"]
-                agreement = ml_pred.get("model_agreement", "0/0")
-
-                log.info(
-                    f"[AnalysisAgent] Day 69 ML ensemble: {ml_dir} "
-                    f"| prob={ml_proba:.2f} | agreement={agreement} | "
-                    f"models={ml_pred['models_used']}"
+        # RE-ENABLED 2026-08-27 (was `if False:` since 2026-08-13): champions
+        # were repopulated offline via scripts/train_champions.py —
+        # 7 majors × {15m, 1h}, triple_barrier h=8 labels, purged chronological
+        # CV, degenerate-guard enforced. Registry now holds portable binaries
+        # (audit: 0 phantom). Disable again with ML_ENSEMBLE_ENABLED=false.
+        try:
+            import os as _os_ml
+            _ml_enabled = _os_ml.getenv("ML_ENSEMBLE_ENABLED", "true").strip().lower() \
+                not in ("0", "false", "no", "off")
+            if _ml_enabled:
+                from ml.model_predictor import get_model_predictor
+                predictor = get_model_predictor()
+                ml_pred = predictor.predict(
+                    features=full_feature_vector, pair=symbol, timeframe=timeframe,
                 )
-        # removed except block (was: except Exception as e: log.warning Day 69 ML prediction failed)
+                if ml_pred.get("prediction") != "NOT_READY" and int(ml_pred.get("models_used") or 0) > 0:
+                    ml_prediction_ctx = ml_pred
+
+                    ml_dir = ml_pred["prediction"]
+                    ml_proba = ml_pred["probability"]
+                    agreement = ml_pred.get("model_agreement", "0/0")
+
+                    log.info(
+                        f"[AnalysisAgent] Day 69 ML ensemble: {ml_dir} "
+                        f"| prob={ml_proba:.2f} | agreement={agreement} | "
+                        f"models={ml_pred['models_used']}"
+                    )
+                else:
+                    # Unmodeled pair/timeframe or cold registry slot: keep ctx
+                    # EMPTY so downstream scorers skip the layer instead of
+                    # mis-reading a NOT_READY payload as a real vote.
+                    # Task 8 visibility fix: this path used to be SILENT, so
+                    # operators couldn't tell 'pair untrained' from 'models
+                    # broken'. One INFO line with the predictor's own reason.
+                    log.info(
+                        f"[AnalysisAgent] Day 69 ML: no vote for {symbol} {timeframe} "
+                        f"({ml_pred.get('ml_unavailable_reason', 'NOT_READY')}, "
+                        f"models_used={ml_pred.get('models_used', 0)})"
+                    )
+                    ml_prediction_ctx = {}
+        except Exception as e:
+            # Task 8 visibility fix: was log.debug (invisible at default log
+            # level) — schema mismatches inside predict() vanished silently.
+            log.warning(f"Day 69 ML prediction failed: {e}")
 
         # ── Day 70: AI Brain Fusion Layer (Ensemble Engine) ───────────
         # The culmination of Days 60-69. Fuses ALL intelligence layers:
@@ -2633,7 +2755,15 @@ class AnalysisAgent:
             # final_signal. Only fill in when nothing upstream already
             # found a trade (final_signal is WAIT/NO TRADE) — this is
             # additive, not an override of an active signal.
-            if final_signal not in ("BUY", "SELL") and adaptive_decision.get("action") in ("BUY", "SELL"):
+            # Task 8 live-readiness fix: skip when a consensus-lock BLOCK
+            # is active this cycle — master said WAIT and the strict
+            # override gate rejected the rule signal; a lone strategy vote
+            # must not re-open what that lock just closed.
+            if (
+                not _consensus_lock_blocked
+                and final_signal not in ("BUY", "SELL")
+                and adaptive_decision.get("action") in ("BUY", "SELL")
+            ):
                 final_signal = adaptive_decision["action"]
                 _agreeing = adaptive_decision.get("agreeing_strategies", []) or []
                 _disagreeing = adaptive_decision.get("disagreeing_strategies", []) or []
@@ -2681,7 +2811,9 @@ class AnalysisAgent:
         # UnifiedSignalEngine produced BUY/SELL (after min_action_score
         # relaxation). Prevents valid single-engine consensus from dying
         # after MasterDecision WAIT.
-        if final_signal not in ("BUY", "SELL"):
+        # Task 8 live-readiness fix: same consensus-lock guard as the
+        # adaptive fill above.
+        if not _consensus_lock_blocked and final_signal not in ("BUY", "SELL"):
             try:
                 _cons = (unified_signal_ctx or {}).get("consensus") or {}
                 _cons_action = str(_cons.get("action", "")).upper()

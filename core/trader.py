@@ -1102,6 +1102,23 @@ class AITrader:
                         dec_out["entry"] = _sh_sig["entry"]
                         dec_out["sl"] = _sh_sig["stop_loss"]
                         dec_out["tp"] = _sh_sig["take_profit"]
+                        # AUDIT FIX (2026-08-26 pipeline audit): the blend's
+                        # stale confidence was left on dec_out — the decision
+                        # now comes from the stop-hunt engine, so Min-conf
+                        # gating / sizing / logs must score THAT engine's
+                        # confidence. Previously a WAIT@96% blend could bail
+                        # the trade through min-confidence even when the
+                        # stop-hunt signal itself was weak (or vice versa),
+                        # and the logged confidence never matched the trade
+                        # actually placed.
+                        _blend_conf_before_lane = dec_out.get("confidence")
+                        try:
+                            dec_out["confidence"] = int(round(float(_sh_sig.get("confidence", 0))))
+                        except (TypeError, ValueError):
+                            log.warning(
+                                f"[Trader] Stop Hunt Direct Lane: non-numeric "
+                                f"confidence={_sh_sig.get('confidence')!r} — keeping blend value"
+                            )
                         dec_out["direct_lane"] = "stop_hunt"
                         dec_out["reasons"] = (dec_out.get("reasons") or []) + [
                             f"Stop Hunt Direct Lane: {_sh_sig['reason']} "
@@ -1110,7 +1127,8 @@ class AITrader:
                         log.info(
                             f"[Trader] Stop Hunt Direct Lane FIRED: "
                             f"{_sh_sig['action']} @ {_sh_sig['entry']:.5f} "
-                            f"SL={_sh_sig['stop_loss']:.5f} TP={_sh_sig['take_profit']:.5f}"
+                            f"SL={_sh_sig['stop_loss']:.5f} TP={_sh_sig['take_profit']:.5f} "
+                            f"conf={dec_out['confidence']}% (blend had {_blend_conf_before_lane}%)"
                         )
                         if debugger:
                             debugger.record("stop_hunt_direct_lane", _sh_sig["action"],
@@ -2962,6 +2980,30 @@ class AITrader:
                     "decision": result["final_action"],
                 })
                 self._record_error("broker", f"execution returned None for {self.symbol}")
+                # AUDIT FIX (2026-08-26): previously reject_reason was left
+                # empty here, so memory/trade_decisions.jsonl recorded
+                # taken=false with blank reject_stage/reject_reason — the
+                # EURNOK 2026-08-07 16:43/18:32/18:56 cycles (SELL @95.9%,
+                # permission 10/10 passed, lot approved) were impossible to
+                # diagnose from logs. The trade_decision_log derives
+                # reject_stage="execution_router" by matching "execution"/
+                # "router" against this string.
+                #
+                # Round-3 refinement: ExecutionRouter.last_failure_reason
+                # carries the SPECIFIC thread-local failure reason (e.g.
+                # "mt5 disconnected after poll timeout",
+                # "absolute_safety: ...", "broker rejected order: ...").
+                # Prefer it over the generic placeholder so operators see
+                # exactly why the order died; keep the generic prefix so
+                # reject_stage derivation still matches "router"/"execution".
+                _router_reason = None
+                try:
+                    _router_reason = self._router.last_failure_reason
+                except Exception:
+                    pass
+                result["reject_reason"] = (
+                    f"Execution router returned None — {_router_reason or 'broker order failed (no specific reason reported)'}"
+                )
 
         if show_chart:
             ChartEngine(self.symbol, self.timeframe).create_full_chart(
@@ -3024,6 +3066,13 @@ class AITrader:
                     _reject_stage = "session"
                 elif "WAIT_APPROVAL" in str(result.get("pending_approval_id")):
                     _reject_stage = "approval_mode_2"
+                # AUDIT FIX (2026-08-26): ANALYSIS_ONLY mode's message
+                # ("APPROVAL_MODE=1 (analysis only) — execution skipped")
+                # contains the word "execution" and was previously
+                # mis-classified as execution_router. Check the approval
+                # modes BEFORE the generic execution/router keyword match.
+                elif "APPROVAL_MODE=1" in _reject_reason or "analysis only" in _reject_reason.lower():
+                    _reject_stage = "approval_mode_1_analysis_only"
                 elif "execution" in _reject_reason.lower() or "router" in _reject_reason.lower():
                     _reject_stage = "execution_router"
                 elif "devil" in _reject_reason.lower() or "advocate" in _reject_reason.lower():

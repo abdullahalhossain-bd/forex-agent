@@ -535,21 +535,32 @@ class ConfidenceEngine:
         disabled = self._load_disabled()
         key = self._key(pattern, pair, timeframe, regime)
 
-        # Already disabled?
-        if key in disabled:
-            d = disabled[key]
-            # Auto-re-enable after 50 trades or 30 days
-            re_enable_date = d.get("re_enable_after")
+        # Audit fix (2026-08-27 decision-chain review): the disable check
+        # used to be an EXACT 4-part key match only. Historical stats are
+        # frequently recorded with regime="UNKNOWN" (regime detector not
+        # populated at record time), but live cycles evaluate under real
+        # regime labels (TRENDING/RANGING/...), producing a different key —
+        # so an explicitly auto-disabled combo (e.g.
+        # mt5_real_trade|EURUSD|H1|UNKNOWN at WR 20%) silently stopped
+        # blocking whenever the current cycle carried a non-UNKNOWN regime.
+        # Fallback: honour a disable entry for ANY regime label of the same
+        # pattern|pair|timeframe prefix (win-rate evidence was collected
+        # across regimes anyway). Exact-key entries still take priority and
+        # keep their own re-enable handling.
+        _d_entry, _d_key = self._match_disabled(disabled, key)
+        if _d_entry is not None:
+            # Auto-re-enable after 30 days
+            re_enable_date = _d_entry.get("re_enable_after")
             if re_enable_date:
                 try:
                     if datetime.now(timezone.utc).isoformat() > re_enable_date:
-                        del disabled[key]
+                        del disabled[_d_key]
                         self._save_disabled(disabled)
-                        log.info(f"[ConfidenceEngine] Pattern re-enabled: {key}")
+                        log.info(f"[ConfidenceEngine] Pattern re-enabled: {_d_key}")
                         return False, None
                 except Exception:
                     pass
-            return True, d.get("reason", "Pattern disabled due to poor performance")
+            return True, _d_entry.get("reason", "Pattern disabled due to poor performance")
 
         # Check current stats
         total    = entry.get("total_trades", 0)
@@ -565,6 +576,31 @@ class ConfidenceEngine:
             return True, f"Recent 10-trade win rate critically low: {recent_score}%"
 
         return False, None
+
+    def _match_disabled(self, disabled: dict, key: str):
+        """Return (entry, matched_key) for a disable record covering `key`.
+
+        Exact key match first; then prefix match on pattern|pair|timeframe
+        so an UNKNOWN-regime disable also blocks real-regime cycles (see
+        the 2026-08-27 audit note in _check_skip). Returns (None, None)
+        when nothing matches.
+        """
+        if not isinstance(disabled, dict) or not disabled:
+            return None, None
+
+        exact = disabled.get(key)
+        if isinstance(exact, dict):
+            return exact, key
+
+        # Normalize prefix the same way _key() does (spaces → underscores,
+        # uppercase already applied by _key). Match on the first 3 parts.
+        parts = key.split("|")
+        if len(parts) >= 3:
+            prefix = "|".join(parts[:3]) + "|"
+            for dkey, dval in disabled.items():
+                if isinstance(dval, dict) and str(dkey).startswith(prefix):
+                    return dval, dkey
+        return None, None
 
     # ══════════════════════════════════════════════════════════
     # PATTERN SKIP MANAGEMENT

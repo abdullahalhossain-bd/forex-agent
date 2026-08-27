@@ -41,8 +41,10 @@
 #     নির্ভর করে।
 # ============================================================
 
+import os
 import threading
 import time
+from typing import Dict, Optional
 
 from utils.logger import get_logger
 from config import validate_mt5_config
@@ -144,6 +146,19 @@ class ExecutionRouter:
         # own most recent failure.
         self._failure_local = threading.local()
 
+        # COOLDOWN (2026-08-27): same symbol+direction hitting repeated
+        # broker-level failures (connection down / order_send raise /
+        # broker reject) used to retry every cycle with no backoff —
+        # e.g. EURNOK SELL failed 3× over 3 hours with identical errors.
+        # After ROUTER_FAILURE_COOLDOWN_THRESHOLD consecutive broker-layer
+        # failures, block further attempts for that symbol+direction for
+        # ROUTER_FAILURE_COOLDOWN_SEC. Policy rejections (hard gates,
+        # safety, permission) intentionally do NOT feed the counter; any
+        # success or pending-limit acceptance resets it.
+        self._cd_lock = threading.Lock()
+        self._fail_streak: Dict[tuple, int] = {}
+        self._cd_until: Dict[tuple, float] = {}
+
         try:
             from config import SIMULATION_MODE
             self._simulation_mode = bool(SIMULATION_MODE)
@@ -176,6 +191,70 @@ class ExecutionRouter:
         rejection sentinel). Call as `return self._fail(reason)`."""
         self._failure_local.reason = reason
         return None
+
+    # ── Broker-failure cooldown helpers ────────────────────────────
+
+    @staticmethod
+    def _cooldown_cfg() -> tuple[int, int]:
+        """(threshold, seconds) from env with safe defaults."""
+        try:
+            thr = int(os.getenv("ROUTER_FAILURE_COOLDOWN_THRESHOLD", "2") or 2)
+            sec = float(os.getenv("ROUTER_FAILURE_COOLDOWN_SEC", "900") or 900)
+        except Exception:
+            thr, sec = 2, 900.0
+        return max(1, thr), max(0.0, sec)
+
+    def _broker_fail_gate(self, symbol: str, direction: str) -> Optional[None]:
+        """Return a cooldown _fail() if this symbol+direction is cooling
+        down after consecutive broker-layer failures; else None."""
+        if not symbol or direction not in ("BUY", "SELL"):
+            return None
+        import time as _time
+        thr, sec = self._cooldown_cfg()
+        if sec <= 0:
+            return None
+        key = (str(symbol).upper(), str(direction))
+        now = _time.time()
+        with self._cd_lock:
+            until = self._cd_until.get(key, 0.0)
+            if until > now:
+                remaining = int(until - now)
+                log.warning(
+                    f"[ExecutionRouter] ⏸ COOLDOWN ACTIVE — {key[0]} {key[1]} "
+                    f"blocked for another {remaining}s after repeated broker failures"
+                )
+                return self._fail(
+                    f"cooldown: {key[0]} {key[1]} paused {remaining}s more "
+                    f"after {self._fail_streak.get(key, '?')} consecutive broker failures"
+                )
+        return None
+
+    def _record_broker_failure(self, symbol: str, direction: str) -> None:
+        """Increment the consecutive-failure counter and arm the cooldown
+        once the threshold is reached."""
+        if not symbol or direction not in ("BUY", "SELL"):
+            return
+        import time as _time
+        thr, sec = self._cooldown_cfg()
+        key = (str(symbol).upper(), str(direction))
+        with self._cd_lock:
+            streak = self._fail_streak.get(key, 0) + 1
+            self._fail_streak[key] = streak
+            if streak >= thr and sec > 0:
+                self._cd_until[key] = _time.time() + sec
+                log.warning(
+                    f"[ExecutionRouter] 🔒 COOLDOWN ARMED — {key[0]} {key[1]} "
+                    f"paused {int(sec)}s ({streak} consecutive broker failures)"
+                )
+
+    def _record_execution_success(self, symbol: str, direction: str) -> None:
+        """Clear failure streak/cooldown for this symbol+direction."""
+        if not symbol:
+            return
+        key = (str(symbol).upper(), str(direction))
+        with self._cd_lock:
+            self._fail_streak.pop(key, None)
+            self._cd_until.pop(key, None)
 
     def _init_mode(self, mt5_conn=None) -> None:
         """Initialize the router for self.mode (simulation / mt5_demo / mt5_live).
@@ -581,6 +660,11 @@ class ExecutionRouter:
         sl        = decision_result.get("sl")
         tp        = decision_result.get("tp")
 
+        # ── Broker-failure cooldown gate ──────────────────────────
+        gated = self._broker_fail_gate(symbol, direction)
+        if gated is not None:
+            return gated
+
         _log_event("router.execute.start", symbol=symbol, decision=direction,
                    lot=lot, sl=sl, tp=tp, simulation=self._simulation_mode)
 
@@ -593,6 +677,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason="mt5 disconnected after poll timeout",
                        stage="connection_check")
+            self._record_broker_failure(symbol, direction)
             return self._fail("mt5 disconnected after poll timeout")
 
         # ── ABSOLUTE_SAFETY hard gate ─────────────────────────────
@@ -697,6 +782,7 @@ class ExecutionRouter:
             _log_event("router.execute.fail", symbol=symbol,
                        reason=f"order placement raised: {e}",
                        stage="order_send")
+            self._record_broker_failure(symbol, direction)
             return self._fail(f"order placement raised: {e}")
 
         if not order_result.get("success"):
@@ -707,6 +793,7 @@ class ExecutionRouter:
                        reason=order_result.get('reason', 'unknown'),
                        stage="order_result",
                        retcode=order_result.get('retcode'))
+            self._record_broker_failure(symbol, direction)
             return self._fail(f"broker rejected order: {order_result.get('reason', 'unknown')}")
 
         # ── PENDING LIMIT ORDER: not filled yet — don't journal as an
@@ -715,6 +802,7 @@ class ExecutionRouter:
         # sync_open_positions) is what should pick this up once the
         # pullback price is actually touched and the broker fills it.
         if order_result.get("pending"):
+            self._record_execution_success(symbol, direction)
             log.info(
                 f"[ExecutionRouter] ⏳ PULLBACK LIMIT ORDER PENDING — {symbol} "
                 f"{direction} @ {pullback['price'] if pullback else decision_result.get('entry')} "
@@ -759,6 +847,7 @@ class ExecutionRouter:
             )
             _log_event("router.execute.success", symbol=symbol, ticket=ticket,
                        price=filled_entry, lot=filled_lot, simulation=True)
+            self._record_execution_success(symbol, direction)
             return {
                 "id": None, "status": "SIMULATED",
                 "broker_symbol": broker_symbol, "ticket": ticket,
@@ -804,6 +893,7 @@ class ExecutionRouter:
         _log_event("router.execute.success", symbol=symbol, ticket=ticket,
                    price=filled_entry, lot=filled_lot, trade_id=trade_id,
                    orphan=journal_failed)
+        self._record_execution_success(symbol, direction)
 
         # Round-30: Register the MT5 ticket → DB trade_id mapping so
         # PositionManager can track this position and detect closes.
