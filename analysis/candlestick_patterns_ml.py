@@ -60,16 +60,64 @@ class CandleStickPatterns:
     def is_dragonfly_doji(current_open, current_close, current_high, current_low):
         """
         Dragonfly Doji.
-        Body < 10% of range, lower shadow > 3x body, upper shadow < body.
+        Body < 10% of range, lower shadow > 60% of range, upper shadow <
+        10% of range (all ratios taken against the candle's own total
+        range, so the definition is scale-independent — works the same
+        on EURUSD, USDJPY, or XAUUSD).
+
+        Bug fix (audit Part 2B): the original condition compared the
+        upper shadow to the *body* (`upper_shadow < body_range`) instead
+        of to the total range. That is not scale-independent: as soon as
+        a candle's body approaches zero (which is exactly what makes it
+        doji-like in the first place), the threshold it's being compared
+        against also approaches zero, so the check degenerates into
+        "is the upper wick smaller than an already-microscopic body" —
+        a razor's-edge comparison that real (and even textbook-literal)
+        dragonfly dojis fail on floating-point noise alone. This mirrors
+        the already-correct, range-relative formula used by
+        `candlestick_patterns_mw.py::_check_dragonfly_doji`.
         """
         body_range = abs(current_close - current_open)
         total_range = current_high - current_low
+        if total_range <= 0:
+            return False
         upper_shadow = current_high - max(current_close, current_open)
         lower_shadow = min(current_close, current_open) - current_low
         return (
-            (body_range / (total_range + 0.001) < 0.1)
-            and (lower_shadow > (3 * body_range))
-            and (upper_shadow < body_range)
+            (body_range / total_range < 0.1)
+            and (lower_shadow / total_range > 0.6)
+            and (upper_shadow / total_range < 0.1)
+        )
+
+    @staticmethod
+    def is_gravestone_doji(current_open, current_close, current_high, current_low):
+        """
+        Gravestone Doji (the bearish mirror image of Dragonfly Doji).
+        Body < 10% of range, upper shadow > 60% of range, lower shadow <
+        10% of range — all range-relative, so scale-independent.
+
+        Bug fix (audit Part 2C): this detector did not exist at all in
+        this module — `candlestick_patterns_mw.py` has one
+        (`_check_gravestone_doji`), but this ml/boolean-detector module
+        did not, forcing callers/tests needing a scalar boolean check to
+        hand-roll the shape math inline (and get it wrong: an earlier
+        inline version of this check in `test_candlestick_architecture.py`
+        compared the lower shadow to the body rather than to the total
+        range, which is the same non-scale-independent mistake fixed in
+        `is_dragonfly_doji` above). Added here as the ml-module's own
+        implementation, defined the same way as `_check_gravestone_doji`
+        in `candlestick_patterns_mw.py` so the two modules agree.
+        """
+        body_range = abs(current_close - current_open)
+        total_range = current_high - current_low
+        if total_range <= 0:
+            return False
+        upper_shadow = current_high - max(current_close, current_open)
+        lower_shadow = min(current_close, current_open) - current_low
+        return (
+            (body_range / total_range < 0.1)
+            and (upper_shadow / total_range > 0.6)
+            and (lower_shadow / total_range < 0.1)
         )
 
     # ── 2-bar patterns ───────────────────────────────────────────────────────

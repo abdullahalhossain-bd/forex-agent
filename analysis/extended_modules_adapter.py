@@ -30,7 +30,10 @@ Modules wired here (17)
   andean_oscillator, supertrend, utbot_alerts, nadaraya_watson_envelope,
   daily_high_low, auction_market_theory, candlestick_patterns_ml,
   breaker_block, flip_zones, curve_mtf
-  (10 from the original 17-module "imported-only" audit)
+  (10 from the original 17-module "imported-only" audit. NOTE:
+  candlestick_patterns_ml is listed here for audit history — as of the
+  2026-08-31 candlestick architecture fix it is no longer independently
+  wired; see the "candlestick architecture fix" note below.)
 
   candlestick_patterns_br, candlestick_patterns_mw, supermao_ichimoku
   (3 more added in a follow-up pass — these were in the SEPARATE "fully
@@ -45,7 +48,13 @@ Modules wired here (17)
   not a copy of it. Since none of the three actually duplicate live logic
   and all three are working per-candle directional generators, they were
   wired in here rather than deleted. core/obsolete.py has been updated to
-  match — see that file's entries for these three paths.)
+  match — see that file's entries for these three paths. NOTE: as of the
+  2026-08-31 candlestick architecture fix, candlestick_patterns_br and
+  candlestick_patterns_mw are likewise no longer independently wired as
+  votes — being "not duplicate code" turned out not to mean "not duplicate
+  vote weight" when the same candle fires in more than one of the three
+  modules at once. See the "candlestick architecture fix" note below for
+  the replacement design.)
 
   vw_macd, supermao_bands
   (2 more added in the 2026-07-22 dead-file audit — both were in the
@@ -70,6 +79,27 @@ Modules wired here (17)
   in the codebase are research/strategy_generator.py's config dict for
   an unrelated research tool and phase5_regime.py's ema20 crossover
   used for *regime classification*, not a directional fusion vote.)
+
+  candlestick architecture fix (2026-08-31) — candlestick_patterns_ml,
+  candlestick_patterns_br, and candlestick_patterns_mw are no longer
+  registered as three separate votes in `checks`. All three were genuinely
+  distinct implementations (see the original 2026-07 note below, kept for
+  history), but "not duplicate code" does not mean "not duplicate
+  information": all three can fire on the SAME underlying candle shape
+  (e.g. a Hammer) on the SAME bar, and until this fix each one added its
+  own independent weight, so one physical candle could cast up to 3x its
+  intended vote. They are now consumed internally, exactly once each per
+  bar, by `analysis.candlestick_engine.evaluate()` — a single canonical
+  engine that deduplicates same-pattern detections across the three
+  source modules into ONE scored event (cross-source agreement becomes a
+  *component* of that event's confidence score, not a multiplier on vote
+  count) and casts exactly one vote via the new `candlestick_engine` entry
+  below. `candlestick_engine.py` already existed, fully built, with its
+  own causal MarketContext, next-bar-confirmation handling, and a
+  lookahead regression test — it just wasn't imported anywhere in the
+  production call graph until now. `_vote_candlestick_patterns_ml/_br/_mw`
+  are kept below (same convention as `_vote_golden_death_cross` a few
+  lines down) for research/comparison use only; they are not in `checks`.
 
   cci_state_machine (Book 5 Ch.11, added Tier 2 pass 2026-07-22)
   (This one is intentionally wired into get_zone_dependent_votes, NOT
@@ -299,10 +329,80 @@ def _vote_auction_market_theory(df: pd.DataFrame) -> Optional[Vote]:
     return None
 
 
+def _vote_candlestick_engine(df: pd.DataFrame, symbol: Optional[str] = None) -> Optional[Vote]:
+    """ONE canonical candlestick vote for production (candlestick-architecture
+    fix, see below). Wraps `analysis.candlestick_engine.evaluate()`, which
+    already:
+      - runs candlestick_patterns_ml.py, _br.py, and _mw.py internally,
+      - merges (deduplicates) overlapping detections of the SAME underlying
+        pattern across those three source modules into ONE scored event
+        instead of three additive votes (agreement is a *component* of the
+        confidence score, not a multiplier on vote count),
+      - applies causal trend/location/volatility/confirmation context,
+      - never uses next-bar confirmation evidence for the most recent bar
+        (no lookahead — see candlestick_engine.py's causality regression
+        test), and
+      - surfaces bull+bear conflicts explicitly instead of silently netting.
+
+    This REPLACES the three separate _vote_candlestick_patterns_ml/_br/_mw
+    entries below, which used to be registered independently in `checks`
+    (see get_extended_votes()) and could cast up to 3 separate bullish (or
+    bearish) votes for the exact same candle shape — e.g. ml.Hammer +
+    br.Hammer + mw.Hammer all firing on one bar used to add up to 3x the
+    intended weight. candlestick_engine.py already existed fully built
+    (with its own dedup/causality logic and regression tests) but was never
+    imported by this adapter — production kept running the old triple-vote
+    path in parallel with the unused "unified" engine sitting as dead code.
+    `_vote_candlestick_patterns_ml/_br/_mw` are left defined below (same
+    convention as `_vote_golden_death_cross`, which was also disabled from
+    `checks` but kept for reference) purely as research/comparison
+    call points — they are no longer registered in `checks`, so they can
+    no longer contribute an independent production vote.
+    """
+    from analysis.candlestick_engine import evaluate as ce_evaluate
+
+    if len(df) < 5:
+        return None
+    try:
+        result = ce_evaluate(df, symbol=symbol)
+    except Exception as e:
+        log.debug(f"[ExtendedSignals] candlestick_engine failed: {e}")
+        return None
+
+    signal = result.get("signal")
+    if signal not in ("bullish", "bearish"):
+        return None  # neutral / no directional evidence
+
+    confidence = float(result.get("confidence", 0.0))  # 0..100
+    # Confidence -> integer weight. This is a coarse quantization of an
+    # already-computed, multi-factor confidence score (reliability +
+    # cross-source agreement + trend + location + volatility + confirmation
+    # + conviction — see candlestick_engine._score_group), NOT a re-tuned
+    # or backtest-fitted threshold. Capped at 3 (below the old worst-case
+    # ceiling of up to 5 across three independent votes) precisely because
+    # this is now ONE canonical vote representing one piece of underlying
+    # candle evidence, not three.
+    if confidence >= 70:
+        weight = 3
+    elif confidence >= 45:
+        weight = 2
+    else:
+        weight = 1
+
+    patterns = result.get(f"{signal}_patterns") or []
+    pattern_str = ", ".join(patterns) if patterns else signal
+    reason = f"Candlestick engine: {pattern_str} ({confidence:.0f}% confidence)"
+    if result.get("conflicts"):
+        reason += " [conflicting patterns present]"
+    return (signal, weight, reason)
+
+
 def _vote_candlestick_patterns_ml(df: pd.DataFrame) -> Optional[Vote]:
-    """Aggregate the 8 boolean pattern detectors over the last 2 candles
-    into a single bullish/bearish vote (bullish patterns minus bearish
-    patterns detected on the most recent bar)."""
+    """RESEARCH/COMPARISON ONLY — no longer registered in `checks` (see
+    `_vote_candlestick_engine` above). Aggregate the 8 boolean pattern
+    detectors over the last 2 candles into a single bullish/bearish vote
+    (bullish patterns minus bearish patterns detected on the most recent
+    bar)."""
     from analysis.candlestick_patterns_ml import CandleStickPatterns as C
 
     if len(df) < 3:
@@ -342,7 +442,10 @@ _BR_BULLISH_PATTERNS = {
 
 
 def _vote_candlestick_patterns_br(df: pd.DataFrame, symbol: Optional[str] = None) -> Optional[Vote]:
-    """Brazilian-book scanner (analysis/candlestick_patterns_br.py). This
+    """RESEARCH/COMPARISON ONLY — no longer registered in `checks` (see
+    `_vote_candlestick_engine` above; this source module is still consumed
+    internally by candlestick_engine.evaluate()). Brazilian-book scanner
+    (analysis/candlestick_patterns_br.py). This
     module only defines a bullish-reversal pattern set plus 4 direction-
     less "ambivalent" patterns (Marubozu, Doji, Spinning Top, Star) — it
     has no bearish counterpart list, so this wrapper only ever casts
@@ -382,7 +485,10 @@ def _vote_candlestick_patterns_br(df: pd.DataFrame, symbol: Optional[str] = None
 
 
 def _vote_candlestick_patterns_mw(df: pd.DataFrame) -> Optional[Vote]:
-    """MotiveWave-style 33-pattern scanner (analysis/candlestick_patterns_mw.py).
+    """RESEARCH/COMPARISON ONLY — no longer registered in `checks` (see
+    `_vote_candlestick_engine` above; this source module is still consumed
+    internally by candlestick_engine.evaluate()). MotiveWave-style 33-pattern
+    scanner (analysis/candlestick_patterns_mw.py).
     Independent implementation from candlestick_patterns_ml.py/patterns_br.py —
     broader pattern set (1/2/3-bar), each pre-classified bullish/bearish/neutral
     via csp_signal. NOT a duplicate of candlestick_patterns_ml.py despite
@@ -747,9 +853,15 @@ def get_extended_votes(
         ("nadaraya_watson_envelope", lambda: _vote_nadaraya_watson(df)),
         ("daily_high_low", lambda: _vote_daily_high_low(df)),
         ("auction_market_theory", lambda: _vote_auction_market_theory(df)),
-        ("candlestick_patterns_ml", lambda: _vote_candlestick_patterns_ml(df)),
-        ("candlestick_patterns_br", lambda: _vote_candlestick_patterns_br(df, symbol)),
-        ("candlestick_patterns_mw", lambda: _vote_candlestick_patterns_mw(df)),
+        # Candlestick architecture fix: ONE canonical candlestick vote,
+        # not three. `_vote_candlestick_engine` internally runs ml/br/mw
+        # and deduplicates overlapping detections of the same pattern
+        # (see that function's docstring). The three individual
+        # candlestick_patterns_ml/_br/_mw entries that used to be
+        # registered here independently — and could triple-vote the same
+        # candle shape — have been removed from `checks`; their wrapper
+        # functions are kept below for research/comparison use only.
+        ("candlestick_engine", lambda: _vote_candlestick_engine(df, symbol)),
         ("supermao_ichimoku", lambda: _vote_supermao_ichimoku(df)),
         ("breaker_block", lambda: _vote_breaker_block(df, order_blocks)),
         ("flip_zones", lambda: _vote_flip_zones(df, nearest_demand, nearest_supply)),
@@ -767,9 +879,11 @@ def get_extended_votes(
 
     # Names of single-candle pattern modules whose votes an active window
     # (Nison rule-spec priority_order_when_signals_conflict #1) can suppress.
-    _SINGLE_CANDLE_MODULES = {
-        "candlestick_patterns_ml", "candlestick_patterns_br", "candlestick_patterns_mw",
-    }
+    # Updated for the candlestick architecture fix: the three separate
+    # candlestick_patterns_ml/_br/_mw voters were replaced by the single
+    # "candlestick_engine" voter (see `checks` above), so this set now
+    # names that one canonical vote instead of the three it replaced.
+    _SINGLE_CANDLE_MODULES = {"candlestick_engine"}
 
     votes: List[Vote] = []
     named_votes: List[tuple] = []  # (name, vote) — kept alongside `votes` for suppression logic

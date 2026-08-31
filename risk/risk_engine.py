@@ -35,7 +35,7 @@ class RiskEngine:
     MAX_RR           = 5.0
     DAILY_LOSS_LIMIT = 3.0
     MAX_OPEN_TRADES  = 3
-    ATR_SL_MULT      = 1.5  # SL = ATR * 1.5 (~25 pips on EURUSD H1)
+    ATR_SL_MULT      = 2.0  # v3.18  # SL = ATR * 1.5 (~25 pips on EURUSD H1)
     # P0-2 (Audit Fix): Config loading must NOT be wrapped in try/except.
     # If config.py fails to import, the system MUST crash on boot —
     # silently trading with wrong risk parameters is far more dangerous.
@@ -78,7 +78,9 @@ class RiskEngine:
 
     def evaluate(self, signal: str, entry: float, atr: float, regime: dict | None = None,
                  correlation_ctx: dict | None = None, df=None,
-                 strategy: str | None = None) -> dict:
+                 strategy: str | None = None,
+                 stop_loss: float | None = None,
+                 take_profit: float | None = None) -> dict:
         # Day 81+ hotfix: WAIT signal should also be rejected (not just NO TRADE).
         # Previously WAIT fell through to the `else` branch (SELL) and got
         # approved with SL/TP — but WAIT means "no trade", so it must reject.
@@ -139,166 +141,228 @@ class RiskEngine:
             except Exception as _e_corr:
                 log.debug(f"[RiskEngine] correlation_ctx parse failed: {_e_corr}")
 
-        vol_mult = {
-            "LOW_VOLATILITY":  1.0,
-            "NORMAL":          self.ATR_SL_MULT,
-            "HIGH_VOLATILITY": 2.2,
-        }.get(regime.get("volatility", "NORMAL") if regime else "NORMAL", self.ATR_SL_MULT)
+        # ══════════════════════════════════════════════════════════════
+        # STRUCTURE-FIRST GEOMETRY (no ATR-primary fallback)
+        # ──────────────────────────────────────────────────────────────
+        # Rule: Structure decides where the trade is invalid.
+        #       ATR only validates distance sensibility + buffer size.
+        #       If structure cannot be established → REJECT (fail loud).
+        # ══════════════════════════════════════════════════════════════
 
-        # Day 81+ hotfix: ATR can be None/0/NaN — force a safe default
-        if not atr or atr != atr:  # NaN check
-            log.warning(f"[RiskEngine] atr={atr} (invalid) — using 0.0010")
-            atr = 0.0010
-
-        # Day 97+ Book Page 13: per-instrument ATR multiplier
-        symbol_upper = self.symbol.upper().replace("/", "").replace("=X", "")
-        instrument_mult = 1.0
-        if symbol_upper in ("XAUUSD", "XAGUSD"):
-            instrument_mult = 1.5
-        elif symbol_upper.endswith("JPY"):
-            instrument_mult = 1.2
-        elif symbol_upper in ("US30", "NAS100"):
-            instrument_mult = 1.3
-        vol_mult = vol_mult * instrument_mult
-
-        sl_distance = round(atr * vol_mult, 5)
-
-        # Day 96 bugfix: in LOW_VOLATILITY regime (vol_mult=1.0) ATR can be
-        # as low as 6-7 pips on majors during Sydney/Tokyo sessions, giving
-        # an SL of just 6-7 pips — easily hit by spread + normal noise
-        # before any real move develops (this matched the production
-        # journal: EURUSD 6.6 pip SL, GBPUSD 6.4 pip SL, both stopped out).
-        # Enforce a hard floor of 10 pips regardless of regime/ATR.
-        min_sl_distance = pips_to_price(self.symbol, 10)
-        if sl_distance < min_sl_distance:
-            log.info(
-                f"[RiskEngine] sl_distance={sl_distance} below 10-pip floor "
-                f"({min_sl_distance}) — flooring to avoid noise stop-out"
+        if not atr or atr != atr:  # None / 0 / NaN
+            return self._reject(
+                f"ATR unavailable or invalid (atr={atr!r}) — cannot validate "
+                f"structural SL/TP distance without ATR. Fix indicator pipeline."
             )
-            sl_distance = round(min_sl_distance, 5)
+        atr = float(atr)
 
-        sl_pips     = round(sl_distance / self.pip) if self.pip > 0 else 10
+        if df is None or (hasattr(df, "__len__") and len(df) < 20):
+            return self._reject(
+                f"OHLC history (df) missing or too short (len="
+                f"{0 if df is None else len(df)}) — structural SL/TP requires "
+                f"market data. No ATR fallback."
+            )
+
+        # Distance bounds (ATR-relative, not fixed pips alone)
+        hard_floor = pips_to_price(self.symbol, 15)  # absolute noise floor
+        min_sl_distance = max(hard_floor, 0.5 * atr)
+        max_sl_distance = 2.5 * atr
 
         try:
-            from risk.rr_policy import get_min_rr
+            from risk.rr_policy import get_min_rr, get_execution_min_rr
             try:
                 from core.constants import is_test_mode
                 _tm = bool(is_test_mode())
             except Exception:
                 _tm = False
             _min_rr = float(get_min_rr(strategy=strategy, test_mode=_tm))
-        except Exception:
-            _min_rr = float(self.MIN_RR)
-        _min_rr = max(0.5, min(float(self.MAX_RR), _min_rr))
+            _execution_min_rr = float(get_execution_min_rr(strategy=strategy, test_mode=_tm))
+        except Exception as _e_rr:
+            return self._reject(
+                f"rr_policy unavailable ({_e_rr}) — cannot enforce R:R without "
+                f"policy module. Fail closed."
+            )
+        _min_rr = max(1.0, min(float(self.MAX_RR), _min_rr))
+        _execution_min_rr = max(1.0, min(float(self.MAX_RR), _execution_min_rr))
 
-        if signal == "BUY":
-            sl_price = round(entry - sl_distance, 5)
-            floor_tp = round(entry + sl_distance * _min_rr, 5)
-        else:
-            sl_price = round(entry + sl_distance, 5)
-            floor_tp = round(entry - sl_distance * _min_rr, 5)
+        structure_source = None
+        structure_reasons: list = []
+        sl_price = None
+        tp_price = None
+        tp_source = None
 
-        structure_source = "atr"
-        structure_reasons = []
-        if df is not None:
+        # ── 1. STOP LOSS: signal-provided structure first ─────────────
+        _sig_sl = None
+        try:
+            if stop_loss is not None and float(stop_loss) > 0:
+                _sig_sl = float(stop_loss)
+        except (TypeError, ValueError):
+            _sig_sl = None
+
+        if _sig_sl is not None:
+            _side_ok = (
+                (signal == "BUY" and _sig_sl < entry) or
+                (signal == "SELL" and _sig_sl > entry)
+            )
+            _dist = abs(entry - _sig_sl)
+            if not _side_ok:
+                return self._reject(
+                    f"Signal SL wrong side of entry: signal={signal} "
+                    f"entry={entry} stop_loss={_sig_sl}"
+                )
+            if _dist < min_sl_distance:
+                return self._reject(
+                    f"Signal SL too tight: {_dist:.5f} < min "
+                    f"{min_sl_distance:.5f} (max(15p, 0.5*ATR)). "
+                    f"Structure invalidation is noise-level — NO TRADE."
+                )
+            if _dist > max_sl_distance:
+                return self._reject(
+                    f"Signal SL too wide: {_dist:.5f} > max "
+                    f"{max_sl_distance:.5f} (2.5*ATR). Risk undefined — NO TRADE."
+                )
+            sl_price = round(_sig_sl, 5)
+            structure_source = "signal_structure"
+            structure_reasons.append("stop_loss provided by signal engine")
+
+        # ── 2. STOP LOSS: compute from market structure if signal missing ─
+        if sl_price is None:
             try:
                 from risk.structure_stop import compute_structure_stop
-
                 structure_sl = compute_structure_stop(
                     df,
                     signal,
                     method="swing_atr",
-                    lookback=20,
+                    lookback=30,
                     atr_buffer_mult=0.20,
                     atr=atr,
                 )
                 structure_sl = round(float(structure_sl), 5)
-                structure_pips = (
-                    (entry - structure_sl) / self.pip
-                    if signal == "BUY" else
-                    (structure_sl - entry) / self.pip
-                )
-                if structure_pips >= 10 and (
+                _side_ok = (
                     (signal == "BUY" and structure_sl < entry) or
                     (signal == "SELL" and structure_sl > entry)
-                ):
-                    sl_price = structure_sl
-                    sl_distance = round(abs(entry - sl_price), 5)
-                    sl_pips = round(sl_distance / self.pip)
-                    structure_source = "fractal_swing_atr"
-                    structure_reasons.append("recent fractal swing with 0.20 ATR buffer")
-                else:
-                    structure_reasons.append("structure stop invalid or below 10-pip minimum")
+                )
+                _dist = abs(entry - structure_sl)
+                if not _side_ok:
+                    return self._reject(
+                        f"Computed structure SL wrong side: signal={signal} "
+                        f"entry={entry} structure_sl={structure_sl}"
+                    )
+                if _dist < min_sl_distance:
+                    return self._reject(
+                        f"Structure SL too tight: {_dist:.5f} < min "
+                        f"{min_sl_distance:.5f}. No deeper valid structure — NO TRADE."
+                    )
+                if _dist > max_sl_distance:
+                    return self._reject(
+                        f"Structure SL too wide: {_dist:.5f} > max "
+                        f"{max_sl_distance:.5f} (2.5*ATR). Trade quality "
+                        f"questionable — NO TRADE."
+                    )
+                sl_price = structure_sl
+                structure_source = "fractal_swing_atr"
+                structure_reasons.append(
+                    "recent fractal swing + 0.20 ATR buffer (lookback=30)"
+                )
             except Exception as _e_sl:
-                log.debug(f"[RiskEngine] structure-based SL lookup failed: {_e_sl}")
+                return self._reject(
+                    f"Structure SL computation failed: {_e_sl}. "
+                    f"No ATR fallback — fix structure_stop / OHLC data."
+                )
 
-        # BUG FIX (2026-08-25): TP used to be computed ONLY as
-        # entry ± sl_distance * _min_rr — i.e. EVERY trade landed at
-        # exactly the minimum RR (2.0 by default), regardless of where
-        # real support/resistance actually sits. That's backwards: a
-        # fixed RR multiple is a risk *floor*, not a price target — the
-        # market doesn't know or care about our RR math. Two failure
-        # modes followed from this:
-        #   1. When real resistance/support was CLOSER than the fixed
-        #      multiple, TP sat in "unconfirmed territory" past the
-        #      last place price had actually reacted (exactly what
-        #      risk/entry_quality_guardrails.py::check_tp_structure_
-        #      validation flags downstream as a WARNING — but that
-        #      check only *complains*, it never fixes the price).
-        #   2. When real resistance/support was FARTHER than the fixed
-        #      multiple, we left pips on the table by capping every
-        #      winning trade at 1:2 instead of riding it to the level
-        #      the market was actually respecting.
-        #
-        # Use the nearest structural target in the trade direction, subject
-        # to the risk-policy RR floor.
-        # BUG FIX (2026-08-27, no-trades audit): the previous selection took
-        # the NEAREST swing in the trade direction (`min(candidates)` /
-        # `max(candidates)`). With a window-3 swing detector on 100 bars that
-        # nearest level is usually a MICRO-swing only a few pips away, so
-        # tp_distance << sl_distance → rr_ratio 0.0–0.6 → "R:R below
-        # execution minimum" REJECTED 225 trades in a single morning's log.
-        # Correct behaviour: choose the nearest swing that still clears the
-        # risk-policy RR floor (sl_distance * _min_rr); if no such structural
-        # target exists, keep the ATR RR floor instead of rejecting. Risk is
-        # never weakened — TP is always >= policy minimum RR — but a tiny
-        # pullback level can no longer veto every setup.
-        tp_price = floor_tp
-        tp_source = "atr_rr_floor"
-        if df is not None:
+        if sl_price is None:
+            return self._reject(
+                "No structural SL available from signal or market. "
+                "ATR-primary SL is disabled. NO TRADE."
+            )
+
+        sl_distance = round(abs(entry - sl_price), 5)
+        sl_pips = round(sl_distance / self.pip) if self.pip > 0 else 0
+        if sl_pips < 1:
+            return self._reject(
+                f"SL distance collapsed to {sl_pips} pips after conversion — "
+                f"pip size or prices invalid."
+            )
+
+        # ── 3. TAKE PROFIT: signal-provided structure first ───────────
+        _sig_tp = None
+        try:
+            if take_profit is not None and float(take_profit) > 0:
+                _sig_tp = float(take_profit)
+        except (TypeError, ValueError):
+            _sig_tp = None
+
+        if _sig_tp is not None:
+            _side_ok = (
+                (signal == "BUY" and _sig_tp > entry) or
+                (signal == "SELL" and _sig_tp < entry)
+            )
+            if not _side_ok:
+                return self._reject(
+                    f"Signal TP wrong side of entry: signal={signal} "
+                    f"entry={entry} take_profit={_sig_tp}"
+                )
+            _tp_dist = abs(_sig_tp - entry)
+            _rr_probe = (_tp_dist / sl_distance) if sl_distance > 0 else 0
+            if _rr_probe < _execution_min_rr:
+                return self._reject(
+                    f"Signal TP R:R {_rr_probe:.2f} < execution min "
+                    f"{_execution_min_rr:.2f}. Structure target too close — NO TRADE."
+                )
+            tp_price = round(_sig_tp, 5)
+            tp_source = "signal_structure"
+
+        # ── 4. TAKE PROFIT: nearest meaningful structure beyond min RR ─
+        if tp_price is None:
             try:
                 from risk.entry_quality_guardrails import _find_swing_highs, _find_swing_lows
-
-                _min_tp_distance = sl_distance * float(_min_rr)
+                _min_tp_distance = sl_distance * float(_execution_min_rr)
                 if signal == "BUY":
                     swings = _find_swing_highs(df, lookback=100)
                     candidates = sorted(s for s in swings if s > entry)
                     viable = [s for s in candidates if (s - entry) >= _min_tp_distance]
-                    if viable:
-                        tp_price = round(viable[0], 5)
-                        tp_source = "structure"
+                    if not viable:
+                        return self._reject(
+                            f"No structural TP (swing high) beyond min RR distance "
+                            f"{_min_tp_distance:.5f}. Forcing TP past structure is "
+                            f"disabled. NO TRADE."
+                        )
+                    tp_price = round(viable[0], 5)
+                    tp_source = "structure_swing_high"
                 else:
                     swings = _find_swing_lows(df, lookback=100)
                     candidates = sorted((s for s in swings if s < entry), reverse=True)
                     viable = [s for s in candidates if (entry - s) >= _min_tp_distance]
-                    if viable:
-                        tp_price = round(viable[0], 5)
-                        tp_source = "structure"
+                    if not viable:
+                        return self._reject(
+                            f"No structural TP (swing low) beyond min RR distance "
+                            f"{_min_tp_distance:.5f}. Forcing TP past structure is "
+                            f"disabled. NO TRADE."
+                        )
+                    tp_price = round(viable[0], 5)
+                    tp_source = "structure_swing_low"
             except Exception as _e_tp:
-                log.debug(f"[RiskEngine] structure-based TP lookup failed, using flat RR floor: {_e_tp}")
+                return self._reject(
+                    f"Structure TP computation failed: {_e_tp}. "
+                    f"No ATR RR-floor fallback. NO TRADE."
+                )
+
+        if tp_price is None:
+            return self._reject(
+                "No structural TP available from signal or market. "
+                "ATR RR-floor TP is disabled. NO TRADE."
+            )
 
         tp_distance = abs(tp_price - entry)
-        tp_pips  = round(tp_distance / self.pip) if self.pip > 0 else round(sl_pips * _min_rr)
+        tp_pips = round(tp_distance / self.pip) if self.pip > 0 else 0
         rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
-        try:
-            from risk.rr_policy import get_execution_min_rr
-            _execution_min_rr = get_execution_min_rr(strategy=strategy, test_mode=_tm)
-        except Exception:
-            _execution_min_rr = 1.5
         if rr_ratio < _execution_min_rr:
             return self._reject(
-                f"R:R {rr_ratio:.2f} below execution minimum {_execution_min_rr:.2f}"
+                f"R:R {rr_ratio:.2f} below execution minimum {_execution_min_rr:.2f} "
+                f"(structure-derived). NO TRADE."
             )
+
+
 
         risk_usd = round(self.balance * self.MAX_RISK_PC / 100, 2)
         # BUG FIX (Cent-account 100x unit mismatch): get_pip_value_usd() is a

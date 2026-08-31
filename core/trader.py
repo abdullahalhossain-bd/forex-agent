@@ -897,6 +897,55 @@ class AITrader:
     def get_signal(self, show_chart: bool = False, auto_paper_trade: bool = True) -> dict:
         return self.run_cycle(show_chart=show_chart, auto_paper_trade=auto_paper_trade)
 
+    def _sz_loss_cooldown_active(self, direction: str) -> tuple:
+        """v3.21 (live): True while `direction` is cooling down after a loss.
+
+        After a trade closes at a loss in direction X, new entries in X are
+        blocked for SZ_LOSS_COOLDOWN_MIN minutes (default 300 = 20 M15 bars).
+        Set SZ_LOSS_COOLDOWN_MIN=0 to disable.
+        """
+        try:
+            mins = float(os.getenv("SZ_LOSS_COOLDOWN_MIN", "300") or 0)
+        except (TypeError, ValueError):
+            mins = 300.0
+        if mins <= 0:
+            return False, ""
+        d = str(direction or "").upper()
+        last = (getattr(self, "_sz_last_loss_ts", {}) or {}).get(d)
+        if last is None:
+            return False, ""
+        try:
+            elapsed_min = (datetime.now(timezone.utc) - last).total_seconds() / 60.0
+        except Exception:
+            return False, ""
+        if elapsed_min < mins:
+            return True, (f"v3.21 loss cooldown: {d} lost at "
+                          f"{last.strftime('%Y-%m-%d %H:%M')} UTC — blocked "
+                          f"{elapsed_min:.0f}m / {mins:.0f}m")
+        return False, ""
+
+
+    def _core_reject(self, reason: str, analysis_out=None, session_ctx=None, entry=None) -> dict:
+        """Same shape as evaluate_decision_core success return — safe for run_cycle unpack."""
+        log.error(f"Pipeline failed: {reason}")
+        return {
+            "analysis_out": analysis_out if isinstance(analysis_out, dict) else {"error": reason},
+            "dec_out": {
+                "decision": "WAIT",
+                "final_action": "NO TRADE",
+                "execution_action": "NO TRADE",
+                "reject_reason": reason,
+                "confidence": 0,
+            },
+            "risk_out": {"approved": False, "reject_reason": reason, "lot": 0},
+            "perm_out": {"allowed": False, "execution_allowed": False, "final_action": "NO TRADE"},
+            "memory_ctx": {},
+            "pat_ctx": {},
+            "vec_ctx": {},
+            "entry": entry,
+            "session_ctx": session_ctx or {},
+        }
+
     def evaluate_decision_core(self, market_out: dict, session_ctx: dict, debugger=None, bypass_checks=None) -> dict:
         """
         SHARED DECISION CORE — Backtest / Demo / Real execution parity.//
@@ -1017,9 +1066,135 @@ class AITrader:
         # SL=-0.00072, TP=0.00144) — a guaranteed instant stop-out.
         # Use latest_price (already extracted from market_out above)
         # as the second-tier fallback so entry is always a real price.
-        entry = signal_data.get("entry") or ind.get("close") or ind.get("price") or latest_price
-        if not entry or entry <= 0:
-            return self._error_result("No valid price available for entry")
+        # ═══════════════════════════════════════════════════════════
+        # ENTRY POINT GATE (highest priority)
+        # ───────────────────────────────────────────────────────────
+        # Rule: No structural planned entry from signal → NO TRADE.
+        #       Market price is NEVER the planned entry.
+        #       If price already ran past entry → chasing → NO TRADE.
+        #       If price too far from entry → wait for retest → NO TRADE.
+        # ═══════════════════════════════════════════════════════════
+        # dec_out not created yet (DecisionAgent runs later) — use analysis signal only
+        entry = (
+            signal_data.get("entry")
+            or signal_data.get("entry_price")
+            or analysis_out.get("entry")
+            or analysis_out.get("entry_price")
+        )
+        _signal_sl = (
+            signal_data.get("stop_loss")
+            or signal_data.get("sl")
+            or analysis_out.get("stop_loss")
+            or analysis_out.get("sl")
+        )
+        _signal_tp = (
+            signal_data.get("take_profit")
+            or signal_data.get("take_profit_suggested")
+            or signal_data.get("tp")
+            or analysis_out.get("take_profit")
+            or analysis_out.get("tp")
+        )
+        _direction = (
+            analysis_out.get("final_signal")
+            or analysis_out.get("decision")
+            or signal_data.get("action")
+            or signal_data.get("signal")
+            or ""
+        )
+        _direction = str(_direction).upper().replace("STRONG_", "")
+
+        if _direction not in ("BUY", "SELL"):
+            # No trade direction yet — skip structural entry enforcement
+            entry = float(entry) if entry and float(entry) > 0 else (
+                float(ind.get("close") or ind.get("price") or latest_price or 0) or 0.0
+            )
+        elif not entry or float(entry) <= 0:
+            return self._core_reject(
+                "ENTRY GATE: signal did not provide structural entry_price. "
+                "Market-price entry is forbidden. NO TRADE.",
+                analysis_out=analysis_out,
+                session_ctx=session_ctx,
+                entry=None,
+            )
+        else:
+            entry = float(entry)
+
+        if _direction in ("BUY", "SELL"):
+            _px = ind.get("close") or ind.get("price") or latest_price
+            try:
+                _px = float(_px) if _px is not None else None
+            except (TypeError, ValueError):
+                _px = None
+            if not _px or _px <= 0:
+                return self._core_reject(
+                    "ENTRY GATE: no valid current market price to validate entry distance.",
+                    analysis_out=analysis_out,
+                    session_ctx=session_ctx,
+                    entry=entry,
+                )
+
+            _atr = ind.get("atr")
+            try:
+                _atr = float(_atr) if _atr is not None else None
+            except (TypeError, ValueError):
+                _atr = None
+            if not _atr or _atr <= 0:
+                return self._core_reject(
+                    f"ENTRY GATE: ATR invalid ({_atr!r}) — cannot measure entry distance. NO TRADE.",
+                    analysis_out=analysis_out,
+                    session_ctx=session_ctx,
+                    entry=entry,
+                )
+
+            _max_entry_dist = max(_atr * 0.35, _atr * 0.25)
+            _dist = abs(_px - entry)
+
+            if _direction == "BUY":
+                # Already ran above entry by more than band → chasing long
+                if _px > entry + _max_entry_dist:
+                    return self._core_reject(
+                        f"ENTRY GATE: BUY chasing — price {_px:.5f} is "
+                        f"{(_px - entry):.5f} above planned entry {entry:.5f} "
+                        f"(max {_max_entry_dist:.5f}). Wait for retest. NO TRADE.",
+                        analysis_out=analysis_out,
+                        session_ctx=session_ctx,
+                        entry=entry,
+                    )
+                # Still too far below entry → not reached yet (limit would wait; we don't chase early)
+                if entry - _px > _max_entry_dist:
+                    return self._core_reject(
+                        f"ENTRY GATE: BUY entry not reached — price {_px:.5f} is "
+                        f"{(entry - _px):.5f} below planned entry {entry:.5f}. "
+                        f"Wait for price to reach level. NO TRADE.",
+                        analysis_out=analysis_out,
+                        session_ctx=session_ctx,
+                        entry=entry,
+                    )
+            else:  # SELL
+                if _px < entry - _max_entry_dist:
+                    return self._core_reject(
+                        f"ENTRY GATE: SELL chasing — price {_px:.5f} is "
+                        f"{(entry - _px):.5f} below planned entry {entry:.5f} "
+                        f"(max {_max_entry_dist:.5f}). Wait for retest. NO TRADE.",
+                        analysis_out=analysis_out,
+                        session_ctx=session_ctx,
+                        entry=entry,
+                    )
+                if _px - entry > _max_entry_dist:
+                    return self._core_reject(
+                        f"ENTRY GATE: SELL entry not reached — price {_px:.5f} is "
+                        f"{(_px - entry):.5f} above planned entry {entry:.5f}. "
+                        f"Wait for price to reach level. NO TRADE.",
+                        analysis_out=analysis_out,
+                        session_ctx=session_ctx,
+                        entry=entry,
+                    )
+
+            log.info(
+                f"[ENTRY GATE] {self.symbol} {_direction} OK | "
+                f"planned={entry:.5f} price={_px:.5f} dist={_dist:.5f} "
+                f"(max={_max_entry_dist:.5f}) atr={_atr:.5f}"
+            )
         # Day 72 fix: normalize STRONG_BUY/STRONG_SELL to BUY/SELL for approved check
         _final_norm = analysis_out.get("final_signal", "WAIT")
         if "STRONG_BUY" in str(_final_norm):
@@ -1051,6 +1226,22 @@ class AITrader:
             debugger.record("decision",
                             dec_out.get("decision", "WAIT"),
                             f"conf={dec_out.get('confidence', 0):.0f}%")
+
+        # v3.21 (live): same-direction loss cooldown — block a new entry in
+        # direction X for SZ_LOSS_COOLDOWN_MIN minutes (default 300 = 20 M15
+        # bars) after a trade in direction X closed at a loss. Mirrors the
+        # v3.21 backtest guard that stopped 15 consecutive knife-catch
+        # re-entries during the Aug-2024 crash window.
+        _sz_dir = str(dec_out.get("decision", "")).upper()
+        if _sz_dir in ("BUY", "SELL"):
+            _sz_blocked, _sz_reason = self._sz_loss_cooldown_active(_sz_dir)
+            if _sz_blocked:
+                dec_out["decision"] = "WAIT"
+                dec_out["confidence"] = 0
+                dec_out["reject_reason"] = _sz_reason
+                log.info(f"[Trader] {self.symbol}: {_sz_reason}")
+                if debugger:
+                    debugger.record("decision", "WAIT", _sz_reason)
 
         # ── Phase 25 follow-up: multi-factor signal scoring + confidence
         # management. Runs AFTER DecisionAgent but BEFORE RiskEngine so
@@ -1187,24 +1378,27 @@ class AITrader:
                 f"stale daily_risk.json state"
             )
 
+        # Pass signal structural SL/TP into RiskEngine (structure-first, no ATR primary).
+        # RiskEngine rejects loudly if geometry is missing/invalid.
+        try:
+            _sl_arg = float(_signal_sl) if _signal_sl not in (None, "", 0, 0.0) else None
+        except (TypeError, ValueError):
+            _sl_arg = None
+        try:
+            _tp_arg = float(_signal_tp) if _signal_tp not in (None, "", 0, 0.0) else None
+        except (TypeError, ValueError):
+            _tp_arg = None
+
         risk_out = self._risk.evaluate(
             signal=dec_out["decision"],
             entry=entry,
-            atr=ind.get("atr", 0.0005),
+            atr=ind.get("atr"),  # no silent 0.0005 default — RiskEngine rejects if invalid
             regime=market_out["regime"],
-            # EXECUTION-PROOF AUDIT FIX: pass the live correlation_ctx
-            # produced by CorrelationEngine in AnalysisAgent. Previously
-            # this was computed every cycle and discarded (CONSUMPTION-MAP
-            # row #63). Now RiskEngine uses it as an additional gate +
-            # lot-sizing multiplier. Falls back gracefully to None when
-            # the ctx is missing (e.g. analysis pipeline errored).
             correlation_ctx=analysis_out.get("correlation_ctx") if isinstance(analysis_out, dict) else None,
-            # 2026-08-25 fix: pass OHLC history so RiskEngine can place TP
-            # at a real structural level (nearest swing high/low that still
-            # clears the min-RR floor) instead of always a flat ATR*RR
-            # multiple — see risk/risk_engine.py comment at the TP block.
             df=market_out.get("df"),
             strategy=dec_out.get("strategy"),
+            stop_loss=_sl_arg,
+            take_profit=_tp_arg,
         )
 
         # Audit fix: fail CLOSED on new entries when we can't trust our
@@ -1332,6 +1526,19 @@ class AITrader:
                 if _corr["sl_corrected"] or _corr["tp_corrected"]:
                     for _note in _corr["notes"]:
                         log.info(f"[Trader] {self.symbol}: {_note}")
+                    # v3.19 FIX (micro-SL bug): keep the floored RiskEngine SL
+                    # when the structural correction would tighten below 15 pips.
+                    _pipcorr = 0.01 if "JPY" in self.symbol.upper() else (
+                        1.0 if "XAU" in self.symbol.upper() else 0.0001)
+                    _corr_sl_d = abs((_entry_for_correction or 0) - (_corr.get("sl") or 0)) / _pipcorr
+                    if _corr.get("sl_corrected") and _corr_sl_d < 15.0:
+                        log.info(
+                            f"[Trader] {self.symbol}: v3.19 SL floor — corrected SL "
+                            f"{_corr_sl_d:.1f}p < 15p; keeping RiskEngine SL "
+                            f"{dec_out.get('sl')}"
+                        )
+                        _corr["sl"] = dec_out.get("sl")
+                        _corr["sl_corrected"] = False
                     dec_out["sl"] = risk_out["sl_price"] = _corr["sl"]
                     dec_out["tp"] = risk_out["tp_price"] = _corr["tp"]
                     # Recompute pip distances/RR so downstream reporting matches.
@@ -3538,6 +3745,19 @@ class AITrader:
 
             self._risk.record_trade_close(trade["pair"], trade["pnl"])
             self._circuit_breaker.record_result(trade["result"], trade["pnl"])
+
+            # v3.21 (live): same-direction loss cooldown — record the close
+            # time of every losing trade so the decision-core gate can block
+            # immediate same-direction re-entries (revenge-trade guard).
+            _sz_dir = str(
+                trade.get("type")
+                or (trade.get("context") or {}).get("decision")
+                or ""
+            ).upper()
+            if _sz_dir in ("BUY", "SELL") and float(trade.get("pnl", 0) or 0) < 0:
+                if not hasattr(self, "_sz_last_loss_ts"):
+                    self._sz_last_loss_ts = {}
+                self._sz_last_loss_ts[_sz_dir] = datetime.now(timezone.utc)
 
             # ── Audit fix (Phase 9 wiring): CostTracker.record_trade(). ──
             # monitoring/cost_analysis.py::CostTracker is registered as the

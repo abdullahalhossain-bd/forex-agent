@@ -1,4 +1,4 @@
-﻿import json
+import json
 from pathlib import Path
 from collections import Counter
 path = Path('logs') / 'execution.log'

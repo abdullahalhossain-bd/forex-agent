@@ -97,12 +97,47 @@ PATTERN_LENGTH = {
 }
 
 
+def is_no_pattern(value) -> bool:
+    """
+    True if `value` represents "no pattern detected" in a `csp_pattern`
+    cell.
+
+    Bug fix (audit Part 1, "NaN handling bugs"): `compute()` builds
+    `csp_pattern` from a plain Python list seeded with `None` for "no
+    pattern". Assigning that list into a pandas object-dtype column
+    normally preserves `None`, but downstream operations on the
+    DataFrame (`.copy()`, `pd.concat`, reindexing — all of which this
+    module and its callers do) are not guaranteed to preserve `None`
+    over `float('nan')` in every pandas version; which sentinel comes
+    back out of `.to_numpy(dtype=object)` can depend on the pandas
+    version and the exact path the column took to get there. Code that
+    only checks `value is None` can therefore silently let a `nan`
+    *float* through as if it were a real pattern name — it then gets
+    treated as a truthy, non-None "pattern", stored in string sets,
+    sorted alongside real pattern-name strings, etc., and blows up with
+    `TypeError: '<' not supported between instances of 'str' and 'float'`
+    (see AUDIT_REPORT.md and `test_candlestick_architecture.py`'s
+    zero-range-candle regression test, which reproduces this on a
+    last-bar zero-range candle).
+
+    Every place in this codebase that asks "does this cell hold a
+    pattern name" — `add_confirmation()` here, and
+    `candlestick_engine.py`'s `_events_from_mw()` — must use this helper
+    instead of a bare `is None` check.
+    """
+    if value is None:
+        return True
+    if isinstance(value, float) and np.isnan(value):
+        return True
+    return False
+
+
 def _categorize(pattern: Optional[str]) -> Optional[str]:
     if pattern is None:
         return None
-    if pattern in BULLISH_REVERSAL_PATTERNS or pattern == "Bullish Marubozu":
+    if pattern in BULLISH_REVERSAL_PATTERNS or pattern == "Bullish Marubozu" or pattern == "Bullish Separating Lines":
         return "bullish"
-    if pattern in BEARISH_REVERSAL_PATTERNS or pattern == "Bearish Marubozu":
+    if pattern in BEARISH_REVERSAL_PATTERNS or pattern == "Bearish Marubozu" or pattern == "Bearish Separating Lines":
         return "bearish"
     if pattern in NEUTRAL_PATTERNS:
         return "neutral"
@@ -806,7 +841,7 @@ def add_confirmation(
 
     for i in range(n):
         p = patterns[i]
-        if p is None or (isinstance(p, float) and np.isnan(p)):
+        if is_no_pattern(p):
             continue
         if p not in _CONFIRMABLE_BULLISH_1BAR and p not in _CONFIRMABLE_BEARISH_1BAR:
             continue
@@ -820,6 +855,30 @@ def add_confirmation(
 
     out["csp_confirmed"] = confirmed
     out["csp_confirmation_pending"] = pending
+
+    # Causal/actionable representation:
+    # confirmation for pattern bar i becomes known only when bar i+1 closes.
+    # Therefore the confirmation evidence is exposed on bar i+1.
+    confirmation_available = np.zeros(n, dtype=bool)
+    confirmation_direction = np.zeros(n, dtype=np.int8)
+
+    for i in range(1, n):
+        source = i - 1
+        p = patterns[source]
+
+        if not confirmed[source]:
+            continue
+
+        if p in _CONFIRMABLE_BULLISH_1BAR:
+            confirmation_available[i] = True
+            confirmation_direction[i] = 1
+        elif p in _CONFIRMABLE_BEARISH_1BAR:
+            confirmation_available[i] = True
+            confirmation_direction[i] = -1
+
+    out["csp_confirmation_available"] = confirmation_available
+    out["csp_confirmation_direction"] = confirmation_direction
+
     return out
 
 

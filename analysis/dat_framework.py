@@ -120,7 +120,16 @@ class DATFramework:
             self.fetcher = DataFetcher()
             self.ind = Indicators()
             self.pat = PatternDetector()
-            self.sr = SupportResistance()
+            # FIX (Finding #8, S/R correctness audit): SupportResistance
+            # used to be built ONCE here in __init__, before `evaluate()`'s
+            # `timeframe` argument is even known, and then reused for
+            # every call regardless of what timeframe was requested — so
+            # `evaluate(symbol, timeframe="H4")` still ran swing detection
+            # tuned for the H1 default. We now store the class (same
+            # pattern already used for `self._fib_engine_cls` below) and
+            # instantiate it per-call in evaluate() with the real
+            # timeframe.
+            self._sr_engine_cls = SupportResistance
         except Exception as e:
             self._init_error = f"Core dependency init failed: {e}"
             log.warning(f"DATFramework init partial: {e}")
@@ -183,8 +192,9 @@ class DATFramework:
                 return result
 
             # ── A: Area ─────────────────────────────────────────
-            sr_result = self.sr.analyze(df)
-            sr_ctx = self.sr.get_ai_context(sr_result) if hasattr(self.sr, 'get_ai_context') else {}
+            sr_engine = self._sr_engine_cls(timeframe=timeframe)
+            sr_result = sr_engine.analyze(df)
+            sr_ctx = sr_engine.get_ai_context(sr_result) if hasattr(sr_engine, 'get_ai_context') else {}
             area_found, zone_type, zone_price = self._evaluate_area(
                 ind_ctx, sr_ctx, df=df, symbol=symbol, timeframe=timeframe
             )

@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import inspect
+import weakref
 from typing import Optional
 
 import pandas as pd
@@ -48,6 +49,14 @@ log = get_logger("candlestick_patterns_br")
 # process, so a hot loop calling doji()/spinning_top() per-bar without a
 # `symbol` doesn't spam the log.
 _warned_no_symbol: set[str] = set()
+
+# Private, module-level trend cache used by `_compute_trend()` below. Keyed
+# by (id(df), fast_span, slow_period, id(close_values)) and evicted via
+# weakref.finalize when the source DataFrame is garbage-collected. NEVER
+# stored on `df.attrs` — mutating a caller's DataFrame as a side channel
+# broke `pd.concat()` for any other code touching the same df downstream
+# (see the CACHING FIX note in `_compute_trend()`).
+_TREND_CACHE: dict = {}
 
 
 def _resolve_absolute_threshold(
@@ -128,21 +137,42 @@ def _compute_trend(df: pd.DataFrame, fast_span: int = 9, slow_period: int = 50):
     chute_alta, estrela) calls `_trend_down_confirmed`/`_trend_up_confirmed`
     independently, and each of those calls `_compute_trend`. On a single
     `detect_all(df)` call that's the same 9-EMA/50-SMA recomputed ~8 times
-    over identical data. Rather than thread a `context=` kwarg through
-    every function's public signature (a bigger, more invasive API change),
-    we cache the result on `df.attrs` — a dict pandas already carries on
-    every DataFrame — keyed by (fast_span, slow_period). This is invisible
-    to callers, fully backward compatible, and turns O(8 recomputations)
-    into O(1) per unique (fast_span, slow_period) pair per DataFrame.
+    over identical data.
+
+    CACHING FIX (candlestick architecture audit, 2026-08-31): this used to
+    cache the result on `df.attrs["_br_trend_cache"]` — a dict pandas
+    already carries on every DataFrame. That silently MUTATED the caller's
+    shared DataFrame with array-valued entries. Once any Series derived
+    from that DataFrame (via ordinary column selection, which inherits
+    `.attrs`) was later passed through `pd.concat()` anywhere else in the
+    pipeline — e.g. `_pattern_context.atr()`, which every candlestick_engine
+    call runs right after this module — pandas' `__finalize__` attrs-
+    equality check tries to compare dicts containing numpy arrays/Series
+    and raises `ValueError: The truth value of an array... is ambiguous`.
+    This was reproduced directly: `evaluate()` (single bar) worked, but
+    `evaluate_series()` (which calls `br.detect_all()` and then later
+    rebuilds ATR via `pd.concat` on the same df) crashed immediately after.
+    A "performance cache" must never have an observable side effect on the
+    caller's object. The cache now lives in a private, module-level,
+    id-keyed dict instead of on `df.attrs`, with a `weakref.finalize` hook
+    that evicts the entry once the DataFrame is garbage-collected — so
+    there is no memory leak and no mutation of anything the caller can see.
     """
-    cache = df.attrs.setdefault("_br_trend_cache", {})
-    key = (fast_span, slow_period, id(df["close"].values))
-    cached = cache.get(key)
+    cache_key = (id(df), fast_span, slow_period, id(df["close"].values))
+    cached = _TREND_CACHE.get(cache_key)
     if cached is not None:
         return cached
     mm_9 = df["close"].ewm(span=fast_span, adjust=False).mean()
     mm_50 = df["close"].rolling(slow_period).mean()
-    cache[key] = (mm_9, mm_50)
+    _TREND_CACHE[cache_key] = (mm_9, mm_50)
+    # Evict this entry once `df` itself is garbage-collected, so the cache
+    # can never outlive (or leak) the DataFrame it was computed from. If
+    # `df` isn't weak-referenceable for some reason, fail open (no caching
+    # for that call) rather than raise — correctness over the optimization.
+    try:
+        weakref.finalize(df, _TREND_CACHE.pop, cache_key, None)
+    except TypeError:
+        pass
     return mm_9, mm_50
 
 

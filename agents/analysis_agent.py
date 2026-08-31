@@ -424,7 +424,14 @@ class AnalysisAgent:
         pat_ctx  = {}  # DISABLED: patterns WR <40% — prevents scoring influence
 
         # ── 2. Support & Resistance ───────────────────────────
-        sr      = SupportResistance()
+        # FIX (Finding #8, S/R correctness audit): `timeframe` is already
+        # resolved above (`market_output.get("timeframe", "15m")`) but was
+        # not being passed through, so the engine always fell back to its
+        # H1-shaped swing_window default (4) regardless of what timeframe
+        # `df` actually is. That silently mismatches swing confirmation
+        # lag/clustering against the real bar spacing on every timeframe
+        # other than H1. Propagate the real timeframe explicitly.
+        sr      = SupportResistance(timeframe=timeframe)
         sr_res  = sr.analyze(df)
         sr.get_summary(sr_res)
         sr_ctx  = sr.get_ai_context(sr_res)
@@ -1549,7 +1556,7 @@ class AnalysisAgent:
         # bypass (already exists at line ~565) consumes it.
         from core.constants import is_backtest_mode as _bt_mode_check
         _bt_mode = _bt_mode_check()
-        _bt_aggressive = _bt_mode  # backtest = aggressive rule-signal path
+        _bt_aggressive = False  # v3.18: disabled — MasterAnalyst verdict is the authority (live parity)
 
         rule_sig_raw = signal_result.get("signal", "WAIT")
         rule_conf = signal_result.get("confidence", 0)
@@ -2760,7 +2767,8 @@ class AnalysisAgent:
             # override gate rejected the rule signal; a lone strategy vote
             # must not re-open what that lock just closed.
             if (
-                not _consensus_lock_blocked
+                False  # v3.18: disabled — MasterAnalyst WAIT must stay WAIT
+                and not _consensus_lock_blocked
                 and final_signal not in ("BUY", "SELL")
                 and adaptive_decision.get("action") in ("BUY", "SELL")
             ):
@@ -2813,7 +2821,8 @@ class AnalysisAgent:
         # after MasterDecision WAIT.
         # Task 8 live-readiness fix: same consensus-lock guard as the
         # adaptive fill above.
-        if not _consensus_lock_blocked and final_signal not in ("BUY", "SELL"):
+        if False and not _consensus_lock_blocked and final_signal not in ("BUY", "SELL"):
+            # v3.18: disabled — MasterAnalyst WAIT must stay WAIT (no lone-engine fill)
             try:
                 _cons = (unified_signal_ctx or {}).get("consensus") or {}
                 _cons_action = str(_cons.get("action", "")).upper()

@@ -80,6 +80,7 @@ or None if:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Optional
 
 import numpy as np
@@ -155,6 +156,15 @@ def get_stop_hunt_direct_signal(
         # 2026-08-13: removed debug print() — was firing every bar
         return None
 
+    # v3.21 (live parity): the "direct lane" is a bypass that generates a
+    # SELL straight from StopHuntSignalEngine even when the DecisionAgent
+    # said WAIT — i.e. a trade with no master-verdict approval. The
+    # v3.18-v3.21 debug sessions proved this lane causes unauthorized
+    # losses, so it is DISABLED by default now. Set env
+    # SZ_DISABLE_STOP_HUNT_LANE=0 to restore the legacy behavior.
+    if str(os.getenv("SZ_DISABLE_STOP_HUNT_LANE", "1")).strip() == "1":
+        return None
+
     # Late import — same module the tester uses (analysis/stop_hunt_signal_engine.py)
     from analysis.stop_hunt_signal_engine import StopHuntSignalEngine
 
@@ -222,7 +232,13 @@ def get_stop_hunt_direct_signal(
     try:
         from analysis.support_resistance import SupportResistance
         sr_window = df.iloc[max(0, i - 200):i + 1]
-        sr_res = SupportResistance().analyze(sr_window)
+        # FIX (Finding #8, S/R correctness audit): this module's contract
+        # (see module docstring) is H1 OHLCV only, and the engine's
+        # default timeframe already happens to be "H1" — so this was not
+        # a live bug — but leaving it implicit means a future default
+        # change elsewhere in support_resistance.py would silently break
+        # this module's tester-parity guarantee. Made explicit.
+        sr_res = SupportResistance(timeframe="H1").analyze(sr_window)
     except Exception as e:
         log.debug(f"[stop_hunt_direct_lane] S/R analyze failed: {e}")
         sr_res = {}

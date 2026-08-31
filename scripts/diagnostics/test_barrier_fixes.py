@@ -133,8 +133,8 @@ check("master_ctx safe default code present",
 # ──────────────────────────────────────────────────────────────────
 # Summary
 # ──────────────────────────────────────────────────────────────────
-    print()
-    print("=" * 70)
-    print(f"  Result: {PASS} PASS, {FAIL} FAIL")
-    print("=" * 70)
-    sys.exit(0 if FAIL == 0 else 1)
+print()
+print("=" * 70)
+print(f"  Result: {PASS} PASS, {FAIL} FAIL")
+print("=" * 70)
+sys.exit(0 if FAIL == 0 else 1)

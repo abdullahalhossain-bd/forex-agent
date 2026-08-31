@@ -543,13 +543,36 @@ class StopHuntSignalEngine:
         if not np.isfinite(atr_val) or atr_val <= 0:
             atr_val = float(df["close"].iloc[-1]) * 0.001  # fallback 0.1% of price
 
-        # Entry = open of the candle AFTER confirmation
-        # (or current close if confirmation is the last candle)
+        # Structural entry for stop-hunt:
+        # - Preferred: open of the candle AFTER confirmation (classic ICT timing)
+        # - If confirmation is the last bar: entry = zone edge (retest level),
+        #   NEVER raw close (that is chasing).
         confirm_idx = event.confirm_index
         if confirm_idx + 1 < len(df):
             entry_price = float(df["open"].iloc[confirm_idx + 1])
         else:
-            entry_price = float(df["close"].iloc[-1])
+            # Live bar still forming — planned entry at the zone boundary
+            # that was swept (BUY reclaims zone_top, SELL reclaims zone_bottom).
+            if event.reversal_direction == "BUY":
+                entry_price = float(event.zone_top)
+            else:
+                entry_price = float(event.zone_bottom)
+            current = float(df["close"].iloc[-1])
+            # Anti-chase: if price already left the zone by >0.35 ATR, wait for retest
+            if event.reversal_direction == "BUY" and current > entry_price + atr_val * 0.35:
+                return self._no_trade_signal(
+                    reason=(
+                        f"Stop hunt BUY: price {current:.5f} already past zone entry "
+                        f"{entry_price:.5f} — wait for retest, no chase"
+                    )
+                )
+            if event.reversal_direction == "SELL" and current < entry_price - atr_val * 0.35:
+                return self._no_trade_signal(
+                    reason=(
+                        f"Stop hunt SELL: price {current:.5f} already past zone entry "
+                        f"{entry_price:.5f} — wait for retest, no chase"
+                    )
+                )
 
         # SL = just beyond wick extreme
         sl_buffer = atr_val * SL_BUFFER_ATR_MULT
@@ -596,15 +619,14 @@ class StopHuntSignalEngine:
             )
 
         if rr < MIN_RR_RATIO:
-            # Fall back to 1.5 R:R if zone-based TP is too close
-            if event.reversal_direction == "BUY":
-                take_profit = entry_price + risk * MIN_RR_RATIO
-            else:
-                take_profit = entry_price - risk * MIN_RR_RATIO
-            rr = MIN_RR_RATIO
-            tp_note = f" | TP set to 1:{MIN_RR_RATIO:.0f} R:R (zone TP too close)"
-        else:
-            tp_note = ""
+            # No artificial TP stretch — structure must provide real target
+            return self._no_trade_signal(
+                reason=(
+                    f"Stop hunt confirmed but structural TP R:R {rr:.2f} < "
+                    f"min {MIN_RR_RATIO:.2f} — no fabricated RR target. Wait."
+                )
+            )
+        tp_note = ""
 
         # Confidence scoring
         confidence = _strength_to_confidence(

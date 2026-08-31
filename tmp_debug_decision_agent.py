@@ -1,4 +1,4 @@
-﻿from agents.decision_agent import DecisionAgent
+from agents.decision_agent import DecisionAgent
 agent = DecisionAgent()
 analysis_out = {
     'final_signal': 'WAIT',

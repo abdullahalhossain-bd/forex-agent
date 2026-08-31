@@ -1,4 +1,4 @@
-﻿import json, collections, datetime
+import json, collections, datetime
 from pathlib import Path
 path = Path('logs') / 'execution.log'
 blocked = []

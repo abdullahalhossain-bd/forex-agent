@@ -1149,42 +1149,76 @@ class MultiStrategyPAEngine:
                 f"Step 5: Lower timeframe ({mtf_info.get('lower_tf_used')}) confirmation failed"
             )
 
-        # ── Compute entry, SL, TP ──
+        # ── Compute structural Entry / SL / TP (NO market-price entry, NO ATR RR floor) ──
+        # Entry = confluence zone edge (planned structural entry), not current close.
+        # SL    = structural invalidation (swing / pattern extreme) + ATR buffer.
+        # TP    = nearest meaningful structure beyond min RR. If none → no trade.
         current_price = float(df["close"].iloc[-1])
         sl_buffer = atr_val * 0.15
+        min_sl_dist = max(atr_val * 0.5, atr_val * 0.5)  # 0.5 ATR floor (RiskEngine also enforces)
 
         if action == "BUY":
-            # Entry at current price; SL below recent swing low or confluence zone bottom
-            entry_price = current_price
+            # Planned entry at confluence zone top (bullish retest / zone edge)
+            if confluence_zone is None:
+                return self._no_trade_signal(
+                    "BUY geometry: confluence zone missing — cannot set structural entry"
+                )
+            entry_price = float(confluence_zone.zone_top)
+            # If price already ran away from zone (> 0.5 ATR), do not chase
+            if current_price - entry_price > atr_val * 0.5:
+                return self._no_trade_signal(
+                    f"BUY geometry: price {current_price:.5f} already >0.5 ATR above "
+                    f"zone entry {entry_price:.5f} — chasing, NO TRADE"
+                )
             recent_lows = [s["price"] for s in trend.swing_lows[-3:]] if trend.swing_lows else []
-            sl_anchor = min(recent_lows) if recent_lows else (confluence_zone.zone_bottom - sl_buffer)
-            stop_loss = sl_anchor - sl_buffer
-            # TP = nearest resistance zone OR confluence zone + min R:R
-            res_above = [z for z in sr_zones if z.type == "resistance" and z.zone_bottom > entry_price]
-            if res_above:
-                take_profit = min(z.zone_bottom for z in res_above)
+            if recent_lows:
+                sl_anchor = min(recent_lows)
             else:
-                # Fallback: 1:2 R:R
-                risk = entry_price - stop_loss
-                take_profit = entry_price + risk * MIN_RR_RATIO
+                sl_anchor = float(confluence_zone.zone_bottom)
+            stop_loss = sl_anchor - sl_buffer
+            if entry_price - stop_loss < min_sl_dist:
+                return self._no_trade_signal(
+                    f"BUY geometry: SL too tight ({entry_price - stop_loss:.5f} < "
+                    f"{min_sl_dist:.5f}). No valid structure invalidation."
+                )
+            res_above = [z for z in sr_zones if z.type == "resistance" and z.zone_bottom > entry_price]
+            if not res_above:
+                return self._no_trade_signal(
+                    "BUY geometry: no resistance zone above entry for structural TP — NO TRADE"
+                )
+            take_profit = min(z.zone_bottom for z in res_above)
         else:  # SELL
-            entry_price = current_price
-            # If shooting star setup detected, use 1st candle's upper wick for SL
+            if confluence_zone is None:
+                return self._no_trade_signal(
+                    "SELL geometry: confluence zone missing — cannot set structural entry"
+                )
+            entry_price = float(confluence_zone.zone_bottom)
+            if entry_price - current_price > atr_val * 0.5:
+                return self._no_trade_signal(
+                    f"SELL geometry: price {current_price:.5f} already >0.5 ATR below "
+                    f"zone entry {entry_price:.5f} — chasing, NO TRADE"
+                )
             if ss_setup.get("detected"):
-                # SL = shooting star upper wick + buffer
                 c1 = df.iloc[-2]
                 stop_loss = float(c1["high"]) + sl_buffer
             else:
                 recent_highs = [s["price"] for s in trend.swing_highs[-3:]] if trend.swing_highs else []
-                sl_anchor = max(recent_highs) if recent_highs else (confluence_zone.zone_top + sl_buffer)
+                if recent_highs:
+                    sl_anchor = max(recent_highs)
+                else:
+                    sl_anchor = float(confluence_zone.zone_top)
                 stop_loss = sl_anchor + sl_buffer
-            # TP = nearest support zone
+            if stop_loss - entry_price < min_sl_dist:
+                return self._no_trade_signal(
+                    f"SELL geometry: SL too tight ({stop_loss - entry_price:.5f} < "
+                    f"{min_sl_dist:.5f}). No valid structure invalidation."
+                )
             sup_below = [z for z in sr_zones if z.type == "support" and z.zone_top < entry_price]
-            if sup_below:
-                take_profit = max(z.zone_top for z in sup_below)
-            else:
-                risk = stop_loss - entry_price
-                take_profit = entry_price - risk * MIN_RR_RATIO
+            if not sup_below:
+                return self._no_trade_signal(
+                    "SELL geometry: no support zone below entry for structural TP — NO TRADE"
+                )
+            take_profit = max(z.zone_top for z in sup_below)
 
         # R:R check
         risk = abs(entry_price - stop_loss)

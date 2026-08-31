@@ -1,4 +1,4 @@
-﻿import inspect
+import inspect
 import core.trader as t
 src = inspect.getsource(t)
 print('entry fix present:', 'entry=risk_out.get("entry")' in src)

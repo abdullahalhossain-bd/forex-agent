@@ -2335,7 +2335,11 @@ if __name__ == "__main__":
 
     fetcher = DataFetcher()
     ind     = Indicators()
-    sr_eng  = SupportResistance()
+    # FIX (Finding #8, S/R correctness audit): this demo fetches "1h"
+    # data; the engine's default timeframe ("H1") already matched by
+    # coincidence, but made explicit here so it can't silently drift out
+    # of sync if the fetch timeframe above is ever changed.
+    sr_eng  = SupportResistance(timeframe="H1")
 
     df = fetcher.fetch_ohlcv("EURUSD", "1h", limit=200)
     if df is not None:

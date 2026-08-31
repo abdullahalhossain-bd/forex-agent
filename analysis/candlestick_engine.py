@@ -188,15 +188,28 @@ def _events_from_mw(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) 
     precomputed_trend = ctx.trend_mw.to_numpy() if not config.mw_trend_filter_via_context else np.array(
         [ctx.trend_label(i) for i in range(len(df))], dtype=object
     )
-    # Volatility-adaptive tolerance instead of mw.py's original hardcoded 0.05
-    # (Phase 3 fix applied to mw.py itself; the engine supplies the value).
-    regime_to_tol = {"low": 0.03, "normal": 0.05, "high": 0.08, "unknown": 0.05}
-    # Use the tolerance for the *majority* regime across the dataframe as a
-    # single scalar (mw.compute()'s per-bar loop takes one tolerance value;
-    # per-bar-varying tolerance would require threading a Series through the
-    # loop, a further extension noted in EXTENSION_GUIDE.md).
-    dominant_regime = ctx.volatility_regime.mode().iloc[0] if not ctx.volatility_regime.empty else "normal"
-    tol = regime_to_tol.get(dominant_regime, 0.05)
+    # near_equal_tolerance: a fixed, dataset-independent value (matches
+    # mw.compute()'s own causal default). This function used to pick a
+    # single tolerance for the WHOLE call by taking the "dominant"
+    # (mode) volatility regime across the entire `df` and mapping that to
+    # a tolerance — e.g. {"low": 0.03, "normal": 0.05, "high": 0.08}. That
+    # was a LOOKAHEAD BUG (found by candlestick_engine.py's own truncation-
+    # stability regression test, which failed before this fix): the mode
+    # of `ctx.volatility_regime` over the whole dataframe depends on every
+    # bar in `df`, including bars that come *after* the bar currently being
+    # scored. In a live/streaming context, "today's" pattern classification
+    # cannot depend on next month's volatility distribution — and the
+    # regression test proved it doesn't have to: truncating the dataframe
+    # changed the tolerance, which changed which historical bars were
+    # classified as Tweezer/Counterattack/Separating-Lines patterns, even
+    # for bars far from the truncation point. Per-bar-causal adaptive
+    # tolerance (e.g. driven by each bar's own already-causal
+    # `ctx.volatility_regime.iloc[i]`) is a legitimate future enhancement,
+    # but requires threading a tolerance *Series* through `mw.compute()`'s
+    # internal per-bar loop instead of a single scalar — out of scope for
+    # this fix. A fixed tolerance is unconditionally causal and is what is
+    # used here.
+    tol = 0.05
 
     out = mw.compute(df, precomputed_trend=precomputed_trend, near_equal_tolerance=tol)
     if config.mw_use_confirmation:
@@ -207,7 +220,17 @@ def _events_from_mw(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) 
     cat = out["csp_category"].to_numpy(dtype=object)
     bars_len = out["csp_bars"].to_numpy()
     for i, name in enumerate(patt):
-        if name is None:
+        # Bug fix (audit Part 1 "NaN handling bugs" / Part 4 bonus find):
+        # `csp_pattern` can surface a missing value as float `nan` instead
+        # of `None` depending on the pandas version and the DataFrame
+        # operations `mw.compute()`/`mw.add_confirmation()` went through
+        # (see `mw.is_no_pattern()` for the full explanation). A bare
+        # `name is None` check let `nan` slip through as a fake pattern
+        # name, which later crashed `sorted({e.name for e in ...})` in
+        # `evaluate()` with `TypeError: '<' not supported between
+        # instances of 'str' and 'float'` whenever the last bar of a
+        # DataFrame had no detected pattern (e.g. a zero-range candle).
+        if mw.is_no_pattern(name):
             continue
         direction = cat[i] if cat[i] in ("bullish", "bearish") else "neutral"
         events.append(PatternEvent(bar=i, source="mw", name=_canon(name),
@@ -244,10 +267,19 @@ def _events_from_ml(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) 
     return events
 
 
-def _events_from_br(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) -> list[PatternEvent]:
+def _events_from_br(
+    df: pd.DataFrame, ctx: MarketContext, config: EngineConfig, symbol: Optional[str] = None,
+) -> list[PatternEvent]:
     if not config.use_br:
         return []
-    detected = br.detect_all(df)   # uses ATR-based auto-scaling by default (Phase 3 fix)
+    # `symbol`, when known, is forwarded so br.py's doji()/spinning_top()
+    # use pip-scaled thresholds (via _resolve_absolute_threshold) instead of
+    # only the ATR-based auto-scaling fallback. Both paths are FX-safe, but
+    # an explicit symbol is more precise than an ATR proxy when available.
+    # (Bug fix: `evaluate()`/`evaluate_series()` already accepted a `symbol`
+    # kwarg but never threaded it this far down — see PART 6/7 of the
+    # candlestick architecture audit.)
+    detected = br.detect_all(df, symbol=symbol)   # ATR-based auto-scaling if symbol is None (Phase 3 fix)
     events: list[PatternEvent] = []
     close, open_ = df["close"].to_numpy(), df["open"].to_numpy()
     n = len(df)
@@ -290,10 +322,12 @@ def _events_from_br(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) 
     return events
 
 
-def collect_events(df: pd.DataFrame, ctx: MarketContext, config: EngineConfig) -> list[PatternEvent]:
+def collect_events(
+    df: pd.DataFrame, ctx: MarketContext, config: EngineConfig, symbol: Optional[str] = None,
+) -> list[PatternEvent]:
     """Run all three source modules once and return a flat list of events."""
     events: list[PatternEvent] = []
-    events += _events_from_br(df, ctx, config)
+    events += _events_from_br(df, ctx, config, symbol=symbol)
     events += _events_from_mw(df, ctx, config)
     events += _events_from_ml(df, ctx, config)
     return events
@@ -407,26 +441,59 @@ def _score_group(
 
 
 def _bar_confirmation_status(
-    mw_out_confirmed: Optional[pd.DataFrame], name: str, bar: int, n_bars: int,
+    mw_out_confirmed: Optional[pd.DataFrame],
+    name: str,
+    bar: int,
+    n_bars: int,
 ) -> Optional[bool]:
     """
-    Returns True/False if this event's confirmation is already knowable,
-    or None if not applicable (not a confirmable 1-bar pattern) / not yet
-    knowable (this bar IS the last bar — the confirming bar hasn't happened
-    yet, so we must never claim "confirmed" or "failed": see
-    `mw.add_confirmation` docstring's causality note, and Phase-7 validation
-    checklist item "no impossible confirmations").
+    Return confirmation evidence that is causally available at `bar`.
+
+    Important:
+    - Pattern is detected on bar i.
+    - Confirmation is determined by bar i+1 close.
+    - Confirmation therefore becomes actionable on bar i+1.
+    - The confirmation must match the directional family of the
+      pattern being scored.
     """
     if mw_out_confirmed is None:
         return None
-    if name not in (mw._CONFIRMABLE_BULLISH_1BAR | mw._CONFIRMABLE_BEARISH_1BAR):
+
+    confirmable_bullish = mw._CONFIRMABLE_BULLISH_1BAR
+    confirmable_bearish = mw._CONFIRMABLE_BEARISH_1BAR
+
+    if name not in (confirmable_bullish | confirmable_bearish):
         return None
-    if bar >= n_bars - 1:
-        return None  # pending — the confirming bar doesn't exist yet
-    return bool(mw_out_confirmed["csp_confirmed"].iloc[bar])
 
+    if bar < 0:
+        bar = n_bars + bar
 
-# ── Public API ────────────────────────────────────────────────────────────
+    if bar <= 0 or bar >= n_bars:
+        return None
+
+    required_direction = (
+        1 if name in confirmable_bullish else -1
+    )
+
+    available = bool(
+        mw_out_confirmed["csp_confirmation_available"].iloc[bar]
+    )
+
+    direction = int(
+        mw_out_confirmed["csp_confirmation_direction"].iloc[bar]
+    )
+
+    # No confirmation from the required pattern family is available.
+    if not available:
+        return False
+
+    # Confirmation exists, but it belongs to the opposite directional
+    # family. Do not incorrectly credit it to this pattern.
+    if direction != required_direction:
+        return False
+
+    return True
+
 
 def evaluate(
     df: pd.DataFrame,
@@ -465,7 +532,7 @@ def evaluate(
         location_lookback=config.location_lookback, volume_lookback=config.volume_lookback,
     )
 
-    events = collect_events(df, ctx, config)
+    events = collect_events(df, ctx, config, symbol=symbol)
     bar_events = [e for e in events if e.bar == at]
 
     # mw confirmation table only needed for the specific pattern set; build
@@ -554,6 +621,29 @@ def evaluate(
         else:
             explanations.append("No patterns detected at this bar.")
 
+    # Insufficient warm-up guard: `confidence` (and the other blended scores)
+    # can come out NaN when this bar doesn't yet have enough history for one
+    # of MarketContext's rolling components (e.g. volatility_regime needs
+    # `volatility_lookback` bars, location needs `location_lookback` bars).
+    # A directional "bullish"/"bearish" signal paired with a NaN confidence
+    # is not evidence of anything — it's an artifact of an under-warmed
+    # window — so it is downgraded to neutral explicitly here rather than
+    # silently reaching a caller (e.g. a vote-weighting function) that might
+    # otherwise coerce NaN into a low-but-nonzero default weight and cast a
+    # vote with no real basis.
+    if signal != "neutral" and not np.isfinite(confidence):
+        warnings.append(
+            f"{signal.capitalize()} pattern detected, but confidence could not be computed "
+            "(insufficient bar history for one or more context components — trend/location/"
+            "volatility warm-up not yet complete). Downgraded to neutral."
+        )
+        signal = "neutral"
+        confidence = 0.0
+        failure_probability = 0.5
+        pattern_strength = 0.0
+        confirmation_strength = 0.5
+        quality_score = 0.0
+
     if signal != "neutral":
         w = scored[signal]
         explanations.append(
@@ -641,7 +731,7 @@ def evaluate_series(
         df, atr_period=config.atr_period, volatility_lookback=config.volatility_lookback,
         location_lookback=config.location_lookback, volume_lookback=config.volume_lookback,
     )
-    events = collect_events(df, ctx, config)
+    events = collect_events(df, ctx, config, symbol=symbol)
 
     events_by_bar: dict[int, list[PatternEvent]] = {}
     for e in events:
@@ -693,6 +783,14 @@ def evaluate_series(
             failure_probability = 1.0 - confidence
             conflict = False
         else:
+            signal, winner, confidence, failure_probability, conflict = "neutral", None, 0.0, 0.5, False
+
+        # Insufficient warm-up guard (mirrors evaluate()'s identical check):
+        # a directional signal whose confidence came out NaN — because this
+        # bar doesn't yet have enough history for one of MarketContext's
+        # rolling components — is not real evidence and must not be scored,
+        # counted, or fed into a later win-rate validation as if it were.
+        if signal != "neutral" and not np.isfinite(confidence):
             signal, winner, confidence, failure_probability, conflict = "neutral", None, 0.0, 0.5, False
 
         rows.append({
@@ -761,7 +859,15 @@ if __name__ == "__main__":
     cols = ["signal", "confidence", "pattern_strength", "trend_label"]
     a = series_full.iloc[:check_upto][cols].reset_index(drop=True)
     b = series_trunc.iloc[:check_upto][cols].reset_index(drop=True)
-    mismatches = (a != b).any(axis=1).sum()
+    # NaN-safe row comparison: plain `!=` treats NaN != NaN as True, which
+    # would falsely flag two identical "insufficient warm-up data" rows
+    # (both legitimately NaN) as a lookahead mismatch. Two NaNs in the same
+    # column agree; anything else compares normally.
+    row_differs = pd.Series(False, index=a.index)
+    for col in cols:
+        both_nan = a[col].isna() & b[col].isna()
+        row_differs |= (a[col] != b[col]) & ~both_nan
+    mismatches = int(row_differs.sum())
     print(f"  Rows compared: {check_upto}, mismatches after truncating the future: {mismatches}")
     assert mismatches == 0, "LOOKAHEAD BUG: engine output changed when the future was removed!"
     print("  Engine causality regression check passed.")

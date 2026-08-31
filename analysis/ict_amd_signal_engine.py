@@ -234,7 +234,7 @@ class ICTAMDSignalEngine:
         wick_body_ratio: float = WICK_BODY_RATIO_MIN,
         min_rr_ratio: float = MIN_RR_RATIO,
         allow_medium_zone_tp: bool = True,
-        allow_atr_fallback_tp: bool = True,
+        allow_atr_fallback_tp: bool = False,  # structure-only TP; no ATR projection fallback
     ):
         self.timeframe = timeframe
         self.wick_body_ratio = wick_body_ratio
@@ -872,6 +872,23 @@ class ICTAMDSignalEngine:
         # OR open of candle after MSS confirmation
         # We use FVG midpoint as primary entry (more precise)
         entry_price = fvg.midpoint
+        current_price = float(df["close"].iloc[-1])
+
+        # Anti-chase: if price already left the FVG entry by >0.35 ATR, wait for retest
+        if abs(current_price - entry_price) > atr_val * 0.35:
+            # Only block when price moved in the TRADE direction past entry (chase)
+            # Direction not fully known yet — use FVG type
+            fvg_type = str(getattr(fvg, "type", "") or "").lower()
+            chased = False
+            if "bull" in fvg_type and current_price > entry_price + atr_val * 0.35:
+                chased = True
+            if "bear" in fvg_type and current_price < entry_price - atr_val * 0.35:
+                chased = True
+            if chased:
+                return self._no_trade_signal(
+                    f"FVG entry {entry_price:.5f} already left by price "
+                    f"{current_price:.5f} (>0.35 ATR) — wait for retest, no chase"
+                )
 
         # SL = wick extreme + buffer
         sl_buffer = atr_val * 0.15

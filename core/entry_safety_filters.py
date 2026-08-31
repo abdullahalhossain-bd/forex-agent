@@ -46,6 +46,7 @@ The six rules implemented here:
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
@@ -385,6 +386,19 @@ class EntrySafetyFilters:
         sr_ctx = sr_ctx or {}
         mtf_bias = mtf_bias or {}
 
+        # v3.21 (live parity): single-layer override DISABLED by default.
+        # The v3.18-v3.21 debug sessions proved this gate lets the rule
+        # engine flip a MasterAnalyst WAIT into a trade on its own — the
+        # exact bypass that produced unauthorized losses in backtest.
+        # The master verdict is the sole trade authority. Set env
+        # SZ_DISABLE_OVERRIDE_GATE=0 to restore the legacy gate.
+        if str(os.getenv("SZ_DISABLE_OVERRIDE_GATE", "1")).strip() == "1":
+            return SafetyCheckResult(
+                allowed=False,
+                reason=("v3.21: single-layer override disabled — master WAIT "
+                        "stays WAIT (set SZ_DISABLE_OVERRIDE_GATE=0 to restore)"),
+                details={"exhaustion_penalty": 0.0},
+            )
         direction = rule_signal if rule_signal in ("BUY", "SELL") else None
         if direction is None:
             return SafetyCheckResult(allowed=False, reason="No directional rule signal to evaluate")
