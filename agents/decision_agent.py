@@ -33,13 +33,18 @@ def _fallback_sl_tp(direction: str, entry_price: float, ind_ctx: dict,
     except (TypeError, ValueError):
         atr = None
 
-    if atr is None:
+    if atr is None or atr <= 0:
         atr = float(entry_price) * 0.001
 
-    # 2026-08-12: TP 1:1.5 R:R — SL=1.5 ATR, TP=2.25 ATR
-    # Historical: break-even WR=43%, production expects 50%+ = profit
+    # Guard: never let ATR collapse to near-zero (would produce SL≈entry
+    # and later RRR=0 / zero-distance bugs). Floor at 0.05% of price.
+    atr = max(float(atr), float(entry_price) * 0.0005)
+
+    # Fixed 1:2 R:R (2026-08-31): SL=1.5 ATR, TP=3.0 ATR
+    # Structural path uses finalize_trade_geometry (TP = 2× actual risk).
+    # This fallback only runs when no structural SL was injected.
     sl_distance = atr * 1.5
-    tp_distance = atr * 2.25
+    tp_distance = atr * 3.0
 
     if direction == "BUY":
         sl = entry_price - sl_distance
@@ -159,7 +164,7 @@ class DecisionAgent:
     # getting blocked by the 85% zero-consensus override, leaving
     # effectively no trades being placed at all.
     import os as _os_conf
-    CONFIDENCE_FLOOR = float(_os_conf.getenv("DECISION_CONFIDENCE_FLOOR", "60.0"))
+    CONFIDENCE_FLOOR = float(_os_conf.getenv("DECISION_CONFIDENCE_FLOOR", "40.0"))
 
     # Keep backward-compatible aliases so any external reference to the
     # old names still works.
@@ -274,113 +279,188 @@ class DecisionAgent:
         sources.append(("master", float(master_conf_for_vote or 0), 1.5,
                 master_signal_for_vote in BUYSELL and float(master_conf_for_vote or 0) > 0))
 
-        # 4. ML Ensemble (0-100 scale, highest weight — fuses ML+rules+LLM)
-        # NOTE: when ml_available=False, the Ensemble is running in
-        # degraded "rules-only" mode — its confidence is largely derived
-        # from the same rule/master signal already counted above, NOT an
-        # independent ML-fused opinion. Counting it at full weight here
-        # would double-count essentially the same vote. Halve its weight
-        # in that state so it still contributes (rules-only isn't worthless)
-        # but doesn't inflate the aggregate as if two independent layers
-        # agreed. Once ML models are retrained and ml_available=True again,
-        # it returns to full weight automatically.
-        ensemble_ctx = analysis_out.get("ensemble") if isinstance(analysis_out, dict) else None
-        if isinstance(ensemble_ctx, dict) and ensemble_ctx and not ensemble_ctx.get("error"):
-            e_decision = ensemble_ctx.get("decision", "WAIT")
-            e_conf = float(ensemble_ctx.get("confidence", 0) or 0)
-            e_ml_available = bool(ensemble_ctx.get("ml_available", True))
-            e_weight = 2.0 if e_ml_available else 1.0
-            sources.append(("ensemble", e_conf, e_weight,
-                            e_decision in ("BUY", "SELL") and e_conf > 0))
+        # 4. ML Ensemble — HARD REMOVED from confidence (2026-08-31)
+        # Models schema-mismatched (74 vs 161 features); every cycle was
+        # SKIPPED. Including a dead layer only diluted participation and
+        # produced 0% ML in audit logs. Do NOT re-add until retrain lands.
+        # (ensemble_ctx may still exist on analysis_out for audit, ignored.)
 
-        # 5. RL Agent (0-1 scale -> *100)
+        # 5. RL Agent — kept but only if it actually voted BUY/SELL
         rl_ctx = analysis_out.get("rl_agent") if isinstance(analysis_out, dict) else None
         if isinstance(rl_ctx, dict) and rl_ctx and not rl_ctx.get("error"):
             rl_action = rl_ctx.get("action_name", "HOLD")
             rl_conf = float(rl_ctx.get("confidence", 0) or 0) * 100
-            sources.append(("rl_agent", rl_conf, 1.5,
+            sources.append(("rl_agent", rl_conf, 1.2,
                             rl_action in ("BUY", "SELL") and rl_conf > 0))
 
-        # 6/7. Unified Signal Engine consensus + Adaptive Decision
-        # (confidence is a Low/Medium/High label here, not a number)
-        # 2026-08-19 FIX: Low 30→45, Medium 60→65. Mapping fusion/adaptive
-        # "Low" to 30% was the main reason strong tech/LLM signals ended
-        # at ~33% after aggregate damping. 45% keeps Low as a real discount
-        # without tanking the whole decision below LiveRiskManager's floor.
-        _label_conf = {"High": 85.0, "Medium": 65.0, "Low": 45.0}
+        # ── New confidence core (post-ML): structural + session layers ──
+        # Weights tuned so agreement across structure/SMC/session lifts
+        # confidence without any single noisy LLM spike dominating.
+        _label_conf = {"High": 82.0, "Medium": 64.0, "Low": 48.0, "A": 80.0, "B": 65.0, "C": 50.0, "A+": 88.0}
+
+        # 6. Unified Signal Engine consensus + Adaptive
+        # 2026-09-01: only count as participating when direction AGREES
+        # with the primary Master/Rule/LLM direction. Opposite votes
+        # (e.g. Adaptive SELL while Master BUY) and Unified NO_TRADE must
+        # ABSTAIN — they used to dilute aggregate confidence and force WAIT.
+        _primary_dir = None
+        for _cand in (master_signal_for_vote, rule_signal, llm_signal):
+            _cu = str(_cand or "").upper()
+            if "BUY" in _cu:
+                _primary_dir = "BUY"
+                break
+            if "SELL" in _cu:
+                _primary_dir = "SELL"
+                break
+
         unified_ctx = analysis_out.get("unified_signal") if isinstance(analysis_out, dict) else None
         if isinstance(unified_ctx, dict) and unified_ctx and not unified_ctx.get("error"):
             consensus = unified_ctx.get("consensus", {}) or {}
-            u_action = consensus.get("action", "NO_TRADE")
-            u_conf = _label_conf.get(consensus.get("confidence", "Low"), 45.0)
-            sources.append(("unified_signal", u_conf, 1.0,
-                            u_action in ("BUY", "SELL") and u_conf > 0))
+            u_action = str(consensus.get("action", "NO_TRADE")).upper()
+            u_conf = _label_conf.get(str(consensus.get("confidence", "Low")), 48.0)
+            try:
+                _cal = float(consensus.get("calibrated_score") or 0)
+                if _cal > 0:
+                    u_conf = _cal * 100.0 if _cal <= 1.0 else _cal
+                    u_conf = max(40.0, min(90.0, u_conf))
+            except (TypeError, ValueError):
+                pass
+            _u_agree = (
+                u_action in ("BUY", "SELL")
+                and u_conf > 0
+                and (_primary_dir is None or u_action == _primary_dir)
+            )
+            sources.append(("unified_signal", u_conf, 1.4, _u_agree))
 
             adaptive = unified_ctx.get("adaptive_decision", {}) or {}
             if not adaptive.get("error"):
-                a_action = adaptive.get("action", "NO_TRADE")
-                # BUG FIX: AdaptiveDecisionEngine.decide()'s "score" field is a
-                # raw confluence point-total (docstring example: score=8.5) —
-                # NOT a 0-1 confidence fraction. Multiplying it by 100 produced
-                # nonsensical aggregate-confidence inputs like 180% (prod log:
-                # score=1.80 -> 180%), inflating the weighted-average aggregate
-                # confidence even when the engine's own label was "Low". Reuse
-                # the Low/Medium/High label mapping instead of rescaling score.
-                a_score = _label_conf.get(adaptive.get("confidence", "Low"), 45.0)
-                sources.append(("adaptive_decision", a_score, 1.0,
-                                a_action in ("BUY", "SELL") and a_score > 0))
+                a_action = str(adaptive.get("action", "NO_TRADE")).upper()
+                a_score = _label_conf.get(str(adaptive.get("confidence", "Low")), 48.0)
+                _a_agree = (
+                    a_action in ("BUY", "SELL")
+                    and a_score > 0
+                    and (_primary_dir is None or a_action == _primary_dir)
+                )
+                sources.append(("adaptive_decision", a_score, 1.2, _a_agree))
 
-        # ── EXECUTION-PROOF AUDIT FIX: wire previously-dead outputs ──
-        # The CONSUMPTION-MAP audit proved these 4 ctx fields were
-        # computed every cycle (with real API calls in some cases) but
-        # their directional signals NEVER reached DecisionAgent. Now
-        # they contribute to aggregate_confidence as low-weight sources.
-        # Weights are deliberately small (0.5 each) so a single
-        # secondary engine cannot overpower the primary rule+LLM+master
-        # voices — they're tie-breakers, not drivers.
-        # -----------------------------------------------------------------
+        # 7. SMC engine grade/score (structural quality)
+        smc_ctx = analysis_out.get("smc_ctx") or analysis_out.get("smc") or {}
+        if isinstance(smc_ctx, dict) and smc_ctx:
+            smc_dir = str(
+                smc_ctx.get("signal") or smc_ctx.get("direction") or smc_ctx.get("bias") or ""
+            ).upper()
+            if "STRONG_BUY" in smc_dir or smc_dir == "BUY":
+                smc_action = "BUY"
+            elif "STRONG_SELL" in smc_dir or smc_dir == "SELL":
+                smc_action = "SELL"
+            else:
+                smc_action = "WAIT"
+            try:
+                smc_score = float(smc_ctx.get("score") or smc_ctx.get("smc_score") or 0)
+            except (TypeError, ValueError):
+                smc_score = 0.0
+            grade = str(smc_ctx.get("grade") or "").upper()
+            smc_conf = smc_score if smc_score > 1 else smc_score * 100.0
+            if smc_conf <= 0:
+                smc_conf = _label_conf.get(grade, 0.0)
+            if smc_conf > 0 and smc_action in ("BUY", "SELL"):
+                sources.append(("smc", min(90.0, smc_conf), 1.3, True))
 
-        # 8. Forecast Engine (Day 97 — EMA+RSI+body composite forecast)
-        # Original comment at analysis_agent.py:1001 said "Weight = 10%
-        # in decision fusion" — that wiring was never done. Now done.
+        # 8. Session quality (London/NY overlap etc.)
+        session_ctx = analysis_out.get("session_ctx") or analysis_out.get("session") or {}
+        if isinstance(session_ctx, dict) and session_ctx:
+            try:
+                sess_score = float(
+                    session_ctx.get("score")
+                    or session_ctx.get("session_score")
+                    or session_ctx.get("fusion_score")
+                    or 0
+                )
+            except (TypeError, ValueError):
+                sess_score = 0.0
+            # Session is a quality multiplier layer — participate when score is meaningful
+            if sess_score > 0:
+                sources.append(("session", min(90.0, sess_score), 0.9, sess_score >= 40))
+
+        # 9. Confluence engine quality
+        confluence_ctx = analysis_out.get("confluence") or {}
+        if isinstance(confluence_ctx, dict) and confluence_ctx:
+            try:
+                c_conf = float(confluence_ctx.get("confidence") or confluence_ctx.get("conf") or 0)
+            except (TypeError, ValueError):
+                c_conf = 0.0
+            c_dir = str(confluence_ctx.get("direction") or confluence_ctx.get("bias") or "").upper()
+            c_action = "BUY" if "BUY" in c_dir or "BULL" in c_dir else (
+                "SELL" if "SELL" in c_dir or "BEAR" in c_dir else "WAIT"
+            )
+            # Only count confluence when it AGREES with primary Master/Rule/LLM dir
+            _c_agree = (
+                c_conf > 0
+                and c_action in ("BUY", "SELL")
+                and (_primary_dir is None or c_action == _primary_dir)
+            )
+            sources.append(("confluence", min(90.0, c_conf), 1.1, _c_agree))
+
+        # 10. MTF structure alignment bonus
+        mtf_ctx = analysis_out.get("mtf_structure_ctx") or analysis_out.get("mtf_structure") or {}
+        if isinstance(mtf_ctx, dict) and mtf_ctx:
+            align = str(mtf_ctx.get("alignment") or mtf_ctx.get("align") or "").upper()
+            combined = str(mtf_ctx.get("combined_bias") or mtf_ctx.get("combined") or "").upper()
+            mtf_action = "BUY" if "BULL" in combined else ("SELL" if "BEAR" in combined else "WAIT")
+            if "FULL" in align or align == "ALIGNED":
+                sources.append(("mtf_structure", 75.0, 1.0, mtf_action in ("BUY", "SELL")))
+            elif "PARTIAL" in align:
+                sources.append(("mtf_structure", 55.0, 0.7, mtf_action in ("BUY", "SELL")))
+
+        # Secondary tie-breakers (low weight)
         forecast_ctx = analysis_out.get("forecast_ctx") if isinstance(analysis_out, dict) else None
         if isinstance(forecast_ctx, dict) and forecast_ctx and not forecast_ctx.get("error"):
             f_direction = (forecast_ctx.get("forecast_direction") or "NEUTRAL").upper()
             f_conf = float(forecast_ctx.get("forecast_confidence", 0) or 0)
-            # Map BULLISH/BEARISH to BUY/SELL for participation check
             f_action = "BUY" if "BULL" in f_direction else ("SELL" if "BEAR" in f_direction else "WAIT")
-            sources.append(("forecast", f_conf, 0.5,
+            sources.append(("forecast", f_conf, 0.4,
                             f_action in ("BUY", "SELL") and f_conf > 0))
 
-        # 9. Institutional Flow (Day 96 — COT + retail displacement)
-        # When institutions diverge from retail, that's a known signal.
         institutional_ctx = analysis_out.get("institutional_ctx") if isinstance(analysis_out, dict) else None
         if isinstance(institutional_ctx, dict) and institutional_ctx and not institutional_ctx.get("error"):
             i_bias = (institutional_ctx.get("inst_bias") or "NEUTRAL").upper()
             i_conf = float(institutional_ctx.get("inst_confidence", 0) or 0)
             i_action = "BUY" if "BULL" in i_bias else ("SELL" if "BEAR" in i_bias else "WAIT")
-            sources.append(("institutional", i_conf, 0.5,
+            sources.append(("institutional", i_conf, 0.4,
                             i_action in ("BUY", "SELL") and i_conf > 0))
 
-        # 10. Economic Surprise (Day 96 — Actual vs Forecast surprise)
         surprise_ctx = analysis_out.get("surprise_ctx") if isinstance(analysis_out, dict) else None
         if isinstance(surprise_ctx, dict) and surprise_ctx and not surprise_ctx.get("error"):
             s_direction = (surprise_ctx.get("surprise_direction") or "NEUTRAL").upper()
             s_conf = float(surprise_ctx.get("surprise_confidence", 0) or 0)
             s_action = "BUY" if "BULL" in s_direction else ("SELL" if "BEAR" in s_direction else "WAIT")
-            sources.append(("surprise", s_conf, 0.5,
+            sources.append(("surprise", s_conf, 0.4,
                             s_action in ("BUY", "SELL") and s_conf > 0))
 
-        # 11. Momentum Strategy (2026-08-25 audit fix — see analysis_agent.py
-        # comment: MomentumStrategy was built + registered but never
-        # actually invoked or consumed anywhere; wired in as a low-weight
-        # tie-breaker like forecast/institutional/surprise above.)
         momentum_ctx = analysis_out.get("momentum_ctx") if isinstance(analysis_out, dict) else None
         if isinstance(momentum_ctx, dict) and momentum_ctx and not momentum_ctx.get("error"):
             m_action = (momentum_ctx.get("momentum_signal") or "HOLD").upper()
             m_conf = float(momentum_ctx.get("momentum_confidence", 0) or 0)
-            sources.append(("momentum", m_conf, 0.5,
+            sources.append(("momentum", m_conf, 0.4,
                             m_action in ("BUY", "SELL") and m_conf > 0))
+
+        # Structural entry presence bonus (ENTRY GATE readiness)
+        sig = analysis_out.get("signal") if isinstance(analysis_out, dict) else None
+        _has_entry = False
+        if isinstance(sig, dict):
+            try:
+                _e = float(sig.get("entry") or sig.get("entry_price") or 0)
+                _has_entry = _e > 0
+            except (TypeError, ValueError):
+                _has_entry = False
+        if not _has_entry and isinstance(analysis_out, dict):
+            try:
+                _e = float(analysis_out.get("entry") or analysis_out.get("entry_price") or 0)
+                _has_entry = _e > 0
+            except (TypeError, ValueError):
+                pass
+        if _has_entry:
+            sources.append(("structural_entry", 70.0, 0.8, True))
 
         participating = [(l, c, w) for l, c, w, p in sources if p]
         total_weight = sum(w for _, _, w, _ in sources)
@@ -1312,7 +1392,12 @@ class DecisionAgent:
         # Day 53 — Dynamic Confidence Engine final pass
         # ──────────────────────────────────────────────────────
         confidence_engine_result = None
-        if decision in ("BUY", "SELL") and self.confidence_engine:
+        # 2026-09-01: Bayesian / small-sample ConfidenceEngine DISABLED.
+        # Live logs showed "Small sample (0/3) — Bayesian penalty" crushing
+        # valid Master+LLM signals to WAIT. Historical sample gating is
+        # deferred until sufficient closed trades exist; until then the
+        # analysis aggregate stands.
+        if False and decision in ("BUY", "SELL") and self.confidence_engine:
             confidence_engine_result = self.confidence_engine.adjust_decision(
                 signal          = decision,
                 base_confidence = adj_conf,
@@ -1378,7 +1463,7 @@ class DecisionAgent:
                 # aggregate signal down to WAIT) while giving downstream
                 # penalties actual room to apply without auto-failing.
                 try:
-                    if _preserved_conf >= 60 and adj_conf < 60:
+                    if _preserved_conf >= self.MIN_TRADE_CONFIDENCE and adj_conf < self.MIN_TRADE_CONFIDENCE:
                         adj_conf = min(99, _preserved_conf)
                         reasons.append(
                             f"ℹ️ ConfidenceEngine reduction clamped to preserved {adj_conf:.0f}% (strong aggregate support)"
@@ -1410,6 +1495,12 @@ class DecisionAgent:
                     },
                 )
 
+        # Bayesian / small-sample engine disabled — record for audit
+        if decision in ("BUY", "SELL"):
+            reasons.append(
+                "ℹ️ Day53 ConfidenceEngine SKIPPED (Bayesian/small-sample disabled)"
+            )
+
         # ──────────────────────────────────────────────────────────
         # Decision-engine confidence gate (all-layer aggregate).
         # ──────────────────────────────────────────────────────────
@@ -1423,9 +1514,15 @@ class DecisionAgent:
                 f"< {self.MIN_TRADE_CONFIDENCE:.0f}% floor — applying penalty instead of hard WAIT"
             )
             adj_conf = max(0, min(99, _preserved_conf - 5))
-            if adj_conf < 60:
-                decision = "WAIT"
-                reasons.append("⚠️ Final confidence below 60% after penalty — WAIT")
+            # 2026-09-01: floor lowered to CONFIDENCE_FLOOR (default 40).
+            # Do NOT hard-WAIT solely on aggregate — TradePermission is
+            # the authority on min confidence.
+            if adj_conf < self.MIN_TRADE_CONFIDENCE:
+                reasons.append(
+                    f"ℹ️ Aggregate {adj_conf:.0f}% below floor "
+                    f"{self.MIN_TRADE_CONFIDENCE:.0f}% — kept directional; "
+                    f"TradePermission decides"
+                )
             else:
                 reasons.append(f"✅ Confidence retained at {adj_conf:.0f}% for downstream execution")
 
@@ -1615,20 +1712,45 @@ class DecisionAgent:
             except (TypeError, ValueError):
                 _oriented_ok = False
             if not _oriented_ok:
-                _fb_sl, _fb_tp = _fallback_sl_tp(decision, entry, ind_ctx, market_out.get("regime", {}))
-                reasons.append(
-                    f"⚠️ SL/TP orientation mismatch for {decision} "
-                    f"(entry={entry}, sl={sl}, tp={tp} looked like the opposite "
-                    f"direction's setup) — discarded and recomputed ATR-based "
-                    f"SL/TP for {decision}"
-                )
-                log.warning(
-                    f"[DecisionAgent] SL/TP orientation mismatch for decision="
-                    f"{decision} | stale entry={entry} sl={sl} tp={tp} — "
-                    f"recomputing ATR-based fallback instead of passing "
-                    f"mismatched levels to FusionV3"
-                )
-                sl, tp = _fb_sl, _fb_tp
+                # ★ FIX (2026-09-01): Prefer distance-preserving reorient first;
+                # only fall back to ATR if distances are unusable.
+                try:
+                    _risk_d = abs(_entry_f - _sl_f)
+                    _rew_d = abs(_entry_f - _tp_f)
+                    if _risk_d > 0 and _rew_d > 0:
+                        if decision == "BUY":
+                            sl = _entry_f - _risk_d
+                            tp = _entry_f + _rew_d
+                        else:
+                            sl = _entry_f + _risk_d
+                            tp = _entry_f - _rew_d
+                        reasons.append(
+                            f"⚠️ SL/TP orientation mismatch for {decision} "
+                            f"— reoriented preserving distances "
+                            f"(risk={_risk_d:.5f}, reward={_rew_d:.5f})"
+                        )
+                        log.warning(
+                            f"[DecisionAgent] SL/TP reoriented for {decision} | "
+                            f"entry={entry} → sl={sl} tp={tp}"
+                        )
+                    else:
+                        raise ValueError("zero distance")
+                except Exception:
+                    _fb_sl, _fb_tp = _fallback_sl_tp(
+                        decision, entry, ind_ctx, market_out.get("regime", {})
+                    )
+                    reasons.append(
+                        f"⚠️ SL/TP orientation mismatch for {decision} "
+                        f"(entry={entry}, sl={sl}, tp={tp}) — discarded and "
+                        f"recomputed ATR-based SL/TP"
+                    )
+                    log.warning(
+                        f"[DecisionAgent] SL/TP orientation mismatch for "
+                        f"decision={decision} | stale entry={entry} sl={sl} "
+                        f"tp={tp} — using ATR fallback"
+                    )
+                    if _fb_sl is not None and _fb_tp is not None:
+                        sl, tp = _fb_sl, _fb_tp
 
         return self._result(
             decision, adj_conf, risk_out, reasons,

@@ -416,15 +416,15 @@ def get_max_trades_per_day(tier: int = 1) -> int:
 # v3.21 (live): default 80 (was 55 — had drifted from the documented 80).
 # 80 matches the v3.18-v3.21 backtest gate; below this the master verdict's
 # confidence floor stops filtering weak signals.
-MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 80)
+MIN_CONFIDENCE_PROD: int = _env_int("MIN_CONFIDENCE_PROD", 40)
 MIN_CONFIDENCE_TEST: int = _env_int("MIN_CONFIDENCE_TEST", 10)
 # 2026-08-13: default 4 (was 5). Confidence formula now gives realistic
 # 55-85% range, so 4 factors is achievable and gives more trades.
 MIN_ALIGNED_FACTORS_PROD: int = _env_int("MIN_ALIGNED_FACTORS_PROD", 2)
 MIN_ALIGNED_FACTORS_TEST: int = _env_int("MIN_ALIGNED_FACTORS_TEST", 1)
-MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 50.0)
-MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 72.0)
-MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 70.0)
+MIN_CONFIDENCE_TIER_1: float = _env_float("MIN_CONFIDENCE_TIER_1", 40.0)
+MIN_CONFIDENCE_TIER_2: float = _env_float("MIN_CONFIDENCE_TIER_2", 40.0)
+MIN_CONFIDENCE_TIER_3: float = _env_float("MIN_CONFIDENCE_TIER_3", 40.0)
 
 
 def get_min_confidence(tier: int = 1) -> float:

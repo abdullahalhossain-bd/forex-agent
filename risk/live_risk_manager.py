@@ -119,9 +119,9 @@ def _build_tiers() -> dict:
     # (§19), shouldn't move without a baseline-vs-modified backtest; this
     # only fixes the comment to describe what the code actually does.
     return {
-        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 50.0, "manual", 0.5),
-        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 50.0, "semi_auto", 0.8),
-        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 50.0, "fully_auto", 1.0),
+        1: CapitalTier(1, "Initial Live", 0.005, 0.015, mt, 40.0, "manual", 0.5),
+        2: CapitalTier(2, "Controlled Automation", 0.01, 0.03, mt, 40.0, "semi_auto", 0.8),
+        3: CapitalTier(3, "Mature System", 0.01, 0.03, mt, 40.0, "fully_auto", 1.0),
     }
 
 

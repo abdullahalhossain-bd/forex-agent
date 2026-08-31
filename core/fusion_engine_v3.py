@@ -108,6 +108,46 @@ def _safe_get(d: Optional[dict], key: str, default: Any = None) -> Any:
     return d.get(key, default)
 
 
+def _reorient_sl_tp(entry: float, sl: float, tp: float, direction: str):
+    """★ FIX (2026-09-01): If SL/TP are oriented for the opposite direction,
+    flip them so geometry matches `direction` while preserving distances.
+
+    Example: decision=BUY but sl > entry and tp < entry (SELL-shaped).
+    We keep |entry-sl| as risk distance and |entry-tp| as reward distance,
+    then place SL below and TP above for BUY (or the reverse for SELL).
+
+    Returns (sl, tp, was_reoriented: bool).
+    """
+    entry = _safe_float(entry)
+    sl = _safe_float(sl)
+    tp = _safe_float(tp)
+    if entry <= 0 or sl <= 0 or tp <= 0:
+        return sl, tp, False
+
+    direction = (direction or "").upper()
+    risk_dist = abs(entry - sl)
+    reward_dist = abs(entry - tp)
+    if risk_dist <= 0:
+        return sl, tp, False
+
+    if direction == "BUY":
+        oriented_ok = sl < entry < tp
+        if oriented_ok:
+            return sl, tp, False
+        # Force correct orientation
+        new_sl = entry - risk_dist
+        new_tp = entry + reward_dist
+        return new_sl, new_tp, True
+    elif direction == "SELL":
+        oriented_ok = tp < entry < sl
+        if oriented_ok:
+            return sl, tp, False
+        new_sl = entry + risk_dist
+        new_tp = entry - reward_dist
+        return new_sl, new_tp, True
+    return sl, tp, False
+
+
 def compute_rrr(entry: float, sl: float, tp: float, direction: str) -> float:
     """Compute risk:reward ratio (1 : N).
 
@@ -284,9 +324,26 @@ def validate_fusion(
     #      downgrade. This fixes the issue where RRR 1:1.17 (just below
     #      old 1.30 minimum) killed valid BUY signals from multiple modules.
     if decision in ("BUY", "SELL") and entry and sl and tp:
+        # ★ FIX (2026-09-01): Auto-reorient SL/TP when geometry belongs to
+        # the opposite direction (common after conflict-resolution flip).
+        # Prevents spurious RRR=0 and "1:0.00" downgrades.
+        _sl, _tp, _reoriented = _reorient_sl_tp(entry, sl, tp, decision)
+        if _reoriented:
+            log.warning(
+                f"[FusionV3] SL/TP reoriented for {decision}: "
+                f"entry={entry} old_sl={sl} old_tp={tp} → "
+                f"new_sl={_sl} new_tp={_tp}"
+            )
+            sl, tp = _sl, _tp
+            # Expose corrected levels so callers can use them
+            result.failure_reasons.append(
+                f"SL/TP auto-reoriented for {decision} "
+                f"(was opposite-side geometry)"
+            )
+
         result.rrr = compute_rrr(entry, sl, tp, decision)
         if result.rrr < min_rrr:
-            # Hard fail — RRR is genuinely bad
+            # Hard fail — RRR is genuinely bad (even after reorient)
             result.rrr_valid = False
             result.failure_reasons.append(
                 f"RRR is 1:{result.rrr:.2f} — below hard minimum 1:{min_rrr:.2f}. "
@@ -299,17 +356,28 @@ def validate_fusion(
             pass
     elif decision in ("BUY", "SELL"):
         # BUY/SELL with missing SL/TP/entry — can't validate RRR.
-        # Don't fail validation outright (the risk engine may have a
-        # reason for missing values), but flag it.
         result.rrr = 0.0
-        # If entry/sl/tp are all present but RRR computation returned 0
-        # (e.g. risk ≤ 0 because SL is on wrong side), that's a real fail.
         if entry and sl and tp:
-            result.rrr_valid = False
-            result.failure_reasons.append(
-                f"RRR computation returned 0 — likely SL on wrong side of "
-                f"entry for {decision}. Downgrading to WAIT."
-            )
+            # Last-resort: try reorient even in this branch
+            _sl, _tp, _reoriented = _reorient_sl_tp(entry, sl, tp, decision)
+            if _reoriented:
+                result.rrr = compute_rrr(entry, _sl, _tp, decision)
+                if result.rrr >= min_rrr:
+                    result.rrr_valid = True
+                    log.warning(
+                        f"[FusionV3] Recovered RRR via reorient: 1:{result.rrr:.2f}"
+                    )
+                else:
+                    result.rrr_valid = False
+                    result.failure_reasons.append(
+                        f"RRR still bad after reorient (1:{result.rrr:.2f})"
+                    )
+            else:
+                result.rrr_valid = False
+                result.failure_reasons.append(
+                    f"RRR computation returned 0 — SL on wrong side of "
+                    f"entry for {decision}. Downgrading to WAIT."
+                )
 
     # ── Master List Issue #5a: Weighted confidence + conflict resolution ─
     final_signal, weighted_conf, conflict_expl = resolve_conflict(

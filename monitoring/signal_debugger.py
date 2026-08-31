@@ -168,6 +168,7 @@ class CycleDebug:
     final_reason: str = ""
     blocked_at: Optional[str] = None        # LAST hard-block layer (kept for back-compat)
     first_blocked_at: Optional[str] = None  # Day 91: FIRST hard-block layer — root cause
+    evaluation_id: str = ""                 # Observability: correlates with pipeline_trace
 
     def record(self, layer: str, status: str, detail: str = "") -> None:
         self.layers.append(LayerVerdict(layer=layer, status=status, detail=detail))
@@ -230,7 +231,7 @@ class CycleDebug:
         return "\n".join(lines)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "symbol":           self.symbol,
             "timeframe":        self.timeframe,
             "started_at":       datetime.fromtimestamp(self.started_at, tz=timezone.utc).isoformat(),
@@ -240,6 +241,9 @@ class CycleDebug:
             "blocked_at":       self.blocked_at,        # last hard-block (back-compat)
             "first_blocked_at": self.first_blocked_at,  # Day 91: root cause
         }
+        if getattr(self, "evaluation_id", None):
+            d["evaluation_id"] = self.evaluation_id
+        return d
 
 
 # ── Singleton debugger ────────────────────────────────────────
@@ -261,11 +265,12 @@ class SignalDebugger:
 
     # ── Per-cycle API ──────────────────────────────────────────
 
-    def start_cycle(self, symbol: str, timeframe: str) -> None:
+    def start_cycle(self, symbol: str, timeframe: str, evaluation_id: str = "") -> None:
         self._current = CycleDebug(
             symbol=symbol,
             timeframe=timeframe,
             started_at=time.time(),
+            evaluation_id=evaluation_id or "",
         )
 
     def record(self, layer: str, status: str, detail: str = "") -> None:

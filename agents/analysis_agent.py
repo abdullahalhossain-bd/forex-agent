@@ -104,6 +104,487 @@ def _apply_confidence_penalty(signal_result: dict, amount: float, reason: str, s
         pass
 
 
+def _safe_float(v, default=None):
+    try:
+        if v is None:
+            return default
+        f = float(v)
+        if f != f or f <= 0:  # NaN or non-positive
+            return default
+        return f
+    except (TypeError, ValueError):
+        return default
+
+
+def resolve_structural_entry(
+    direction: str,
+    signal_result: dict,
+    unified_signal_ctx: dict,
+    smc_result: dict,
+    smc_ctx: dict,
+    liquidity_ctx: dict,
+    structure_ctx: dict,
+    master_ctx: dict,
+    current_price: float = None,
+) -> dict:
+    """
+    Resolve a structural (non-market) entry price for ENTRY GATE.
+
+    Priority (first valid wins):
+      1. signal_result already has entry/entry_price
+      2. adaptive_decision.entry_price (unified)
+      3. ICT/AMD / multi_strategy_pa / stop_hunt signal entry_price
+      4. master_ctx.master_entry
+      5. SMC order-block / FVG midpoint aligned with direction
+      6. liquidity pool / structure swing level aligned with direction
+
+    Returns dict: {entry, stop_loss, take_profit, source} — entry may be None.
+    Never invents market-price entry; GATE stays closed if nothing structural exists.
+    """
+    out = {"entry": None, "stop_loss": None, "take_profit": None, "source": None}
+    direction = str(direction or "").upper().replace("STRONG_", "")
+    if direction not in ("BUY", "SELL"):
+        return out
+
+    def _geometry_ok(entry, sl, tp):
+        """BUY requires SL < entry < TP; SELL requires TP < entry < SL.
+        Missing SL/TP is allowed (RiskEngine can fill later) — only reject
+        inverted geometry that would instantly stop out the wrong way.
+        """
+        e = _safe_float(entry)
+        if e is None:
+            return False
+        s = _safe_float(sl)
+        t = _safe_float(tp)
+        if s is None and t is None:
+            return True
+        if direction == "BUY":
+            if s is not None and s >= e:
+                return False
+            if t is not None and t <= e:
+                return False
+            if s is not None and t is not None and not (s < e < t):
+                return False
+        else:  # SELL
+            if s is not None and s <= e:
+                return False
+            if t is not None and t >= e:
+                return False
+            if s is not None and t is not None and not (t < e < s):
+                return False
+        return True
+
+    def _accept(entry, sl=None, tp=None, source="", require_geometry=True):
+        e = _safe_float(entry)
+        if e is None:
+            return False
+        s = _safe_float(sl)
+        t = _safe_float(tp)
+        if require_geometry and not _geometry_ok(e, s, t):
+            # Drop inverted SL/TP; still allow entry-only if geometry fails
+            # only because SL/TP were wrong (not because entry is invalid).
+            if s is not None or t is not None:
+                # try entry without the bad SL/TP
+                if _geometry_ok(e, None, None):
+                    out["entry"] = e
+                    out["stop_loss"] = None
+                    out["take_profit"] = None
+                    out["source"] = f"{source}_entry_only"
+                    return True
+            return False
+        out["entry"] = e
+        out["stop_loss"] = s
+        out["take_profit"] = t
+        out["source"] = source
+        return True
+
+    # 1) Existing signal fields — only if already direction-consistent
+    if isinstance(signal_result, dict):
+        sig_dir = str(
+            signal_result.get("signal")
+            or signal_result.get("action")
+            or signal_result.get("direction")
+            or direction
+        ).upper().replace("STRONG_", "")
+        if sig_dir in (direction, "BUY", "SELL") and (
+            sig_dir == direction or sig_dir not in ("BUY", "SELL")
+        ):
+            if _accept(
+                signal_result.get("entry") or signal_result.get("entry_price"),
+                signal_result.get("stop_loss") or signal_result.get("sl") or signal_result.get("sl_price"),
+                signal_result.get("take_profit") or signal_result.get("tp") or signal_result.get("tp_price"),
+                "signal_result",
+            ):
+                return out
+
+    unified = unified_signal_ctx if isinstance(unified_signal_ctx, dict) else {}
+
+    # 2) Adaptive — STRICT direction match (fixes BUY+SELL-geometry bug)
+    adaptive = unified.get("adaptive_decision") or {}
+    if isinstance(adaptive, dict):
+        ad_action = str(adaptive.get("action", "")).upper().replace("STRONG_", "")
+        if ad_action == direction:
+            if _accept(
+                adaptive.get("entry_price"),
+                adaptive.get("stop_loss"),
+                adaptive.get("take_profit"),
+                "adaptive_decision",
+            ):
+                return out
+
+    # 3) Per-engine structural levels — direction must match exactly
+    for engine_key, source_name in (
+        ("ict_amd", "ict_amd"),
+        ("multi_strategy_pa", "multi_strategy_pa"),
+        ("stop_hunt", "stop_hunt"),
+    ):
+        block = unified.get(engine_key) or {}
+        sig = block.get("signal") if isinstance(block, dict) else None
+        if not isinstance(sig, dict):
+            continue
+        act = str(sig.get("action", "")).upper().replace("STRONG_", "")
+        if act != direction:
+            continue
+        entry_val = sig.get("entry_price") or sig.get("entry")
+        sl_val = sig.get("stop_loss") or sig.get("sl")
+        tp_val = (
+            sig.get("take_profit")
+            or sig.get("take_profit_suggested")
+            or sig.get("tp")
+        )
+        if _accept(entry_val, sl_val, tp_val, source_name):
+            return out
+
+    # 4) Master planned entry — only when master signal matches direction
+    if isinstance(master_ctx, dict):
+        m_sig = str(
+            master_ctx.get("master_signal") or master_ctx.get("signal") or ""
+        ).upper().replace("STRONG_", "")
+        if m_sig == direction or m_sig not in ("BUY", "SELL", "WAIT", "NO TRADE"):
+            if _accept(
+                master_ctx.get("master_entry"),
+                master_ctx.get("master_sl"),
+                master_ctx.get("master_tp1") or master_ctx.get("master_tp"),
+                "master_ctx",
+            ):
+                return out
+
+    # 5) SMC order blocks / FVGs (direction-aligned)
+    smc = smc_result if isinstance(smc_result, dict) else {}
+    # Common shapes: h4/m15 order_blocks lists, or top-level
+    ob_lists = []
+    for k in ("order_blocks", "order_block"):
+        if isinstance(smc.get(k), list):
+            ob_lists.append(smc.get(k))
+    for tf_key in ("h4", "h1", "m15", "M15", "H4", "H1"):
+        tf_block = smc.get(tf_key) or {}
+        if isinstance(tf_block, dict):
+            for k in ("order_blocks", "order_block"):
+                if isinstance(tf_block.get(k), list):
+                    ob_lists.append(tf_block.get(k))
+    for obs in ob_lists:
+        for ob in obs or []:
+            if not isinstance(ob, dict):
+                continue
+            ob_dir = str(ob.get("direction") or ob.get("bias") or ob.get("type") or "").upper()
+            bullish = "BULL" in ob_dir or ob_dir in ("BUY", "DEMAND", "LONG")
+            bearish = "BEAR" in ob_dir or ob_dir in ("SELL", "SUPPLY", "SHORT")
+            if direction == "BUY" and not bullish:
+                continue
+            if direction == "SELL" and not bearish:
+                continue
+            # Prefer zone midpoint / top(bottom) for buy(sell)
+            top = _safe_float(ob.get("top") or ob.get("high") or ob.get("zone_top"))
+            bot = _safe_float(ob.get("bottom") or ob.get("low") or ob.get("zone_bottom"))
+            mid = _safe_float(ob.get("mid") or ob.get("midpoint"))
+            if mid is None and top is not None and bot is not None:
+                mid = (top + bot) / 2.0
+            entry_candidate = mid or (bot if direction == "BUY" else top)
+            if _accept(entry_candidate, source="smc_order_block"):
+                return out
+
+    # FVG midpoints from smc or ctx
+    fvg_lists = []
+    for k in ("fvgs", "fair_value_gaps", "fvg"):
+        if isinstance(smc.get(k), list):
+            fvg_lists.append(smc.get(k))
+    if isinstance(smc_ctx, dict):
+        for k in ("fvgs", "fair_value_gaps", "fvg"):
+            if isinstance(smc_ctx.get(k), list):
+                fvg_lists.append(smc_ctx.get(k))
+    for fvgs in fvg_lists:
+        for fvg in fvgs or []:
+            if not isinstance(fvg, dict):
+                continue
+            ftype = str(fvg.get("type") or fvg.get("direction") or "").upper()
+            if direction == "BUY" and "BEAR" in ftype:
+                continue
+            if direction == "SELL" and "BULL" in ftype:
+                continue
+            mid = _safe_float(
+                fvg.get("midpoint") or fvg.get("mid") or fvg.get("entry")
+            )
+            if mid is None:
+                top = _safe_float(fvg.get("top") or fvg.get("high"))
+                bot = _safe_float(fvg.get("bottom") or fvg.get("low"))
+                if top is not None and bot is not None:
+                    mid = (top + bot) / 2.0
+            if _accept(mid, source="smc_fvg"):
+                return out
+
+    # 6) Liquidity / structure swings (last resort structural)
+    if isinstance(liquidity_ctx, dict):
+        pools_below = liquidity_ctx.get("pools_below") or liquidity_ctx.get("below")
+        pools_above = liquidity_ctx.get("pools_above") or liquidity_ctx.get("above")
+        if direction == "BUY":
+            # buy-side retest often near liquidity below / discount zone
+            cand = _safe_float(
+                liquidity_ctx.get("nearest_support")
+                or (pools_below[0] if isinstance(pools_below, list) and pools_below else None)
+            )
+            if _accept(cand, source="liquidity_support"):
+                return out
+        else:
+            cand = _safe_float(
+                liquidity_ctx.get("nearest_resistance")
+                or (pools_above[0] if isinstance(pools_above, list) and pools_above else None)
+            )
+            if _accept(cand, source="liquidity_resistance"):
+                return out
+
+    if isinstance(structure_ctx, dict):
+        if direction == "BUY":
+            cand = _safe_float(
+                structure_ctx.get("last_hl")
+                or structure_ctx.get("support")
+                or structure_ctx.get("bos_level")
+            )
+            if _accept(cand, source="structure_hl"):
+                return out
+        else:
+            cand = _safe_float(
+                structure_ctx.get("last_lh")
+                or structure_ctx.get("resistance")
+                or structure_ctx.get("bos_level")
+            )
+            if _accept(cand, source="structure_lh"):
+                return out
+
+    return out
+
+
+
+def _min_sl_price_for_symbol(symbol: str, atr: float = None) -> float:
+    """RiskEngine floor: max(15 pips, 0.5*ATR) in price units.
+
+    RiskEngine rejects with strict `< min` (not `<=`), so equal distance
+    still fails: "0.00150 < min 0.00150". Add +1 pip buffer above floor.
+    """
+    sym = str(symbol or "").upper().replace("M", "")
+    if "XAU" in sym or "GOLD" in sym:
+        pip = 0.01
+    elif "XAG" in sym or "SILVER" in sym:
+        pip = 0.001
+    elif "JPY" in sym:
+        pip = 0.01
+    else:
+        pip = 0.0001
+    floor = 15.0 * pip
+    atr_v = _safe_float(atr)
+    if atr_v is not None and atr_v > 0:
+        floor = max(floor, 0.5 * atr_v)
+    # Strict `< min` in RiskEngine — sit 1 pip above the floor
+    return floor + pip
+
+def finalize_trade_geometry(
+    direction: str,
+    entry: float,
+    stop_loss=None,
+    take_profit=None,
+    atr: float = None,
+    max_sl_atr: float = 2.5,
+    target_rr: float = 2.0,
+    fallback_sl_atr: float = 1.5,
+    min_sl_price: float = None,
+) -> dict:
+    """
+    Central TradeGeometry policy (Phase-1):
+
+      1. Structural SL preferred (already resolved upstream).
+      2. If no SL → ATR fallback: SL = fallback_sl_atr × ATR.
+      3. If SL distance > max_sl_atr × ATR → REJECT (no blind clip —
+         preserves structural invalidation meaning).
+      4. TP always = entry ± (target_rr × risk)  → fixed R:R (default 1:2).
+      5. Geometry must match direction.
+
+    Returns dict:
+      {ok, entry, stop_loss, take_profit, risk, rr, source_note, reject_reason}
+    """
+    out = {
+        "ok": False,
+        "entry": None,
+        "stop_loss": None,
+        "take_profit": None,
+        "risk": None,
+        "rr": target_rr,
+        "source_note": None,
+        "reject_reason": None,
+    }
+    d = str(direction or "").upper().replace("STRONG_", "")
+    e = _safe_float(entry)
+    if d not in ("BUY", "SELL") or e is None:
+        out["reject_reason"] = "invalid direction/entry"
+        return out
+
+    atr_v = _safe_float(atr)
+    if atr_v is not None and atr_v <= 0:
+        atr_v = None
+
+    sl = _safe_float(stop_loss)
+    # Strip inverted SL first
+    if sl is not None:
+        if d == "BUY" and sl >= e:
+            sl = None
+        elif d == "SELL" and sl <= e:
+            sl = None
+
+    note = "structural_sl"
+    # Fallback ATR SL when structural missing
+    if sl is None:
+        if atr_v is None:
+            out["reject_reason"] = "no structural SL and ATR unavailable"
+            return out
+        dist = atr_v * float(fallback_sl_atr)
+        sl = e - dist if d == "BUY" else e + dist
+        note = f"atr_fallback_{fallback_sl_atr}x"
+
+    risk = abs(e - sl)
+    if risk <= 0:
+        out["reject_reason"] = "zero risk distance"
+        return out
+
+    # Wide structural SL: do NOT blind-clip to 2.5 ATR (false stop-outs).
+    # Discard that SL and switch to ATR fallback (same as no-SL path).
+    # This keeps fixed 1:2 geometry and stops Master/Fusion leaking 1:0.4 R:R.
+    if atr_v is not None and atr_v > 0 and note == "structural_sl":
+        max_dist = atr_v * float(max_sl_atr)
+        if risk > max_dist + 1e-12:
+            was_risk = risk
+            dist = atr_v * float(fallback_sl_atr)
+            sl = e - dist if d == "BUY" else e + dist
+            risk = abs(e - sl)
+            note = (
+                f"structural_too_wide_atr_fallback_{fallback_sl_atr}x"
+                f"(was_risk={was_risk:.5f};max={max_dist:.5f})"
+            )
+
+    if risk <= 0:
+        out["reject_reason"] = "zero risk distance after fallback"
+        return out
+
+    # RiskEngine min SL: max(15 pips, 0.5*ATR). Enforce so geometry is never
+    # rejected as "SL too tight" after we intentionally set ATR-based stops.
+    if min_sl_price is not None and min_sl_price > 0 and risk < min_sl_price:
+        risk = float(min_sl_price)
+        sl = e - risk if d == "BUY" else e + risk
+        note = f"{note}+min_sl_floor"
+
+    # Fixed R:R TP from actual risk (centralized — overrides any prior TP)
+    # +0.5% risk buffer so RiskEngine "RR < min 2.00" float edge never fails
+    tp_dist = risk * float(target_rr) * 1.005
+    if d == "BUY":
+        tp = e + tp_dist
+    else:
+        tp = e - tp_dist
+
+    out["ok"] = True
+    out["entry"] = e
+    out["stop_loss"] = sl
+    out["take_profit"] = tp
+    out["risk"] = risk
+    out["rr"] = float(target_rr)
+    out["source_note"] = note
+    return out
+
+
+def inject_structural_entry(
+    signal_result: dict,
+    master_ctx: dict,
+    resolved: dict,
+    direction: str = None,
+    atr: float = None,
+    symbol: str = None,
+) -> dict:
+    """Write resolved structural entry into signal + master so trader ENTRY GATE sees it.
+    Applies finalize_trade_geometry: max 2.5 ATR SL, fixed 1:2 TP from risk.
+    Returns geometry result dict (ok / reject_reason).
+    """
+    empty = {"ok": False, "reject_reason": "no entry"}
+    if not resolved or not resolved.get("entry"):
+        return empty
+
+    d = str(direction or "").upper().replace("STRONG_", "")
+    geo = finalize_trade_geometry(
+        direction=d,
+        entry=resolved.get("entry"),
+        stop_loss=resolved.get("stop_loss"),
+        take_profit=resolved.get("take_profit"),
+        atr=atr,
+        max_sl_atr=2.5,
+        target_rr=2.0,
+        fallback_sl_atr=1.5,
+        min_sl_price=_min_sl_price_for_symbol(
+            symbol
+            or (signal_result or {}).get("symbol")
+            or (master_ctx or {}).get("symbol")
+            or "",
+            atr,
+        ),
+    )
+
+    if not geo.get("ok"):
+        # Still inject entry so ENTRY GATE can pass; clear ALL SL/TP including
+        # master_ctx so FusionV3/RiskEngine cannot leak stale Master R:R (1:0.42).
+        entry = float(resolved["entry"])
+        if isinstance(signal_result, dict):
+            signal_result["entry"] = entry
+            signal_result["entry_price"] = entry
+            signal_result["entry_source"] = resolved.get("source")
+            signal_result["geometry_reject"] = geo.get("reject_reason")
+            for k in ("stop_loss", "sl", "take_profit", "tp", "rr"):
+                signal_result.pop(k, None)
+        if isinstance(master_ctx, dict):
+            master_ctx["master_entry"] = entry
+            for k in ("master_sl", "master_tp1", "master_tp", "master_tp2"):
+                master_ctx.pop(k, None)
+        return geo
+
+    entry = float(geo["entry"])
+    sl = float(geo["stop_loss"])
+    tp = float(geo["take_profit"])
+
+    if isinstance(signal_result, dict):
+        signal_result["entry"] = entry
+        signal_result["entry_price"] = entry
+        signal_result["entry_source"] = resolved.get("source")
+        signal_result["stop_loss"] = sl
+        signal_result["sl"] = sl
+        signal_result["take_profit"] = tp
+        signal_result["tp"] = tp
+        signal_result["rr"] = geo.get("rr", 2.0)
+        signal_result["geometry_note"] = geo.get("source_note")
+        signal_result.pop("geometry_reject", None)
+
+    # Always overwrite master levels so Fusion/Risk never see old Master TP/SL
+    if isinstance(master_ctx, dict):
+        master_ctx["master_entry"] = entry
+        master_ctx["master_sl"] = sl
+        master_ctx["master_tp1"] = tp
+        master_ctx["master_tp"] = tp
+
+    return geo
+
+
 class AnalysisAgent:
     """
     Day 65 Unified Pipeline:
@@ -2244,56 +2725,24 @@ class AnalysisAgent:
             log.warning(f"[AnalysisAgent] Day 68 FeatureEngineering failed: {e}")
             feature_vector_ctx = {"error": str(e)}
 
-        # ── Day 69: ML Model Prediction (Ensemble) ────────────────────
-        # DISABLED 2026-08-13 (winrate audit): memory/ml_models/_registry.json
-        # is empty — zero trained models on disk. Every predict() returns
-        # NOT_READY, but the empty ctx is still fed to EnsembleEngine which
-        # then applies -8%/-10% confidence penalties to valid BUY/SELL signals.
-        ml_prediction_ctx: Dict[str, Any] = {}
-        # RE-ENABLED 2026-08-27 (was `if False:` since 2026-08-13): champions
-        # were repopulated offline via scripts/train_champions.py —
-        # 7 majors × {15m, 1h}, triple_barrier h=8 labels, purged chronological
-        # CV, degenerate-guard enforced. Registry now holds portable binaries
-        # (audit: 0 phantom). Disable again with ML_ENSEMBLE_ENABLED=false.
-        try:
-            import os as _os_ml
-            _ml_enabled = _os_ml.getenv("ML_ENSEMBLE_ENABLED", "true").strip().lower() \
-                not in ("0", "false", "no", "off")
-            if _ml_enabled:
-                from ml.model_predictor import get_model_predictor
-                predictor = get_model_predictor()
-                ml_pred = predictor.predict(
-                    features=full_feature_vector, pair=symbol, timeframe=timeframe,
-                )
-                if ml_pred.get("prediction") != "NOT_READY" and int(ml_pred.get("models_used") or 0) > 0:
-                    ml_prediction_ctx = ml_pred
-
-                    ml_dir = ml_pred["prediction"]
-                    ml_proba = ml_pred["probability"]
-                    agreement = ml_pred.get("model_agreement", "0/0")
-
-                    log.info(
-                        f"[AnalysisAgent] Day 69 ML ensemble: {ml_dir} "
-                        f"| prob={ml_proba:.2f} | agreement={agreement} | "
-                        f"models={ml_pred['models_used']}"
-                    )
-                else:
-                    # Unmodeled pair/timeframe or cold registry slot: keep ctx
-                    # EMPTY so downstream scorers skip the layer instead of
-                    # mis-reading a NOT_READY payload as a real vote.
-                    # Task 8 visibility fix: this path used to be SILENT, so
-                    # operators couldn't tell 'pair untrained' from 'models
-                    # broken'. One INFO line with the predictor's own reason.
-                    log.info(
-                        f"[AnalysisAgent] Day 69 ML: no vote for {symbol} {timeframe} "
-                        f"({ml_pred.get('ml_unavailable_reason', 'NOT_READY')}, "
-                        f"models_used={ml_pred.get('models_used', 0)})"
-                    )
-                    ml_prediction_ctx = {}
-        except Exception as e:
-            # Task 8 visibility fix: was log.debug (invisible at default log
-            # level) — schema mismatches inside predict() vanished silently.
-            log.warning(f"Day 69 ML prediction failed: {e}")
+        # ── Day 69: ML Model Prediction ───────────────────────────────
+        # HARD-DISABLED 2026-08-31:
+        #   - Schema mismatch (models expect 74 features, pipeline emits 161)
+        #   - Every cycle logged SKIPPED / no_compatible_model
+        #   - ML vote was 0% and still polluted confidence / ensemble path
+        # Confidence is now pure structural + rule + LLM + session (see
+        # DecisionAgent._aggregate_confidence redesign). Re-enable only after
+        # full retrain: python scripts/train_models.py --pair ALL --timeframe 15m
+        ml_prediction_ctx: Dict[str, Any] = {
+            "prediction": "DISABLED",
+            "models_used": 0,
+            "ml_unavailable_reason": "hard_disabled_schema_mismatch_2026_08_31",
+            "disabled": True,
+        }
+        log.info(
+            f"[AnalysisAgent] Day 69 ML: DISABLED for {symbol} {timeframe} "
+            f"(schema mismatch 74 vs 161 — confidence system no longer uses ML)"
+        )
 
         # ── Day 70: AI Brain Fusion Layer (Ensemble Engine) ───────────
         # The culmination of Days 60-69. Fuses ALL intelligence layers:
@@ -3012,6 +3461,92 @@ class AnalysisAgent:
         except Exception as _e_mtf:
             log.debug(f"[AnalysisAgent] MTF structure gate wiring failed: {_e_mtf}")
 
+        # ── STRUCTURAL ENTRY INJECTION (ENTRY GATE fix 2026-08-31) ──
+        # trader.py rejects any BUY/SELL without a non-market structural
+        # entry_price. Master/LLM often set direction without levels.
+        # Pull planned entry from adaptive / ICT / PA / SMC / liquidity /
+        # structure and write into signal_result + master_ctx.
+        try:
+            _dir_for_entry = str(final_signal or "").upper().replace("STRONG_", "")
+            if _dir_for_entry not in ("BUY", "SELL"):
+                # Also try adaptive/unified consensus direction so levels
+                # are ready if a downstream override flips direction.
+                _ad = (unified_signal_ctx or {}).get("adaptive_decision") or {}
+                _cons = (unified_signal_ctx or {}).get("consensus") or {}
+                _dir_for_entry = str(
+                    _ad.get("action") or _cons.get("action") or ""
+                ).upper()
+            _px_for_entry = None
+            try:
+                _px_for_entry = float(df["close"].iloc[-1]) if len(df) > 0 else None
+            except Exception:
+                _px_for_entry = None
+            _resolved_entry = resolve_structural_entry(
+                direction=_dir_for_entry,
+                signal_result=signal_result if isinstance(signal_result, dict) else {},
+                unified_signal_ctx=unified_signal_ctx if isinstance(unified_signal_ctx, dict) else {},
+                smc_result=smc_result if isinstance(smc_result, dict) else {},
+                smc_ctx=smc_ctx if isinstance(smc_ctx, dict) else {},
+                liquidity_ctx=liquidity_ctx if isinstance(liquidity_ctx, dict) else {},
+                structure_ctx=structure_ctx if isinstance(structure_ctx, dict) else {},
+                master_ctx=master_ctx if isinstance(master_ctx, dict) else {},
+                current_price=_px_for_entry,
+            )
+            # ATR for geometry validation (max 2.5×ATR SL, fixed 1:2 TP)
+            _atr_for_geo = None
+            try:
+                _ic = ind_ctx if isinstance(ind_ctx, dict) else {}
+                _atr_for_geo = _safe_float(
+                    _ic.get("atr") or _ic.get("ATR")
+                )
+                if _atr_for_geo is None and len(df) > 0 and "atr" in getattr(df, "columns", []):
+                    _atr_for_geo = _safe_float(df["atr"].iloc[-1])
+            except Exception:
+                _atr_for_geo = None
+
+            if _resolved_entry.get("entry"):
+                _geo = inject_structural_entry(
+                    signal_result,
+                    master_ctx,
+                    _resolved_entry,
+                    direction=_dir_for_entry,
+                    atr=_atr_for_geo,
+                    symbol=symbol,
+                )
+                if _geo.get("ok"):
+                    log.info(
+                        f"[AnalysisAgent] TradeGeometry OK: "
+                        f"{_dir_for_entry} @ {_geo['entry']:.5f} "
+                        f"sl={_geo['stop_loss']:.5f} tp={_geo['take_profit']:.5f} "
+                        f"risk={_geo['risk']:.5f} RR=1:{_geo['rr']} "
+                        f"note={_geo.get('source_note')} "
+                        f"src={_resolved_entry.get('source')}"
+                    )
+                else:
+                    log.warning(
+                        f"[AnalysisAgent] TradeGeometry REJECT: "
+                        f"{_dir_for_entry} @ {_resolved_entry['entry']:.5f} "
+                        f"— {_geo.get('reject_reason')}"
+                    )
+            elif _dir_for_entry in ("BUY", "SELL"):
+                log.warning(
+                    f"[AnalysisAgent] No structural entry for {_dir_for_entry} "
+                    f"on {symbol} — ENTRY GATE will block market-price fill"
+                )
+        except Exception as _entry_err:
+            log.warning(f"[AnalysisAgent] Structural entry resolve failed: {_entry_err}")
+
+        _top_entry = None
+        _top_sl = None
+        _top_tp = None
+        try:
+            if isinstance(signal_result, dict):
+                _top_entry = signal_result.get("entry") or signal_result.get("entry_price")
+                _top_sl = signal_result.get("stop_loss") or signal_result.get("sl")
+                _top_tp = signal_result.get("take_profit") or signal_result.get("tp")
+        except Exception:
+            pass
+
         return {
             "df":                df,
             "pat_ctx":           pat_ctx,
@@ -3026,6 +3561,11 @@ class AnalysisAgent:
             "bias_ctx":          bias_ctx,
             "signal":            signal_result,
             "signal_ctx":        signal_ctx,
+            # Top-level aliases so trader ENTRY GATE can read either path
+            "entry":             _top_entry,
+            "entry_price":       _top_entry,
+            "stop_loss":         _top_sl,
+            "take_profit":       _top_tp,
             "llm":               llm_result,
             "llm_ctx":           llm_ctx,
             "news":              news_result,

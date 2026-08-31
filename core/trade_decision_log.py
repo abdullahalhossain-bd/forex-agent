@@ -109,6 +109,15 @@ def log_decision(
     Never raises — logging failures are silently dropped.
     """
     try:
+        # Observability: attach evaluation_id when caller didn't pass one.
+        _eval_id = extra.pop("evaluation_id", None) if "evaluation_id" in extra else None
+        if not _eval_id:
+            try:
+                from core.pipeline_observability import get_pipeline_trace
+                _eval_id = get_pipeline_trace().current_evaluation_id()
+            except Exception:
+                _eval_id = None
+
         record = {
             "ts":             datetime.now(timezone.utc).isoformat(),
             "symbol":         symbol,
@@ -126,6 +135,8 @@ def log_decision(
             "ticket":         ticket,
             "cycle_errors":   cycle_errors or [],
         }
+        if _eval_id:
+            record["evaluation_id"] = _eval_id
         record.update(extra)
         line = json.dumps(record, default=str)
         with _LOCK:

@@ -19,19 +19,27 @@ def find_fractal_swing_high(df, lookback=20, fs=2):
         if all(highs[i] > highs[i-j] and highs[i] > highs[i+j] for j in range(1, fs+1)): return float(highs[i])
     return float(highs.max())
 
-def compute_structure_stop(df, direction, method="swing_atr", lookback=20, atr_buffer_mult=1.0, atr=0.0):
+def compute_structure_stop(df, direction, method="swing_atr", lookback=50, atr_buffer_mult=0.20, atr=0.0):
+    """Structure-based SL. lookback=50 matches entry_quality DEFAULT_SL_SWING_LOOKBACK
+    so Devil's Advocate / sl_swing_anchor sees the same swings.
+    atr_buffer_mult=0.20 matches risk_engine structure path.
+    """
     if direction.upper() == "BUY":
         swing = find_fractal_swing_low(df, lookback) or find_swing_low(df, lookback)
-        if atr <= 0: atr = float(df.iloc[-1].get("atr",0.001) or 0.001) if len(df)>0 else 0.001
-        if method == "swing": return swing
+        if atr <= 0:
+            atr = float(df.iloc[-1].get("atr", 0.001) or 0.001) if len(df) > 0 else 0.001
+        if method == "swing":
+            return swing
         return swing - atr * atr_buffer_mult
     else:
         swing = find_fractal_swing_high(df, lookback) or find_swing_high(df, lookback)
-        if atr <= 0: atr = float(df.iloc[-1].get("atr",0.001) or 0.001) if len(df)>0 else 0.001
-        if method == "swing": return swing
+        if atr <= 0:
+            atr = float(df.iloc[-1].get("atr", 0.001) or 0.001) if len(df) > 0 else 0.001
+        if method == "swing":
+            return swing
         return swing + atr * atr_buffer_mult
 
-def compute_structure_stop_pips(df, direction, entry_price, method="swing_atr", lookback=20, atr_buffer_mult=1.0, pip_size=0.0001):
+def compute_structure_stop_pips(df, direction, entry_price, method="swing_atr", lookback=50, atr_buffer_mult=0.20, pip_size=0.0001):
     sp = compute_structure_stop(df, direction, method, lookback, atr_buffer_mult)
-    sl_pips = (entry_price - sp) / pip_size if direction.upper()=="BUY" else (sp - entry_price) / pip_size
+    sl_pips = (entry_price - sp) / pip_size if direction.upper() == "BUY" else (sp - entry_price) / pip_size
     return max(round(sl_pips, 1), 5.0)

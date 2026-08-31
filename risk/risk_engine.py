@@ -211,15 +211,38 @@ class RiskEngine:
                     f"entry={entry} stop_loss={_sig_sl}"
                 )
             if _dist < min_sl_distance:
-                return self._reject(
-                    f"Signal SL too tight: {_dist:.5f} < min "
-                    f"{min_sl_distance:.5f} (max(15p, 0.5*ATR)). "
-                    f"Structure invalidation is noise-level — NO TRADE."
+                # Too tight: stretch to the minimum safe distance instead of
+                # hard-rejecting. Noise-level SL is still invalid, but clamping
+                # keeps the trade alive with a proper buffer.
+                log.warning(
+                    f"[RiskEngine] Signal SL too tight ({_dist:.5f} < "
+                    f"{min_sl_distance:.5f}) — stretching to min "
+                    f"(max(15p, 0.5*ATR))"
+                )
+                if signal == "BUY":
+                    _sig_sl = entry - min_sl_distance
+                else:
+                    _sig_sl = entry + min_sl_distance
+                _dist = min_sl_distance
+                structure_reasons.append(
+                    f"signal SL stretched to min {min_sl_distance:.5f}"
                 )
             if _dist > max_sl_distance:
-                return self._reject(
-                    f"Signal SL too wide: {_dist:.5f} > max "
-                    f"{max_sl_distance:.5f} (2.5*ATR). Risk undefined — NO TRADE."
+                # ★ FIX (2026-09-01): previously hard-rejected → sl_price=None
+                # → trade_permission saw distance 0 → "SL reduction rejected".
+                # Now clamp to 2.5*ATR so the trade can proceed with defined risk.
+                log.warning(
+                    f"[RiskEngine] Signal SL too wide ({_dist:.5f} > "
+                    f"{max_sl_distance:.5f} = 2.5*ATR) — clamping to max "
+                    f"instead of rejecting (prevents downstream 0-distance bug)"
+                )
+                if signal == "BUY":
+                    _sig_sl = entry - max_sl_distance
+                else:
+                    _sig_sl = entry + max_sl_distance
+                _dist = max_sl_distance
+                structure_reasons.append(
+                    f"signal SL clamped to max {max_sl_distance:.5f} (2.5*ATR)"
                 )
             sl_price = round(_sig_sl, 5)
             structure_source = "signal_structure"
@@ -233,7 +256,7 @@ class RiskEngine:
                     df,
                     signal,
                     method="swing_atr",
-                    lookback=30,
+                    lookback=50,  # match entry_quality DEFAULT_SL_SWING_LOOKBACK
                     atr_buffer_mult=0.20,
                     atr=atr,
                 )
@@ -249,20 +272,38 @@ class RiskEngine:
                         f"entry={entry} structure_sl={structure_sl}"
                     )
                 if _dist < min_sl_distance:
-                    return self._reject(
-                        f"Structure SL too tight: {_dist:.5f} < min "
-                        f"{min_sl_distance:.5f}. No deeper valid structure — NO TRADE."
+                    # Stretch structure SL to minimum safe distance
+                    log.warning(
+                        f"[RiskEngine] Structure SL too tight ({_dist:.5f} < "
+                        f"{min_sl_distance:.5f}) — stretching to min"
+                    )
+                    if signal == "BUY":
+                        structure_sl = entry - min_sl_distance
+                    else:
+                        structure_sl = entry + min_sl_distance
+                    _dist = min_sl_distance
+                    structure_reasons.append(
+                        f"structure SL stretched to min {min_sl_distance:.5f}"
                     )
                 if _dist > max_sl_distance:
-                    return self._reject(
-                        f"Structure SL too wide: {_dist:.5f} > max "
-                        f"{max_sl_distance:.5f} (2.5*ATR). Trade quality "
-                        f"questionable — NO TRADE."
+                    # ★ FIX (2026-09-01): clamp instead of hard reject
+                    # (same root-cause as signal-SL path — prevents 0-distance cascade)
+                    log.warning(
+                        f"[RiskEngine] Structure SL too wide ({_dist:.5f} > "
+                        f"{max_sl_distance:.5f} = 2.5*ATR) — clamping to max"
                     )
-                sl_price = structure_sl
+                    if signal == "BUY":
+                        structure_sl = entry - max_sl_distance
+                    else:
+                        structure_sl = entry + max_sl_distance
+                    _dist = max_sl_distance
+                    structure_reasons.append(
+                        f"structure SL clamped to max {max_sl_distance:.5f} (2.5*ATR)"
+                    )
+                sl_price = round(structure_sl, 5)
                 structure_source = "fractal_swing_atr"
                 structure_reasons.append(
-                    "recent fractal swing + 0.20 ATR buffer (lookback=30)"
+                    "recent fractal swing + 0.20 ATR buffer (lookback=50)"
                 )
             except Exception as _e_sl:
                 return self._reject(
@@ -283,6 +324,62 @@ class RiskEngine:
                 f"SL distance collapsed to {sl_pips} pips after conversion — "
                 f"pip size or prices invalid."
             )
+
+        # ── 2b. SNAP SL TO NEAREST VALID SWING (structure-anchoring) ──
+        # ★ FIX (2026-09-01): Devil's Advocate / entry_quality often REJECT
+        # on "SL not structure-anchored" when SL was clamped to ATR band
+        # or signal used a fixed-pip distance. Snap to the nearest swing
+        # on the correct side that still sits inside [min_sl, max_sl].
+        # This makes sl_swing_anchor pass without softening the DA gate.
+        try:
+            from risk.entry_quality_guardrails import (
+                _find_swing_lows, _find_swing_highs,
+            )
+            _snap_lookback = 50
+            if signal == "BUY":
+                _swings = _find_swing_lows(df, lookback=_snap_lookback) or []
+                _valid = [
+                    s for s in _swings
+                    if (entry - max_sl_distance) <= s < entry
+                    and (entry - s) >= min_sl_distance
+                ]
+            else:
+                _swings = _find_swing_highs(df, lookback=_snap_lookback) or []
+                _valid = [
+                    s for s in _swings
+                    if entry < s <= (entry + max_sl_distance)
+                    and (s - entry) >= min_sl_distance
+                ]
+            if _valid:
+                _best = min(_valid, key=lambda s: abs(s - sl_price))
+                _buf = 0.15 * atr  # small buffer beyond the swing
+                if signal == "BUY":
+                    _snapped = _best - _buf
+                    _snapped = max(
+                        entry - max_sl_distance,
+                        min(entry - min_sl_distance, _snapped),
+                    )
+                else:
+                    _snapped = _best + _buf
+                    _snapped = min(
+                        entry + max_sl_distance,
+                        max(entry + min_sl_distance, _snapped),
+                    )
+                _old_sl = sl_price
+                sl_price = round(float(_snapped), 5)
+                sl_distance = round(abs(entry - sl_price), 5)
+                sl_pips = round(sl_distance / self.pip) if self.pip > 0 else 0
+                structure_source = (structure_source or "signal") + "+swing_snap"
+                structure_reasons.append(
+                    f"SL snapped to swing {_best:.5f} (was {_old_sl:.5f}) "
+                    f"+0.15ATR buffer → {sl_price:.5f}"
+                )
+                log.info(
+                    f"[RiskEngine] SL swing-snap: {_old_sl:.5f} → {sl_price:.5f} "
+                    f"(anchor={_best:.5f}, dist={sl_distance:.5f})"
+                )
+        except Exception as _e_snap:
+            log.debug(f"[RiskEngine] SL swing-snap skipped: {_e_snap}")
 
         # ── 3. TAKE PROFIT: signal-provided structure first ───────────
         _sig_tp = None

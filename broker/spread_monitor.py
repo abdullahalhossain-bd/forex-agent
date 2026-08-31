@@ -37,26 +37,42 @@ class SpreadMonitor:
     def check(
         self, symbol: str, current_spread_pips: float, news_active: bool = False
     ) -> dict:
-        clean_symbol = symbol.upper()[:6]
-        max_allowed = MAX_SPREAD_PIPS.get(clean_symbol, MAX_SPREAD_PIPS["DEFAULT"])
-
-        if news_active:
-            max_allowed *= NEWS_WINDOW_MULTIPLIER
-
-        allowed = current_spread_pips <= max_allowed
-        reason = (
-            "OK"
-            if allowed
-            else f"Spread {current_spread_pips} pips > max {max_allowed} pips"
-                 f"{' (news window — stricter limit)' if news_active else ''}"
-        )
-
-        if not allowed:
-            log.warning(f"[SpreadMonitor] {clean_symbol} blocked — {reason}")
-
-        return {
-            "allowed": allowed,
-            "current_spread_pips": current_spread_pips,
-            "max_allowed_pips": round(max_allowed, 2),
-            "reason": reason,
-        }
+        # Prefer canonical policy (suffix-safe, asset-class aware)
+        try:
+            from core.spread_policy import spread_allowed, clean_symbol as _cs
+            decision = spread_allowed(
+                current_spread_pips,
+                symbol,
+                news_active=news_active,
+                news_multiplier=NEWS_WINDOW_MULTIPLIER,
+            )
+            clean = _cs(symbol)
+            if not decision["allowed"]:
+                log.warning(f"[SpreadMonitor] {clean} blocked — {decision['reason']}")
+            return {
+                "allowed": decision["allowed"],
+                "current_spread_pips": current_spread_pips,
+                "max_allowed_pips": decision["max_allowed_pips"],
+                "reason": decision["reason"] if not decision["allowed"] else "OK",
+                "level": decision.get("level"),
+            }
+        except Exception:
+            clean_symbol = symbol.upper().replace("M", "")[:6]
+            max_allowed = MAX_SPREAD_PIPS.get(clean_symbol, MAX_SPREAD_PIPS["DEFAULT"])
+            if news_active:
+                max_allowed *= NEWS_WINDOW_MULTIPLIER
+            allowed = current_spread_pips <= max_allowed
+            reason = (
+                "OK"
+                if allowed
+                else f"Spread {current_spread_pips} pips > max {max_allowed} pips"
+                     f"{' (news window — stricter limit)' if news_active else ''}"
+            )
+            if not allowed:
+                log.warning(f"[SpreadMonitor] {clean_symbol} blocked — {reason}")
+            return {
+                "allowed": allowed,
+                "current_spread_pips": current_spread_pips,
+                "max_allowed_pips": round(max_allowed, 2),
+                "reason": reason,
+            }

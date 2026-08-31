@@ -35,7 +35,8 @@ Toggles (env):
     DA_SAFETY_NET_MODE        enforce | warn_only   (default enforce)
     DA_MIN_ATR_PIPS           default 4.0    — dead-market floor (in pips)
     DA_NEWS_SPIKE_ATR_MULT    default 2.5    — candle > N*ATR = spike entry
-    DA_MAX_SPREAD_RATIO       default 0.35   — spread/ATR execution-cost cap
+    DA_MAX_SPREAD_RATIO       default 0.35   — spread/ATR WARN threshold
+    DA_MAX_SPREAD_RATIO_VETO  default 0.50   — spread/ATR hard VETO (was single 0.35)
     DA_STRUCT_SL_BUFFER_PIPS  default 2.0    — SL must clear structure by this
     DA_STRUCT_PROXIMITY_MULT  default 2.0    — ignore levels farther than
                                                N x sl_distance from entry
@@ -344,12 +345,20 @@ class DASafetyNet:
         if spread_pips is None or spread_pips <= 0:
             return CheckOutcome(name, VERDICT_SKIP, "no live spread data (spread_pips missing/zero)")
 
+        # Instrument-aware limits via core.spread_policy (XAUUSD live ~260
+        # must not be vetoed by legacy MAX_SPREAD_PIPS DEFAULT=3 / hard 5).
         try:
-            from broker.spread_monitor import MAX_SPREAD_PIPS
-            clean = self._clean_symbol(symbol)
-            max_allowed = float(MAX_SPREAD_PIPS.get(clean, MAX_SPREAD_PIPS["DEFAULT"]))
+            from core.spread_policy import get_max_spread_pips, clean_symbol as _cs
+            max_allowed = float(get_max_spread_pips(symbol))
+            clean = _cs(symbol)
         except Exception:
-            max_allowed = 3.0
+            try:
+                from broker.spread_monitor import MAX_SPREAD_PIPS
+                clean = self._clean_symbol(symbol)
+                max_allowed = float(MAX_SPREAD_PIPS.get(clean, MAX_SPREAD_PIPS.get("DEFAULT", 25.0)))
+            except Exception:
+                clean = self._clean_symbol(symbol)
+                max_allowed = 25.0
         if news_active:
             max_allowed *= 0.5  # mirror SpreadMonitor.NEWS_WINDOW_MULTIPLIER
 
@@ -358,18 +367,32 @@ class DASafetyNet:
             "spread_pips": spread_pips,
             "max_allowed_pips": round(max_allowed, 2),
             "news_window": news_active,
+            "symbol_clean": clean if "clean" in dir() else self._clean_symbol(symbol),
         }
 
+        # ★ FIX (2026-09-01): Two-tier spread/ATR ratio.
+        # Old single threshold 0.35 caused hard VETO at 35.1% (noise-level
+        # overshoot) — e.g. USDCHF "spread eats 35.1% of ATR (> 35%)".
+        # Now: WARN at DA_MAX_SPREAD_RATIO (default 0.35), hard VETO only
+        # above DA_MAX_SPREAD_RATIO_VETO (default 0.50). Absolute pip cap
+        # (max_allowed) still hard-vetoes as before.
         ratio_warn = _env_float("DA_MAX_SPREAD_RATIO", 0.35)
+        ratio_veto = _env_float("DA_MAX_SPREAD_RATIO_VETO", 0.50)
+        if ratio_veto < ratio_warn:
+            ratio_veto = ratio_warn
         spread_ratio: Optional[float] = None
         if atr and atr > 0:
             try:
                 from core.constants import get_pip_size
                 pip_size = get_pip_size(self._clean_symbol(symbol)) or 0.0001
                 atr_pips = float(atr) / pip_size
+                # Floor atr_pips so tiny M15 ATR during quiet NY doesn't
+                # inflate the ratio and false-veto on normal spreads.
+                atr_pips = max(atr_pips, _env_float("DA_MIN_ATR_PIPS", 4.0))
                 if atr_pips > 0:
                     spread_ratio = spread_pips / atr_pips
                     details["spread_to_atr_ratio"] = round(spread_ratio, 4)
+                    details["atr_pips_used"] = round(atr_pips, 2)
             except Exception:
                 pass
 
@@ -380,10 +403,18 @@ class DASafetyNet:
                 + (" (news window)" if news_active else ""),
                 details,
             )
-        if spread_ratio is not None and spread_ratio > ratio_warn:
+        if spread_ratio is not None and spread_ratio > ratio_veto:
             return CheckOutcome(
                 name, VERDICT_VETO,
-                f"spread eats {round(spread_ratio * 100, 1)}% of ATR (> {ratio_warn:.0%}) — edge destroyed by cost",
+                f"spread eats {round(spread_ratio * 100, 1)}% of ATR "
+                f"(> {ratio_veto:.0%} hard cap) — edge destroyed by cost",
+                details,
+            )
+        if spread_ratio is not None and spread_ratio > ratio_warn:
+            return CheckOutcome(
+                name, VERDICT_WARN,
+                f"spread eats {round(spread_ratio * 100, 1)}% of ATR "
+                f"(> {ratio_warn:.0%} warn) — elevated cost, not veto",
                 details,
             )
         if spread_pips > max_allowed * 0.7:

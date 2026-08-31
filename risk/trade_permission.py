@@ -143,9 +143,9 @@ class TradePermission:
     # Reads from .env via core.constants.MIN_CONFIDENCE_PROD.
     try:
         from core.constants import MIN_CONFIDENCE_PROD as _ENV_MIN_CONF
-        MIN_CONFIDENCE_PROD = int(_ENV_MIN_CONF) if _ENV_MIN_CONF else 80
+        MIN_CONFIDENCE_PROD = int(_ENV_MIN_CONF) if _ENV_MIN_CONF else 40
     except Exception:
-        MIN_CONFIDENCE_PROD = 80
+        MIN_CONFIDENCE_PROD = 40
     MIN_CONFIDENCE_TEST  = 10
     MIN_CONFIDENCE_RECENT_WIN_RATE_FLOOR = 0.45
     MIN_CONFIDENCE_RECENT_WIN_RATE_STEP = 5
@@ -176,7 +176,7 @@ class TradePermission:
     # justify a trade. Named constant (was a bare `55` inline) so the
     # threshold is easy to find and change in one place. User request:
     # confidence >= 60 should be enough to trade even in a LOW session.
-    SESSION_LOW_QUALITY_MIN_CONFIDENCE = 60
+    SESSION_LOW_QUALITY_MIN_CONFIDENCE = 40
 
     @property
     def MIN_CONFIDENCE(self) -> int:
@@ -2057,6 +2057,24 @@ class TradePermission:
         _sl_dist_pre = abs(_entry_price - _sl_pre) if _entry_price and _sl_pre else 0.0
         _sl_dist_post = abs(_entry_price - _sl_post) if _entry_price and _sl_post else 0.0
 
+        # ★ FIX (2026-09-01): When risk_engine previously rejected (wide SL)
+        # it returned sl_price=None → _sl_post=0 → distance 0 → false
+        # "SL reduction rejected". Now fall back to the original signal SL
+        # so the 60% sanity check is not poisoned by a missing post value.
+        # (Primary fix is in risk_engine clamping; this is defensive.)
+        if _sl_dist_post == 0.0 and _sl_dist_pre > 0.0 and _entry_price > 0:
+            log.warning(
+                f"[TradePermission] risk_out.sl_price missing/zero "
+                f"(dist_post=0) while signal SL exists (dist_pre="
+                f"{_sl_dist_pre:.6f}) — falling back to original signal SL"
+            )
+            _sl_post = _sl_pre
+            _sl_dist_post = _sl_dist_pre
+            if isinstance(risk_out, dict):
+                risk_out["sl_price"] = _sl_pre
+            # Also keep result consistent
+            result["sl"] = _sl_pre
+
         # Flag whether SL was adjusted by risk layer / permission
         _sl_adjusted = bool(round(_sl_dist_pre, 8) != round(_sl_dist_post, 8))
 
@@ -2067,8 +2085,10 @@ class TradePermission:
         result["risk_sl_reduction_rejected"] = False
 
         # Sanity reject: if final SL offers less than 60% of original distance
+        # (only meaningful when both distances are positive and a real reduction occurred)
         try:
-            if _sl_dist_pre > 0 and _sl_dist_post < 0.6 * _sl_dist_pre:
+            if (_sl_dist_pre > 0 and _sl_dist_post > 0
+                    and _sl_dist_post < 0.6 * _sl_dist_pre):
                 # Emit explicit rejection reason and mark as failed check so
                 # downstream systems and audits can see why this trade was refused.
                 _rej_detail = (

@@ -42,19 +42,25 @@ except Exception:
         "exotics will use DEFAULT=10.0)."
     )
     SPREAD_LIMITS_PIPS = {
-        "EURUSD": 3.0,
-        "GBPUSD": 4.0,
-        "USDJPY": 3.0,
-        "AUDUSD": 3.0,
-        "USDCAD": 4.0,
-        "XAUUSD": 50.0,
-        "XAGUSD": 10.0,
-        "DEFAULT": 10.0,
+        "EURUSD": 3.0, "GBPUSD": 3.5, "USDJPY": 20.0, "AUDUSD": 3.5,
+        "USDCAD": 4.0, "USDCHF": 4.0, "NZDUSD": 4.0,
+        "XAUUSD": 400.0, "XAGUSD": 60.0, "XPTUSD": 900.0, "XPDUSD": 900.0,
+        "USDZAR": 200.0, "EURTRY": 3000.0, "GBPTRY": 3500.0,
+        "EURSEK": 400.0, "GBPSEK": 400.0,
+        "DEFAULT": 25.0,
     }
  
  
 def _spread_limit(symbol: str) -> float:
-    return SPREAD_LIMITS_PIPS.get(symbol.upper(), SPREAD_LIMITS_PIPS["DEFAULT"])
+    """Symbol max spread in pips — delegates to core.spread_policy when available."""
+    try:
+        from core.spread_policy import get_max_spread_pips
+        return float(get_max_spread_pips(symbol))
+    except Exception:
+        sym = str(symbol or "").upper()
+        if sym.endswith("M") and len(sym) in (7, 8):
+            sym = sym[:-1]
+        return float(SPREAD_LIMITS_PIPS.get(sym, SPREAD_LIMITS_PIPS["DEFAULT"]))
  
  
 def _test_mode() -> bool:

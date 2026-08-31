@@ -982,6 +982,12 @@ class AITrader:
             memory_ctx, pat_ctx, vec_ctx, entry, session_ctx.
         """
         log.info("[3/9] Analysis Agent...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("ANALYSIS")
+        except Exception:
+            pass
         # ── Phase 25 follow-up: enrich market_out with MTF, strength,
         # liquidity BEFORE AnalysisAgent runs, so the analysis layer has
         # the richer context to fuse with its own signals. Fail-safe.
@@ -1052,6 +1058,12 @@ class AITrader:
             )
 
         log.info("[4/9] Decision Agent...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("SIGNAL")
+        except Exception:
+            pass
         # Day 81+ hotfix: analysis_out may come from an early-return path
         # (dead zone, error, etc.) that doesn't include a "signal" key.
         # Use defensive `.get()` so we never raise KeyError here.
@@ -1264,6 +1276,12 @@ class AITrader:
                 log.warning(f"[Trader] apply_signal_scoring failed (non-fatal): {_oc_e}")
 
         log.info("[5/9] Risk Engine...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("RISK")
+        except Exception:
+            pass
 
         # ── Stop Hunt Direct Lane (2026-08-02, Abdullah audit) ──────────
         # per_strategy_tester.py validated a real out-of-sample edge
@@ -1851,6 +1869,12 @@ class AITrader:
             log.debug(f"[Trader] risk.finalized log failed (non-fatal): {e}")
 
         log.info("[6/9] Safety Guard (Permission + Correlation)...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("TRADE_PERMISSION")
+        except Exception:
+            pass
         perm_out = self._perm.check(
             decision_out=dec_out,
             risk_out=risk_out,
@@ -2125,6 +2149,17 @@ class AITrader:
         )
         log.debug(f"[Trader] {self.symbol}: cycle evaluation_id={self._current_evaluation_id}")
 
+        # ── Pipeline observability (structured stage/gate events) ──
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().start_cycle(
+                evaluation_id=self._current_evaluation_id,
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+            )
+        except Exception:
+            pass
+
         # Day 81+ hotfix: reset per-cycle LLM call counter so each
         # symbol cycle gets a fresh budget of MAX_LLM_CALLS_PER_CYCLE.
         # Without this, the counter would accumulate across cycles and
@@ -2140,7 +2175,10 @@ class AITrader:
         try:
             from monitoring.signal_debugger import get_signal_debugger
             debugger = get_signal_debugger()
-            debugger.start_cycle(self.symbol, self.timeframe)
+            debugger.start_cycle(
+                self.symbol, self.timeframe,
+                evaluation_id=getattr(self, "_current_evaluation_id", "") or "",
+            )
         except Exception as e:
             debugger = None
 
@@ -2179,6 +2217,17 @@ class AITrader:
                             if debugger:
                                 debugger.record("human_override", "BLOCK", _override)
                                 debugger.record_final("NO_TRADE", f"Human override: {_override}")
+                                try:
+                                    from core.pipeline_observability import get_pipeline_trace, StageStatus
+                                    get_pipeline_trace().stage_result(
+                                        "HUMAN_OVERRIDE", StageStatus.BLOCKED.value,
+                                        reason_code="HUMAN_OVERRIDE",
+                                        reason=f"Human override: {_override}",
+                                        signal="NO_TRADE",
+                                    )
+                                    get_pipeline_trace().end_cycle()
+                                except Exception:
+                                    pass
                                 debugger.log_cycle_summary()
                                 debugger.save_to_file()
                             return {
@@ -2256,6 +2305,7 @@ class AITrader:
                             f"< 85% of balance=${acct.balance:.0f} "
                             f"(ratio={equity_ratio:.3f}). HALTING all trading."
                         )
+                        self._obs_end_cycle(locals().get('result'))
                         return {
                             "symbol": self.symbol,
                             "final_action": "WAIT",
@@ -2277,6 +2327,17 @@ class AITrader:
                     debugger.record("frequency_ctrl", "BLOCK",
                                     f"Daily cap {freq_ctrl.trade_count_today()}/max")
                     debugger.record_final("NO_TRADE", "Daily trade cap reached")
+                    try:
+                        from core.pipeline_observability import get_pipeline_trace, StageStatus
+                        get_pipeline_trace().stage_result(
+                            "FREQUENCY_CAP", StageStatus.BLOCKED.value,
+                            reason_code="FREQUENCY_CAP",
+                            reason="Daily trade cap reached",
+                            signal="NO_TRADE",
+                        )
+                        get_pipeline_trace().end_cycle()
+                    except Exception:
+                        pass
                     debugger.log_cycle_summary()
                     debugger.save_to_file()
                 log.warning("[Frequency] Daily trade cap hit — skipping cycle")
@@ -2298,6 +2359,12 @@ class AITrader:
         latest_price = None
 
         log.info("[1/9] Market Agent...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("MARKET_DATA")
+        except Exception:
+            pass
         with self._stage(f"aitrader.{self.symbol}.market"):
             market_out = self._data_provider.get_market_out(self.symbol, self.timeframe)
         if "error" in market_out:
@@ -2318,6 +2385,17 @@ class AITrader:
             if debugger:
                 debugger.record("market_data", "ERROR", market_out.get("error", "fetch_failed"))
                 debugger.record_final("NO_TRADE", "Market data fetch failed")
+                try:
+                    from core.pipeline_observability import get_pipeline_trace, StageStatus
+                    get_pipeline_trace().stage_result(
+                        "MARKET_DATA", StageStatus.ERROR.value,
+                        reason_code="MARKET_DATA_FAILED",
+                        reason=str(market_out.get("error", "fetch_failed"))[:200],
+                        signal="NO_TRADE",
+                    )
+                    get_pipeline_trace().end_cycle()
+                except Exception:
+                    pass
                 debugger.log_cycle_summary()
                 debugger.save_to_file()
             # Return WITHOUT "error" key for unavailable symbols — they must
@@ -2345,6 +2423,15 @@ class AITrader:
             debugger.record("market_data", "OK",
                             f"price={ind_ctx.get('price', ind_ctx.get('close', '?'))} "
                             f"trend={ind_ctx.get('trend', '?')}")
+            try:
+                from core.pipeline_observability import get_pipeline_trace, StageStatus
+                get_pipeline_trace().stage_result(
+                    "MARKET_DATA", StageStatus.PASS.value,
+                    reason_code="OK",
+                    reason=f"price={ind_ctx.get('price', ind_ctx.get('close', '?'))} trend={ind_ctx.get('trend', '?')}",
+                )
+            except Exception:
+                pass
 
         ind = market_out.get("ind_ctx", {})
         # Day 81+ hotfix: Indicators.get_ai_context() uses "price" key, not "close"
@@ -2357,6 +2444,7 @@ class AITrader:
                 price_val = float(latest_price)
                 if price_val <= 0 or price_val != price_val:  # NaN check
                     log.warning(f"[Trader] BAD PRICE detected: {latest_price} — skipping cycle")
+                    self._obs_end_cycle(locals().get('result'))
                     return {
                         "symbol": self.symbol,
                         "final_action": "WAIT",
@@ -2365,6 +2453,7 @@ class AITrader:
                     }
             except (ValueError, TypeError):
                 log.warning(f"[Trader] INVALID PRICE type: {latest_price} — skipping cycle")
+                self._obs_end_cycle(locals().get('result'))
                 return {
                     "symbol": self.symbol,
                     "final_action": "WAIT",
@@ -2372,6 +2461,7 @@ class AITrader:
                     "reject_reason": f"Invalid price: {latest_price}",
                 }
         else:
+            self._obs_end_cycle()
             return self._error_result("No price available from market data")
 
         candle_time = self._extract_candle_time(market_out)
@@ -2410,6 +2500,12 @@ class AITrader:
         # [2/9] Circuit Breaker Gate — existing positions above still get
         # monitored (SL/TP/timeout) even while tripped; only NEW entries block.
         log.info("[2/9] Circuit Breaker Gate...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("CIRCUIT_BREAKER")
+        except Exception:
+            pass
         self._circuit_breaker.reset_daily()
         cb_check = self._circuit_breaker.allow_trade()
         if not cb_check["allowed"]:
@@ -2447,6 +2543,17 @@ class AITrader:
                 debugger.record_final("NO_TRADE", f"CircuitBreaker: {cb_check['reason']}")
                 debugger.log_cycle_summary()
                 debugger.save_to_file()
+            try:
+                from core.pipeline_observability import get_pipeline_trace, StageStatus
+                get_pipeline_trace().stage_result(
+                    "CIRCUIT_BREAKER", StageStatus.BLOCKED.value,
+                    reason_code="CIRCUIT_BREAKER",
+                    reason=f"{cb_check.get('mode')}: {cb_check.get('reason')}",
+                    signal="NO_TRADE",
+                )
+                get_pipeline_trace().end_cycle()
+            except Exception:
+                pass
             self._publish("risk.circuit_breaker", {
                 "symbol": self.symbol, "mode": cb_check["mode"], "reason": cb_check["reason"],
             })
@@ -2469,9 +2576,18 @@ class AITrader:
                              reject_reason=f"[{cb_check['mode']}] {cb_check['reason']}")
             except Exception as e: pass
             self._print_final(result)
+            self._obs_end_cycle(result)
             return result
         if debugger:
             debugger.record("circuit_breaker", "OK", "Trade allowed")
+        try:
+            from core.pipeline_observability import get_pipeline_trace, StageStatus
+            get_pipeline_trace().stage_result(
+                "CIRCUIT_BREAKER", StageStatus.PASS.value,
+                reason_code="OK", reason="Trade allowed",
+            )
+        except Exception:
+            pass
 
         # Day 72 fix: Removed candle dedup check that was blocking ALL pairs.
         # The old logic compared candle_time with _last_decision_candle and
@@ -2546,6 +2662,7 @@ class AITrader:
                     )
                     result["reject_reason"] = f"Stale data: {staleness.get('reason')}"
                     self._print_final(result)
+                    self._obs_end_cycle(result)
                     return result
             except Exception as e:
                 log.debug(f"[Trader] Data staleness check skipped (non-fatal): {e}")
@@ -2574,6 +2691,7 @@ class AITrader:
                     )
                     result["reject_reason"] = "Candle not closed: forming bar pre-stripped"
                     self._print_final(result)
+                    self._obs_end_cycle(result)
                     return result
 
                 from core.production_hardening import (
@@ -2661,6 +2779,7 @@ class AITrader:
                         )
                         result["reject_reason"] = f"Candle not closed: {closed_check.get('reason')}"
                         self._print_final(result)
+                        self._obs_end_cycle(result)
                         return result
             except Exception as e:
                 log.debug(f"[Trader] Candle-close check skipped (non-fatal): {e}")
@@ -2685,6 +2804,7 @@ class AITrader:
                              reject_stage="analysis_agent",
                              reject_reason=f"Analysis error: {analysis_out.get('error')}")
             except Exception as e: pass
+            self._obs_end_cycle()
             return self._error_result(f"Analysis Agent: {analysis_out['error']}")
 
         log.info("[7/9] Learning Agent...")
@@ -2778,6 +2898,12 @@ class AITrader:
         result["approval_mode"] = self._approval.mode_name
 
         log.info("[8/9] Approval Gate...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("APPROVAL")
+        except Exception:
+            pass
 
         # ════════════════════════════════════════════════════════════════
         # ARCHITECTURAL FIX (Round 3 audit, 2026-08-13):
@@ -3054,6 +3180,12 @@ class AITrader:
                 result["reject_reason"] = approval_out.get("message", result.get("reject_reason"))
 
         log.info("[9/9] Execution + Alerts...")
+
+        try:
+            from core.pipeline_observability import get_pipeline_trace
+            get_pipeline_trace().stage_entered("MT5_ORDER_SEND")
+        except Exception:
+            pass
         if approved_to_execute:
             with self._stage(f"aitrader.{self.symbol}.execute"):
                 trade = self._execution_adapter.open_trade(
@@ -3226,6 +3358,21 @@ class AITrader:
                 result["reject_reason"] = (
                     f"Execution router returned None — {_router_reason or 'broker order failed (no specific reason reported)'}"
                 )
+                try:
+                    from core.pipeline_observability import get_pipeline_trace, StageStatus
+                    get_pipeline_trace().stage_result(
+                        "MT5_ORDER_SEND", StageStatus.EXECUTION_FAILED.value,
+                        reason_code="MT5_ORDER_FAILED",
+                        reason=str(_router_reason or "execution_router returned None")[:200],
+                        signal=result.get("final_action"),
+                    )
+                    get_pipeline_trace().stage_result(
+                        "EXECUTION_RESULT", StageStatus.EXECUTION_FAILED.value,
+                        reason_code="MT5_ORDER_FAILED",
+                        reason=str(_router_reason or "execution_router returned None")[:200],
+                    )
+                except Exception:
+                    pass
 
         if show_chart:
             ChartEngine(self.symbol, self.timeframe).create_full_chart(
@@ -3315,6 +3462,7 @@ class AITrader:
                 reject_reason=_reject_reason,
                 lot=result.get("lot"),
                 entry=result.get("entry"),
+                evaluation_id=getattr(self, "_current_evaluation_id", None),
                 sl=result.get("sl"),
                 tp=result.get("tp"),
                 ticket=result.get("ticket"),
@@ -3382,6 +3530,42 @@ class AITrader:
             journal.log_decision(entry)
         except Exception as e:
             log.debug(f"[Journal] log_decision failed: {e}")
+
+        # ── Pipeline observability: final summary for this evaluation ──
+        try:
+            from core.pipeline_observability import get_pipeline_trace, StageStatus, map_reject_reason_to_code
+            _trace = get_pipeline_trace()
+            _final = result.get("final_action") or result.get("decision") or ""
+            _taken = bool(result.get("paper_trade_id") or result.get("ticket"))
+            _reject = result.get("reject_reason") or ""
+            if _taken:
+                _trace.set_trade_params(
+                    lot=result.get("lot"),
+                    entry=result.get("entry"),
+                    sl=result.get("sl"),
+                    tp=result.get("tp"),
+                    ticket=result.get("ticket") or result.get("paper_trade_id"),
+                    signal=_final,
+                )
+                _trace.stage_result(
+                    "EXECUTION_RESULT",
+                    StageStatus.EXECUTION_SUCCESS.value,
+                    reason_code="OK",
+                    reason="Order filled / trade recorded",
+                    signal=_final,
+                )
+            elif _reject:
+                _code = map_reject_reason_to_code(result.get("reject_stage", ""), _reject)
+                _trace.stage_result(
+                    "FINAL_DECISION",
+                    StageStatus.BLOCKED.value,
+                    reason_code=_code,
+                    reason=_reject[:200],
+                    signal=_final,
+                )
+            _trace.end_cycle()
+        except Exception:
+            pass
         return result
 
     def monitor_open_trades(self, price: float = None) -> list[dict]:
@@ -4453,6 +4637,44 @@ class AITrader:
         # the last one), so this copy is currently dead code, but
         # fixing both for consistency.
         return clean_symbol(symbol)
+
+
+    def _obs_end_cycle(self, result: dict = None) -> None:
+        """Emit pipeline summary for this evaluation. Observability only — never raises."""
+        try:
+            from core.pipeline_observability import (
+                get_pipeline_trace, StageStatus, map_reject_reason_to_code,
+            )
+            trace = get_pipeline_trace()
+            if result:
+                final = result.get("final_action") or result.get("decision") or ""
+                taken = bool(result.get("paper_trade_id") or result.get("ticket"))
+                reject = result.get("reject_reason") or ""
+                if taken:
+                    trace.set_trade_params(
+                        lot=result.get("lot"),
+                        entry=result.get("entry"),
+                        sl=result.get("sl"),
+                        tp=result.get("tp"),
+                        ticket=result.get("ticket") or result.get("paper_trade_id"),
+                        signal=final,
+                    )
+                    trace.stage_result(
+                        "EXECUTION_RESULT", StageStatus.EXECUTION_SUCCESS.value,
+                        reason_code="OK", reason="Order filled / trade recorded",
+                        signal=final,
+                    )
+                elif reject:
+                    code = map_reject_reason_to_code(
+                        result.get("reject_stage", "") or "", reject
+                    )
+                    trace.stage_result(
+                        "FINAL_DECISION", StageStatus.BLOCKED.value,
+                        reason_code=code, reason=reject[:200], signal=final,
+                    )
+            trace.end_cycle()
+        except Exception:
+            pass
 
     def _error_result(self, reason: str) -> dict:
         log.error(f"Pipeline failed: {reason}")
