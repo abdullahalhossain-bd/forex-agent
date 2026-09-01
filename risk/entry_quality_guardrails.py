@@ -107,8 +107,23 @@ DEFAULT_SL_SWING_LOOKBACK   = 50      # check last 50 bars for swing low/high
 DEFAULT_SL_PROXIMITY_ATR    = 1.5     # SL within 1.5×ATR of a swing = "anchored"
 
 # Flag 3 — TP structure validation
+# BUG FIX (2026-09-01, "DA rejects almost everything" audit): a flat 5-pip
+# proximity window is tiny relative to typical TP distances RiskEngine
+# actually places (20-50+ pips on majors, much more on XAU/JPY), and this
+# check has no idea what pip-equivalent RiskEngine used to pick that TP in
+# the first place. In production logs, approved trades whose TP RiskEngine
+# had already validated structurally were still failing this SECOND,
+# independent swing search by 26-30 pips almost every single cycle — not
+# because the TP was actually unstructured, but because a flat 5-pip
+# window essentially never matches a nearby-but-not-pixel-identical swing.
+# That false-fail then combined with rejection_psychology's (now fixed)
+# near-universal false-fail to trip Devil's Advocate's "2+ checks failing
+# together = high-severity cluster" instruction on nearly every review.
+# Widen the tolerance so it reflects "is TP roughly at a real level" (the
+# check's actual intent per its own docstring) rather than requiring
+# near pixel-exact agreement with an independently-run swing search.
 DEFAULT_TP_STRUCTURE_LOOKBACK = 100   # check last 100 bars for prior tests
-DEFAULT_TP_PROXIMITY_PIPS     = 5     # S/R within 5 pips of TP = "validated"
+DEFAULT_TP_PROXIMITY_PIPS     = 20    # S/R within 20 pips of TP = "validated"
 
 # Flag 4 — Indecision candles
 DEFAULT_INDECISION_BODY_PCT  = 0.30   # body < 30% of range = indecision
@@ -1813,51 +1828,83 @@ def check_rejection_psychology(
             reason="Insufficient data — skipping rejection-psychology check",
         )
 
+    # BUG FIX (2026-09-01, "DA rejects almost everything" audit):
+    # This used to inspect ONLY df.iloc[-1] — literally the single most
+    # recent candle. Requiring THAT SPECIFIC bar to (a) be a >=1.5x
+    # wick:body rejection AND (b) sit within 0.5*ATR of a swing zone is an
+    # extremely narrow coincidence to demand every single decision cycle;
+    # in practice almost no cycle's last candle happens to be a fresh
+    # rejection wick, so this check failed on nearly every trade
+    # regardless of setup quality — and its verdict fed straight into
+    # Devil's Advocate's evidence as "no psychological confirmation",
+    # which (combined with tp_structure_validation, see below) tripped
+    # the "2+ checks failing together = high-severity cluster, lean
+    # REJECT" instruction in the DA prompt on almost every review.
+    # Fix: scan the last few candles (not just the latest) for a
+    # qualifying rejection wick near a zone — "was there recent
+    # psychological confirmation at this entry" rather than "is the
+    # literal current bar a wick", which is what this check is actually
+    # meant to answer per its own docstring.
+    recent_window = min(3, len(df))
+    atr = _atr(df)
+    direction = direction.upper()
+
+    if direction == "SELL":
+        zones = _find_swing_highs(df, lookback=zone_lookback)
+    else:
+        zones = _find_swing_lows(df, lookback=zone_lookback)
+
+    best_match = None  # (wick_body_ratio, wick, body, anchor_price, nearest_zone_price)
+    for i in range(1, recent_window + 1):
+        bar = df.iloc[-i]
+        o, h, l, c = float(bar["open"]), float(bar["high"]), float(bar["low"]), float(bar["close"])
+        body = abs(c - o)
+        if direction == "SELL":
+            wick = h - max(o, c)
+            anchor_price = h
+        else:
+            wick = min(o, c) - l
+            anchor_price = l
+
+        has_rejection_wick = body > 1e-9 and wick >= body * wick_body_ratio
+        if not has_rejection_wick or not zones:
+            continue
+        nearest_zone_price = min(zones, key=lambda z: abs(z - anchor_price))
+        near_zone = abs(nearest_zone_price - anchor_price) <= atr * zone_atr_tol
+        if near_zone:
+            best_match = (
+                round(wick / body, 2), wick, body, anchor_price, nearest_zone_price, i,
+            )
+            break  # most recent qualifying candle wins
+
+    # Details reflect the most recent candle for context even when no
+    # match was found, plus whatever match (if any) was located.
     last = df.iloc[-1]
     o, h, l, c = float(last["open"]), float(last["high"]), float(last["low"]), float(last["close"])
     body = abs(c - o)
-    upper_wick = h - max(o, c)
-    lower_wick = min(o, c) - l
-    atr = _atr(df)
-
-    direction = direction.upper()
-    if direction == "SELL":
-        # Bearish confirmation: long UPPER wick rejecting a resistance zone
-        wick = upper_wick
-        zones = _find_swing_highs(df, lookback=zone_lookback)
-        anchor_price = h
-    else:
-        # Bullish confirmation: long LOWER wick rejecting a support zone
-        wick = lower_wick
-        zones = _find_swing_lows(df, lookback=zone_lookback)
-        anchor_price = l
-
-    has_rejection_wick = body > 1e-9 and wick >= body * wick_body_ratio
-    near_zone = False
-    nearest_zone_price = None
-    if zones:
-        nearest_zone_price = min(zones, key=lambda z: abs(z - anchor_price))
-        near_zone = abs(nearest_zone_price - anchor_price) <= atr * zone_atr_tol
+    wick = (h - max(o, c)) if direction == "SELL" else (min(o, c) - l)
+    has_rejection_wick_last = body > 1e-9 and wick >= body * wick_body_ratio
 
     details = {
-        "direction":          direction,
-        "wick":               round(wick, 5),
-        "body":               round(body, 5),
-        "wick_body_ratio":    round(wick / body, 2) if body > 1e-9 else None,
-        "has_rejection_wick": has_rejection_wick,
-        "near_zone":          near_zone,
-        "nearest_zone_price": round(nearest_zone_price, 5) if nearest_zone_price is not None else None,
+        "direction":              direction,
+        "scanned_bars":           recent_window,
+        "last_bar_wick_body_ratio": round(wick / body, 2) if body > 1e-9 else None,
+        "has_rejection_wick_last_bar": has_rejection_wick_last,
+        "match_found":            best_match is not None,
+        "match_bars_ago":         best_match[5] if best_match else None,
+        "wick_body_ratio":        best_match[0] if best_match else None,
+        "nearest_zone_price":     round(best_match[4], 5) if best_match else None,
     }
 
-    if has_rejection_wick and near_zone:
+    if best_match is not None:
         return EntryQualityResult(
             flag_name="rejection_psychology",
             passed=True,
             reason=(
                 f"Genuine rejection psychology confirmed — {direction} entry backed by a "
-                f"{details['wick_body_ratio']}x wick rejecting a real structural zone at "
-                f"{details['nearest_zone_price']}. This reads as institutional-style "
-                f"confirmation, not a random wick."
+                f"{details['wick_body_ratio']}x wick ({details['match_bars_ago']} bar(s) ago) "
+                f"rejecting a real structural zone at {details['nearest_zone_price']}. This "
+                f"reads as institutional-style confirmation, not a random wick."
             ),
             details=details,
         )
@@ -1866,11 +1913,9 @@ def check_rejection_psychology(
         flag_name="rejection_psychology",
         passed=False,
         reason=(
-            "No zone-anchored rejection wick found supporting this entry — "
-            + ("a wick was present but not near any real swing zone. "
-               if has_rejection_wick else "no meaningful rejection wick at all. ")
-            + "Entry lacks the psychological confirmation of buyers/sellers actually "
-              "defending a level."
+            f"No zone-anchored rejection wick found in the last {recent_window} candles "
+            "supporting this entry. Entry lacks the psychological confirmation of "
+            "buyers/sellers actually defending a level."
         ),
         details=details,
     )

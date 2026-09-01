@@ -452,7 +452,21 @@ class RiskEngine:
 
         tp_distance = abs(tp_price - entry)
         tp_pips = round(tp_distance / self.pip) if self.pip > 0 else 0
-        rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
+        # DATA-INTEGRITY FIX (RR staleness bug): rr_ratio was previously
+        # computed as round(tp_pips) / round(sl_pips) — dividing two
+        # independently pip-rounded integers instead of the raw price
+        # distances. That silently diverged from the ratio actually used
+        # two blocks above (`_rr_probe = _tp_dist / sl_distance`, unrounded)
+        # to decide whether to reject the trade, so the gate approved on
+        # one number while risk_out["rr_ratio"] — the number Devil's
+        # Advocate, trade_permission's "Min R:R" check, and the rr_policy
+        # hook all treat as ground truth — reported a different, distorted
+        # one. For tight stops the pip-rounding error compounds on both
+        # legs and can inflate/deflate the ratio by 20%+ (observed: DA saw
+        # 3.56 while the real price-based RR was ~2.92). Fix: divide the
+        # precise (unrounded) distances directly; tp_pips/sl_pips remain
+        # available separately for display/sizing only.
+        rr_ratio = round(tp_distance / sl_distance, 2) if sl_distance > 0 else 0
         if rr_ratio < _execution_min_rr:
             return self._reject(
                 f"R:R {rr_ratio:.2f} below execution minimum {_execution_min_rr:.2f} "

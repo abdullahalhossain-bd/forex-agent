@@ -437,7 +437,19 @@ class TradePermission:
                 and not c.get("passed", True)
             ]
             if exec_failed:
-                # Account for execution_filters in total denominator
+                # AUDIT-TRAIL FIX (2026-09-01): this short-circuit is
+                # intentional (an execution_filter hard block is
+                # authoritative and must not be overwritten by downstream
+                # advisory checks) — but returning early here means
+                # `total` only ever counted the execution_filters dict
+                # (usually 1-2 entries), while every OTHER blocked trade
+                # in the log runs the full ~15-check suite and reports
+                # total=11-17. That made this look like "the system only
+                # checked 1 thing" when in reality ~15 other checks simply
+                # never ran because this gate already settled it. Keep the
+                # short-circuit (correct behavior) but make that explicit
+                # in the result instead of leaving a misleadingly small
+                # total for anyone reading the audit log.
                 total = len(execution_filters)
                 failed_checks = [{"check": c.get("check", "?"), "detail": (c.get("detail") or "")} for c in exec_failed]
                 result = {
@@ -455,6 +467,15 @@ class TradePermission:
                     "tp": risk_out.get("tp_price"),
                     "lot": risk_out.get("lot", 0),
                     "rr": risk_out.get("rr_ratio", 0),
+                    # New: makes the short-circuit visible to log readers
+                    # and any downstream code, instead of an unexplained
+                    # small "total".
+                    "short_circuited": True,
+                    "short_circuit_reason": (
+                        f"Blocked by execution_filter '{exec_failed[0].get('check', '?')}' "
+                        f"before the remaining permission checks ran (short-circuit is "
+                        f"intentional — an execution_filter veto is authoritative)."
+                    ),
                 }
                 return result
 

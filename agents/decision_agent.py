@@ -1912,12 +1912,25 @@ class DecisionAgent:
                     # Preserve confidence for audit (do NOT zero it).
                     for _fail_reason in fusion_v3_result.failure_reasons:
                         reasons.append(f"⛔ FusionV3: {_fail_reason}")
+                    # DATA-INTEGRITY note: this rrr is computed from
+                    # entry/sl/tp that come from MasterAnalyst's suggested
+                    # levels or an ATR-based fallback (see the entry/sl/tp
+                    # resolution block above) — RiskEngine hasn't run yet at
+                    # this point (decide() was called with a zeroed
+                    # placeholder risk_out). It is a PRELIMINARY estimate,
+                    # not the trade's real R:R. Label it as such in logs so
+                    # it never gets compared against risk_out["rr_ratio"]
+                    # (the authoritative, post-RiskEngine number Devil's
+                    # Advocate reviews) as if they were the same measurement
+                    # — that mismatch is exactly the kind of confusion that
+                    # can look like a "stale RR" bug when it's actually two
+                    # different numbers for two different pipeline stages.
                     log.warning(
                         f"[DecisionAgent] FusionV3 downgraded "
                         f"{_orig_decision}→WAIT | "
                         f"ttl_valid={fusion_v3_result.ttl_valid} | "
                         f"rrr_valid={fusion_v3_result.rrr_valid} | "
-                        f"rrr=1:{fusion_v3_result.rrr:.2f}"
+                        f"preliminary_rrr(pre-RiskEngine)=1:{fusion_v3_result.rrr:.2f}"
                     )
             except Exception as e:
                 log.warning(

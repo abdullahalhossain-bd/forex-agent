@@ -357,7 +357,16 @@ class AutonomousRiskManager:
             tp_price = round(entry - sl_distance * min_rr, 5)
 
         tp_pips = round(sl_pips * min_rr)
-        rr_ratio = round(tp_pips / sl_pips, 2) if sl_pips > 0 else 0
+        # DATA-INTEGRITY FIX (RR staleness bug, same root cause as
+        # risk/risk_engine.py and agents/risk_agent.py): tp_pips/sl_pips
+        # are each independently rounded to whole pips, so dividing them
+        # compounds two roundings into a distorted ratio. Compute rr_ratio
+        # from the raw (unrounded) price distances instead — this is the
+        # number Devil's Advocate and downstream approval gates trust as
+        # ground truth, so it must reflect the real trade, not a rounded
+        # approximation of it.
+        tp_distance_raw = abs(tp_price - entry)
+        rr_ratio = round(tp_distance_raw / sl_distance, 2) if sl_distance > 0 else 0
 
         # Margin check
         margin_needed = lot * 1000

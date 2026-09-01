@@ -10,5 +10,29 @@
     "spread_pips": 1.4,
     "latency_ms": 144,
     "timestamp": "2026-09-01T06:41:47+00:00"
+  },
+  {
+    "ticket": 4639148100,
+    "pair": "XAUUSDm",
+    "direction": "SELL",
+    "requested": 4381.074,
+    "executed": 4380.74,
+    "slippage": 0.334,
+    "slippage_pips": 3340.0,
+    "spread_pips": 26.0,
+    "latency_ms": 180,
+    "timestamp": "2026-09-01T11:36:50+00:00"
+  },
+  {
+    "ticket": 4640289593,
+    "pair": "GBPAUDm",
+    "direction": "BUY",
+    "requested": 1.89322,
+    "executed": 1.8932200000000001,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 2.1,
+    "latency_ms": 134,
+    "timestamp": "2026-09-01T13:35:31+00:00"
   }
 ]

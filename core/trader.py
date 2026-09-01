@@ -3004,7 +3004,22 @@ class AITrader:
                                 # legacy key kept for other consumers
                                 "session": (session_ctx or {}).get("trade_quality"),
                                 "volatility": market_out.get("volatility") or analysis_out.get("volatility"),
-                                "rr_ratio": result.get("rr"),
+                                # DATA-INTEGRITY FIX: this was `result.get("rr")` —
+                                # a value snapshotted back in _build_result(), a
+                                # separate dict copy from the `risk_out` object
+                                # passed a few lines below. Nothing currently
+                                # reads market_context["rr_ratio"] (DA's thesis/
+                                # evidence builders read risk_out["rr_ratio"]
+                                # directly), but keeping a second, independently
+                                # snapshotted copy of the same number under the
+                                # same key is exactly the kind of duplication
+                                # that produced the stale-RR bug fixed upstream
+                                # in risk_engine.py — a future consumer could
+                                # easily start reading this field and silently
+                                # get a value that has since diverged from
+                                # risk_out. Point it at the live risk_out dict
+                                # instead so it can never drift.
+                                "rr_ratio": risk_out.get("rr_ratio"),
                                 # 2026-08-13 fix: include canonical market data
                                 # so DA doesn't see "unknown" for H4/SR
                                 "h4_trend": analysis_out.get("mtf_structure_ctx", {}).get("h4_trend", "unknown"),
