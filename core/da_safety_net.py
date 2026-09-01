@@ -31,17 +31,38 @@ Design rules:
       gate itself ("tell the reviewer what it does NOT know").
 
 Toggles (env):
-    DA_SAFETY_NET_ENABLED     default true   — master switch
-    DA_SAFETY_NET_MODE        enforce | warn_only   (default enforce)
-    DA_MIN_ATR_PIPS           default 4.0    — dead-market floor (in pips)
-    DA_NEWS_SPIKE_ATR_MULT    default 2.5    — candle > N*ATR = spike entry
-    DA_MAX_SPREAD_RATIO       default 0.35   — spread/ATR WARN threshold
-    DA_MAX_SPREAD_RATIO_VETO  default 0.50   — spread/ATR hard VETO (was single 0.35)
-    DA_STRUCT_SL_BUFFER_PIPS  default 2.0    — SL must clear structure by this
-    DA_STRUCT_PROXIMITY_MULT  default 2.0    — ignore levels farther than
-                                               N x sl_distance from entry
-    DA_MIN_SL_PIPS            default 6.0    — absolute noise-floor for any SL
-    DA_LOT_MISMATCH_TOL       default 0.25   — relative lot deviation allowed
+    DA_SAFETY_NET_ENABLED         default true   — master switch
+    DA_SAFETY_NET_MODE            enforce | warn_only   (default enforce)
+    DA_H4_COUNTERTREND_HARD_VETO  default false  — VETO (not WARN) on H4
+                                                    counter-trend; also
+                                                    honors trade_context
+                                                    .strategy_charter
+                                                    .counter_trend_prohibited
+    DA_NEWS_SPIKE_ATR_MULT        NO DEFAULT     — must be explicitly set or
+                                                    the news-spike-candle
+                                                    sub-check SKIPs
+    DA_MAX_SPREAD_RATIO           default 0.35   — spread/ATR WARN threshold
+    DA_MAX_SPREAD_RATIO_VETO      default 0.50   — spread/ATR hard VETO
+    DA_LOT_MISMATCH_TOL           NO DEFAULT     — must be explicitly set or
+                                                    the mismatch-ratio VETO
+                                                    is skipped (risk-overflow
+                                                    check still runs)
+
+2026-09 audit fix (overfit / "no default data" policy): the structure-SL
+check no longer maintains its own thresholds at all (DA_MIN_SL_PIPS /
+DA_STRUCT_SL_BUFFER_PIPS / DA_STRUCT_PROXIMITY_MULT are gone) — it now
+validates the swing-anchor verdict already computed by
+risk/entry_quality_guardrails.check_sl_swing_anchor() instead of
+re-deriving an independent judgment. DA_MIN_ATR_PIPS (a flat, symbol-blind
+pip floor) has been removed entirely: no ATR-percentile/regime data source
+by symbol+timeframe was found in this codebase, and comparing raw pip
+counts across instruments with different pip economics (e.g. EURUSD vs
+XAUUSD) is exactly the kind of generic-default comparison this module must
+not make. The asian-session and H4-counter-trend checks were downgraded
+from VETO to WARN by default (both are unvalidated, empirical/C-type
+rules per the audit, not broker/risk hard facts) — H4 counter-trend can be
+restored to a hard VETO via explicit policy (env flag above or a
+strategy_charter flag), but never as a silent default.
 
 The session check deliberately requires an explicit wall-clock opt-in
 (``da_allow_wallclock_session`` on trade_context) when no session data was
@@ -90,6 +111,30 @@ def _env_float(name: str, default: float) -> float:
         return v if v > 0 else default
     except (TypeError, ValueError):
         return default
+
+
+def _env_float_strict(name: str) -> Optional[float]:
+    """Like _env_float but WITHOUT a built-in numeric default.
+
+    2026-09 overfit/default-data audit fix: several checks in this module
+    used to fall back to a hardcoded, symbol-blind constant (e.g. a flat
+    ATR-pip floor applied identically to EURUSD and XAUUSD) whenever the
+    operator hadn't explicitly configured a value. That is exactly the
+    "guess a generic value when exact data is unavailable" pattern this
+    module is supposed to forbid. Checks that cannot get either (a) an
+    authoritative live/pipeline value or (b) an operator-configured,
+    explicitly-set policy value must now SKIP instead of silently
+    assuming a number nobody chose. Returns None if unset/invalid so the
+    caller can distinguish "not configured" from "configured as 0".
+    """
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        v = float(raw)
+        return v if v > 0 else None
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass
@@ -160,6 +205,30 @@ class DASafetyNet:
             return s[:6]
         return s[:6]
 
+    @staticmethod
+    def _resolve_pip_size(symbol: str) -> float:
+        """Resolve pip size for `symbol`, preferring a LIVE derivation
+        from the broker's own MT5 symbol_info() (digits/point) over the
+        static core.constants.PIP_SIZE table.
+
+        2026-09 audit fix: the static table only covers ~40 hardcoded FX
+        majors/crosses/metals/indices. The operator's own broker lists
+        300+ tradeable symbols (crypto, single-name stocks, dozens of
+        exotic FX crosses) that the static table has never heard of and
+        which would silently fall through to PIP_SIZE["DEFAULT"]=0.0001
+        — meaningless for e.g. a stock quoted in whole dollars. Uses the
+        EXACT symbol string (not the 6-char cleaned form) since MT5 needs
+        the broker's own suffixed name (e.g. "EURUSDm") to resolve
+        symbol_info() correctly; falls back to the static table via
+        get_pip_size() only when no live connection is available.
+        """
+        try:
+            from core.constants import get_live_pip_size
+            return get_live_pip_size(symbol)
+        except Exception:
+            from core.constants import get_pip_size
+            return get_pip_size(symbol) or 0.0001
+
     # ------------------------------------------------------------------
     # public entry point
     # ------------------------------------------------------------------
@@ -183,11 +252,11 @@ class DASafetyNet:
         sig = str(signal or "").upper()
 
         checks.append(self._check_session(trade_context, mc, symbol))
-        checks.append(self._check_h4_trend(mc, decision_out, sig))
+        checks.append(self._check_h4_trend(mc, decision_out, sig, trade_context))
         news_active = self._news_is_active(analysis_out)
         checks.append(self._check_spread(symbol, ind_ctx, analysis_out, news_active))
         checks.append(self._check_atr_regime(ind_ctx, regime, mc))
-        checks.append(self._check_structure_sl(sig, risk_out, mc, sr_ctx, ind_ctx))
+        checks.append(self._check_structure_sl(sig, risk_out, mc, sr_ctx, ind_ctx, trade_context))
         checks.append(self._check_lot_sizing(symbol, risk_out))
 
         vetoes = [c for c in checks if c.verdict == VERDICT_VETO]
@@ -293,17 +362,27 @@ class DASafetyNet:
                 "Asian-only session; pair has native Tokyo liquidity — proceed cautiously",
                 {"sessions": sessions},
             )
+        # 2026-09 overfit audit downgrade: "Asian session = veto" is a
+        # C-type empirical/market-structure rule (per audit classification),
+        # not a broker/risk-management hard fact, and no OOS-validated
+        # dataset backing this specific cutoff was found in the repo. A
+        # hard VETO here would silently reject trades based on an
+        # unvalidated heuristic. Downgraded to WARN so it still reaches
+        # the evidence payload / audit log for future expectancy analysis
+        # without blocking execution on suspected-overfit policy.
         return CheckOutcome(
-            name, VERDICT_VETO,
-            "asian_dead_chop: no London/NY session and pair has no native "
-            "Tokyo liquidity — historical WR killer",
+            name, VERDICT_WARN,
+            "asian_low_liquidity: no London/NY session and pair has no native "
+            "Tokyo liquidity — WARN only (unvalidated as a hard rule; see "
+            "audit note on overfit risk, not auto-vetoed)",
             {"sessions": sessions},
         )
 
     # ------------------------------------------------------------------
     # 2. H4 counter-trend filter
     # ------------------------------------------------------------------
-    def _check_h4_trend(self, mc: Dict[str, Any], decision_out: Dict[str, Any], signal: str) -> CheckOutcome:
+    def _check_h4_trend(self, mc: Dict[str, Any], decision_out: Dict[str, Any], signal: str,
+                        trade_context: Optional[Dict[str, Any]] = None) -> CheckOutcome:
         name = "h4_trend_filter"
         mtf = (decision_out.get("mtf_trends") or {}) if isinstance(decision_out, dict) else {}
         h4 = None
@@ -320,11 +399,29 @@ class DASafetyNet:
         if h4 in (None, "", "unknown"):
             return CheckOutcome(name, VERDICT_SKIP, "no H4 trend data available")
         if self._trend_opposes(h4, signal):
-            return CheckOutcome(
-                name, VERDICT_VETO,
-                f"H4 trend '{h4}' actively opposes {signal} — counter-trend loss pattern",
-                {"h4_trend": str(h4)},
+            # 2026-09 overfit audit (Phase 10): counter-trend was
+            # auto-vetoed unconditionally. Per policy this should only be
+            # a hard VETO when the strategy has EXPLICITLY configured
+            # counter-trend as forbidden; otherwise it's a WARN/confidence
+            # penalty, not a blanket rule. No such explicit policy flag is
+            # read anywhere in this pipeline today, so — rather than
+            # invent a default ("assume forbidden") — this now requires an
+            # explicit opt-in via trade_context["strategy_charter"]
+            # ["counter_trend_prohibited"] (or the equivalent
+            # DA_H4_COUNTERTREND_HARD_VETO=true env override) to VETO.
+            # Absent that explicit policy, it WARNs.
+            charter = (trade_context or {}).get("strategy_charter") or {}
+            charter_forbids = bool(isinstance(charter, dict) and charter.get("counter_trend_prohibited"))
+            env_hard = self._flag("DA_H4_COUNTERTREND_HARD_VETO", False)
+            hard = charter_forbids or env_hard
+            verdict = VERDICT_VETO if hard else VERDICT_WARN
+            policy_note = (
+                "strategy_charter.counter_trend_prohibited=true" if charter_forbids
+                else "DA_H4_COUNTERTREND_HARD_VETO=true" if env_hard
+                else "no explicit counter-trend-prohibited policy set — WARN, not auto-veto"
             )
+            reason = f"H4 trend '{h4}' actively opposes {signal} — counter-trend ({policy_note})"
+            return CheckOutcome(name, verdict, reason, {"h4_trend": str(h4)})
         return CheckOutcome(name, VERDICT_PASS, f"H4 trend '{h4}' does not oppose signal",
                             {"h4_trend": str(h4)})
 
@@ -347,6 +444,15 @@ class DASafetyNet:
 
         # Instrument-aware limits via core.spread_policy (XAUUSD live ~260
         # must not be vetoed by legacy MAX_SPREAD_PIPS DEFAULT=3 / hard 5).
+        # 2026-09 overfit/default-data audit fix: the old third fallback
+        # step here silently assumed a flat 25.0-pip limit for ANY symbol
+        # neither core.spread_policy nor broker.spread_monitor could
+        # resolve — a generic, symbol-blind guess of exactly the kind this
+        # module must not make. If no authoritative per-symbol/asset-class
+        # limit can be resolved, this check now SKIPs instead of fabricating
+        # a number nobody configured.
+        max_allowed: Optional[float] = None
+        clean = self._clean_symbol(symbol)
         try:
             from core.spread_policy import get_max_spread_pips, clean_symbol as _cs
             max_allowed = float(get_max_spread_pips(symbol))
@@ -354,11 +460,18 @@ class DASafetyNet:
         except Exception:
             try:
                 from broker.spread_monitor import MAX_SPREAD_PIPS
-                clean = self._clean_symbol(symbol)
-                max_allowed = float(MAX_SPREAD_PIPS.get(clean, MAX_SPREAD_PIPS.get("DEFAULT", 25.0)))
+                if clean in MAX_SPREAD_PIPS:
+                    max_allowed = float(MAX_SPREAD_PIPS[clean])
             except Exception:
-                clean = self._clean_symbol(symbol)
-                max_allowed = 25.0
+                pass
+        if max_allowed is None:
+            return CheckOutcome(
+                name, VERDICT_SKIP,
+                f"no authoritative max-spread limit resolvable for '{clean}' "
+                "(core.spread_policy and broker.spread_monitor both lack an "
+                "entry) — refusing to assume a generic default",
+                {"spread_pips": spread_pips, "symbol_clean": clean},
+            )
         if news_active:
             max_allowed *= 0.5  # mirror SpreadMonitor.NEWS_WINDOW_MULTIPLIER
 
@@ -373,22 +486,34 @@ class DASafetyNet:
         # ★ FIX (2026-09-01): Two-tier spread/ATR ratio.
         # Old single threshold 0.35 caused hard VETO at 35.1% (noise-level
         # overshoot) — e.g. USDCHF "spread eats 35.1% of ATR (> 35%)".
-        # Now: WARN at DA_MAX_SPREAD_RATIO (default 0.35), hard VETO only
-        # above DA_MAX_SPREAD_RATIO_VETO (default 0.50). Absolute pip cap
-        # (max_allowed) still hard-vetoes as before.
-        ratio_warn = _env_float("DA_MAX_SPREAD_RATIO", 0.35)
-        ratio_veto = _env_float("DA_MAX_SPREAD_RATIO_VETO", 0.50)
-        if ratio_veto < ratio_warn:
+        # Now: WARN/VETO tiers only fire when explicitly configured.
+        #
+        # 2026-09 overfit-audit fix: DA_MAX_SPREAD_RATIO / _VETO no longer
+        # have baked-in numeric defaults (were 0.35 / 0.50) — these were
+        # unvalidated D-type constants (a specific-incident bugfix, not an
+        # OOS-validated policy). Per the "no default data" instruction,
+        # the ratio-based WARN/VETO tier now only evaluates when the
+        # operator has explicitly set both env values; otherwise this
+        # sub-check is skipped and the trade is judged purely on the
+        # absolute per-symbol pip limit above (still authoritative and
+        # always active).
+        ratio_warn = _env_float_strict("DA_MAX_SPREAD_RATIO")
+        ratio_veto = _env_float_strict("DA_MAX_SPREAD_RATIO_VETO")
+        ratio_policy_active = ratio_warn is not None and ratio_veto is not None
+        if ratio_policy_active and ratio_veto < ratio_warn:
             ratio_veto = ratio_warn
         spread_ratio: Optional[float] = None
         if atr and atr > 0:
             try:
-                from core.constants import get_pip_size
-                pip_size = get_pip_size(self._clean_symbol(symbol)) or 0.0001
+                pip_size = self._resolve_pip_size(symbol)
                 atr_pips = float(atr) / pip_size
-                # Floor atr_pips so tiny M15 ATR during quiet NY doesn't
-                # inflate the ratio and false-veto on normal spreads.
-                atr_pips = max(atr_pips, _env_float("DA_MIN_ATR_PIPS", 4.0))
+                # 2026-09 audit fix: removed the flat DA_MIN_ATR_PIPS floor
+                # that used to prop up a tiny M15 ATR to a fixed 4.0-pip
+                # minimum before dividing — another instance of a
+                # symbol-blind generic default. A genuinely tiny ATR now
+                # legitimately produces a high spread/ATR ratio (which is
+                # an accurate signal: cost really is large relative to
+                # current movement), rather than being silently floored.
                 if atr_pips > 0:
                     spread_ratio = spread_pips / atr_pips
                     details["spread_to_atr_ratio"] = round(spread_ratio, 4)
@@ -403,14 +528,14 @@ class DASafetyNet:
                 + (" (news window)" if news_active else ""),
                 details,
             )
-        if spread_ratio is not None and spread_ratio > ratio_veto:
+        if spread_ratio is not None and ratio_policy_active and spread_ratio > ratio_veto:
             return CheckOutcome(
                 name, VERDICT_VETO,
                 f"spread eats {round(spread_ratio * 100, 1)}% of ATR "
                 f"(> {ratio_veto:.0%} hard cap) — edge destroyed by cost",
                 details,
             )
-        if spread_ratio is not None and spread_ratio > ratio_warn:
+        if spread_ratio is not None and ratio_policy_active and spread_ratio > ratio_warn:
             return CheckOutcome(
                 name, VERDICT_WARN,
                 f"spread eats {round(spread_ratio * 100, 1)}% of ATR "
@@ -450,40 +575,53 @@ class DASafetyNet:
             return CheckOutcome(name, VERDICT_SKIP, "no ATR data available")
 
         details: Dict[str, Any] = {"atr": atr}
+        # 2026-09 overfit/default-data audit fix: DA_NEWS_SPIKE_ATR_MULT no
+        # longer has a baked-in numeric default (was 2.5, an unvalidated
+        # E-type constant). This multiplier is self-relative (candle vs
+        # that instrument's OWN ATR, not a cross-symbol comparison) so it
+        # is not banned outright the way a flat cross-symbol floor is —
+        # but per the "no default data" instruction it must now be an
+        # operator-configured, explicit policy value (DA_NEWS_SPIKE_ATR_MULT
+        # env var) or this specific sub-check SKIPs rather than assume one.
+        spike_mult = _env_float_strict("DA_NEWS_SPIKE_ATR_MULT")
         if candle_range is not None and candle_range > 0:
             details["last_candle_range"] = candle_range
-            spike_mult = _env_float("DA_NEWS_SPIKE_ATR_MULT", 2.5)
-            if candle_range > spike_mult * atr:
-                return CheckOutcome(
-                    name, VERDICT_VETO,
-                    f"news_spike_entry: last candle {candle_range} > {spike_mult}x ATR "
-                    f"({round(candle_range / atr, 2)}x) — entering into a blowout",
-                    details,
-                )
+            if spike_mult is not None:
+                details["news_spike_atr_mult_used"] = spike_mult
+                if candle_range > spike_mult * atr:
+                    return CheckOutcome(
+                        name, VERDICT_VETO,
+                        f"news_spike_entry: last candle {candle_range} > {spike_mult}x ATR "
+                        f"({round(candle_range / atr, 2)}x) — entering into a blowout "
+                        "(explicit DA_NEWS_SPIKE_ATR_MULT policy)",
+                        details,
+                    )
 
-        min_atr_pips_default = _env_float("DA_MIN_ATR_PIPS", 4.0)
-        # atr here is a raw price delta; convert to pips when possible using
-        # the pipeline-provided spread conversion heuristic is unreliable
-        # without the symbol, so callers pass ind_ctx["atr_pips"] when they
-        # can. Fall back to relative regime text.
-        atr_pips = self._f(ind_ctx.get("atr_pips")) if isinstance(ind_ctx, dict) else None
-        if atr_pips is None and candle_range:
-            pass
+        # 2026-09 overfit/default-data audit fix (Phase 8): DA_MIN_ATR_PIPS
+        # was a FLAT, symbol-blind pip floor (default 4.0) applied
+        # identically to EURUSD and XAUUSD alike — comparing absolute pip
+        # counts across instruments with wildly different pip economics is
+        # a textbook overfit/generic-default violation. No symbol+timeframe
+        # ATR-percentile/regime data source was found anywhere in this
+        # codebase during the audit, so rather than keep guessing a flat
+        # number, this hard floor is REMOVED entirely. If/when a real
+        # ATR-percentile or relative-regime source is wired in (regime
+        # dict already carries a text label from upstream analysis), this
+        # check can resume grading on that authoritative signal. Until
+        # then: use the upstream `regime` classification (already
+        # instrument-aware, computed by the analysis pipeline for THIS
+        # symbol+timeframe) as WARN-only signal, never a VETO based on an
+        # invented cross-symbol number.
         low_regime = bool(vol_l) and ("low" in vol_l or "sleep" in vol_l)
+        atr_pips = self._f(ind_ctx.get("atr_pips")) if isinstance(ind_ctx, dict) else None
         if atr_pips is not None and atr_pips > 0:
             details["atr_pips"] = atr_pips
-            if atr_pips < min_atr_pips_default:
-                return CheckOutcome(
-                    name, VERDICT_VETO,
-                    f"atr_collapse: {atr_pips} pips < floor {min_atr_pips_default} — dead market",
-                    details,
-                )
-            return CheckOutcome(name, VERDICT_PASS, f"ATR healthy ({atr_pips} pips)", details)
         if low_regime:
             return CheckOutcome(
                 name, VERDICT_WARN,
-                f"regime flagged low volatility ('{vol_l.strip()}') but ATR-floor "
-                "unverifiable (no atr_pips)",
+                f"regime flagged low volatility ('{vol_l.strip()}') by the "
+                "analysis pipeline (instrument+timeframe aware) — WARN only; "
+                "no flat cross-symbol ATR-pip floor is applied here anymore",
                 details,
             )
         return CheckOutcome(name, VERDICT_PASS, "ATR present, no collapse/spike signals", details)
@@ -493,7 +631,27 @@ class DASafetyNet:
     # ------------------------------------------------------------------
     def _check_structure_sl(self, signal: str, risk_out: Dict[str, Any],
                             mc: Dict[str, Any], sr_ctx: Dict[str, Any],
-                            ind_ctx: Dict[str, Any]) -> CheckOutcome:
+                            ind_ctx: Dict[str, Any],
+                            trade_context: Optional[Dict[str, Any]] = None) -> CheckOutcome:
+        """Validate the SL's structural quality.
+
+        2026-09 audit fix (Phase 6 / finding F5): this check used to
+        maintain its OWN independent swing-detection + buffer/proximity
+        logic (DA_MIN_SL_PIPS / DA_STRUCT_SL_BUFFER_PIPS /
+        DA_STRUCT_PROXIMITY_MULT, all with baked-in numeric defaults),
+        completely separate from risk/entry_quality_guardrails.py's
+        check_sl_swing_anchor() — which runs earlier in the SAME pipeline,
+        uses proper fractal-swing detection, an ATR-relative anchor
+        distance (not a flat cross-symbol pip floor), and the now-fixed
+        authoritative pip size. That created two independent, sometimes
+        disagreeing verdicts about the same SL. Per "do not recreate
+        swing detection inside DA... validate the already-calculated
+        answer rather than invent another one", this check now VALIDATES
+        entry_quality_detail's sl_swing_anchor result instead of
+        recomputing anything, and uses NO default/fallback thresholds of
+        its own. If that upstream result isn't available, this SKIPs —
+        it does not fall back to a second, independent judgment.
+        """
         name = "structure_sl_check"
         if signal not in {"BUY", "SELL"}:
             return CheckOutcome(name, VERDICT_SKIP, "not a directional trade")
@@ -502,89 +660,47 @@ class DASafetyNet:
         if entry is None or sl is None or entry <= 0 or sl <= 0:
             return CheckOutcome(name, VERDICT_SKIP, "entry/SL prices unavailable")
 
-        sl_distance = abs(entry - sl)
-        sl_distance_pips_hint = self._f(risk_out.get("sl_pips"))
+        perm_out = (trade_context or {}).get("perm_out")
+        entry_quality_detail = (
+            perm_out.get("entry_quality_detail") if isinstance(perm_out, dict) else None
+        ) or {}
+        results = entry_quality_detail.get("results") or []
+        swing_result = next(
+            (r for r in results if isinstance(r, dict) and r.get("flag_name") == "sl_swing_anchor"),
+            None,
+        )
 
-        min_sl_pips = _env_float("DA_MIN_SL_PIPS", 6.0)
-        buffer_pips = _env_float("DA_STRUCT_SL_BUFFER_PIPS", 2.0)
-        proximity_mult = _env_float("DA_STRUCT_PROXIMITY_MULT", 2.0)
-
-        protective = None
-        side = ""
-        if signal == "BUY":
-            level = self._first_price(sr_ctx, mc, key="nearest_support")
-            if level is not None and level < entry:
-                protective = level
-                side = "support"
-        else:
-            level = self._first_price(sr_ctx, mc, key="nearest_resistance")
-            if level is not None and level > entry:
-                protective = level
-                side = "resistance"
-
-        # need pip size to translate buffers — derive from SL pips hint if present
-        pip_size: Optional[float] = None
-        if sl_distance_pips_hint and sl_distance_pips_hint > 0:
-            pip_size = sl_distance / sl_distance_pips_hint
-        else:
-            sym = str(mc.get("symbol") or "") or ""
-            try:
-                from core.constants import get_pip_size
-                pip_size = get_pip_size(sym)
-            except Exception:
-                pip_size = None
-
-        details: Dict[str, Any] = {
-            "entry": entry, "sl": sl,
-            "sl_distance_pips": round(sl_distance / pip_size, 1) if pip_size else None,
-        }
-
-        # 5a. absolute noise floor
-        if pip_size and sl_distance_pips_hint and sl_distance_pips_hint < min_sl_pips:
-            return CheckOutcome(
-                name, VERDICT_VETO,
-                f"sl_inside_noise: {sl_distance_pips_hint} pips < absolute floor {min_sl_pips} "
-                "— pure-noise stop",
-                details,
-            )
-
-        if protective is None:
-            return CheckOutcome(name, VERDICT_SKIP, "no nearby protective structure known",
-                                details)
-
-        dist_to_struct = abs(entry - protective)
-        if pip_size and sl_distance and round(dist_to_struct / sl_distance, 3) > proximity_mult:
+        if swing_result is None:
             return CheckOutcome(
                 name, VERDICT_SKIP,
-                f"nearest {side} is {round(dist_to_struct / sl_distance, 2)}x SL distance away — "
-                "higher-timeframe level irrelevant at this stop horizon",
-                details,
+                "no upstream sl_swing_anchor result available on "
+                "trade_context.perm_out.entry_quality_detail — refusing to "
+                "recompute an independent swing-anchor judgment",
+                {"entry": entry, "sl": sl},
             )
 
-        buffer_px = (buffer_pips * pip_size) if pip_size else 0.0
-        if signal == "BUY":
-            inside_noise = sl > protective - buffer_px
-            proper = protective - buffer_px
-        else:
-            inside_noise = sl < protective + buffer_px
-            proper = protective + buffer_px
+        details = dict(swing_result.get("details") or {})
+        details["entry"] = entry
+        details["sl"] = sl
+        passed = bool(swing_result.get("passed", True))
+        severity = str(swing_result.get("severity", "WARNING")).upper()
+        reason = swing_result.get("reason", "")
 
-        details[f"nearest_{side}"] = protective
-        details["structure_aware_sl"] = round(proper, 5)
-
-        if inside_noise:
+        if passed:
             return CheckOutcome(
-                name, VERDICT_VETO,
-                f"SL sits INSIDE structure noise: {side} {protective} with only "
-                f"{buffer_pips} pip clearance required — price routinely wicks there; "
-                "stop will be hunted before structure invalidates the thesis",
+                name, VERDICT_PASS,
+                reason or "SL validated against upstream swing-anchor result",
                 details,
             )
-        return CheckOutcome(
-            name, VERDICT_PASS,
-            f"SL respects {side} {protective} (+{buffer_pips} pip clearance)",
-            details,
-        )
+
+        # BLOCK severity from entry_quality_guardrails is already a hard
+        # safety-relevant verdict (wrong-side SL, or — depending on
+        # SL_SWING_ANCHOR_HARD_BLOCK — unanchored-from-structure). Mirror
+        # it as VETO; anything softer (WARNING) stays WARN here too,
+        # exactly matching the upstream severity rather than re-deriving
+        # a new one.
+        verdict = VERDICT_VETO if severity == "BLOCK" else VERDICT_WARN
+        return CheckOutcome(name, verdict, f"upstream sl_swing_anchor: {reason}", details)
 
     @staticmethod
     def _first_price(*sources: Dict[str, Any], key: str) -> Optional[float]:
@@ -617,14 +733,59 @@ class DASafetyNet:
         clean = self._clean_symbol(symbol)
         details: Dict[str, Any] = {"symbol_used": clean}
 
-        unmapped = False
+        # 2026-09 audit fix (Phase 2 / finding F4): this used to go
+        # straight to the static PIP_VALUE_USD table, ignoring the
+        # authoritative LIVE source (core.constants.get_live_pip_value_per_lot,
+        # which reads real MT5 tick_value/tick_size and is explicitly
+        # documented as required — its own docstring says the static table
+        # is "WRONG by ~100x" on cent accounts). DA now tries the live
+        # source first. A VETO from this check is only ever issued when
+        # the pip value came from that live/authoritative source; if only
+        # the static approximation is available, any mismatch/overflow
+        # found is reported as WARN (informational, non-authoritative)
+        # rather than a hard block on approximated data.
+        #
+        # Note: get_live_pip_value_per_lot() itself never raises — on any
+        # failure it internally logs a warning and returns the static
+        # table value directly, so a bare try/except around it can't tell
+        # live from fallback. Liveness is therefore determined by whether
+        # an MT5 connection actually resolves first.
+        pip_val: Optional[float] = None
+        pip_val_is_live = False
+        mt5_conn = None
         try:
-            from core.constants import PIP_VALUE_USD, get_pip_value_usd
-            pip_val = get_pip_value_usd(clean)
-            unmapped = clean not in PIP_VALUE_USD
-            details["pip_value_per_lot"] = pip_val
-        except Exception as exc:
-            return CheckOutcome(name, VERDICT_SKIP, f"pip value lookup failed: {exc}")
+            from core.service_registry import get_registry
+            mt5_conn = get_registry().try_resolve("mt5_connection")
+        except Exception:
+            mt5_conn = None
+
+        if mt5_conn is not None:
+            try:
+                from core.constants import get_live_pip_value_per_lot
+                candidate = float(get_live_pip_value_per_lot(clean, mt5_conn=mt5_conn))
+                if candidate > 0:
+                    pip_val = candidate
+                    pip_val_is_live = True
+            except Exception:
+                pip_val = None
+
+        if pip_val is None or pip_val <= 0:
+            try:
+                from core.constants import PIP_VALUE_USD, get_pip_value_usd
+                pip_val = get_pip_value_usd(clean)
+                pip_val_is_live = False
+                if clean not in PIP_VALUE_USD:
+                    return CheckOutcome(
+                        name, VERDICT_SKIP,
+                        f"no live pip value AND '{clean}' has no static table "
+                        "entry either — refusing to guess a DEFAULT pip value",
+                        details,
+                    )
+            except Exception as exc:
+                return CheckOutcome(name, VERDICT_SKIP, f"pip value lookup failed: {exc}")
+
+        details["pip_value_per_lot"] = pip_val
+        details["pip_value_source"] = "live_mt5" if pip_val_is_live else "static_table_approx"
 
         expected_lot = (balance * risk_pct / 100.0) / (sl_pips * pip_val)
         actual_risk_pct = (lot * sl_pips * pip_val) / balance * 100.0
@@ -633,27 +794,39 @@ class DASafetyNet:
         details["actual_risk_pct"] = round(actual_risk_pct, 4)
         details["intended_risk_pct"] = risk_pct
 
-        tol = _env_float("DA_LOT_MISMATCH_TOL", 0.25)
+        # 2026-09 audit fix: DA_LOT_MISMATCH_TOL no longer has a baked-in
+        # numeric default (was 0.25). This is a B-type broker/risk
+        # requirement per the audit, so it must be an explicit operator
+        # policy value, not an assumed one; without it, mismatch-ratio
+        # VETO is skipped (risk-overflow check below still runs, since
+        # "actual > 1.5x intended" needs no separate tolerance constant).
+        tol = _env_float_strict("DA_LOT_MISMATCH_TOL")
         rel_dev = abs(lot - expected_lot) / expected_lot if expected_lot > 0 else 0.0
+        details["rel_deviation"] = round(rel_dev, 4)
 
-        if rel_dev > tol:
+        def _severity(vetoable: bool) -> str:
+            return VERDICT_VETO if (vetoable and pip_val_is_live) else VERDICT_WARN
+
+        if tol is not None and rel_dev > tol:
             return CheckOutcome(
-                name, VERDICT_VETO,
+                name, _severity(True),
                 f"lot mismatch: booked {round(lot, 2)} vs correct {round(expected_lot, 4)} "
-                f"({round(rel_dev * 100, 0)}% off) — real risk ≠ intended risk",
+                f"({round(rel_dev * 100, 0)}% off, tol={tol}) — real risk ≠ intended risk"
+                + ("" if pip_val_is_live else " (pip value NOT live-verified — WARN only)"),
                 details,
             )
         if actual_risk_pct > risk_pct * 1.5:
             return CheckOutcome(
-                name, VERDICT_VETO,
+                name, _severity(True),
                 f"risk overflow: actual {actual_risk_pct:.2f}% vs intended {risk_pct}% "
-                "(min-lot or rounding pushed risk past tolerance)",
+                "(min-lot or rounding pushed risk past tolerance)"
+                + ("" if pip_val_is_live else " (pip value NOT live-verified — WARN only)"),
                 details,
             )
-        # un-mapped symbol fallback becomes its own warning even if numbers matched
-        if unmapped:
+        if not pip_val_is_live:
             return CheckOutcome(name, VERDICT_WARN,
-                                f"pip value for '{clean}' uses DEFAULT fallback table",
+                                f"pip value for '{clean}' uses static-table approximation, "
+                                "not live MT5 data — sizing not independently verified",
                                 details)
         if lot < 0.01 and expected_lot < 0.01:
             return CheckOutcome(
@@ -664,6 +837,7 @@ class DASafetyNet:
             )
         return CheckOutcome(
             name, VERDICT_PASS,
-            f"sizing consistent (lot {round(lot, 2)}, real risk {actual_risk_pct:.2f}%)",
+            f"sizing consistent (lot {round(lot, 2)}, real risk {actual_risk_pct:.2f}%, "
+            "pip value live-verified)",
             details,
         )

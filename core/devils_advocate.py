@@ -578,28 +578,6 @@ class DevilsAdvocateGate:
                     or structure_ctx.get("liquidity_sweep")
                     or "unknown"
                 ),
-                # BUG FIX (2026-08-25): structure_ctx["displacement"] is a
-                # BOOLEAN (True/False — see analysis/structure.py:632,
-                # disp.get("detected")), while structure_ctx["displacement_dir"]
-                # holds the actual direction string ("BULLISH"/"BEARISH"/
-                # "NONE" — structure.py:633). The old `X or Y or Z` chain
-                # let the boolean win via Python truthiness whenever
-                # displacement WAS detected (True is truthy), so the LLM
-                # was shown a bare `True` instead of the direction —
-                # discarding the one piece of information (which way did
-                # it displace) needed to judge whether it agrees or
-                # conflicts with the signal. smc_ctx never actually
-                # carries a "displacement" key (get_ai_context doesn't
-                # set one), so it was dead weight in the chain anyway.
-                # Direction string (incl. "NONE" when not detected) now
-                # takes priority; the raw boolean is only a last-resort
-                # fallback if displacement_dir itself is missing.
-                "displacement": (
-                    structure_ctx.get("displacement_dir")
-                    or smc_ctx.get("displacement")
-                    or structure_ctx.get("displacement")
-                    or "unknown"
-                ),
             },
             "location": {
                 "pdh": sr_ctx.get("pdh", "unknown"),
@@ -813,19 +791,15 @@ class DevilsAdvocateGate:
                 "Only fail RISK_STRUCTURE for a genuine, still-present problem: SL/TP on the "
                 "wrong side of entry, a TP path blocked by an obstacle in evidence.location/"
                 "entry_quality, or RR that doesn't clear the minimum bar even after correction.\n"
-                "  4. MOMENTUM -- evidence.structure.displacement being 'NONE'/'unknown' is a "
-                "NEUTRAL data point, not a negative one -- most valid setups simply won't have a "
-                "displacement candle at the decision bar, so its absence alone must never fail "
-                "this pillar or drive a REJECT. Only weigh it when displacement IS present: "
-                "aligned displacement is a positive add; displacement that clearly opposes the "
-                "signal direction is a real negative worth noting.\n"
+                "  4. MOMENTUM -- weigh evidence.momentum holistically (candle quality, "
+                "volatility_regime, recent price behavior); don't fail this pillar on a single "
+                "absent/neutral data point.\n"
                 "  5. REGIME_HTF -- evidence.context.htf_conflict is a precomputed, mechanical "
                 "signal: true means HTF genuinely trends AGAINST the signal (real contradiction, "
                 "should usually fail this pillar); false only means HTF is not actively opposing "
                 "-- it does NOT mean HTF supports the trade. Do not treat 'not opposing' as "
                 "'supporting'. Also weigh evidence.momentum.volatility_regime: a RANGING regime "
-                "is fine on its own as long as structure genuinely aligns -- don't add extra "
-                "scrutiny just because displacement happens to be absent (see pillar 4).\n"
+                "is fine on its own as long as structure genuinely aligns.\n"
                 "\nTreat NONE, UNKNOWN, SIDEWAYS, NEUTRAL, and absent fields as neutral or "
                 "missing throughout all pillars. Neutral plus positive evidence is not a "
                 "contradiction; only explicit opposing evidence can create a contradiction.\n"
@@ -837,9 +811,15 @@ class DevilsAdvocateGate:
                 "as a single high-severity red flag, not N independent minor ones -- ask yourself "
                 "'why should this trade still happen despite this many independent entry-quality "
                 "warnings?' before deciding TAKE. "
-                "\nDecide REJECT if 2 or more pillars are FAIL, or if any single pillar failure "
-                "is severe enough alone (e.g. STRUCTURE contradicts the signal outright, or "
-                "REGIME_HTF shows htf_conflict=true with no offsetting structure). Decide TAKE "
+                "\nDo NOT use a mechanical vote-count rule (e.g. 'N warnings = reject'). Weigh "
+                "pillars holistically: a single severe, thesis-invalidating failure (STRUCTURE "
+                "contradicts the signal outright, or REGIME_HTF shows htf_conflict=true with no "
+                "offsetting structure) can justify REJECT on its own, while several genuinely "
+                "correlated WARNs describing the SAME underlying issue (e.g. weak momentum "
+                "showing up in both MOMENTUM and one execution-quality flag) should be weighed "
+                "as that one issue, not stacked as independent strikes against the trade. "
+                "Decide REJECT when the surviving, non-duplicated evidence against the trade "
+                "materially outweighs the evidence for it. Decide TAKE "
                 "only if pillars are mostly PASS and any WARNs are minor and outweighed. Decide "
                 "UNCERTAIN if evidence is too sparse/degraded for a confident call either way. "
                 "CONSISTENCY REQUIREMENT (hard rule, checked programmatically downstream): "
@@ -1183,17 +1163,24 @@ class DevilsAdvocateGate:
                     f"thesis_quality={thesis_quality} on a TAKE decision"
                 )
             elif fail_pillar_count >= 2:
-                # Same self-contradiction principle as the expected_edge check
-                # above, applied to the model's own pillar scoring: the prompt
-                # explicitly instructs "REJECT if 2+ pillars are FAIL". A model
-                # that scores 2+ pillars FAIL and still says TAKE is
-                # contradicting its own structured output, not expressing a
-                # considered "warnings don't matter here" judgment -- treat it
-                # the same as any other internal inconsistency.
-                failed_names = [n for n, v in pillars.items() if v["verdict"] == "FAIL"]
-                contradiction_reason = (
-                    f"{fail_pillar_count} pillars FAIL ({', '.join(failed_names)}) on a TAKE decision"
-                )
+                # 2026-09 overfit-audit fix: this used to enforce the
+                # prompt's OLD mechanical "REJECT if 2+ pillars are FAIL"
+                # rule as a hard post-hoc override. That rule has been
+                # removed from the prompt itself (models now weigh
+                # pillars holistically, per the audit's "don't use a
+                # mechanical vote-count rule" instruction) — enforcing an
+                # arbitrary count threshold here would silently reinstate
+                # the exact rule the prompt was changed to stop using,
+                # regardless of what the model concluded. This branch is
+                # therefore removed; 2+ pillar FAILs alongside a TAKE no
+                # longer auto-triggers a contradiction override on their
+                # own. The two genuinely irreducible self-contradiction
+                # checks above (expected_edge=negative on a TAKE, and
+                # counter_evidence_strength >= thesis_quality on a TAKE)
+                # remain, since those are the model disagreeing with
+                # itself on its OWN summary judgment, not an externally
+                # imposed vote count.
+                pass
         if contradiction_reason:
             log.warning(f"[DevilsAdvocate] TAKE overridden -- internal contradiction: {contradiction_reason}")
             resolved = self._resolve_contradiction()

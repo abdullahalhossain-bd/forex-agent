@@ -251,6 +251,86 @@ def get_pip_value_usd(symbol: str) -> float:
     return PIP_VALUE_USD.get(clean, PIP_VALUE_USD["DEFAULT"])
 
 
+def get_live_pip_size(symbol: str, mt5_conn=None) -> float:
+    """Get pip size for a symbol, derived LIVE from the broker's own
+    MT5 symbol_info() (digits + point), instead of the static PIP_SIZE
+    table above.
+
+    Why this exists (2026-09 audit, finding: static PIP_SIZE only covers
+    ~40 hardcoded FX/metal/index symbols; the operator's actual broker
+    (Exness-style "m"-suffixed account) lists 300+ tradeable symbols —
+    crypto (BTCUSDm, ETHUSDm...), single-name stocks (AAPLm, TSLAm...),
+    dozens of exotic FX crosses (USDZARm, EURTRYm, AUDMXNm...), and more
+    metals/indices than the static table lists. For every one of those,
+    get_pip_size() silently falls through to PIP_SIZE["DEFAULT"]=0.0001
+    — a meaningless pip size for a stock quoted in whole dollars or a
+    5-digit exotic. Confirmed via the operator's own live MT5 spread
+    scan across the full symbol list.
+
+    Formula (matches the operator's own verified live-scan formula):
+        pip_size = 0.0001 if symbol_info.digits in (4, 5) else symbol_info.point
+
+    This is the SAME convention MT5/most brokers use for what counts as
+    "one pip" on 4/5-digit-quote FX pairs (a pip is the 2nd-to-last
+    digit, i.e. 10x the raw point) vs everything else (JPY crosses,
+    metals, indices, stocks, crypto), where "one pip" is just defined as
+    one raw price point. Because it reads digits/point straight from the
+    broker for the EXACT symbol traded (including any suffix like "m"),
+    it is correct for every symbol the broker lists without needing a
+    per-symbol table entry — this generalizes the PIP_SIZE table rather
+    than replacing it: the static table remains the offline/backtest
+    mirror (no MT5 connection there), and is also the last-resort
+    fallback here if live symbol_info() is unavailable.
+
+    Args:
+        symbol: trading symbol, e.g. "EURUSD" or "USDZARm".
+        mt5_conn: an already-connected MT5 connector/session exposing
+            .symbol_info(symbol). If None, tries to resolve the shared
+            connection via core.service_registry; if that also fails,
+            falls back to get_pip_size() (the static table) with a loud
+            warning — never fails silently.
+
+    Returns:
+        Pip size in price units for this exact symbol, live-derived
+        when possible.
+    """
+    import logging
+    log = logging.getLogger("core.constants")
+
+    try:
+        if mt5_conn is None:
+            from core.service_registry import get_registry
+            mt5_conn = get_registry().try_resolve("mt5_connection")
+
+        if mt5_conn is None:
+            raise RuntimeError("no MT5 connection available")
+
+        info = mt5_conn.symbol_info(symbol)
+        digits = int(getattr(info, "digits", 0) or 0)
+        point = float(getattr(info, "point", 0) or 0)
+
+        if point <= 0:
+            raise ValueError(f"symbol_info({symbol}) returned point={point} — unusable")
+
+        pip_size = 0.0001 if digits in (4, 5) else point
+        if pip_size <= 0:
+            raise ValueError(f"computed non-positive pip size: {pip_size}")
+
+        return pip_size
+
+    except Exception as e:
+        fallback = get_pip_size(symbol)
+        log.warning(
+            f"[get_live_pip_size] Could not get live pip size for "
+            f"{symbol} from MT5 ({e}). Falling back to static PIP_SIZE "
+            f"table ({fallback}). If this symbol isn't in that table "
+            f"(e.g. an exotic cross, stock, index, or crypto symbol), "
+            f"this fallback is WRONG (0.0001 DEFAULT) — fix the MT5 "
+            f"connection before trading real money on that symbol."
+        )
+        return fallback
+
+
 def get_live_pip_value_per_lot(symbol: str, mt5_conn=None) -> float:
     """Get per-standard-lot pip value in the ACCOUNT'S OWN currency/unit,
     read live from the broker via MT5 symbol_info().
@@ -304,7 +384,14 @@ def get_live_pip_value_per_lot(symbol: str, mt5_conn=None) -> float:
         info = mt5_conn.symbol_info(symbol)
         tick_value = float(getattr(info, "trade_tick_value", 0) or 0)
         tick_size = float(getattr(info, "trade_tick_size", 0) or 0)
-        pip_size = get_pip_size(symbol)
+        # 2026-09 audit fix: was get_pip_size(symbol) (static table,
+        # DEFAULT=0.0001 for anything not in the ~40-symbol table).
+        # Uses the same already-resolved live mt5_conn/info to derive
+        # pip_size live too, so this stays correct for exotics/crypto/
+        # stocks the static table has never heard of.
+        digits = int(getattr(info, "digits", 0) or 0)
+        point = float(getattr(info, "point", 0) or 0)
+        pip_size = (0.0001 if digits in (4, 5) else point) if point > 0 else get_pip_size(symbol)
 
         if tick_value <= 0 or tick_size <= 0:
             raise ValueError(

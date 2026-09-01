@@ -152,12 +152,31 @@ class EntryQualityResult:
 # ─── Helpers ──────────────────────────────────────────────────
 
 def _pip_value(symbol: str) -> float:
-    sym = (symbol or "").upper()
-    if sym.endswith("JPY"):
-        return 0.01
-    if sym == "XAUUSD":
-        return 0.1
-    return 0.0001
+    """Pip size for a symbol.
+
+    FIX (overfit/data-integrity audit): this used to be a THIRD independent
+    pip-size table, disagreeing with core.constants.PIP_SIZE and
+    core.spread_policy on XAUUSD (0.1 here vs the authoritative 0.01
+    elsewhere -- a 10x error that silently corrupted every gold SL/TP
+    structural-anchor distance computed by this module). Per the "never
+    use default/approximated data when exact instrument-specific data
+    already exists elsewhere" policy, this now delegates to the single
+    authoritative source.
+
+    2026-09 update: prefers a LIVE derivation from the broker's own MT5
+    symbol_info() (digits/point) via core.constants.get_live_pip_size,
+    since the operator's broker lists 300+ symbols (crypto, stocks,
+    exotic crosses) the static PIP_SIZE table has never heard of. Falls
+    back to the static table (core.constants.get_pip_size) only when no
+    live MT5 connection is available. No local fallback table remains
+    here.
+    """
+    try:
+        from core.constants import get_live_pip_size
+        return get_live_pip_size(symbol)
+    except Exception:
+        from core.constants import get_pip_size
+        return get_pip_size(symbol)
 
 
 def _atr(df: pd.DataFrame, period: int = 14) -> float:

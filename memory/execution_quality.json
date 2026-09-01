@@ -1,0 +1,14 @@
+[
+  {
+    "ticket": 4637217212,
+    "pair": "USDCADm",
+    "direction": "BUY",
+    "requested": 1.38683,
+    "executed": 1.3868300000000002,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.4,
+    "latency_ms": 144,
+    "timestamp": "2026-09-01T06:41:47+00:00"
+  }
+]

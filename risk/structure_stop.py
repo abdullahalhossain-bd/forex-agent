@@ -40,6 +40,21 @@ def compute_structure_stop(df, direction, method="swing_atr", lookback=50, atr_b
         return swing + atr * atr_buffer_mult
 
 def compute_structure_stop_pips(df, direction, entry_price, method="swing_atr", lookback=50, atr_buffer_mult=0.20, pip_size=0.0001):
+    """Structure SL distance, in pips.
+
+    2026-09 audit fix (finding F3): this used to floor the result at a
+    flat `5.0` pips regardless of symbol — the same kind of symbol-blind
+    noise-floor default that core/da_safety_net.py's DA_MIN_SL_PIPS was
+    removed for. "5 pips" means wildly different things across
+    instruments depending on pip_size/typical volatility, and this
+    function has no idea which symbol it's being called for beyond
+    whatever pip_size the caller passed in — floor removed. The caller
+    is expected to pass the symbol's authoritative pip_size (e.g. via
+    core.constants.get_pip_size) rather than relying on the 0.0001
+    default here for non-4/5-digit-quote symbols (JPY pairs, metals,
+    indices), the same "no default data" policy documented in
+    core/da_safety_net.py.
+    """
     sp = compute_structure_stop(df, direction, method, lookback, atr_buffer_mult)
     sl_pips = (entry_price - sp) / pip_size if direction.upper() == "BUY" else (sp - entry_price) / pip_size
-    return max(round(sl_pips, 1), 5.0)
+    return round(sl_pips, 1)

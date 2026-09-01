@@ -595,12 +595,29 @@ class LiveRiskManager:
         perm.checks.append({"check": "daily_trades", "passed": True, "detail": f"{self._trades_today}/{_max_daily}"})
 
         # ── Check 4: Spread check ───────────────────────────────────
-        max_spread = 5.0  # max 5 pips spread
-        if spread_pips > max_spread:
-            perm.reject_reason = f"Spread too high: {spread_pips:.1f} > {max_spread}"
+        # 2026-09 audit fix (finding F2): this used to be a single flat
+        # `5.0` applied to EVERY symbol — nonsensical for XAUUSD (whose
+        # live spread routinely runs ~150-300+ pips) and needlessly loose
+        # for tight majors. Now uses the same per-pair authoritative
+        # table (core.spread_policy, sourced from core.constants.PIP_SIZE)
+        # that core/da_safety_net.py's spread_check consumes, so this gate
+        # and DA's gate can no longer silently disagree about the same
+        # symbol. No local/default table is kept here — if the pair truly
+        # isn't in the authoritative table, spread_policy's own documented
+        # asset-class fallback applies (see core/spread_policy.py), not a
+        # second independent guess invented in this file.
+        try:
+            from core.spread_policy import get_max_spread_pips
+            max_spread = float(get_max_spread_pips(pair))
+        except Exception as exc:
+            perm.reject_reason = f"Spread policy lookup failed for {pair}: {exc}"
             perm.checks.append({"check": "spread", "passed": False, "detail": perm.reject_reason})
             return perm
-        perm.checks.append({"check": "spread", "passed": True, "detail": f"{spread_pips:.1f} pips"})
+        if spread_pips > max_spread:
+            perm.reject_reason = f"Spread too high: {spread_pips:.1f} > {max_spread:.1f} (pair={pair})"
+            perm.checks.append({"check": "spread", "passed": False, "detail": perm.reject_reason})
+            return perm
+        perm.checks.append({"check": "spread", "passed": True, "detail": f"{spread_pips:.1f} pips (limit {max_spread:.1f})"})
 
         # ── Check 5: Exposure / correlation ─────────────────────────
         # Estimate risk_usd for exposure check

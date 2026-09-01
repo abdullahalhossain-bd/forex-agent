@@ -64,11 +64,13 @@ class TestSessionFilter:
         out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "session_filter") == VERDICT_PASS
 
-    def test_asian_chop_vetoes_non_asian_pair(self):
+    def test_asian_chop_warns_non_asian_pair(self):
+        # 2026-09 audit: downgraded VETO -> WARN (unvalidated C-type
+        # empirical rule; see DA_SAFETY_NET_AUDIT_PHASE1-20.md)
         net = DASafetyNet()
         tc, risk, dec = _mk(mc={"sessions_active": ["tokyo", "sydney"]})
         out = net.run(tc, "BUY", risk, dec)
-        assert _verdict_of(out["checks"], "session_filter") == VERDICT_VETO
+        assert _verdict_of(out["checks"], "session_filter") == VERDICT_WARN
 
     def test_asian_session_warns_for_jpy_pair(self):
         net = DASafetyNet()
@@ -105,8 +107,9 @@ class TestSessionFilter:
         tc["market_context"].pop("session", None)
         tc["da_allow_wallclock_session"] = True
         out = net.run(tc, "BUY", risk, dec)
-        # sydney-only + EURUSD => asian chop veto via live clock path
-        assert _verdict_of(out["checks"], "session_filter") == VERDICT_VETO
+        # sydney-only + EURUSD => asian low-liquidity WARN via live clock path
+        # (2026-09 audit: downgraded from VETO)
+        assert _verdict_of(out["checks"], "session_filter") == VERDICT_WARN
 
     def test_quality_string_via_legacy_key_skips_not_vetoes(self):
         # regression guard: legacy "session" key holding a trade-QUALITY
@@ -138,8 +141,25 @@ class TestSessionFilter:
 
 
 class TestTrendFilter:
-    def test_h4_opposing_buy_vetoed(self):
+    def test_h4_opposing_buy_warns_by_default(self):
+        # 2026-09 audit (Phase 10): counter-trend is WARN unless an
+        # explicit policy (strategy_charter.counter_trend_prohibited or
+        # DA_H4_COUNTERTREND_HARD_VETO=true) opts into a hard VETO.
         net = DASafetyNet()
+        tc, risk, dec = _mk(mc={"h4_trend": "downtrend"})
+        out = net.run(tc, "BUY", risk, dec)
+        assert _verdict_of(out["checks"], "h4_trend_filter") == VERDICT_WARN
+
+    def test_h4_opposing_buy_vetoed_with_explicit_charter_policy(self):
+        net = DASafetyNet()
+        tc, risk, dec = _mk(mc={"h4_trend": "downtrend"})
+        tc["strategy_charter"] = {"counter_trend_prohibited": True}
+        out = net.run(tc, "BUY", risk, dec)
+        assert _verdict_of(out["checks"], "h4_trend_filter") == VERDICT_VETO
+
+    def test_h4_opposing_buy_vetoed_with_env_policy(self, monkeypatch):
+        net = DASafetyNet()
+        monkeypatch.setenv("DA_H4_COUNTERTREND_HARD_VETO", "true")
         tc, risk, dec = _mk(mc={"h4_trend": "downtrend"})
         out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "h4_trend_filter") == VERDICT_VETO
@@ -162,7 +182,8 @@ class TestTrendFilter:
         tc["market_context"].pop("h4_trend")
         dec["mtf_trends"] = {"4h": "bearish"}
         out = net.run(tc, "BUY", risk, dec)
-        assert _verdict_of(out["checks"], "h4_trend_filter") == VERDICT_VETO
+        # WARN by default (2026-09 audit); no explicit counter-trend policy set
+        assert _verdict_of(out["checks"], "h4_trend_filter") == VERDICT_WARN
 
 
 class TestSpreadCheck:
@@ -179,48 +200,68 @@ class TestSpreadCheck:
         assert _verdict_of(out["checks"], "spread_check") == VERDICT_VETO
 
     def test_spread_eating_atr_vetoed_even_under_pip_limit(self):
-        # XAUUSD allows 5 pips but a 3-pip spread vs tiny ATR destroys edge
+        # XAUUSD authoritative absolute limit is 400 pips (core.spread_policy)
+        # so this is purely a spread/ATR ratio VETO, not an absolute-pip one.
+        # gold pip size 0.01, ATR 8 pips (atr=0.08), spread 4.5 -> ratio 0.5625
+        # (> DA_MAX_SPREAD_RATIO_VETO default 0.50) while nowhere near the
+        # absolute 400-pip limit.
         net = DASafetyNet()
         tc, risk, dec = _mk()
         tc["symbol"] = "XAUUSD"
-        dec["ind_ctx"] = {"atr": 0.05, "spread_pips": 3.0}  # atr=500p ok ratio; use tighter
-        dec["ind_ctx"] = {"atr": 0.006, "spread_pips": 3.0}  # atr=60p, ratio .05 passable
-        dec["ind_ctx"] = {"atr": 0.0006, "spread_pips": 3.0}  # broken pip math guard
-        # instead craft directly: gold pip size 0.01, ATR 8 pips, spread 3 → 37% pass;
-        # make spread 4 → 50% veto (>35%) while under absolute limit of 5
-        dec["ind_ctx"] = {"atr": 0.08, "spread_pips": 4.0}
+        dec["ind_ctx"] = {"atr": 0.08, "spread_pips": 4.5}
         out = net.run(tc, "SELL", risk, dec)
         c = next(c for c in out["checks"] if c["check"] == "spread_check")
         assert c["verdict"] == VERDICT_VETO and "ATR" in c["reason"]
 
     def test_spread_near_limit_warns(self):
+        # EURUSD authoritative max (core.spread_policy) = 3.0 pips;
+        # 2.5 is between the 0.7x-of-limit WARN band (2.1) and the limit,
+        # and its ATR ratio (0.010 price -> 100 pips ATR) stays low so the
+        # ratio branch doesn't fire first.
         net = DASafetyNet()
-        tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.010, "spread_pips": 1.8}})
-        out = net.run(tc, "BUY", risk, dec)  # 1.8 > 0.7*2.0, under it
+        tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.010, "spread_pips": 2.5}})
+        out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "spread_check") == VERDICT_WARN
 
     def test_news_window_halves_limit(self):
+        # EURUSD authoritative max = 3.0 -> halved to 1.5 under a news
+        # window; 1.8 pips breaches that.
         net = DASafetyNet()
-        tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.010, "spread_pips": 1.2}})
+        tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.010, "spread_pips": 1.8}})
         tc["analysis_out"] = {"news_ctx": {"risk_level": "high"}}
-        out = net.run(tc, "BUY", risk, dec)  # news max = 1.0 → 1.2 > 1.0 veto
+        out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "spread_check") == VERDICT_VETO
 
 
 class TestAtrRegime:
-    def test_news_spike_candle_vetoed(self):
+    def test_news_spike_candle_skipped_without_explicit_policy(self):
+        # 2026-09 audit: DA_NEWS_SPIKE_ATR_MULT no longer has a baked-in
+        # default. Without an explicit operator value, the spike sub-check
+        # does not fire (overall verdict falls through to PASS).
         net = DASafetyNet()
+        tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.0015, "last_candle_range": 0.006}})
+        out = net.run(tc, "BUY", risk, dec)
+        v = next(c for c in out["checks"] if c["check"] == "atr_regime_check")
+        assert v["verdict"] == VERDICT_PASS
+
+    def test_news_spike_candle_vetoed_with_explicit_policy(self, monkeypatch):
+        net = DASafetyNet()
+        monkeypatch.setenv("DA_NEWS_SPIKE_ATR_MULT", "2.5")
         tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.0015, "last_candle_range": 0.006}})
         out = net.run(tc, "BUY", risk, dec)  # 4x ATR > 2.5x
         v = next(c for c in out["checks"] if c["check"] == "atr_regime_check")
         assert v["verdict"] == VERDICT_VETO and "spike" in v["reason"]
 
-    def test_atr_collapse_via_atr_pips(self):
+    def test_atr_collapse_no_longer_flat_floor_vetoed(self):
+        # 2026-09 audit (Phase 8): the flat, symbol-blind DA_MIN_ATR_PIPS
+        # floor was removed entirely (no cross-symbol ATR-pip comparison
+        # without a validated percentile/regime source). A low atr_pips
+        # value alone no longer VETOes.
         net = DASafetyNet()
         tc, risk, dec = _mk(dec={"ind_ctx": {"atr": 0.0002, "atr_pips": 2.0}})
         out = net.run(tc, "BUY", risk, dec)
         v = next(c for c in out["checks"] if c["check"] == "atr_regime_check")
-        assert v["verdict"] == VERDICT_VETO and "collapse" in v["reason"]
+        assert v["verdict"] == VERDICT_PASS
 
     def test_low_vol_regime_warns_without_atr_pips(self):
         net = DASafetyNet()
@@ -238,66 +279,128 @@ class TestAtrRegime:
         assert _verdict_of(out["checks"], "atr_regime_check") == VERDICT_SKIP
 
 
+def _with_swing_result(tc, *, passed, severity="WARNING", reason="", details=None):
+    """Attach a fake upstream entry_quality_guardrails.sl_swing_anchor
+    result to trade_context, the way risk/trade_permission.py does in the
+    real pipeline (trade_context["perm_out"]["entry_quality_detail"]).
+    2026-09 audit: structure_sl_check now VALIDATES this instead of
+    recomputing its own independent swing-anchor judgment (finding F5)."""
+    tc["perm_out"] = {
+        "entry_quality_detail": {
+            "results": [
+                {
+                    "flag_name": "sl_swing_anchor",
+                    "passed": passed,
+                    "severity": severity,
+                    "reason": reason,
+                    "details": details or {},
+                }
+            ]
+        }
+    }
+    return tc
+
+
 class TestStructureSL:
-    def test_sl_inside_structure_noise_vetoed_for_buy(self):
-        # entry 1.1000, support 1.0980 (within 2x SL distance), SL 1.0975+?
-        # SL 1.0990 sits ABOVE support-2pips(1.0978) -> inside noise
+    def test_no_upstream_result_skips(self):
+        # 2026-09 audit (finding F5): no independent re-derivation anymore.
+        # Without the upstream sl_swing_anchor result on
+        # trade_context.perm_out, this SKIPs rather than invent its own
+        # swing-detection/buffer judgment.
         net = DASafetyNet()
-        tc, risk, dec = _mk(risk={"sl_price": 1.0990, "sl_pips": 10})
-        tc["market_context"]["nearest_support"] = 1.0980
-        out = net.run(tc, "BUY", risk, dec)
-        v = next(c for c in out["checks"] if c["check"] == "structure_sl_check")
-        assert v["verdict"] == VERDICT_VETO and "noise" in v["reason"]
-
-    def test_sl_beyond_structure_passes(self):
-        net = DASafetyNet()
-        tc, risk, dec = _mk()  # SL 1.0970 < support 1.0980 - 2 pips
-        tc["market_context"]["nearest_support"] = 1.0980
-        out = net.run(tc, "BUY", risk, dec)
-        assert _verdict_of(out["checks"], "structure_sl_check") == VERDICT_PASS
-
-    def test_far_structure_skipped(self):
-        # support 80 pips below entry = 2.67x SL distance -> irrelevant horizon
-        net = DASafetyNet()
-        tc, risk, dec = _mk(risk={"sl_price": 1.0990, "sl_pips": 10})
-        tc["market_context"]["nearest_support"] = 1.0920
+        tc, risk, dec = _mk()
         out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "structure_sl_check") == VERDICT_SKIP
 
-    def test_sell_structure_mirror(self):
+    def test_upstream_block_severity_mirrored_as_veto(self):
+        net = DASafetyNet()
+        tc, risk, dec = _mk()
+        _with_swing_result(tc, passed=False, severity="BLOCK",
+                            reason="SL is on the wrong side of entry")
+        out = net.run(tc, "BUY", risk, dec)
+        v = next(c for c in out["checks"] if c["check"] == "structure_sl_check")
+        assert v["verdict"] == VERDICT_VETO
+
+    def test_upstream_warning_severity_mirrored_as_warn(self):
+        net = DASafetyNet()
+        tc, risk, dec = _mk()
+        _with_swing_result(tc, passed=False, severity="WARNING",
+                            reason="SL is 12.0 pips (2.1x ATR) from nearest swing")
+        out = net.run(tc, "BUY", risk, dec)
+        v = next(c for c in out["checks"] if c["check"] == "structure_sl_check")
+        assert v["verdict"] == VERDICT_WARN
+
+    def test_upstream_pass_mirrored_as_pass(self):
+        net = DASafetyNet()
+        tc, risk, dec = _mk()
+        _with_swing_result(tc, passed=True,
+                            reason="SL anchored to swing 1.0980 (10.0 pips / 0.8x ATR)")
+        out = net.run(tc, "BUY", risk, dec)
+        assert _verdict_of(out["checks"], "structure_sl_check") == VERDICT_PASS
+
+    def test_sell_direction_also_validates_upstream(self):
         net = DASafetyNet()
         tc, risk, dec = _mk(risk={"entry": 1.1000, "sl_price": 1.1010, "sl_pips": 10})
-        tc["market_context"]["nearest_resistance"] = 1.1020
-        # resistance-adjacent SELL: SL 1.1010 is BELOW 1.1020+2pips=1.1022? yes 1.1010<1.1022
-        # -> inside noise (stop under the level gets wicked before rejection)
+        _with_swing_result(tc, passed=False, severity="BLOCK",
+                            reason="SL wrong side for SELL")
         out = net.run(tc, "SELL", risk, dec)
         v = next(c for c in out["checks"] if c["check"] == "structure_sl_check")
         assert v["verdict"] == VERDICT_VETO
 
-    def test_min_sl_floor_vetoed(self):
-        net = DASafetyNet()
-        tc, risk, dec = _mk(risk={"sl_price": 1.0996, "sl_pips": 4})
-        out = net.run(tc, "BUY", risk, dec)  # 4 pips < 6 floor, no structure needed
-        v = next(c for c in out["checks"] if c["check"] == "structure_sl_check")
-        assert v["verdict"] == VERDICT_VETO and "floor" in v["reason"]
-
 
 class TestLotSizing:
-    def test_consistent_lot_passes(self):
+    @staticmethod
+    def _mock_live(monkeypatch, pip_val):
+        """Mock an available MT5 connection + live pip value, the way
+        DASafetyNet._check_lot_sizing now requires before it will VETO on
+        a mismatch (2026-09 audit finding F4)."""
+        fake_conn = object()
+        monkeypatch.setattr(
+            "core.service_registry.get_registry",
+            lambda: type("R", (), {"try_resolve": staticmethod(lambda name: fake_conn)})(),
+        )
+        monkeypatch.setattr(
+            "core.constants.get_live_pip_value_per_lot",
+            lambda symbol, mt5_conn=None: pip_val,
+        )
+
+    def test_consistent_lot_warns_without_live_verification(self):
+        # 2026-09 audit: no MT5 connection in this test env -> pip value
+        # is a static-table approximation -> always WARN (informational,
+        # "sizing not independently verified"), never a silent PASS on
+        # unverified data.
+        net = DASafetyNet()
+        tc, risk, dec = _mk(risk={"lot": 0.033})
+        out = net.run(tc, "BUY", risk, dec)
+        assert _verdict_of(out["checks"], "lot_sizing_check") == VERDICT_WARN
+
+    def test_consistent_lot_passes_when_live_verified(self, monkeypatch):
+        self._mock_live(monkeypatch, pip_val=10.0)
         net = DASafetyNet()
         tc, risk, dec = _mk(risk={"lot": 0.033})
         out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "lot_sizing_check") == VERDICT_PASS
 
-    def test_lot_mismatch_vetoed(self):
-        # intended: balance*1% / (30 * 10) = 0.0333 lot; booked 1.0 = ~2900% off
+    def test_lot_mismatch_warns_without_live_verification(self):
+        # intended: balance*1% / (30 * 10) = 0.0333 lot; booked 1.0 = ~2900% off,
+        # but with no live-verified pip value + no explicit
+        # DA_LOT_MISMATCH_TOL policy set, this is WARN via the risk-overflow
+        # branch, not a silent PASS and not a VETO on approximated data.
+        net = DASafetyNet()
+        tc, risk, dec = _mk(risk={"lot": 1.00})
+        out = net.run(tc, "BUY", risk, dec)
+        assert _verdict_of(out["checks"], "lot_sizing_check") == VERDICT_WARN
+
+    def test_lot_mismatch_vetoed_when_live_verified(self, monkeypatch):
+        self._mock_live(monkeypatch, pip_val=10.0)
         net = DASafetyNet()
         tc, risk, dec = _mk(risk={"lot": 1.00})
         out = net.run(tc, "BUY", risk, dec)
         assert _verdict_of(out["checks"], "lot_sizing_check") == VERDICT_VETO
 
-    def test_jpy_pair_size_consistency(self):
+    def test_jpy_pair_size_consistency_when_live_verified(self, monkeypatch):
         # USDJPY: sl 25 pips, pip value 6.5 -> correct lot = 10/(25*6.5)=0.0615
+        self._mock_live(monkeypatch, pip_val=6.5)
         net = DASafetyNet()
         tc, risk, dec = _mk(risk={"lot": 0.06})
         tc["symbol"] = "USDJPY"
@@ -305,24 +408,48 @@ class TestLotSizing:
         out = net.run(tc, "SELL", risk, dec)
         assert _verdict_of(out["checks"], "lot_sizing_check") == VERDICT_PASS
 
-    def test_gold_wrong_pip_value_detected(self):
-        # XAUUSD pip val $1/lot: correct lot = 10/(30*1)=0.33 — booking with
-        # FX-style assumption (pip_val 10 -> lot 0.03) is 90% off -> veto
+    def test_gold_wrong_pip_value_detected_but_capped_at_warn_without_live_data(self):
+        # 2026-09 audit fix (finding F4): with no live MT5 connection
+        # available in this test environment, get_live_pip_value_per_lot()
+        # falls back to the static table. Per the "never VETO on
+        # non-authoritative/approximated data" policy, a mismatch computed
+        # from the non-live fallback is now capped at WARN, not VETO — a
+        # VETO here requires the pip value to actually come from live
+        # broker data (see next test for the live-verified case).
         net = DASafetyNet()
-        tc, risk, dec = _mk(risk={"lot": 0.03})
+        tc, risk, dec = _mk(risk={"lot": 0.03}, dec={"ind_ctx": {"atr": 0.6, "spread_pips": 4.0}})
         tc["symbol"] = "XAUUSD"
         out = net.run(tc, "BUY", risk, dec)
         v = next(c for c in out["checks"] if c["check"] == "lot_sizing_check")
+        assert v["verdict"] == VERDICT_WARN
+
+    def test_gold_wrong_pip_value_vetoed_when_live_verified(self, monkeypatch):
+        self._mock_live(monkeypatch, pip_val=1.0)  # true XAUUSD pip value
+        net = DASafetyNet()
+        tc, risk, dec = _mk(risk={"lot": 0.03}, dec={"ind_ctx": {"atr": 0.6, "spread_pips": 4.0}})
+        tc["symbol"] = "XAUUSD"
+        tc["market_context"] = tc.get("market_context", {})
+        import os
+        os.environ["DA_LOT_MISMATCH_TOL"] = "0.25"
+        try:
+            out = net.run(tc, "BUY", risk, dec)
+        finally:
+            os.environ.pop("DA_LOT_MISMATCH_TOL", None)
+        v = next(c for c in out["checks"] if c["check"] == "lot_sizing_check")
         assert v["verdict"] == VERDICT_VETO and "mismatch" in v["reason"]
 
-    def test_unmapped_symbol_warns_on_fallback_table(self):
+    def test_unmapped_symbol_skips_rather_than_guess(self):
+        # 2026-09 audit fix: no live MT5 connection AND the symbol isn't in
+        # the static PIP_VALUE_USD table either -> SKIP, not a silent
+        # generic-default guess (get_pip_value_usd's own internal 10.0
+        # fallback is exactly the kind of default this check must not
+        # rely on for a symbol nobody has actually mapped).
         net = DASafetyNet()
         tc, risk, dec = _mk(risk={"lot": 0.033})
-        tc["symbol"] = "USDMXN"   # not in PIP_VALUE_USD -> DEFAULT 10 used
+        tc["symbol"] = "USDMXN"
         out = net.run(tc, "BUY", risk, dec)
-        # numbers still consistent w/ fallback (10) -> warn not veto
         v = next(c for c in out["checks"] if c["check"] == "lot_sizing_check")
-        assert v["verdict"] == VERDICT_WARN
+        assert v["verdict"] == VERDICT_SKIP
 
     def test_incomplete_fields_skip(self):
         net = DASafetyNet()
@@ -354,7 +481,7 @@ class TestGateIntegration:
     def test_veto_short_circuits_before_llm_call(self, monkeypatch):
         captured = []
         gate = self._gate(monkeypatch, captured)
-        tc, risk, dec = _mk(mc={"sessions_active": ["tokyo"]})  # asian chop EURUSD
+        tc, risk, dec = _mk(mc={"sessions_active": []})  # market closed -> hard VETO
         result = gate.review(trade_context=tc, signal="BUY", risk_out=risk, decision_out=dec)
         assert result["decision"] == "REJECT"
         assert "safety_net_veto" in str(result.get("critical_failure"))

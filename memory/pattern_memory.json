@@ -1,0 +1,50 @@
+[
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "LOSS",
+    "pnl_pips": -100.0,
+    "timestamp": "2026-09-01T05:13:17.380788+00:00"
+  },
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "WIN",
+    "pnl_pips": 200.0,
+    "timestamp": "2026-09-01T05:13:17.394769+00:00"
+  },
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "LOSS",
+    "pnl_pips": -100.0,
+    "timestamp": "2026-09-01T05:17:30.213165+00:00"
+  },
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "WIN",
+    "pnl_pips": 200.0,
+    "timestamp": "2026-09-01T05:17:30.227075+00:00"
+  },
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "LOSS",
+    "pnl_pips": -100.0,
+    "timestamp": "2026-09-01T05:25:36.071350+00:00"
+  },
+  {
+    "symbol": "EURUSD",
+    "regime": "trend",
+    "pattern": "breakout",
+    "result": "WIN",
+    "pnl_pips": 200.0,
+    "timestamp": "2026-09-01T05:25:36.083457+00:00"
+  }
+]
