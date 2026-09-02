@@ -3251,6 +3251,20 @@ class AITrader:
                 result["ticket"] = trade.get("ticket")
                 result["paper_balance"] = self._paper.balance
                 self._risk.record_trade_open(self.symbol)
+                # Fix (2026-09-01): LiveRiskManager's daily-trade quota must
+                # only be consumed by a CONFIRMED fill (we're inside `if
+                # trade:`, i.e. ExecutionRouter actually returned a filled
+                # trade with a ticket) — not by check_trade_permission()
+                # returning allowed=True earlier in the pipeline, which can
+                # still be vetoed downstream (devil's advocate, correlation
+                # filter, final_decision_gate) or fail at the broker. Doing
+                # it there was inflating the daily count on approved-but-
+                # never-filled attempts (20/20 reached off only 3 real fills).
+                if self._live_risk_manager is not None:
+                    try:
+                        self._live_risk_manager.record_trade_executed(self.symbol)
+                    except Exception as e:
+                        log.warning(f"[Trader] live_risk_manager.record_trade_executed failed (non-fatal): {e}")
                 self._notify_trade_open(trade, result, dec_out)
 
                 # Round-30: Register MT5 ticket → DB trade_id in PositionManager.

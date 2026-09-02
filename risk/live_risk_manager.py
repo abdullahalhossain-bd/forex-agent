@@ -674,12 +674,22 @@ class LiveRiskManager:
         perm.checks.append({"check": "position_size", "passed": True, "detail": f"lot={sizing.lot}, risk=${sizing.risk_amount_usd}"})
 
         # ── ALL CHECKS PASSED ───────────────────────────────────────
+        # NOTE (fix, 2026-09-01): _trades_today is NO LONGER incremented
+        # here. This method is a read-only permission check — it can be
+        # (and is) called multiple times for the same intended trade
+        # before a real fill happens (devil's-advocate review,
+        # correlation filter, final_decision_gate, broker execution can
+        # all still veto or fail AFTER this returns allowed=True).
+        # Counting here inflated the daily quota on approved-but-never-
+        # filled attempts (e.g. 20/20 reached with only 3 real broker
+        # fills). Callers MUST call record_trade_executed() themselves,
+        # only after the broker/paper adapter confirms an actual fill
+        # (see core/trader.py, next to self._risk.record_trade_open()).
         perm.allowed = True
         perm.lot = sizing.lot
         perm.risk_amount_usd = sizing.risk_amount_usd
         perm.risk_pct = sizing.risk_pct
         perm.tier = tier.tier
-        self._trades_today += 1
 
         # Report capital preservation mode if active
         if dd_status.mode != "NORMAL":
@@ -696,6 +706,28 @@ class LiveRiskManager:
             f"tier={perm.tier} | mode={perm.mode} | conf={confidence:.0f}%"
         )
         return perm
+
+    def record_trade_executed(self, pair: str = "") -> None:
+        """Record ONE real, broker-confirmed trade against the daily quota.
+
+        Call this ONLY after the execution adapter / broker confirms an
+        actual fill (a ticket was returned) — never at the permission-
+        check stage. `check_trade_permission()` can be, and is, called
+        multiple times per intended trade (retries, re-evaluation across
+        cycles, downstream vetoes by devil's advocate / correlation
+        filter / final_decision_gate) without a fill ever happening; only
+        this method should move `_trades_today`.
+
+        Idempotent-safe date handling: self-heals the daily counter the
+        same way check_trade_permission() does, so a fill recorded right
+        at midnight still lands on the correct calendar day.
+        """
+        self._maybe_reset_daily()
+        self._trades_today += 1
+        log.info(
+            f"[LiveRiskManager] Trade recorded {pair} "
+            f"({self._trades_today}/{self.current_tier.max_trades_per_day} today)"
+        )
 
     def status(self) -> Dict[str, Any]:
         """Return full risk status for dashboard."""

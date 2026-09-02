@@ -476,7 +476,7 @@ def _env_float(name: str, default: float) -> float:
 # Single source of truth.  All tiers share the same cap;
 # override per-tier or globally via .env if needed.
 # Consumers: live_risk_manager.TIERS, trade_frequency, strict_risk_manager.
-MAX_TRADES_PER_DAY: int = _env_int("MAX_TRADES_PER_DAY", 20)
+MAX_TRADES_PER_DAY: int = _env_int("MAX_TRADES_PER_DAY", 30)
 MAX_TRADES_PER_DAY_TIER_1: int = _env_int("MAX_TRADES_PER_DAY_TIER_1", MAX_TRADES_PER_DAY)
 MAX_TRADES_PER_DAY_TIER_2: int = _env_int("MAX_TRADES_PER_DAY_TIER_2", MAX_TRADES_PER_DAY)
 MAX_TRADES_PER_DAY_TIER_3: int = _env_int("MAX_TRADES_PER_DAY_TIER_3", MAX_TRADES_PER_DAY)

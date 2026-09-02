@@ -34,5 +34,29 @@
     "spread_pips": 2.1,
     "latency_ms": 134,
     "timestamp": "2026-09-01T13:35:31+00:00"
+  },
+  {
+    "ticket": 4641926130,
+    "pair": "EURCADm",
+    "direction": "BUY",
+    "requested": 1.61126,
+    "executed": 1.6112600000000001,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.5,
+    "latency_ms": 97,
+    "timestamp": "2026-09-01T17:13:51+00:00"
+  },
+  {
+    "ticket": 4641941864,
+    "pair": "GBPCHFm",
+    "direction": "BUY",
+    "requested": 1.09778,
+    "executed": 1.0977800000000002,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.5,
+    "latency_ms": 114,
+    "timestamp": "2026-09-01T17:17:01+00:00"
   }
 ]
