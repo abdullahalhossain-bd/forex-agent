@@ -29,7 +29,7 @@ log = get_logger("decision_validator")
 
 CRITICAL_LAYERS = ["rule_engine", "ml_ensemble"]
 STRONG_OPPOSE_THRESHOLD = 75.0
-MIN_CONFIDENCE = 50.0
+MIN_CONFIDENCE = 40.0
 
 
 @dataclass

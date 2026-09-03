@@ -58,5 +58,29 @@
     "spread_pips": 1.5,
     "latency_ms": 114,
     "timestamp": "2026-09-01T17:17:01+00:00"
+  },
+  {
+    "ticket": 4646501105,
+    "pair": "GBPNZDm",
+    "direction": "BUY",
+    "requested": 2.31823,
+    "executed": 2.31823,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 2.4,
+    "latency_ms": 200,
+    "timestamp": "2026-09-02T10:52:18+00:00"
+  },
+  {
+    "ticket": 4649056668,
+    "pair": "USDJPYm",
+    "direction": "SELL",
+    "requested": 158.804,
+    "executed": 158.804,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 1.0,
+    "latency_ms": 112,
+    "timestamp": "2026-09-02T16:47:07+00:00"
   }
 ]

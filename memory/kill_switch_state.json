@@ -7,7 +7,7 @@
   "level_3_until": null,
   "daily_loss_pct": 0.0,
   "weekly_loss_pct": 0.0,
-  "current_drawdown_pct": 0.004778000000000065,
+  "current_drawdown_pct": 0.0,
   "peak_balance": 10000.0,
   "last_reset": "2026-08-27T07:05:17.993939+00:00"
 }

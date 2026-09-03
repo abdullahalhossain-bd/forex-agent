@@ -50,7 +50,7 @@ class SignalPersistenceFilter:
     WINDOW_BARS = 20          # look back this many signal records
     MAX_FLIPS = 3             # more than 3 direction changes in 20 bars = unstable
     MIN_BARS_SAME_DIR = 1     # 2026-08-12: lowered 2→1 (was delaying breakout entries by 30min on M15)
-    MIN_CONFIDENCE_NEW = 50   # first-ever signal for a pair needs ≥50% confidence
+    MIN_CONFIDENCE_NEW = 40   # first-ever signal for a pair needs ≥40% confidence
 
     def __init__(self):
         # Per-symbol signal history: {symbol: deque of (timestamp, signal, confidence)}
