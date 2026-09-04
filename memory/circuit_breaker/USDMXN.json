@@ -1,8 +1,8 @@
 {
   "mode": "TRADING",
   "consecutive_losses": 0,
-  "daily_loss_usd": 0.0,
-  "date": "2026-09-01",
+  "daily_loss_usd": 11.25,
+  "date": "2026-09-04",
   "recent_results": [
     {
       "result": "LOSS",
@@ -15,10 +15,18 @@
     {
       "result": "BREAKEVEN",
       "ts": "2026-09-01T14:48:34.082982"
+    },
+    {
+      "result": "LOSS",
+      "ts": "2026-09-03T22:01:33.818966"
+    },
+    {
+      "result": "BREAKEVEN",
+      "ts": "2026-09-04T15:15:01.591870"
     }
   ],
   "pause_reason": "",
   "week": "2026-W36",
-  "weekly_loss_usd": 0.0,
+  "weekly_loss_usd": 11.25,
   "daily_loss_sync_stale": false
 }

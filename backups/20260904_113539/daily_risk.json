@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-04",
+  "total_loss_usd": 22.5,
+  "total_win_usd": 0,
+  "open_trades": 0,
+  "open_pairs": [],
+  "trades": [
+    {
+      "symbol": "GBPNZDm",
+      "pnl_usd": -11.25,
+      "time": "2026-09-03T22:00:28.075831+00:00"
+    },
+    {
+      "symbol": "GBPNZDm",
+      "pnl_usd": -11.25,
+      "time": "2026-09-03T22:00:28.098872+00:00"
+    }
+  ]
+}

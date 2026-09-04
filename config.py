@@ -44,7 +44,7 @@ PROJECT_NAME = "Autonomous Forex AI Trader"
 # real live balance on every cycle — but having the boot-time value
 # match means position sizing is correct from the FIRST trade, not
 # only after the first resync.
-INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "10000"))
+INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "1000"))
 INITIAL_CAPITAL = INITIAL_BALANCE  # Alias for compatibility
 RISK_PER_TRADE = 0.005              # 0.5% per trade (production-safe — matches strict_risk_manager)
 # 2026-08-13 fix: MAX_DAILY_LOSS was 0.03 (3%) but DAILY_LOSS_LIMIT_PCT below

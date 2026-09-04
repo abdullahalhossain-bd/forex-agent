@@ -82,5 +82,41 @@
     "spread_pips": 1.0,
     "latency_ms": 112,
     "timestamp": "2026-09-02T16:47:07+00:00"
+  },
+  {
+    "ticket": 4653063591,
+    "pair": "AUDCHFm",
+    "direction": "BUY",
+    "requested": 0.58131,
+    "executed": 0.5813100000000001,
+    "slippage": 0.0,
+    "slippage_pips": 0.0,
+    "spread_pips": 0.9,
+    "latency_ms": 161,
+    "timestamp": "2026-09-03T10:12:19+00:00"
+  },
+  {
+    "ticket": 4662184779,
+    "pair": "AUDSGDm",
+    "direction": "SELL",
+    "requested": 0.91194,
+    "executed": 0.9119400000000001,
+    "slippage": -0.0,
+    "slippage_pips": -0.0,
+    "spread_pips": 5.2,
+    "latency_ms": 210,
+    "timestamp": "2026-09-04T14:08:59+00:00"
+  },
+  {
+    "ticket": 4663277429,
+    "pair": "XAGUSDm",
+    "direction": "SELL",
+    "requested": 66.136,
+    "executed": 66.132,
+    "slippage": 0.004,
+    "slippage_pips": 40.0,
+    "spread_pips": 3.0,
+    "latency_ms": 122,
+    "timestamp": "2026-09-04T16:34:14+00:00"
   }
 ]
