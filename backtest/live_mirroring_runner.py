@@ -129,7 +129,6 @@ def run_live_mirroring_replay(
         bar_time = df.index[i]
         stats["total_bars"] += 1
 
-        # Position lifecycle is advanced before evaluating a new signal.
         bar = Bar(
             timestamp=bar_time.isoformat(),
             high=float(df.iloc[i]["high"]),
@@ -152,7 +151,6 @@ def run_live_mirroring_replay(
                 if rec is not None:
                     rec.lifecycle = closed.to_dict()
                 opened.pop(trade_id, None)
-
             elif max_hold_bars is not None and (i - opened_at) >= max_hold_bars:
                 bid = bar.bid if bar.bid is not None else bar.close
                 spread = bar.spread_pips if bar.spread_pips is not None else spread_pips
@@ -184,9 +182,7 @@ def run_live_mirroring_replay(
             "gmt_time": replay_clock.now().isoformat(),
             "session_strategy": "n/a",
         }
-        core = trader.evaluate_decision_core(
-            market_out, session_ctx, bypass_checks=bypass_checks
-        )
+        core = trader.evaluate_decision_core(market_out, session_ctx, bypass_checks=bypass_checks)
         result.bars_seen += 1
 
         analysis_out = core["analysis_out"]
@@ -229,22 +225,9 @@ def run_live_mirroring_replay(
                 signal_time=replay_clock.now().isoformat(),
                 entry_time=replay_clock.now().isoformat(),
                 historical_bid=historical_bid,
+                historical_ask=historical_ask,
                 pnl_multiplier=pnl_multiplier,
             )
-            # Use explicit ask when available by reopening through the canonical
-            # adapter directly; this is the same execution boundary, not a new
-            # strategy path. Avoid this branch when no ask is present.
-            if historical_ask is not None:
-                adapter.open_positions.pop(trade.trade_id, None)
-                adapter._next_trade_id -= 1
-                trade = adapter.open_trade(
-                    decision_result=decision_payload,
-                    signal_time=replay_clock.now().isoformat(),
-                    entry_time=replay_clock.now().isoformat(),
-                    historical_bid=historical_bid,
-                    historical_ask=historical_ask,
-                    pnl_multiplier=pnl_multiplier,
-                )
         except ValueError:
             stats["execution_rejected"] += 1
             raise
@@ -258,11 +241,9 @@ def run_live_mirroring_replay(
         record_by_trade[trade.trade_id] = record
         result.trades.append(record)
 
-    # End-of-dataset close is explicit and uses the final historical bid.
     if adapter.open_positions:
         final_time = df.index[-1]
         final_bid = _row_float(df.iloc[-1], "bid", "Bid", "close")
-        final_ask = _row_float(df.iloc[-1], "ask", "Ask")
         if final_bid is None:
             final_bid = float(df.iloc[-1]["close"])
         final_spread = _row_float(df.iloc[-1], "spread_pips", "spread", "Spread")
