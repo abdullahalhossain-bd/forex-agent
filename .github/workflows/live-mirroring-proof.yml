@@ -1,0 +1,38 @@
+name: Live Mirroring Proof
+
+on:
+  push:
+    branches:
+      - research/live-mirroring-replay
+  workflow_dispatch:
+
+jobs:
+  canonical-proof:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependency
+        run: python -m pip install --upgrade pytest
+
+      - name: Compile canonical replay modules
+        run: |
+          python -m py_compile \
+            backtest/canonical_execution.py \
+            backtest/canonical_position_monitor.py \
+            backtest/live_mirroring_execution.py \
+            backtest/live_mirroring_runner.py \
+            backtest/unified_engine.py
+
+      - name: Run canonical execution tests
+        run: |
+          python -m pytest -q \
+            tests/test_live_mirroring_execution.py \
+            tests/test_live_mirroring_execution_integration.py \
+            tests/test_unified_engine_canonical_contract.py
