@@ -1,0 +1,43 @@
+{
+  "policy_version": "p0-2026-09-05",
+  "classification": {
+    "A": "pure deterministic from supplied historical inputs",
+    "B": "historical data available and replay-safe when timestamp constrained",
+    "C": "live external source; disabled unless timestamped historical archive exists",
+    "D": "wall-clock dependent; must use ReplayClock in replay",
+    "E": "unsafe or temporal validity unknown; cannot affect a replay decision"
+  },
+  "modules": [
+    {"module": "PatternDetector", "class": "A", "status": "REVIEW_REQUIRED"},
+    {"module": "SupportResistance", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "MarketBiasEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "AdvancedPatternDetector", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "FibonacciEngine", "class": "A", "status": "REVIEW_REQUIRED"},
+    {"module": "SentimentEngine", "class": "C/E", "status": "DISABLE_OR_PROVE_HISTORICAL"},
+    {"module": "SMCEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "SentimentDataProvider", "class": "C/E", "status": "DISABLE_OR_PROVE_HISTORICAL"},
+    {"module": "SessionAnalyzer", "class": "D", "status": "REQUIRES_REPLAY_CLOCK"},
+    {"module": "IntermarketEngine", "class": "C/B", "status": "DISABLE_LIVE_OR_PROVE_HISTORICAL"},
+    {"module": "CurrencyStrengthEngine", "class": "B", "status": "REVIEW_REQUIRED"},
+    {"module": "DivergenceEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "IchimokuEngine", "class": "A", "status": "REVIEW_REQUIRED"},
+    {"module": "VolatilityEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "VolumeProfileEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "SMCAdvancedEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "MTFStructureEngine", "class": "B", "status": "REVIEW_REQUIRED_FOR_HTF_CLOSE_RULE"},
+    {"module": "MarketStructureEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "NewsAPIProvider", "class": "C", "status": "DISABLED_BACKTEST"},
+    {"module": "EconomicCalendarAPI", "class": "C", "status": "DISABLED_BACKTEST"},
+    {"module": "FRED", "class": "C/B", "status": "DISABLE_LIVE_OR_PROVE_TIMESTAMPED"},
+    {"module": "RetailSentiment", "class": "C", "status": "DISABLED_BACKTEST"},
+    {"module": "CorrelationEngine", "class": "A/B", "status": "REVIEW_REQUIRED"},
+    {"module": "InstitutionalFlowEngine", "class": "C/B", "status": "DISABLE_LIVE_OR_PROVE_HISTORICAL"},
+    {"module": "EconomicSurpriseEngine", "class": "B", "status": "REVIEW_REQUIRED_FOR_RELEASE_TIME"},
+    {"module": "MicrostructureEngine", "class": "B/C", "status": "HISTORICAL_TICKS_REQUIRED_OR_DISABLED"},
+    {"module": "NetworkMonitor", "class": "E", "status": "MUST_NOT_AFFECT_TRADE_DECISION"},
+    {"module": "ForecastEngine", "class": "B/E", "status": "MODEL_VERSION_AND_ASOF_REQUIRED"},
+    {"module": "NewsFilter", "class": "C/B", "status": "DISABLED_BACKTEST_UNLESS_HISTORICAL"}
+  ],
+  "overall": "PARTIALLY_PROVEN",
+  "note": "This matrix is intentionally conservative. REVIEW_REQUIRED means source inspection and temporal tests are still required before a module is allowed to influence historical decisions."
+}
