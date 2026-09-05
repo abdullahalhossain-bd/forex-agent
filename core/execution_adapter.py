@@ -1,27 +1,9 @@
-"""
-core/execution_adapter.py — ExecutionAdapter abstraction (execution-parity refactor).
+"""Execution boundary used by live and historical replay.
 
-The trading engine (AITrader.evaluate_decision_core) produces a TradeDecision-
-shaped dict (dec_out/risk_out/perm_out). What happens to that decision — a
-real MT5 order, a demo MT5 order, or a simulated fill against historical
-OHLC — is the ONLY thing allowed to differ between modes, and this module
-is where that boundary lives.
-
-- MT5ExecutionAdapter wraps the EXISTING execution.execution_router.
-  ExecutionRouter, which is already mode-agnostic between mt5_demo and
-  mt5_live (single class, `self.mode` flag, confirmed by reading the code:
-  ExecutionRouter.__init__ branches on self.mode == "mt5_live" only for
-  the extra real-money safety gate, not for a different order-placement
-  code path). This class does not reimplement order placement — it is a
-  thin named wrapper so the abstraction the architecture calls for
-  actually exists as a class, not just a convention.
-
-- HistoricalExecutionAdapter wraps backtest.broker_sim.BrokerSimulator,
-  the only component in the repo that can replay bar high/low SL/TP
-  touches against historical OHLC. It is NOT execution.simulated_executor.
-  SimulatedExecutor (that one is a live-pipeline dry-run smoke test, fills
-  instantly at a fabricated price, no OHLC awareness — wrong tool for
-  historical replay, kept for its own purpose, not merged in here).
+Live execution remains `execution.execution_router.ExecutionRouter`.
+Historical replay may replace only that broker-facing side with the canonical
+adapter below; analysis, decision, risk and permission payloads remain live
+pipeline outputs.
 """
 from __future__ import annotations
 
@@ -29,9 +11,6 @@ from abc import ABC, abstractmethod
 
 
 class ExecutionAdapter(ABC):
-    """Contract: given a TradeDecision (action, entry, sl, tp, lot,
-    confidence), return a fill/rejection result. Never inspects mode."""
-
     @abstractmethod
     def open_trade(self, *, symbol: str, direction: str, entry_price: float,
                    sl: float, tp: float, lot: float, confidence: int,
@@ -44,13 +23,7 @@ class ExecutionAdapter(ABC):
 
 
 class MT5ExecutionAdapter(ExecutionAdapter):
-    """Wraps the existing ExecutionRouter (mode='mt5_demo' or 'mt5_live').
-    Demo and Real are NOT two adapters — they are the same adapter with a
-    different `.mode` string, exactly as ExecutionRouter already
-    implements it. Do not create a separate DemoExecutionAdapter /
-    RealExecutionAdapter — that would reintroduce the duplication this
-    refactor removes.
-    """
+    """Thin wrapper around the existing live/demo ExecutionRouter."""
 
     def __init__(self, execution_router):
         self._router = execution_router
@@ -58,13 +31,6 @@ class MT5ExecutionAdapter(ExecutionAdapter):
     def open_trade(self, *, symbol: str, direction: str, entry_price: float,
                    sl: float, tp: float, lot: float, confidence: int,
                    **kwargs) -> dict:
-        # BUGFIX (execution-parity wiring): ExecutionRouter.execute() reads
-        # decision_result.get("decision") for BUY/SELL — NOT "action". This
-        # key was wrong since the adapter was first written, which is why
-        # it was never wired anywhere: had it been wired with "action", the
-        # router's hard gate (`decision_result.get("decision") not in
-        # (BUY, SELL)`) would have silently treated every trade as
-        # "no action" and never executed a single order.
         decision_result = {
             "symbol": symbol, "decision": direction, "entry": entry_price,
             "sl": sl, "tp": tp, "lot": lot, "confidence": confidence,
@@ -73,19 +39,13 @@ class MT5ExecutionAdapter(ExecutionAdapter):
         return self._router.execute(decision_result)
 
     def get_balance(self) -> float:
-        # ExecutionRouter delegates balance to the live/demo MT5 account
-        # (see core/trader.py._sync_balance) — not tracked here directly.
         raise NotImplementedError(
-            "Live balance comes from AITrader._sync_balance() / MT5 "
-            "account_info(), not from the execution adapter. Call "
-            "trader.balance instead."
+            "Live balance comes from AITrader._sync_balance()/MT5 account_info()."
         )
 
 
 class HistoricalExecutionAdapter(ExecutionAdapter):
-    """Wraps backtest.broker_sim.BrokerSimulator — bar-based SL/TP touch
-    detection against historical OHLC. This is the ONLY execution-side
-    difference the architecture permits for backtest mode."""
+    """Legacy bar simulator adapter retained for existing backtests."""
 
     def __init__(self, broker_simulator):
         self._broker = broker_simulator
@@ -100,11 +60,44 @@ class HistoricalExecutionAdapter(ExecutionAdapter):
         )
 
     def check_exit(self, trade, high: float, low: float, close: float, bar_time):
-        """Historical-only: sweep the current bar's high/low against an
-        open trade's SL/TP. Live/Real never call this — MT5 itself detects
-        SL/TP touches server-side, which is why this method is NOT part
-        of the shared ExecutionAdapter contract, only on this subclass."""
         return self._broker.check_exit(trade, high, low, close, bar_time)
 
     def get_balance(self) -> float:
         return self._broker.get_balance()
+
+
+class CanonicalReplayExecutionAdapter:
+    """Named adapter for the live-mirroring execution boundary.
+
+    It deliberately does not subclass the legacy `ExecutionAdapter` because
+    the canonical replay contract requires the complete live `decision_result`
+    plus replay timestamps and explicit market/cost assumptions. This prevents
+    accidental use of the simplified legacy signature in research runs.
+    """
+
+    def __init__(self, canonical_adapter):
+        from backtest.canonical_execution import CanonicalHistoricalExecutionAdapter
+        if not isinstance(canonical_adapter, CanonicalHistoricalExecutionAdapter):
+            raise TypeError("canonical_adapter must be CanonicalHistoricalExecutionAdapter")
+        self._adapter = canonical_adapter
+
+    def open_trade(self, *, decision_result: dict, signal_time: str,
+                   entry_time: str, historical_bid: float,
+                   pnl_multiplier: float):
+        return self._adapter.open_trade(
+            decision_result=decision_result,
+            signal_time=signal_time,
+            entry_time=entry_time,
+            historical_bid=historical_bid,
+            pnl_multiplier=pnl_multiplier,
+        )
+
+    def close_trade(self, trade_id: int, *, exit_time: str, exit_price: float,
+                    reason: str):
+        return self._adapter.close_trade(
+            trade_id, exit_time=exit_time, exit_price=exit_price, reason=reason
+        )
+
+    @property
+    def open_positions(self):
+        return self._adapter.open_positions
