@@ -25,13 +25,19 @@ class LiveMirroringExecutionBridge:
 
     def execute_decision(self, *, decision_result: dict, signal_time: str,
                          entry_time: str, historical_bid: float,
+                         historical_ask: float | None = None,
                          pnl_multiplier: float) -> PositionLifecycle:
-        """Pass the complete live decision result through unchanged."""
+        """Pass the complete live decision result through unchanged.
+
+        Historical BID/ASK are explicit market inputs. No synthetic next-bar
+        entry is permitted at this boundary.
+        """
         return self.adapter.open_trade(
             decision_result=decision_result,
             signal_time=signal_time,
             entry_time=entry_time,
             historical_bid=historical_bid,
+            historical_ask=historical_ask,
             pnl_multiplier=pnl_multiplier,
         )
 
