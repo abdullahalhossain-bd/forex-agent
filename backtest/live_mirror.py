@@ -1,7 +1,9 @@
 """Strict Live-Trading-Mirror Backtest facade.
 
-This layer enforces historical-only inputs and process settings. Strategy
-thresholds are never optimized here.
+Historical inputs are validated and all external/current-data providers are
+forced into historical-safe mode. The actual replay is delegated to
+``backtest.live_mirror_engine`` so execution uses HistoricalExecutionRouter
+and CanonicalPositionState rather than the legacy adapter shortcut.
 """
 from __future__ import annotations
 from contextlib import contextmanager
@@ -36,71 +38,39 @@ def _neutral_sentiment(pair: str) -> dict:
     return {"pair": pair, "retail_long_pct": 50.0, "retail_source": "historical_unavailable_neutral", "fg_index": 50.0, "fg_label": "Neutral", "fg_source": "historical_unavailable_neutral", "currency_strengths": {}, "strength_source": "historical_unavailable_neutral", "dxy_trend": "NEUTRAL", "dxy_change_pct": 0.0, "dxy_source": "historical_unavailable_neutral", "source": "historical_unavailable_neutral"}
 
 @contextmanager
-def _strict_execution_boundary() -> Iterator[None]:
-    from core.execution_adapter import HistoricalExecutionAdapter
-    from core.data_provider import HistoricalMT5Provider
-    try:
-        from core.csv_data_provider import HistoricalCSVDataProvider
-        provider_classes = (HistoricalMT5Provider, HistoricalCSVDataProvider)
-    except Exception:
-        provider_classes = (HistoricalMT5Provider,)
-    original_advance = {cls: cls.advance_to for cls in provider_classes}
-    original_open = HistoricalExecutionAdapter.open_trade
-    state: dict[str, Any] = {"provider": None}
-    def _remembering_advance(self, bar_index: int):
-        state["provider"] = self
-        return original_advance[type(self)](self, bar_index)
-    def _strict_open(self, *, symbol: str, direction: str, entry_price: float, sl: float, tp: float, lot: float, confidence: int, bar_time=None, **kwargs):
-        provider = state.get("provider")
-        if provider is not None:
-            cursor = getattr(provider, "_cursor", None)
-            source_df = getattr(provider, "primary_df", None)
-            if source_df is None:
-                source_df = getattr(provider, "_df", None)
-            if cursor is not None and source_df is not None:
-                next_idx = int(cursor) + 1
-                if next_idx >= len(source_df): return None
-                entry_price = float(source_df.iloc[next_idx]["open"])
-        try:
-            from config import MAX_LOT
-            lot = min(float(lot), float(MAX_LOT))
-        except Exception:
-            lot = float(lot)
-        if lot <= 0: return None
-        return original_open(self, symbol=symbol, direction=direction, entry_price=entry_price, sl=sl, tp=tp, lot=lot, confidence=confidence, bar_time=bar_time, **kwargs)
-    for cls in provider_classes: cls.advance_to = _remembering_advance
-    HistoricalExecutionAdapter.open_trade = _strict_open
-    try: yield
-    finally:
-        for cls, method in original_advance.items(): cls.advance_to = method
-        HistoricalExecutionAdapter.open_trade = original_open
-
-@contextmanager
 def _strict_replay_environment() -> Iterator[None]:
     import config
     from core.constants import is_backtest_mode, set_backtest_mode
     old_test_mode = getattr(config, "TEST_MODE", False)
     old_simulation_mode = getattr(config, "SIMULATION_MODE", False)
     old_backtest_mode = is_backtest_mode()
-    config.TEST_MODE = False; config.SIMULATION_MODE = True; set_backtest_mode(True)
+    config.TEST_MODE = False
+    config.SIMULATION_MODE = True
+    set_backtest_mode(True)
     sentiment_cls = None; original_get_all = None
     try:
         from analysis.sentiment_data import SentimentDataProvider
         sentiment_cls = SentimentDataProvider; original_get_all = sentiment_cls.get_all
         sentiment_cls.get_all = lambda self, pair: _neutral_sentiment(pair)
-        with _strict_execution_boundary(): yield
+        yield
     finally:
         if sentiment_cls is not None and original_get_all is not None: sentiment_cls.get_all = original_get_all
-        config.TEST_MODE = old_test_mode; config.SIMULATION_MODE = old_simulation_mode; set_backtest_mode(old_backtest_mode)
+        config.TEST_MODE = old_test_mode
+        config.SIMULATION_MODE = old_simulation_mode
+        set_backtest_mode(old_backtest_mode)
 
 def run_live_mirror_backtest(*, symbol: str, df: pd.DataFrame, timeframe: str = "H1", starting_balance: float = 10000.0, warmup_bars: int = 300, max_open_trades: Optional[int] = None, max_hold_bars: int = 100, spread_pips: Optional[float] = None, commission_per_lot: Optional[float] = None, slippage_pips: Optional[float] = None, db_path: str = "backtest/live_mirror.db", verbose: bool = False, save_forensics: bool = True, forensics_path: Optional[str] = None, bypass_checks: Optional[set[str] | list[str]] = None) -> Any:
     validation = validate_historical_ohlcv(df)
     replay_df = df.copy(deep=True)
     replay_df.attrs["live_mirror_validation"] = {"rows": validation.rows, "start": str(validation.start), "end": str(validation.end), "timezone": "UTC"}
     from core.clock import ReplayClock
-    replay_clock = ReplayClock()
+    replay_clock = ReplayClock(validation.start.to_pydatetime())
     with _strict_replay_environment():
-        from backtest.unified_engine import run_unified_backtest
-        return run_unified_backtest(symbol=symbol, df=replay_df, timeframe=timeframe, starting_balance=starting_balance, warmup_bars=warmup_bars, max_open_trades=max_open_trades, max_hold_bars=max_hold_bars, spread_pips=spread_pips, commission_per_lot=commission_per_lot, slippage_pips=slippage_pips, db_path=db_path, verbose=verbose, save_forensics=save_forensics, forensics_path=forensics_path, bypass_checks=bypass_checks, clock=replay_clock)
+        from backtest.live_mirror_engine import run_live_mirror_engine
+        return run_live_mirror_engine(symbol=symbol, df=replay_df, timeframe=timeframe,
+            starting_balance=starting_balance, warmup_bars=warmup_bars,
+            max_open_trades=max_open_trades, max_hold_bars=max_hold_bars,
+            spread_pips=spread_pips, commission_per_lot=commission_per_lot,
+            slippage_pips=slippage_pips, clock=replay_clock, verbose=verbose)
 
 __all__ = ["ReplayValidation", "validate_historical_ohlcv", "run_live_mirror_backtest"]
