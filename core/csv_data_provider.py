@@ -216,12 +216,17 @@ class HistoricalCSVDataProvider(DataProvider):
         data_dir: Optional[Path] = None,
         mtf_timeframes: Optional[list[str]] = None,
         lookback_bars: int = 300,
+        clock=None,
     ):
         self._symbol = symbol.upper()
         self._primary_tf = _normalize_timeframe(primary_timeframe)
         self._lookback = lookback_bars
-        self._mtf_tfs = mtf_timeframes or ["H1", "H4", "D1"]
+        # SMCEngine's live contract always consumes H4 and M15. Keep those
+        # auxiliary series available even when the primary replay timeframe
+        # is H1/H4, so SMC does not silently collapse to score=0.
+        self._mtf_tfs = mtf_timeframes or ["M15", "H1", "H4", "D1"]
         self._data_dir = data_dir
+        self._clock = clock
 
         # Load primary TF CSV
         primary_path = _find_csv(self._symbol, self._primary_tf, data_dir)
@@ -334,6 +339,8 @@ class HistoricalCSVDataProvider(DataProvider):
         if bar_index >= len(self._primary_df):
             bar_index = len(self._primary_df) - 1
         self._cursor = bar_index
+        if self._clock is not None:
+            self._clock.advance(self._primary_df.index[self._cursor])
         # Point-in-time fence for DataFetcher backtest cache (SMC/MTF)
         try:
             from data.backtest_ohlcv_cache import set_asof
@@ -343,6 +350,8 @@ class HistoricalCSVDataProvider(DataProvider):
 
     def current_time(self):
         """Return the timestamp of the bar at the cursor."""
+        if self._clock is not None:
+            return self._clock.now()
         return self._primary_df.index[self._cursor]
 
     def get_market_out(self, symbol: str, timeframe: str) -> dict:

@@ -1238,6 +1238,12 @@ class AnalysisAgent:
             smc_result = smc.analyze()
             smc.print_summary(smc_result)
             smc_ctx    = smc.get_ai_context(smc_result)
+            if not smc_ctx or smc_ctx.get("data_available") is False:
+                log.warning(
+                    "[AnalysisAgent] SMC historical context unavailable for %s; "
+                    "SMC gate result is UNKNOWN, not a zero-quality signal",
+                    symbol,
+                )
         except Exception as e:
             log.warning(f"[AnalysisAgent] SMC Engine error: {e}")
 

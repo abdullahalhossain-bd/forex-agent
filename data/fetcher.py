@@ -543,6 +543,21 @@ class DataFetcher:
         )
         return "unavailable"
 
+    def fetch_ohlcv_mt5(self, symbol="EURUSD", timeframe="M15", limit=300):
+        """Fetch closed historical bars from MT5 without fallback sources."""
+        if self.source != "mt5":
+            raise RuntimeError(f"MT5 source unavailable; selected source is {self.source!r}")
+        normalized_symbol = self._normalize_symbol(symbol)
+        normalized_timeframe = self._normalize_timeframe(timeframe)
+        if normalized_timeframe is None:
+            raise ValueError(f"Unrecognized timeframe: {timeframe}")
+        result = self._fetch_mt5(normalized_symbol, normalized_timeframe, int(limit))
+        if result is None or result.empty:
+            raise RuntimeError(
+                f"MT5 returned no closed bars for {normalized_symbol} {normalized_timeframe}"
+            )
+        return result
+
     def fetch_ohlcv(self, symbol="EURUSD", timeframe="M15", limit=300, periods=None):
         """
         Fetch OHLCV data from the available source.
@@ -635,7 +650,7 @@ class DataFetcher:
         # attempt). Default: MT5 only. On MT5 failure, return None and let
         # the existing "no data this cycle" fail-safe path handle it
         # (skip, log, retry next cycle) instead of silently trading on
-        # corrupted external data. Set MT5_ONLY_MODE=false to restore the
+        normalized_symbol = self._normalize_symbol(symbol)
         # old multi-provider fallback.
         try:
             from config import MT5_ONLY_MODE

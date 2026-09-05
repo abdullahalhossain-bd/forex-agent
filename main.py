@@ -55,6 +55,7 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -645,6 +646,18 @@ Examples:
     parser.add_argument("--max-cycles", type=int, help="Max trading cycles (for testing)")
     parser.add_argument("--days", type=int, help="Backtest: use only the last N days of data")
     parser.add_argument("--bars", type=int, help="Backtest: use only the last N bars/candles of data")
+    parser.add_argument(
+        "--data-source",
+        choices=["csv", "mt5"],
+        default="csv",
+        help="Backtest historical source (default: csv; mt5 reads from the running terminal)",
+    )
+    parser.add_argument(
+        "--llm",
+        choices=["off", "ollama"],
+        default="off",
+        help="Backtest LLM mode (default: off; ollama uses the configured Ollama server)",
+    )
     parser.add_argument("--bypass-gates", help="Comma-separated TradePermission gates to bypass during backtest")
 
     args = parser.parse_args()
@@ -722,8 +735,18 @@ def _run_backtest(args):
       3. Account: isolated backtest DB, never the live trader.db
     """
     import pandas as pd
+    import config as config_module
     from backtest.unified_engine import run_unified_backtest
     from backtest.data_loader import HistoricalDataLoader
+
+    if args.llm == "ollama":
+        config_module.LLM_LOCAL = True
+        os.environ["LLM_LOCAL"] = "true"
+        logging.info(
+            "[Backtest] Ollama enabled: model=%s url=%s",
+            config_module.LLM_MODEL,
+            config_module.LLM_REMOTE_URL,
+        )
 
     # Resolve parameters
     pairs = [clean_symbol(p.strip()) for p in (args.pairs or ",").split(",") if p.strip()] or ["EURUSD"]
@@ -739,24 +762,51 @@ def _run_backtest(args):
 
     logging.info(f"[Backtest] Unified engine — pairs={pairs} timeframe={timeframe} balance=${balance}")
 
-    loader = HistoricalDataLoader()
+    loader = HistoricalDataLoader() if args.data_source == "csv" else None
     all_results = {}
 
     for symbol in pairs:
         csv_path = PROJECT_ROOT / "data" / f"{symbol}_{timeframe}.csv"
-        if not csv_path.exists():
+        if args.data_source == "csv" and not csv_path.exists():
             logging.error(f"[Backtest] Data file not found: {csv_path}")
             print(f"  ERROR: {csv_path} not found. Available data files in data/")
             continue
 
         print(f"\n{'=' * 60}")
         print(f"  BACKTEST: {symbol} {timeframe}")
-        print(f"  Data: {csv_path}")
+        print(f"  Data: {'MT5 terminal' if args.data_source == 'mt5' else csv_path}")
         print(f"  Balance: ${balance}")
         print(f"  Engine: unified (shares live decision core)")
         print(f"{'=' * 60}")
 
-        df = loader.load_csv(file_path=str(csv_path), pair=symbol, timeframe=timeframe)
+        if args.data_source == "mt5":
+            try:
+                from data.fetcher import DataFetcher
+                import MetaTrader5  # noqa: F401 - verifies the terminal package exists
+
+                requested_bars = args.bars or 300
+                fetcher = DataFetcher()
+                df = fetcher.fetch_ohlcv_mt5(
+                    symbol=symbol, timeframe=timeframe, limit=requested_bars,
+                )
+                # Live SMCEngine consumes H4 and M15 regardless of the
+                # primary replay timeframe. Register genuine terminal M15
+                # history; never synthesize lower-timeframe bars from H1.
+                if timeframe != "M15":
+                    from data.backtest_ohlcv_cache import register_series
+                    m15_df = fetcher.fetch_ohlcv_mt5(
+                        symbol=symbol, timeframe="M15",
+                        limit=max(requested_bars * 4, 600),
+                    )
+                    register_series(symbol, "M15", m15_df)
+                df.attrs["pair"] = symbol
+                df.attrs["timeframe"] = timeframe
+            except Exception as exc:
+                logging.error(f"[Backtest] MT5 historical load failed: {exc}")
+                print(f"  ERROR: Could not read {symbol} {timeframe} from MT5 terminal: {exc}")
+                continue
+        else:
+            df = loader.load_csv(file_path=str(csv_path), pair=symbol, timeframe=timeframe)
         if df is None or len(df) == 0:
             logging.error(f"[Backtest] Failed to load {csv_path}")
             continue

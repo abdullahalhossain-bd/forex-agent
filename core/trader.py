@@ -165,6 +165,7 @@ class AITrader:
         registry: "Optional[ServiceRegistry]" = None,
         paper_trader: "Optional[PaperTrader]" = None,
         db: "Optional[TraderDB]" = None,
+        clock=None,
     ):
         # Bug #22 fix: default to config.INITIAL_BALANCE instead of 10000.0
         if balance is None:
@@ -180,6 +181,8 @@ class AITrader:
         self.timeframe = timeframe
         self.notifier = notifier
         self.execution_mode = (execution_mode or EXECUTION_MODE).lower()
+        from core.clock import LiveClock
+        self.clock = clock or LiveClock()
         self._last_decision_candle = None
         # BUG FIX: the circuit-breaker block message used to be logged at
         # WARNING level on every single cycle it stayed tripped, with no
@@ -915,7 +918,7 @@ class AITrader:
         if last is None:
             return False, ""
         try:
-            elapsed_min = (datetime.now(timezone.utc) - last).total_seconds() / 60.0
+            elapsed_min = (self.clock.now() - last).total_seconds() / 60.0
         except Exception:
             return False, ""
         if elapsed_min < mins:
@@ -3970,7 +3973,7 @@ class AITrader:
             if _sz_dir in ("BUY", "SELL") and float(trade.get("pnl", 0) or 0) < 0:
                 if not hasattr(self, "_sz_last_loss_ts"):
                     self._sz_last_loss_ts = {}
-                self._sz_last_loss_ts[_sz_dir] = datetime.now(timezone.utc)
+                    self._sz_last_loss_ts[_sz_dir] = self.clock.now()
 
             # ── Audit fix (Phase 9 wiring): CostTracker.record_trade(). ──
             # monitoring/cost_analysis.py::CostTracker is registered as the

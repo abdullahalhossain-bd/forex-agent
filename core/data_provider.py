@@ -97,20 +97,26 @@ class HistoricalMT5Provider(DataProvider):
     H1 vs live-fetched 4H/1D bars).
     """
 
-    def __init__(self, df, symbol: str, timeframe: str):
+    def __init__(self, df, symbol: str, timeframe: str, clock=None):
         self._df = df
         self._symbol = symbol
         self._timeframe = timeframe
+        self._clock = clock
         self._cursor = 0  # index of the last closed bar included
-        # Iteration-3: register M15 + resampled H1/H4 for SMCEngine via
-        # DataFetcher backtest cache (same path live uses for multi-TF).
+        # Register the live SMC timeframes through the same backtest cache.
+        # An H1/H4 primary series cannot manufacture M15 bars; callers must
+        # provide a genuine M15 historical series for exact SMC parity.
         try:
-            from data.backtest_ohlcv_cache import register_from_m15, register_series
+            from data.backtest_ohlcv_cache import register_series, resample_ohlcv
             tf_u = (timeframe or "").upper().replace(" ", "")
+            register_series(symbol, timeframe, df)
+            if tf_u in ("H1", "1H", "60M"):
+                h4_df = resample_ohlcv(df, "H4")
+                if not h4_df.empty:
+                    register_series(symbol, "H4", h4_df)
             if tf_u in ("M15", "15M", "15"):
+                from data.backtest_ohlcv_cache import register_from_m15
                 register_from_m15(symbol, df, also=("H1", "H4"))
-            else:
-                register_series(symbol, timeframe, df)
         except Exception as e:
             log.debug(f"[HistoricalMT5Provider] OHLCV cache register skipped: {e}")
 
@@ -120,6 +126,8 @@ class HistoricalMT5Provider(DataProvider):
         against look-ahead misuse by the caller, only against building
         market_out from bars beyond the cursor."""
         self._cursor = bar_index
+        if self._clock is not None and self._df is not None and len(self._df):
+            self._clock.advance(self._df.index[self._cursor])
         try:
             from data.backtest_ohlcv_cache import set_asof
             if self._df is not None and 0 <= self._cursor < len(self._df):
@@ -128,6 +136,8 @@ class HistoricalMT5Provider(DataProvider):
             pass
 
     def current_time(self):
+        if self._clock is not None:
+            return self._clock.now()
         return self._df.index[self._cursor]
 
     def get_market_out(self, symbol: str, timeframe: str) -> dict:

@@ -61,15 +61,11 @@ class AIAnalyst:
         answer. Kept in sync with agents/master_analyst.py's helper."""
         return "gpt-oss" in (model_name or "").lower()
 
-    # 2026-07-25: Ollama has been COMPLETELY REMOVED from this layer.
-    # See analyze() docstring for the new provider cascade order
-    # (Groq → Gemini → OpenRouter). These OLLAMA_* class attributes
-    # are kept ONLY as no-op stubs so any external code that reads
-    # them (e.g. dashboards, status checks) doesn't AttributeError.
-    # They have NO effect on which providers are tried.
+    # Ollama is opt-in through the provider-neutral gateway. The default
+    # remains the configured legacy provider cascade.
     OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     OLLAMA_MODEL   = os.getenv("OLLAMA_ANALYST_MODEL") or os.getenv("OLLAMA_MODEL") or "qwen3:4b"
-    OLLAMA_ENABLED = False  # HARDCODED False — Ollama no longer in the cascade.
+    OLLAMA_ENABLED = os.getenv("LLM_LOCAL", "false").strip().lower() in ("1", "true", "yes", "on")
 
     # Rough per-1K-token USD prices used only for cost *estimation* /
     # observability, not billing. Overridable via env if pricing changes.
@@ -98,9 +94,10 @@ class AIAnalyst:
         # entirely when backtesting; the None clients are never touched
         # because analyze() returns before reaching them.
         from core.constants import is_backtest_mode
-        if is_backtest_mode():
+        from core.llm_gateway import local_llm_enabled
+        if is_backtest_mode() and not local_llm_enabled():
             self._key_manager = None
-        elif __import__("core.llm_gateway", fromlist=["local_llm_enabled"]).local_llm_enabled():
+        elif local_llm_enabled():
             from core.llm_gateway import backend_info
             self._key_manager = None
             log.info("[AIAnalyst] %s", backend_info())
@@ -325,10 +322,11 @@ class AIAnalyst:
         # results deterministic and reproducible. LLM is a confluence layer,
         # not a core signal generator.
         from core.constants import is_backtest_mode
-        if is_backtest_mode():
+        from core.llm_gateway import local_llm_enabled
+        if is_backtest_mode() and not local_llm_enabled():
             return self._fallback_result("Backtest mode — LLM bypassed, using rule-based signal", rule_signal=signal)
 
-        from core.llm_gateway import LLMGatewayError, call_remote_ollama, local_llm_enabled
+        from core.llm_gateway import LLMGatewayError, call_remote_ollama
         if local_llm_enabled():
             try:
                 raw = call_remote_ollama([{"role": "user", "content": prompt}])

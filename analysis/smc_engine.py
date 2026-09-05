@@ -523,6 +523,7 @@ class SMCEngine:
             "confluence_score": 0, "confluence_factors": {},
             "direction": "NEUTRAL", "grade": "INVALID", "signal": "WAIT",
             "analysis": reason,
+            "data_available": False,
         }
 
     # ═══════════════════════════════════════════════════════
@@ -552,6 +553,7 @@ class SMCEngine:
             ),
             "smc_h4_bos":      h4.get("bos", {}).get("type", "NONE"),
             "smc_h4_choch":    h4.get("choch", {}).get("type", "NONE"),
+            "data_available":  result.get("data_available", True),
         }
 
     # ═══════════════════════════════════════════════════════

@@ -497,7 +497,7 @@ Before deciding BUY/SELL/WAIT, walk through these layers IN ORDER:
         # not a core signal generator — rule engines (Stop Hunt, ICT/AMD,
         # Price Action, Liquidity, CCI) are already fully implemented.
         from core.constants import is_backtest_mode
-        if is_backtest_mode():
+        if is_backtest_mode() and not local_llm_enabled():
             return self._fallback_result(signal, "Backtest mode — LLM bypassed, using rule-based signal")
 
         try:

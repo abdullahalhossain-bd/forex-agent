@@ -175,7 +175,7 @@ def _record_forensic_exit(trade_forensics: dict, trade_id, df: "pd.DataFrame",
 
 
 def _make_backtest_trader(symbol: str, timeframe: str, starting_balance: float,
-                           db_path: str):
+                           db_path: str, clock=None):
     """Construct the SAME AITrader class Demo/Real use, wired to isolated
     backtest state (its own PaperTrader + TraderDB file — never the live
     database/trader.db) so a backtest run cannot contaminate live trade
@@ -196,6 +196,7 @@ def _make_backtest_trader(symbol: str, timeframe: str, starting_balance: float,
         execution_mode="backtest",
         paper_trader=paper,
         db=db,
+        clock=clock,
     )
     return trader
 
@@ -216,6 +217,7 @@ def run_unified_backtest(
     save_forensics: bool = True,
     forensics_path: Optional[str] = None,
     bypass_checks: set[str] | list[str] | None = None,
+    clock=None,
 ) -> UnifiedBacktestResult:
     """Replay `df` bar-by-bar through the SAME decision core Demo/Real use.
 
@@ -242,6 +244,7 @@ def run_unified_backtest(
     from backtest.broker_sim import BrokerSimulator, DEFAULT_SPREAD_PIPS
     from backtest.metrics import calculate_metrics
     from core.data_provider import HistoricalMT5Provider
+    from core.clock import ReplayClock
     from core.execution_adapter import HistoricalExecutionAdapter
     from core.constants import (
         set_backtest_mode, reset_backtest_memory,
@@ -264,6 +267,7 @@ def run_unified_backtest(
     # Resolve cost defaults from shared constants (single source of truth)
     _commission = commission_per_lot if commission_per_lot is not None else _DEF_COMMISSION
     _slippage = slippage_pips if slippage_pips is not None else _DEF_SLIPPAGE
+    replay_clock = clock or ReplayClock()
 
     # Phase 2.5: tell every external-data module (FRED, macro data, news,
     # economic calendar, ...) this is an offline historical replay, not a
@@ -290,7 +294,9 @@ def run_unified_backtest(
     _np.random.seed(42)
 
     try:
-        trader = _make_backtest_trader(symbol, timeframe, starting_balance, db_path)
+        trader = _make_backtest_trader(
+            symbol, timeframe, starting_balance, db_path, clock=replay_clock,
+        )
     except Exception as e:
         log.error(f"[unified_engine] Could not construct backtest AITrader: {e}", exc_info=True)
         return UnifiedBacktestResult(symbol=symbol, timeframe=timeframe, bars=len(df), error=str(e))
@@ -315,12 +321,13 @@ def run_unified_backtest(
         from core.provider_factory import make_backtest_provider
         provider = make_backtest_provider(
             symbol=symbol, timeframe=timeframe, df=df, prefer="auto",
+            clock=replay_clock,
         )
         log.info(f"[unified_engine] Provider: {type(provider).__name__}")
     except Exception as e_provider:
         log.warning(f"[unified_engine] Provider factory failed ({e_provider}) — "
                     f"falling back to HistoricalMT5Provider(df)")
-        provider = HistoricalMT5Provider(df, symbol, timeframe)
+        provider = HistoricalMT5Provider(df, symbol, timeframe, clock=replay_clock)
 
     # ── PARITY (CSV provider support): when using HistoricalCSVProvider,
     # the provider has its OWN primary_df loaded from CSV. Use that as the
@@ -399,6 +406,7 @@ def run_unified_backtest(
             continue
 
         provider.advance_to(i)
+        current_time = replay_clock.now()
         try:
             market_out = provider.get_market_out(symbol, timeframe)
         except Exception as e:
@@ -411,7 +419,7 @@ def run_unified_backtest(
             continue
 
         try:
-            session_ctx = {"current_session": "BACKTEST", "gmt_time": str(current_time),
+            session_ctx = {"current_session": replay_clock.current_session(), "gmt_time": str(current_time),
                             "session_strategy": "n/a"}
             core = trader.evaluate_decision_core(market_out, session_ctx, bypass_checks=bypass_checks)
         except Exception as e:

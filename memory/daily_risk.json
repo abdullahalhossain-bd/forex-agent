@@ -1,31 +1,8 @@
 {
-  "date": "2026-09-04",
-  "total_loss_usd": 22.5,
-  "total_win_usd": 0.0,
-  "open_trades": 1,
-  "open_pairs": [
-    "AUDSGD"
-  ],
-  "trades": [
-    {
-      "symbol": "GBPNZDm",
-      "pnl_usd": -11.25,
-      "time": "2026-09-03T22:00:28.075831+00:00"
-    },
-    {
-      "symbol": "GBPNZDm",
-      "pnl_usd": -11.25,
-      "time": "2026-09-03T22:00:28.098872+00:00"
-    },
-    {
-      "symbol": "AUDSGDm",
-      "pnl_usd": 0.0,
-      "time": "2026-09-04T15:15:01.587578+00:00"
-    },
-    {
-      "symbol": "AUDSGDm",
-      "pnl_usd": 0.0,
-      "time": "2026-09-04T15:15:01.605826+00:00"
-    }
-  ]
+  "date": "2026-09-05",
+  "total_loss_usd": 0,
+  "total_win_usd": 0,
+  "open_trades": 0,
+  "open_pairs": [],
+  "trades": []
 }
