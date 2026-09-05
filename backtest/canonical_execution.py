@@ -1,9 +1,4 @@
-"""Canonical historical execution adapter for live-mirroring replay.
-
-The live ExecutionRouter remains the source-of-truth order boundary. Replay
-replaces only the broker/MT5 side with this deterministic adapter. Decision,
-risk, permission, lot, SL and TP are supplied by the live pipeline unchanged.
-"""
+"""Canonical historical execution adapter for live-mirroring replay."""
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
@@ -67,18 +62,24 @@ def ensure_execution_order(signal_time, entry_time):
 
 
 def compute_fill(direction: str, requested_price: float, spread_pips: float,
-                pip_size: float, slippage_pips: float = 0.0) -> float:
-    """Compute deterministic fill from a historical BID."""
+                pip_size: float, slippage_pips: float = 0.0,
+                historical_ask: Optional[float] = None) -> float:
+    """Compute deterministic executable fill from historical bid/ask data.
+
+    BUY uses historical ASK when available. If only BID plus a known spread is
+    available, ASK is reconstructed as BID + full spread. SELL uses BID.
+    Slippage is applied in the adverse direction. No random component exists.
+    """
     if pip_size <= 0:
         raise ValueError("pip_size must be positive")
     if spread_pips < 0 or slippage_pips < 0:
         raise ValueError("spread/slippage cannot be negative")
-    half = spread_pips * pip_size / 2.0
     slip = slippage_pips * pip_size
     if direction.upper() == "BUY":
-        return requested_price + half + slip
+        ask = float(historical_ask) if historical_ask is not None else float(requested_price) + spread_pips * pip_size
+        return ask + slip
     if direction.upper() == "SELL":
-        return requested_price - slip
+        return float(requested_price) - slip
     raise ValueError(f"Unsupported direction: {direction}")
 
 
@@ -121,7 +122,7 @@ def mark_close(position: PositionLifecycle, exit_time, exit_price: float,
 
 
 class CanonicalHistoricalExecutionAdapter:
-    """Drop-in replay backend at the live ExecutionRouter execution boundary."""
+    """Broker-facing replay backend at the live execution boundary."""
 
     def __init__(self, *, pip_size: float, fill_policy: FillPolicy):
         if pip_size <= 0:
@@ -133,8 +134,8 @@ class CanonicalHistoricalExecutionAdapter:
 
     def open_trade(self, *, decision_result: dict, signal_time: str,
                    entry_time: str, historical_bid: float,
-                   pnl_multiplier: float) -> PositionLifecycle:
-        """Open using the exact live decision payload; only execution differs."""
+                   pnl_multiplier: float,
+                   historical_ask: Optional[float] = None) -> PositionLifecycle:
         ensure_execution_order(signal_time, entry_time)
         direction = str(decision_result.get("decision", "")).upper()
         if direction not in {"BUY", "SELL"}:
@@ -148,10 +149,11 @@ class CanonicalHistoricalExecutionAdapter:
         if lot <= 0:
             raise ValueError("EXECUTION_REJECTED: lot must be positive")
         requested_entry = float(decision_result["entry"])
-        # historical_bid is the authoritative market observation; requested_entry
-        # remains the live pipeline's requested price for parity auditing.
-        fill = compute_fill(direction, float(historical_bid), self.fill_policy.spread_pips,
-                            self.pip_size, self.fill_policy.slippage_pips)
+        fill = compute_fill(
+            direction, float(historical_bid), self.fill_policy.spread_pips,
+            self.pip_size, self.fill_policy.slippage_pips,
+            historical_ask=historical_ask,
+        )
         trade = PositionLifecycle(
             trade_id=self._next_trade_id,
             symbol=str(decision_result.get("symbol", "")), direction=direction,
