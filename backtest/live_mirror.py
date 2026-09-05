@@ -4,13 +4,10 @@ This layer enforces historical-only inputs and process settings. Strategy
 thresholds are never optimized here.
 """
 from __future__ import annotations
-
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Optional
-
 import pandas as pd
-
 
 @dataclass(frozen=True)
 class ReplayValidation:
@@ -18,51 +15,28 @@ class ReplayValidation:
     start: pd.Timestamp
     end: pd.Timestamp
 
-
 def validate_historical_ohlcv(df: pd.DataFrame, *, min_rows: int = 2) -> ReplayValidation:
-    if not isinstance(df, pd.DataFrame):
-        raise TypeError("Historical replay requires a pandas DataFrame")
-    if len(df) < min_rows:
-        raise ValueError(f"Historical replay requires at least {min_rows} rows; got {len(df)}")
-    required = {"open", "high", "low", "close"}
-    missing = required.difference(df.columns)
-    if missing:
-        raise ValueError(f"Historical replay missing OHLC columns: {sorted(missing)}")
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise TypeError("Historical replay index must be a pandas DatetimeIndex")
-    if df.index.tz is None:
-        raise ValueError("Historical replay timestamps must be timezone-aware UTC")
-    if str(df.index.tz) not in ("UTC", "UTC+00:00"):
-        raise ValueError(f"Historical replay index must be UTC; got {df.index.tz}")
-    if not df.index.is_monotonic_increasing:
-        raise ValueError("Historical replay timestamps must be monotonically increasing")
-    if df.index.has_duplicates:
-        raise ValueError("Historical replay contains duplicate timestamps")
+    if not isinstance(df, pd.DataFrame): raise TypeError("Historical replay requires a pandas DataFrame")
+    if len(df) < min_rows: raise ValueError(f"Historical replay requires at least {min_rows} rows; got {len(df)}")
+    missing = {"open", "high", "low", "close"}.difference(df.columns)
+    if missing: raise ValueError(f"Historical replay missing OHLC columns: {sorted(missing)}")
+    if not isinstance(df.index, pd.DatetimeIndex): raise TypeError("Historical replay index must be a pandas DatetimeIndex")
+    if df.index.tz is None: raise ValueError("Historical replay timestamps must be timezone-aware UTC")
+    if str(df.index.tz) not in ("UTC", "UTC+00:00"): raise ValueError(f"Historical replay index must be UTC; got {df.index.tz}")
+    if not df.index.is_monotonic_increasing: raise ValueError("Historical replay timestamps must be monotonically increasing")
+    if df.index.has_duplicates: raise ValueError("Historical replay contains duplicate timestamps")
     numeric = df[["open", "high", "low", "close"]].apply(pd.to_numeric, errors="coerce")
-    if numeric.isna().any().any():
-        raise ValueError("Historical replay contains non-numeric/NaN OHLC values")
-    if (numeric <= 0).any().any():
-        raise ValueError("Historical replay contains non-positive OHLC values")
-    if (numeric["high"] < numeric[["open", "close"]].max(axis=1)).any():
-        raise ValueError("Historical replay contains high below open/close")
-    if (numeric["low"] > numeric[["open", "close"]].min(axis=1)).any():
-        raise ValueError("Historical replay contains low above open/close")
+    if numeric.isna().any().any(): raise ValueError("Historical replay contains non-numeric/NaN OHLC values")
+    if (numeric <= 0).any().any(): raise ValueError("Historical replay contains non-positive OHLC values")
+    if (numeric["high"] < numeric[["open", "close"]].max(axis=1)).any(): raise ValueError("Historical replay contains high below open/close")
+    if (numeric["low"] > numeric[["open", "close"]].min(axis=1)).any(): raise ValueError("Historical replay contains low above open/close")
     return ReplayValidation(len(df), df.index[0], df.index[-1])
 
-
 def _neutral_sentiment(pair: str) -> dict:
-    return {
-        "pair": pair, "retail_long_pct": 50.0, "retail_source": "historical_unavailable_neutral",
-        "fg_index": 50.0, "fg_label": "Neutral", "fg_source": "historical_unavailable_neutral",
-        "currency_strengths": {}, "strength_source": "historical_unavailable_neutral",
-        "dxy_trend": "NEUTRAL", "dxy_change_pct": 0.0,
-        "dxy_source": "historical_unavailable_neutral", "source": "historical_unavailable_neutral",
-    }
-
+    return {"pair": pair, "retail_long_pct": 50.0, "retail_source": "historical_unavailable_neutral", "fg_index": 50.0, "fg_label": "Neutral", "fg_source": "historical_unavailable_neutral", "currency_strengths": {}, "strength_source": "historical_unavailable_neutral", "dxy_trend": "NEUTRAL", "dxy_change_pct": 0.0, "dxy_source": "historical_unavailable_neutral", "source": "historical_unavailable_neutral"}
 
 @contextmanager
 def _strict_execution_boundary() -> Iterator[None]:
-    """Keep the existing adapter boundary strict: no same-bar market fill."""
     from core.execution_adapter import HistoricalExecutionAdapter
     from core.data_provider import HistoricalMT5Provider
     try:
@@ -73,44 +47,33 @@ def _strict_execution_boundary() -> Iterator[None]:
     original_advance = {cls: cls.advance_to for cls in provider_classes}
     original_open = HistoricalExecutionAdapter.open_trade
     state: dict[str, Any] = {"provider": None}
-
     def _remembering_advance(self, bar_index: int):
         state["provider"] = self
         return original_advance[type(self)](self, bar_index)
-
-    def _strict_open(self, *, symbol: str, direction: str, entry_price: float,
-                     sl: float, tp: float, lot: float, confidence: int,
-                     bar_time=None, **kwargs):
+    def _strict_open(self, *, symbol: str, direction: str, entry_price: float, sl: float, tp: float, lot: float, confidence: int, bar_time=None, **kwargs):
         provider = state.get("provider")
         if provider is not None:
             cursor = getattr(provider, "_cursor", None)
-            source_df = getattr(provider, "primary_df", None) or getattr(provider, "_df", None)
+            source_df = getattr(provider, "primary_df", None)
+            if source_df is None:
+                source_df = getattr(provider, "_df", None)
             if cursor is not None and source_df is not None:
                 next_idx = int(cursor) + 1
-                if next_idx >= len(source_df):
-                    return None
+                if next_idx >= len(source_df): return None
                 entry_price = float(source_df.iloc[next_idx]["open"])
         try:
             from config import MAX_LOT
             lot = min(float(lot), float(MAX_LOT))
         except Exception:
             lot = float(lot)
-        if lot <= 0:
-            return None
-        return original_open(self, symbol=symbol, direction=direction,
-                             entry_price=entry_price, sl=sl, tp=tp, lot=lot,
-                             confidence=confidence, bar_time=bar_time, **kwargs)
-
-    for cls in provider_classes:
-        cls.advance_to = _remembering_advance
+        if lot <= 0: return None
+        return original_open(self, symbol=symbol, direction=direction, entry_price=entry_price, sl=sl, tp=tp, lot=lot, confidence=confidence, bar_time=bar_time, **kwargs)
+    for cls in provider_classes: cls.advance_to = _remembering_advance
     HistoricalExecutionAdapter.open_trade = _strict_open
-    try:
-        yield
+    try: yield
     finally:
-        for cls, method in original_advance.items():
-            cls.advance_to = method
+        for cls, method in original_advance.items(): cls.advance_to = method
         HistoricalExecutionAdapter.open_trade = original_open
-
 
 @contextmanager
 def _strict_replay_environment() -> Iterator[None]:
@@ -119,54 +82,25 @@ def _strict_replay_environment() -> Iterator[None]:
     old_test_mode = getattr(config, "TEST_MODE", False)
     old_simulation_mode = getattr(config, "SIMULATION_MODE", False)
     old_backtest_mode = is_backtest_mode()
-    config.TEST_MODE = False
-    config.SIMULATION_MODE = True
-    set_backtest_mode(True)
-    sentiment_cls = None
-    original_get_all = None
+    config.TEST_MODE = False; config.SIMULATION_MODE = True; set_backtest_mode(True)
+    sentiment_cls = None; original_get_all = None
     try:
         from analysis.sentiment_data import SentimentDataProvider
-        sentiment_cls = SentimentDataProvider
-        original_get_all = sentiment_cls.get_all
+        sentiment_cls = SentimentDataProvider; original_get_all = sentiment_cls.get_all
         sentiment_cls.get_all = lambda self, pair: _neutral_sentiment(pair)
-        with _strict_execution_boundary():
-            yield
+        with _strict_execution_boundary(): yield
     finally:
-        if sentiment_cls is not None and original_get_all is not None:
-            sentiment_cls.get_all = original_get_all
-        config.TEST_MODE = old_test_mode
-        config.SIMULATION_MODE = old_simulation_mode
-        set_backtest_mode(old_backtest_mode)
+        if sentiment_cls is not None and original_get_all is not None: sentiment_cls.get_all = original_get_all
+        config.TEST_MODE = old_test_mode; config.SIMULATION_MODE = old_simulation_mode; set_backtest_mode(old_backtest_mode)
 
-
-def run_live_mirror_backtest(*, symbol: str, df: pd.DataFrame, timeframe: str = "H1",
-                             starting_balance: float = 10000.0, warmup_bars: int = 300,
-                             max_open_trades: Optional[int] = None, max_hold_bars: int = 100,
-                             spread_pips: Optional[float] = None,
-                             commission_per_lot: Optional[float] = None,
-                             slippage_pips: Optional[float] = None,
-                             db_path: str = "backtest/live_mirror.db", verbose: bool = False,
-                             save_forensics: bool = True, forensics_path: Optional[str] = None,
-                             bypass_checks: Optional[set[str] | list[str]] = None) -> Any:
+def run_live_mirror_backtest(*, symbol: str, df: pd.DataFrame, timeframe: str = "H1", starting_balance: float = 10000.0, warmup_bars: int = 300, max_open_trades: Optional[int] = None, max_hold_bars: int = 100, spread_pips: Optional[float] = None, commission_per_lot: Optional[float] = None, slippage_pips: Optional[float] = None, db_path: str = "backtest/live_mirror.db", verbose: bool = False, save_forensics: bool = True, forensics_path: Optional[str] = None, bypass_checks: Optional[set[str] | list[str]] = None) -> Any:
     validation = validate_historical_ohlcv(df)
     replay_df = df.copy(deep=True)
-    replay_df.attrs["live_mirror_validation"] = {
-        "rows": validation.rows, "start": str(validation.start),
-        "end": str(validation.end), "timezone": "UTC",
-    }
+    replay_df.attrs["live_mirror_validation"] = {"rows": validation.rows, "start": str(validation.start), "end": str(validation.end), "timezone": "UTC"}
     from core.clock import ReplayClock
     replay_clock = ReplayClock()
     with _strict_replay_environment():
         from backtest.unified_engine import run_unified_backtest
-        return run_unified_backtest(
-            symbol=symbol, df=replay_df, timeframe=timeframe,
-            starting_balance=starting_balance, warmup_bars=warmup_bars,
-            max_open_trades=max_open_trades, max_hold_bars=max_hold_bars,
-            spread_pips=spread_pips, commission_per_lot=commission_per_lot,
-            slippage_pips=slippage_pips, db_path=db_path, verbose=verbose,
-            save_forensics=save_forensics, forensics_path=forensics_path,
-            bypass_checks=bypass_checks, clock=replay_clock,
-        )
-
+        return run_unified_backtest(symbol=symbol, df=replay_df, timeframe=timeframe, starting_balance=starting_balance, warmup_bars=warmup_bars, max_open_trades=max_open_trades, max_hold_bars=max_hold_bars, spread_pips=spread_pips, commission_per_lot=commission_per_lot, slippage_pips=slippage_pips, db_path=db_path, verbose=verbose, save_forensics=save_forensics, forensics_path=forensics_path, bypass_checks=bypass_checks, clock=replay_clock)
 
 __all__ = ["ReplayValidation", "validate_historical_ohlcv", "run_live_mirror_backtest"]
