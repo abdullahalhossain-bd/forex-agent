@@ -1,31 +1,28 @@
 """
 backtest/live_mirror.py — Strict Live-Trading-Mirror Backtest facade.
 
-This module sits in front of backtest.unified_engine and closes the
-remaining environment/data correctness gaps that can otherwise make a
-historical replay look more optimistic than the live pipeline:
+This facade hardens the existing shared-kernel replay without changing
+strategy thresholds:
 
-* TEST_MODE is forcibly disabled for replay. A development TEST_MODE must
-  never force-approve a rejected PositionSizer result in a historical run.
-* live sentiment providers are replaced with a deterministic neutral source
-  while replaying. Today's retail/F&G/DXY data must never be attached to a
-  historical candle. Real historical sentiment can be injected later via
-  a provider; neutral is safer than time-travelled data.
-* the global backtest-mode flag is restored after the run, even on failure.
-  A backtest must not leave the process in historical mode and silently
-  disable live services on the next run.
-* historical OHLC input is validated before any agent is run: UTC-aware,
-  strictly ordered, unique timestamps and valid OHLC geometry.
+* TEST_MODE is forcibly disabled for replay, so development force-approval
+  can never turn a PositionSizer rejection into a synthetic trade.
+* live sentiment providers are replaced with deterministic neutral output
+  when historical sentiment is unavailable. Today's retail/F&G/DXY values
+  must never be attached to an old candle.
+* the global backtest-mode flag is restored after the run, including errors.
+* historical OHLC input is validated before agents run.
+* the final simulated market fill is forced to the NEXT bar OPEN. The live
+  market-order path receives the broker's actual fill; a signal-bar structural
+  entry is not itself a historical fill.
+* the historical adapter applies the same MAX_LOT execution cap before the
+  simulator receives the order.
 
-The underlying decision kernel remains backtest.unified_engine's real
-AITrader.evaluate_decision_core path. This facade does not optimize or
-change strategy thresholds.
+The underlying decision kernel remains AITrader.evaluate_decision_core().
+This module does not optimize thresholds.
 
-IMPORTANT: the facade deliberately does NOT pretend to repair the remaining
-execution-boundary gaps inside unified_engine (notably its current preference
-for dec_out.entry over next-bar-open and its direct HistoricalExecutionAdapter
-path instead of invoking ExecutionRouter). Those are reported separately so
-we never hide a parity defect behind a wrapper.
+A separate P0 remains for replacing the adapter boundary with a fully shared
+historical ExecutionRouter implementation (including pending pullback-limit
+orders and complete router telemetry). This facade does not hide that gap.
 """
 from __future__ import annotations
 
@@ -44,12 +41,7 @@ class ReplayValidation:
 
 
 def validate_historical_ohlcv(df: pd.DataFrame, *, min_rows: int = 2) -> ReplayValidation:
-    """Validate immutable historical input before any agent is run.
-
-    The validator deliberately rejects ambiguous timestamps and malformed
-    candles instead of repairing them silently. Silent repair can change
-    signal timing and invalidate a parity claim.
-    """
+    """Reject malformed/ambiguous historical input instead of repairing it."""
     if not isinstance(df, pd.DataFrame):
         raise TypeError("Historical replay requires a pandas DataFrame")
     if len(df) < min_rows:
@@ -103,6 +95,83 @@ def _neutral_sentiment(pair: str) -> dict:
 
 
 @contextmanager
+def _strict_execution_boundary() -> Iterator[None]:
+    """Patch the existing historical adapter with the live market-fill rule.
+
+    `unified_engine` already owns the lifecycle loop. Its adapter is therefore
+    the narrowest safe boundary for enforcing actual historical market fills
+    without duplicating the decision kernel.
+    """
+    from core.execution_adapter import HistoricalExecutionAdapter
+    from core.data_provider import HistoricalMT5Provider
+
+    try:
+        from core.csv_data_provider import HistoricalCSVDataProvider
+        provider_classes = (HistoricalMT5Provider, HistoricalCSVDataProvider)
+    except Exception:
+        provider_classes = (HistoricalMT5Provider,)
+
+    original_advance = {cls: cls.advance_to for cls in provider_classes}
+    original_open = HistoricalExecutionAdapter.open_trade
+    state: dict[str, Any] = {"provider": None}
+
+    def _remembering_advance(self, bar_index: int):
+        state["provider"] = self
+        return original_advance[type(self)](self, bar_index)
+
+    def _strict_open(self, *, symbol: str, direction: str, entry_price: float,
+                     sl: float, tp: float, lot: float, confidence: int,
+                     bar_time=None, **kwargs):
+        provider = state.get("provider")
+        if provider is not None:
+            cursor = getattr(provider, "_cursor", None)
+            source_df = getattr(provider, "primary_df", None)
+            if source_df is None:
+                source_df = getattr(provider, "_df", None)
+            if cursor is not None and source_df is not None:
+                next_idx = int(cursor) + 1
+                if next_idx >= len(source_df):
+                    # A market order cannot be filled after the final
+                    # historical observation. Never fabricate a close fill.
+                    return None
+                entry_price = float(source_df.iloc[next_idx]["open"])
+
+        # ExecutionRouter's hard lot cap is part of the live execution
+        # contract. Apply it before BrokerSimulator receives the request.
+        try:
+            from config import MAX_LOT
+            lot = min(float(lot), float(MAX_LOT))
+        except Exception:
+            lot = float(lot)
+        if lot <= 0:
+            return None
+
+        return original_open(
+            self,
+            symbol=symbol,
+            direction=direction,
+            entry_price=entry_price,
+            sl=sl,
+            tp=tp,
+            lot=lot,
+            confidence=confidence,
+            bar_time=bar_time,
+            **kwargs,
+        )
+
+    for cls in provider_classes:
+        cls.advance_to = _remembering_advance
+    HistoricalExecutionAdapter.open_trade = _strict_open
+
+    try:
+        yield
+    finally:
+        for cls, method in original_advance.items():
+            cls.advance_to = method
+        HistoricalExecutionAdapter.open_trade = original_open
+
+
+@contextmanager
 def _strict_replay_environment() -> Iterator[None]:
     """Temporarily harden process-wide settings used by legacy modules."""
     import config
@@ -112,15 +181,10 @@ def _strict_replay_environment() -> Iterator[None]:
     old_simulation_mode = getattr(config, "SIMULATION_MODE", False)
     old_backtest_mode = is_backtest_mode()
 
-    # Patch only module attributes read by runtime sizing/permission code.
-    # Never mutate environment variables or .env files.
     config.TEST_MODE = False
     config.SIMULATION_MODE = True
     set_backtest_mode(True)
 
-    # analysis_agent imports this class directly, so patching the method on
-    # the class affects existing instances without rewriting the 29-module
-    # agent. Restore the exact original method afterwards.
     sentiment_cls = None
     original_get_all = None
     try:
@@ -128,7 +192,9 @@ def _strict_replay_environment() -> Iterator[None]:
         sentiment_cls = SentimentDataProvider
         original_get_all = sentiment_cls.get_all
         sentiment_cls.get_all = lambda self, pair: _neutral_sentiment(pair)
-        yield
+
+        with _strict_execution_boundary():
+            yield
     finally:
         if sentiment_cls is not None and original_get_all is not None:
             sentiment_cls.get_all = original_get_all
@@ -155,14 +221,8 @@ def run_live_mirror_backtest(
     forensics_path: Optional[str] = None,
     bypass_checks: Optional[set[str] | list[str]] = None,
 ) -> Any:
-    """Run the canonical AITrader kernel under strict replay constraints.
-
-    `bypass_checks` is intentionally exposed for diagnostics/ablation only.
-    Production-equivalence runs should leave it as None.
-    """
+    """Run the canonical AITrader kernel under strict historical constraints."""
     validation = validate_historical_ohlcv(df)
-
-    # Avoid mutating caller-owned data. The engine/provider may add columns.
     replay_df = df.copy(deep=True)
     replay_df.attrs["live_mirror_validation"] = {
         "rows": validation.rows,
