@@ -1,17 +1,11 @@
 """Compatibility entry point for the research live-mirroring replay.
 
-IMPORTANT: this module no longer owns a second execution engine. The
-historical replay contract is:
-
+The canonical research path is:
     historical data -> AITrader decision core -> canonical execution adapter
     -> historical position monitor -> deterministic P/L
 
-`backtest.live_mirroring_runner` is the single research execution path.
-This facade keeps existing callers of `run_unified_backtest()` working while
-preventing the legacy BrokerSimulator lifecycle from being used by the
-unified research runner.
-
-No strategy parameters are optimized or changed here.
+This facade keeps existing callers working without restoring the legacy
+BrokerSimulator lifecycle or introducing an independent strategy.
 """
 from __future__ import annotations
 
@@ -102,12 +96,7 @@ def run_unified_backtest(
     clock=None,
     **_ignored,
 ) -> UnifiedBacktestResult:
-    """Compatibility wrapper around the canonical live-mirroring runner.
-
-    There is no ATR fallback, fabricated next-bar entry, random fill, or
-    legacy BrokerSimulator execution in this path. The strategy logic remains
-    the live AITrader decision core.
-    """
+    """Compatibility wrapper around the canonical live-mirroring runner."""
     from backtest.live_mirroring_runner import run_live_mirroring_replay
 
     result = run_live_mirroring_replay(
@@ -116,12 +105,15 @@ def run_unified_backtest(
         df=df,
         starting_balance=starting_balance,
         warmup_bars=warmup_bars,
+        max_open_trades=max_open_trades,
+        max_hold_bars=max_hold_bars,
         spread_pips=float(spread_pips or 0.0),
         slippage_pips=float(slippage_pips or 0.0),
         commission_per_lot=float(commission_per_lot or 0.0),
         db_path=db_path,
+        clock=clock,
+        bypass_checks=bypass_checks,
     )
-
     lifecycle_dicts = [record.lifecycle for record in result.trades]
     closed = [x for x in lifecycle_dicts if x.get("status") == "CLOSED"]
     return UnifiedBacktestResult(
@@ -131,7 +123,7 @@ def run_unified_backtest(
         trades=lifecycle_dicts,
         equity_curve=[],
         rejection_stats={
-            "total_bars": result.bars_seen,
+            **result.rejection_stats,
             "closed_trades": len(closed),
             "open_trades": len(result.open_trade_ids),
             "legacy_broker_simulator": "DISABLED",
