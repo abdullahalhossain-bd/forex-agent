@@ -2,35 +2,35 @@
 backtest/live_mirror.py — Strict Live-Trading-Mirror Backtest facade.
 
 This module sits in front of backtest.unified_engine and closes the
-remaining correctness gaps that can otherwise make a historical replay
-look more optimistic than the live pipeline:
+remaining environment/data correctness gaps that can otherwise make a
+historical replay look more optimistic than the live pipeline:
 
-* TEST_MODE is forcibly disabled for replay.  A development TEST_MODE must
+* TEST_MODE is forcibly disabled for replay. A development TEST_MODE must
   never force-approve a rejected PositionSizer result in a historical run.
 * live sentiment providers are replaced with a deterministic neutral source
-  while replaying.  Today's retail/F&G/DXY data must never be attached to a
-  historical candle.  Real historical sentiment can be injected later via
+  while replaying. Today's retail/F&G/DXY data must never be attached to a
+  historical candle. Real historical sentiment can be injected later via
   a provider; neutral is safer than time-travelled data.
 * the global backtest-mode flag is restored after the run, even on failure.
   A backtest must not leave the process in historical mode and silently
   disable live services on the next run.
-* historical OHLC input is validated before the engine starts: UTC-aware,
+* historical OHLC input is validated before any agent is run: UTC-aware,
   strictly ordered, unique timestamps and valid OHLC geometry.
-* the execution adapter is guarded so an engine call made on signal bar i
-  cannot fill from that same bar's close.  A market-order replay uses bar
-  i+1 open; the signal's absolute SL/TP remain unchanged, matching the
-  live flow where the order is requested first and the broker supplies the
-  actual fill.
 
 The underlying decision kernel remains backtest.unified_engine's real
-AITrader.evaluate_decision_core path.  This facade does not optimize or
+AITrader.evaluate_decision_core path. This facade does not optimize or
 change strategy thresholds.
+
+IMPORTANT: the facade deliberately does NOT pretend to repair the remaining
+execution-boundary gaps inside unified_engine (notably its current preference
+for dec_out.entry over next-bar-open and its direct HistoricalExecutionAdapter
+path instead of invoking ExecutionRouter). Those are reported separately so
+we never hide a parity defect behind a wrapper.
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import timezone
 from typing import Any, Iterator, Optional
 
 import pandas as pd
@@ -44,11 +44,11 @@ class ReplayValidation:
 
 
 def validate_historical_ohlcv(df: pd.DataFrame, *, min_rows: int = 2) -> ReplayValidation:
-    """Validate the immutable historical input before any agent is run.
+    """Validate immutable historical input before any agent is run.
 
     The validator deliberately rejects ambiguous timestamps and malformed
     candles instead of repairing them silently. Silent repair can change
-    signal timing and therefore invalidate a parity claim.
+    signal timing and invalidate a parity claim.
     """
     if not isinstance(df, pd.DataFrame):
         raise TypeError("Historical replay requires a pandas DataFrame")
@@ -65,7 +65,6 @@ def validate_historical_ohlcv(df: pd.DataFrame, *, min_rows: int = 2) -> ReplayV
     if df.index.tz is None:
         raise ValueError("Historical replay timestamps must be timezone-aware UTC")
     if str(df.index.tz) not in ("UTC", "UTC+00:00"):
-        # Normalize a copy rather than accepting mixed/local timezone input.
         raise ValueError(f"Historical replay index must be UTC; got {df.index.tz}")
     if not df.index.is_monotonic_increasing:
         raise ValueError("Historical replay timestamps must be strictly increasing")
@@ -113,7 +112,7 @@ def _strict_replay_environment() -> Iterator[None]:
     old_simulation_mode = getattr(config, "SIMULATION_MODE", False)
     old_backtest_mode = is_backtest_mode()
 
-    # Patch only the module attribute read by runtime sizing/permission code.
+    # Patch only module attributes read by runtime sizing/permission code.
     # Never mutate environment variables or .env files.
     config.TEST_MODE = False
     config.SIMULATION_MODE = True
@@ -129,7 +128,6 @@ def _strict_replay_environment() -> Iterator[None]:
         sentiment_cls = SentimentDataProvider
         original_get_all = sentiment_cls.get_all
         sentiment_cls.get_all = lambda self, pair: _neutral_sentiment(pair)
-
         yield
     finally:
         if sentiment_cls is not None and original_get_all is not None:
@@ -175,8 +173,7 @@ def run_live_mirror_backtest(
 
     with _strict_replay_environment():
         from backtest.unified_engine import run_unified_backtest
-
-        result = run_unified_backtest(
+        return run_unified_backtest(
             symbol=symbol,
             df=replay_df,
             timeframe=timeframe,
@@ -193,9 +190,6 @@ def run_live_mirror_backtest(
             forensics_path=forensics_path,
             bypass_checks=bypass_checks,
         )
-
-    # The facade guarantees that the process is no longer in replay mode here.
-    return result
 
 
 __all__ = [
