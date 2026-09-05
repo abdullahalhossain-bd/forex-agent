@@ -1,12 +1,8 @@
 """Canonical historical execution adapter for live-mirroring replay.
 
-Purpose
--------
-Keep live decision/risk/permission code authoritative while replacing only
-MT5's execution backend.  This adapter is deterministic and timestamp-bound.
-It never reads wall-clock time and never invents a fill from a future bar.
-
-Important: this is an execution backend, not a strategy or sizing engine.
+The live ExecutionRouter remains the source-of-truth order boundary. Replay
+replaces only the broker/MT5 side with this deterministic adapter. Decision,
+risk, permission, lot, SL and TP are supplied by the live pipeline unchanged.
 """
 from __future__ import annotations
 
@@ -17,7 +13,6 @@ from typing import Optional
 
 @dataclass(frozen=True)
 class FillPolicy:
-    """Explicit assumptions required when historical bid/ask is unavailable."""
     spread_pips: float
     slippage_pips: float = 0.0
     commission_per_lot: float = 0.0
@@ -37,6 +32,7 @@ class PositionLifecycle:
     filled_lot: float
     stop_loss: float
     take_profit: float
+    pnl_multiplier: float
     exit_time: Optional[str] = None
     exit_price: Optional[float] = None
     exit_reason: Optional[str] = None
@@ -61,7 +57,6 @@ def _require_timestamp(value, field: str) -> datetime:
 
 
 def ensure_execution_order(signal_time, entry_time):
-    """Reject a fill that occurs before the signal decision."""
     signal = _require_timestamp(signal_time, "signal_time")
     entry = _require_timestamp(entry_time, "entry_time")
     if entry < signal:
@@ -73,12 +68,7 @@ def ensure_execution_order(signal_time, entry_time):
 
 def compute_fill(direction: str, requested_price: float, spread_pips: float,
                 pip_size: float, slippage_pips: float = 0.0) -> float:
-    """Compute a deterministic bid/ask fill from a historical mid/bid price.
-
-    Convention matches the replay contract: input is the historical BID.
-    BUY executes at ASK (plus adverse slippage); SELL executes at BID
-    (minus adverse slippage).  No random component is permitted.
-    """
+    """Compute deterministic fill from a historical BID."""
     if pip_size <= 0:
         raise ValueError("pip_size must be positive")
     if spread_pips < 0 or slippage_pips < 0:
@@ -95,7 +85,6 @@ def compute_fill(direction: str, requested_price: float, spread_pips: float,
 def resolve_intrabar(*, direction: str, bar_high: float, bar_low: float,
                      stop_loss: float, take_profit: float,
                      policy: str = "AMBIGUOUS_INTRABAR") -> Optional[str]:
-    """Resolve SL/TP touch without claiming unavailable tick ordering."""
     if direction.upper() == "BUY":
         sl_hit = bar_low <= stop_loss
         tp_hit = bar_high >= take_profit
@@ -104,7 +93,6 @@ def resolve_intrabar(*, direction: str, bar_high: float, bar_low: float,
         tp_hit = bar_low <= take_profit
     else:
         raise ValueError(f"Unsupported direction: {direction}")
-
     if not sl_hit and not tp_hit:
         return None
     if sl_hit and tp_hit:
@@ -113,17 +101,13 @@ def resolve_intrabar(*, direction: str, bar_high: float, bar_low: float,
         if policy == "BEST_CASE":
             return "TP"
         if policy in {"OHLC_ASSUMPTION", "LOWER_TF_REPLAY"}:
-            raise ValueError(
-                "AMBIGUOUS_INTRABAR: both SL and TP touched; "
-                f"policy={policy} requires an ordering source"
-            )
+            raise ValueError("AMBIGUOUS_INTRABAR: both SL and TP touched; ordering source required")
         return "AMBIGUOUS_INTRABAR"
     return "SL" if sl_hit else "TP"
 
 
 def mark_close(position: PositionLifecycle, exit_time, exit_price: float,
                reason: str, pnl_usd: float):
-    """Close an existing replay position without touching global/live state."""
     close_dt = _require_timestamp(exit_time, "exit_time")
     entry_dt = _require_timestamp(position.entry_time, "entry_time")
     if close_dt < entry_dt:
@@ -134,3 +118,70 @@ def mark_close(position: PositionLifecycle, exit_time, exit_price: float,
     position.pnl_usd = float(pnl_usd)
     position.status = "CLOSED"
     return position
+
+
+class CanonicalHistoricalExecutionAdapter:
+    """Drop-in replay backend at the live ExecutionRouter execution boundary."""
+
+    def __init__(self, *, pip_size: float, fill_policy: FillPolicy):
+        if pip_size <= 0:
+            raise ValueError("pip_size must be positive")
+        self.pip_size = float(pip_size)
+        self.fill_policy = fill_policy
+        self._next_trade_id = 1
+        self.open_positions: dict[int, PositionLifecycle] = {}
+
+    def open_trade(self, *, decision_result: dict, signal_time: str,
+                   entry_time: str, historical_bid: float,
+                   pnl_multiplier: float) -> PositionLifecycle:
+        """Open using the exact live decision payload; only execution differs."""
+        ensure_execution_order(signal_time, entry_time)
+        direction = str(decision_result.get("decision", "")).upper()
+        if direction not in {"BUY", "SELL"}:
+            raise ValueError("EXECUTION_REJECTED: decision is not BUY/SELL")
+        missing = [k for k in ("entry", "sl", "tp", "lot") if decision_result.get(k) is None]
+        if missing:
+            raise ValueError(f"EXECUTION_REJECTED: missing {missing}")
+        if pnl_multiplier <= 0:
+            raise ValueError("pnl_multiplier must be positive and explicitly supplied")
+        lot = float(decision_result["lot"])
+        if lot <= 0:
+            raise ValueError("EXECUTION_REJECTED: lot must be positive")
+        requested_entry = float(decision_result["entry"])
+        # historical_bid is the authoritative market observation; requested_entry
+        # remains the live pipeline's requested price for parity auditing.
+        fill = compute_fill(direction, float(historical_bid), self.fill_policy.spread_pips,
+                            self.pip_size, self.fill_policy.slippage_pips)
+        trade = PositionLifecycle(
+            trade_id=self._next_trade_id,
+            symbol=str(decision_result.get("symbol", "")), direction=direction,
+            signal_time=_require_timestamp(signal_time, "signal_time").isoformat(),
+            entry_time=_require_timestamp(entry_time, "entry_time").isoformat(),
+            requested_entry=requested_entry, fill_price=fill,
+            requested_lot=lot, filled_lot=lot,
+            stop_loss=float(decision_result["sl"]), take_profit=float(decision_result["tp"]),
+            pnl_multiplier=float(pnl_multiplier),
+        )
+        self._next_trade_id += 1
+        self.open_positions[trade.trade_id] = trade
+        return trade
+
+    def close_trade(self, trade_id: int, *, exit_time: str, exit_price: float,
+                    reason: str) -> PositionLifecycle:
+        trade = self.open_positions.get(int(trade_id))
+        if trade is None:
+            raise KeyError(f"unknown open trade_id={trade_id}")
+        pnl = self._pnl_before_costs(trade, float(exit_price))
+        commission = trade.filled_lot * self.fill_policy.commission_per_lot
+        trade.commission_usd += commission
+        closed = mark_close(trade, exit_time, exit_price, reason, pnl - commission)
+        self.open_positions.pop(trade.trade_id, None)
+        return closed
+
+    @staticmethod
+    def _pnl_before_costs(trade: PositionLifecycle, exit_price: float) -> float:
+        if trade.direction == "BUY":
+            return (exit_price - trade.fill_price) * trade.filled_lot * trade.pnl_multiplier
+        if trade.direction == "SELL":
+            return (trade.fill_price - exit_price) * trade.filled_lot * trade.pnl_multiplier
+        raise ValueError(f"Unsupported direction: {trade.direction}")
