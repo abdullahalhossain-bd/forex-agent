@@ -591,6 +591,42 @@ PROFILES: dict[str, PairProfile] = {
 }
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# BROKER-AVAILABLE PAIRS (live Exness Cent MT5 symbol audit, 2026-09-10)
+# ─────────────────────────────────────────────────────────────────────────
+# PROFILES above is the full ~48-pair RESEARCH/backtest universe — but
+# this broker/account only actually lists 26 "c"-suffixed FX symbols
+# (confirmed via symbol.py's live MT5 audit: total 26, 25 TRADEABLE +
+# 1 HIGH SPREAD). Every other pair in PROFILES (USDSGD, XAUUSD/XAGUSD/
+# XPTUSD/XPDUSD, USDTRY, USDZAR, EURNOK/EURSEK/GBPSEK/GBPNOK, AUDSGD,
+# NZDSGD, SGDJPY, HKDJPY, MXNJPY, USDCNH, USDMXN, USDTHB, NZDCHF,
+# NZDCAD, CADCHF) does not exist on this broker — sending an order/quote
+# request for any of them fails with "symbol not found". Previously
+# get_active_pairs() only checked `enabled=True`, so config.SYMBOLS
+# included all of these unresolvable tickers.
+#
+# get_active_pairs() below now additionally intersects with this set,
+# so config.SYMBOLS only ever contains pairs this broker can resolve.
+# PROFILES itself is left untouched (still useful for backtesting
+# against a broker/dataset that does offer the wider universe).
+#
+# USDHKDc IS listed by the broker but flagged HIGH SPREAD (394 pts —
+# roughly 40x a major's spread). Excluded from the default tradeable
+# set since a spread that wide dwarfs the risk budget at a small
+# account balance. Set MT5_INCLUDE_HIGH_SPREAD=true in .env to include
+# it anyway.
+BROKER_AVAILABLE_PAIRS = {
+    "AUDCAD", "AUDCHF", "AUDJPY", "AUDNZD", "AUDUSD",
+    "CADJPY", "CHFJPY",
+    "EURAUD", "EURCAD", "EURCHF", "EURGBP", "EURJPY", "EURNZD", "EURUSD",
+    "GBPAUD", "GBPCAD", "GBPCHF", "GBPJPY", "GBPNZD", "GBPUSD",
+    "NZDJPY", "NZDUSD",
+    "USDCAD", "USDCHF", "USDJPY",
+}
+if os.getenv("MT5_INCLUDE_HIGH_SPREAD", "false").lower() == "true":
+    BROKER_AVAILABLE_PAIRS = BROKER_AVAILABLE_PAIRS | {"USDHKD"}
+
+
 def get_pair_profile(symbol: str) -> PairProfile:
     """Get the trading profile for a specific pair.
 
@@ -626,8 +662,14 @@ def get_pair_profile(symbol: str) -> PairProfile:
 
 
 def get_active_pairs() -> list[str]:
-    """Return list of pairs that are enabled (profile.enabled=True)."""
-    return [sym for sym, prof in PROFILES.items() if prof.enabled]
+    """Return pairs that are both enabled (profile.enabled=True) AND
+    actually available on the live broker (see BROKER_AVAILABLE_PAIRS,
+    sourced from the live Exness MT5 symbol audit) — so config.SYMBOLS
+    never hands the live pipeline a ticker the broker can't resolve."""
+    return [
+        sym for sym, prof in PROFILES.items()
+        if prof.enabled and sym in BROKER_AVAILABLE_PAIRS
+    ]
 
 
 def is_pair_enabled(symbol: str) -> bool:

@@ -1,12 +1,30 @@
+import os
 import MetaTrader5 as mt5
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ============================================================
 # MT5 CONFIG
 # ============================================================
-LOGIN = 434119023
-PASSWORD = "Abdullah1@"
-SERVER = "Exness-MT5Trial7"
-PATH = r"C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe"
+# SECURITY FIX: credentials were previously hardcoded here in plaintext
+# and committed to git (this repo is public). Anyone with the repo URL
+# could log into the live account. Now read from .env instead — put
+# your real values in .env (already gitignored), see .env.example.
+#
+# IMPORTANT: the previously-committed credentials are still visible in
+# this repo's git history (commit 012ca28) even after this fix. Change
+# your Exness account password now if you haven't already, and consider
+# scrubbing history with git filter-repo / BFG.
+LOGIN = int(os.getenv("MT5_LOGIN", "0")) or None
+PASSWORD = os.getenv("MT5_PASSWORD")
+SERVER = os.getenv("MT5_SERVER")
+PATH = os.getenv("MT5_PATH") or None
+
+if not (LOGIN and PASSWORD and SERVER):
+    print("❌ Missing MT5_LOGIN / MT5_PASSWORD / MT5_SERVER in .env")
+    print("   Set these in your .env file (see .env.example) before running.")
+    raise SystemExit(1)
 
 
 # ============================================================
@@ -29,12 +47,11 @@ MIN_BARS = {
 # ============================================================
 # CONNECT
 # ============================================================
-if not mt5.initialize(
-    path=PATH,
-    login=LOGIN,
-    password=PASSWORD,
-    server=SERVER
-):
+_init_kwargs = dict(login=LOGIN, password=PASSWORD, server=SERVER)
+if PATH:
+    _init_kwargs["path"] = PATH
+
+if not mt5.initialize(**_init_kwargs):
     print("❌ MT5 connection failed")
     print("Error:", mt5.last_error())
     quit()

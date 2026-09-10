@@ -36,15 +36,30 @@ PROJECT_NAME = "Autonomous Forex AI Trader"
 # _sync_balance() detected a >5% deviation between the boot-time
 # hardcoded value and the live MT5 balance it pulled at runtime.
 #
-# Set INITIAL_BALANCE_USD in .env to your real account balance:
-#   INITIAL_BALANCE_USD=99159.93
-# (omit cents if you prefer: INITIAL_BALANCE_USD=99000)
+# Set INITIAL_BALANCE_USD in .env to your real account balance, in
+# WHATEVER UNIT account_info().balance actually reports — run
+# account_info.py to check. This is NOT always real USD:
+#   - Standard account, currency=USD -> balance is real USD (e.g. 99159.93)
+#   - Cent account, currency=USC     -> balance is US CENTS, not dollars
+#     (confirmed 2026-09-10 via account_info.py on Exness-MT5Real37:
+#      currency=USC, balance=1100.0 -- i.e. $11.00 real USD held as
+#      1100 in the account's own cent-denominated unit).
+#      Setting this to "11" instead of "1100" was a 100x error that
+#      made every risk-% calculation think the account was $11 instead
+#      of its true $11-worth-of-1100-USC, which made the MIN_LOT
+#      tiny-balance safety gate reject nearly every trade.
+#
+# get_live_pip_value_per_lot() (core/constants.py) and _sync_balance()
+# (core/trader.py) both read straight from the SAME live MT5 session,
+# so as long as this boot-time default matches that same unit, risk-%
+# math is unit-consistent throughout — no separate "is this a Cent
+# account?" conversion is needed anywhere else in the codebase.
 #
 # When mt5_demo mode is active, _sync_balance() will still pull the
 # real live balance on every cycle — but having the boot-time value
 # match means position sizing is correct from the FIRST trade, not
 # only after the first resync.
-INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "11"))
+INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "1100"))
 INITIAL_CAPITAL = INITIAL_BALANCE  # Alias for compatibility
 RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "0.005"))  # 0.5% per trade (production-safe — matches strict_risk_manager)
 
@@ -510,6 +525,27 @@ def validate_max_lot_config(logger=None) -> bool:
         for line in msg_lines:
             print(line)
     return False
+
+# ── MIN_RISK_FRACTION_OF_INTENDED (RiskEngine safety guard) ────
+# See risk/risk_engine.py: when MAX_LOT caps a trade's lot below what
+# the target risk % actually needs, this is the minimum fraction of
+# that INTENDED risk the capped lot must still deliver — below it, the
+# trade is rejected rather than silently under-risked. Was previously
+# only a code-level fallback (0.5) inside risk_engine.py, with no
+# config.py definition and no way to see/override it in one place.
+#
+# NOTE: when MIN_LOT >= MAX_LOT (position size is mechanically pinned
+# to a single broker-floor lot — e.g. a very small Cent-account balance
+# where MIN_LOT==MAX_LOT==0.01, so there is literally no larger lot to
+# size up to), this fraction can NEVER be satisfied for any trade whose
+# target-risk lot exceeds that floor — the guard would then reject
+# essentially every signal, which isn't a real safety finding, just an
+# artifact of having zero sizing headroom. risk_engine.py detects that
+# specific case (self.MIN_LOT >= self.MAX_LOT) and bypasses this guard
+# — the floor lot's own risk is still separately capped at
+# MAX_RISK_PCT elsewhere, so it can only ever under-risk (safe by
+# construction), never over-risk.
+MIN_RISK_FRACTION_OF_INTENDED = float(os.getenv("MIN_RISK_FRACTION_OF_INTENDED", "0.5"))
 
 # Maximum LLM calls per symbol cycle.  Each cycle fires:
 #   - SentimentModel (1 call)            — from sentiment_data provider
