@@ -44,9 +44,18 @@ PROJECT_NAME = "Autonomous Forex AI Trader"
 # real live balance on every cycle — but having the boot-time value
 # match means position sizing is correct from the FIRST trade, not
 # only after the first resync.
-INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "1000"))
+INITIAL_BALANCE = float(os.getenv("INITIAL_BALANCE_USD", "11"))
 INITIAL_CAPITAL = INITIAL_BALANCE  # Alias for compatibility
-RISK_PER_TRADE = 0.005              # 0.5% per trade (production-safe — matches strict_risk_manager)
+RISK_PER_TRADE = float(os.getenv("RISK_PER_TRADE", "0.005"))  # 0.5% per trade (production-safe — matches strict_risk_manager)
+
+# ── Hard risk cap (single source of truth) ────────────────────
+# MAX_RISK_PCT is the absolute ceiling any module (RiskAgent,
+# PositionSizer, RiskEngine, ...) may ever risk on a single trade,
+# regardless of how base_risk/Kelly/volatility/confidence multipliers
+# or MIN_LOT floor-rounding land. Was previously hardcoded separately
+# inside risk/position_sizer.py (0.02) with no config override and no
+# equivalent check at all in agents/risk_agent.py. Now one number.
+MAX_RISK_PCT = float(os.getenv("MAX_RISK_PCT", "0.005"))
 # 2026-08-13 fix: MAX_DAILY_LOSS was 0.03 (3%) but DAILY_LOSS_LIMIT_PCT below
 # is 5.0% — two different values for the same concept. MAX_DAILY_LOSS is read
 # by NOTHING in the live path (only Config.MAX_DAILY_LOSS alias at line ~625).
@@ -70,14 +79,21 @@ DAILY_LOSS_LIMIT_PCT = float(os.getenv("DAILY_LOSS_LIMIT_PCT", "5.0"))
 # analysis. 10 is still conservative — increase to 15-20 if your
 # account size supports it.
 try:
-    MAX_OPEN_TRADES = int(os.getenv("MAX_OPEN_TRADES", "10") or 10)
+    MAX_OPEN_TRADES = int(os.getenv("MAX_OPEN_TRADES", "3") or 3)
 except (ValueError, TypeError):
-    MAX_OPEN_TRADES = 10
+    MAX_OPEN_TRADES = 3
 try:
-    MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", "8") or 8)
+    MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", "3") or 3)
 except (ValueError, TypeError):
-    MAX_POSITIONS = 8    # portfolio-wide headroom
-MAX_RISK_PER_PAIR = 0.005          # max 0.5% risk on a single pair (was 2%)
+    MAX_POSITIONS = 3    # portfolio-wide headroom — matched to MAX_OPEN_TRADES
+MAX_RISK_PER_PAIR = float(os.getenv("MAX_RISK_PER_PAIR", "0.005"))  # max 0.5% risk on a single pair
+
+# ── Lot-size bounds (single source of truth) ──────────────────
+# MIN_LOT is the broker's own minimum lot (a hard floor — you cannot
+# submit an order smaller than this). Was previously hardcoded
+# separately in risk/position_sizer.py and strategy/scalping_strategy.py
+# with no config override. MAX_LOT (below) was already config-driven.
+MIN_LOT = float(os.getenv("MIN_LOT", "0.01"))
 
 # ── Market & Data Settings ─────────────────────────────────────
 MARKET = "forex"
@@ -94,9 +110,11 @@ DATA_SOURCE = "yfinance"
 # Fix: append the broker suffix to every symbol when building SYMBOLS,
 # without removing or renaming any pair in the underlying lists below.
 # Override via .env if you switch brokers/accounts:
-#   MT5_SYMBOL_SUFFIX=m      (Exness "m" accounts — current default)
+#   MT5_SYMBOL_SUFFIX=c      (Exness "c" — Cent — accounts, current default)
+#   MT5_SYMBOL_SUFFIX=m      (Exness "m" — Standard/Micro — accounts)
 #   MT5_SYMBOL_SUFFIX=       (broker uses bare names, no suffix)
-BROKER_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "m")
+# e.g. EURUSD -> EURUSDc, GBPUSD -> GBPUSDc, USDJPY -> USDJPYc
+BROKER_SYMBOL_SUFFIX = os.getenv("MT5_SYMBOL_SUFFIX", "c")
 
 
 def _with_broker_suffix(pairs):
@@ -438,7 +456,7 @@ MT5_FALLBACK_TO_SIMULATION = os.getenv("MT5_FALLBACK_TO_SIMULATION", "true").low
 #   $10k → MAX_LOT=0.20  (default)
 #   $50k → MAX_LOT=1.00
 #   $100k→ MAX_LOT=2.00
-MAX_LOT = float(os.getenv("MAX_LOT", "0.20"))
+MAX_LOT = float(os.getenv("MAX_LOT", "0.01"))
 
 # ── MAX_LOT / balance sanity check (2026-08-20 fix) ─────────────
 # RiskEngine's safety guard (risk/risk_engine.py) rejects any trade where
@@ -452,7 +470,12 @@ MAX_LOT = float(os.getenv("MAX_LOT", "0.20"))
 #
 # Recommended MAX_LOT scales ~linearly with balance (see table above:
 # $10k→0.20, $50k→1.00, $100k→2.00, i.e. roughly balance / 50,000).
-RECOMMENDED_MAX_LOT = round(max(0.05, INITIAL_BALANCE / 50000.0), 2)
+# Floor is MIN_LOT (the broker's own minimum), not a hardcoded 0.05 —
+# a hardcoded 0.05 floor made this fire a false-positive "undersized"
+# warning on every genuinely small/cent account (e.g. $11 balance),
+# where MAX_LOT is deliberately pinned to the broker minimum and 0.05
+# lots would itself be wildly over-risking the account.
+RECOMMENDED_MAX_LOT = round(max(MIN_LOT, INITIAL_BALANCE / 50000.0), 2)
 MAX_LOT_SEVERELY_UNDERSIZED = MAX_LOT < RECOMMENDED_MAX_LOT * 0.5
 
 def validate_max_lot_config(logger=None) -> bool:
@@ -787,11 +810,15 @@ class Config:
     INITIAL_BALANCE = INITIAL_BALANCE
     INITIAL_CAPITAL = INITIAL_CAPITAL
     RISK_PER_TRADE = RISK_PER_TRADE
+    MAX_RISK_PCT = MAX_RISK_PCT
     MAX_DAILY_LOSS = MAX_DAILY_LOSS
     DAILY_LOSS_LIMIT_PCT = DAILY_LOSS_LIMIT_PCT
     MAX_OPEN_TRADES = MAX_OPEN_TRADES
     MAX_POSITIONS = MAX_POSITIONS
     MAX_RISK_PER_PAIR = MAX_RISK_PER_PAIR
+    MIN_LOT = MIN_LOT
+    MAX_LOT = MAX_LOT
+    BROKER_SYMBOL_SUFFIX = BROKER_SYMBOL_SUFFIX
 
     # Market
     MARKET = MARKET
